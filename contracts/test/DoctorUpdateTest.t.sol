@@ -38,13 +38,13 @@ contract DoctorUpdateTest is TestHelpers {
     bytes32 constant DOCTOR_ENC_KEY = keccak256("doctor-key");
     
     // Events
-    event RecordCreatedByDoctor(
+    event RecordAddedByDoctor(
         address indexed doctor,
         address indexed patient,
         bytes32 indexed cidHash,
         bytes32 parentCidHash,
         bytes32 recordTypeHash,
-        uint40 expireAt
+        uint40 doctorAccessExpiry
     );
     event EmergencyAccessGranted(
         address indexed doctor,
@@ -115,7 +115,7 @@ contract DoctorUpdateTest is TestHelpers {
         bytes32 expectedCidHash = keccak256(bytes(CID_1));
         
         vm.expectEmit(true, true, true, false);
-        emit RecordCreatedByDoctor(
+        emit RecordAddedByDoctor(
             doctor1,
             patient1,
             expectedCidHash,
@@ -125,15 +125,6 @@ contract DoctorUpdateTest is TestHelpers {
         );
         
         vm.prank(doctor1);
-        
-        // DEBUG: Check doctor status
-        bool isDoc = accessControl.isDoctor(doctor1);
-        bool isVerified = accessControl.isVerifiedDoctor(doctor1);
-        console.log("DEBUG: Doctor1 isDoctor:", isDoc);
-        console.log("DEBUG: Doctor1 isVerified:", isVerified);
-        console.log("DEBUG: AccessControl address:", address(accessControl));
-        console.log("DEBUG: DoctorUpdate.accessControl:", address(doctorUpdate.accessControl()));
-        
         doctorUpdate.addRecordByDoctor(
             CID_1,
             "",
