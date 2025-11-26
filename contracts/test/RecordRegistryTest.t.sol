@@ -35,7 +35,7 @@ contract RecordRegistryTest is TestHelpers {
     event RecordAdded(
         address indexed owner,
         bytes32 indexed cidHash,
-        bytes32 indexed parentCidHash,
+        bytes32 parentCidHash,
         bytes32 recordTypeHash,
         uint40 timestamp
     );
@@ -400,7 +400,7 @@ contract RecordRegistryTest is TestHelpers {
     
     function test_EdgeCase_GetMaxChildrenLimit() public view {
         uint8 limit = recordRegistry.getMaxChildrenLimit();
-        assertEq(limit, 10, "Max children should be 10");
+        assertEq(limit, 100, "Max children should be 100");
     }
 }
 
