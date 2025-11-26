@@ -182,6 +182,20 @@ contract RecordRegistry is IRecordRegistry {
             delete _ownerRecordIndex[rec.owner][oldHash];
         }
 
+        // ✅ FIX: Move children if this record is a parent
+        bytes32[] memory myChildren = _parentChildren[oldHash];
+        if (myChildren.length > 0) {
+            _parentChildren[newHash] = myChildren;
+            delete _parentChildren[oldHash];
+
+            // Update parent reference in all children
+            for (uint256 i = 0; i < myChildren.length; i++) {
+                if (_records[myChildren[i]].exists) {
+                    _records[myChildren[i]].parentCidHash = newHash;
+                }
+            }
+        }
+
         // Delete old record
         delete _records[oldHash];
 
