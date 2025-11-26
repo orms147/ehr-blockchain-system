@@ -59,7 +59,7 @@ contract EHRSystemSecure is Ownable, Pausable, ReentrancyGuard {
     uint256 private _requestNonce;
 
     // ================ CONSTANTS ================
-    uint40 private constant MIN_APPROVAL_DELAY = 1 hours;
+    uint40 private constant MIN_APPROVAL_DELAY = 1 minutes;  // Reduced from 1 hour for better UX
     uint40 private constant MAX_REQUEST_VALIDITY = 30 days;
     uint40 private constant DEFAULT_CONSENT_DURATION = 30 days;
     uint40 private constant MAX_DELEGATION_DURATION = 365 days;
@@ -157,9 +157,14 @@ contract EHRSystemSecure is Ownable, Pausable, ReentrancyGuard {
         }
         if (!accessControl.isPatient(patient)) revert InvalidRequest();
 
-        // Validate validity period
-        if (validForHours == 0 || validForHours > MAX_REQUEST_VALIDITY / 1 hours) {
+        // Validate validity period (allow 0 for default)
+        if (validForHours > MAX_REQUEST_VALIDITY / 1 hours) {
             revert InvalidRequest();
+        }
+        
+        // Use default if 0
+        if (validForHours == 0) {
+            validForHours = 7 * 24; // Default: 7 days
         }
 
         // Validate based on request type
