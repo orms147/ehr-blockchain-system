@@ -37,8 +37,8 @@ contract TestHelpers is Test {
             expireAt,
             includeUpdates,
             allowDelegate,
-            nonce,
-            deadline
+            deadline,
+            nonce
         ));
         
         bytes32 digest = keccak256(abi.encodePacked(
@@ -71,8 +71,8 @@ contract TestHelpers is Test {
             delegatee,
             duration,
             allowSubDelegate,
-            nonce,
-            deadline
+            deadline,
+            nonce
         ));
         
         bytes32 digest = keccak256(abi.encodePacked(
