@@ -26,8 +26,8 @@ contract AccessControlTest is TestHelpers {
     // Events to test
     event UserRegistered(address indexed user, string role);
     event DoctorVerified(address indexed doctor, address indexed verifier, string credential);
-    event OrganizationVerified(address indexed org, string orgName);
-    event VerificationRevoked(address indexed user, address indexed revoker);
+    event OrganizationVerified(address indexed org, address indexed verifier, string orgName);
+    event VerificationRevoked(address indexed user, address indexed revoker, string reason);
     
     function setUp() public {
         // Setup accounts
@@ -150,8 +150,8 @@ contract AccessControlTest is TestHelpers {
         accessControl.registerAsOrganization();
         
         // Ministry verifies
-        vm.expectEmit(true, false, false, true);
-        emit OrganizationVerified(org1, "Hospital ABC");
+        vm.expectEmit(true, true, false, true);
+        emit OrganizationVerified(org1, ministry, "Hospital ABC");
         
         vm.prank(ministry);
         accessControl.verifyOrganization(org1, "Hospital ABC");
@@ -246,8 +246,8 @@ contract AccessControlTest is TestHelpers {
         _setupVerifiedDoctor(doctor1, org1);
         
         // Revoke by verifier
-        vm.expectEmit(true, true, false, false);
-        emit VerificationRevoked(doctor1, org1);
+        vm.expectEmit(true, true, false, true);
+        emit VerificationRevoked(doctor1, org1, "Misconduct");
         
         vm.prank(org1);
         accessControl.revokeDoctorVerification(doctor1);
@@ -283,8 +283,8 @@ contract AccessControlTest is TestHelpers {
         accessControl.verifyOrganization(org1, "Hospital ABC");
         
         // Revoke
-        vm.expectEmit(true, true, false, false);
-        emit VerificationRevoked(org1, ministry);
+        vm.expectEmit(true, true, false, true);
+        emit VerificationRevoked(org1, ministry, "License expired");
         
         vm.prank(ministry);
         accessControl.revokeOrgVerification(org1);

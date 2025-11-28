@@ -444,7 +444,7 @@ contract DoctorUpdateTest is TestHelpers {
         ) = doctorUpdate.getAccessLimits();
         
         assertEq(minHours, 1, "Min should be 1 hour");
-        assertEq(maxHours, 2160, "Max should be 2160 hours (90 days)");
+        assertEq(maxHours, 720, "Max should be 720 hours (30 days)");
         assertEq(defaultHours, 72, "Default should be 72 hours (3 days)");
         assertEq(emergencyHours, 24, "Emergency should be 24 hours");
         assertEq(minWitnesses, 2, "Min witnesses should be 2");

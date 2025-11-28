@@ -66,7 +66,6 @@ contract RecordRegistry is IRecordRegistry {
     ) external override {
         if (!accessControl.isPatient(msg.sender)) revert NotPatient();
         
-        if (bytes(cid).length == 0) revert EmptyCID();
         bytes32 cidHash = keccak256(bytes(cid));
         bytes32 parentHash = bytes(parentCID).length > 0 
             ? keccak256(bytes(parentCID)) 
@@ -84,7 +83,6 @@ contract RecordRegistry is IRecordRegistry {
     ) external override {
         if (!accessControl.isDoctor(msg.sender)) revert NotDoctor();
         
-        if (bytes(cid).length == 0) revert EmptyCID();
         bytes32 cidHash = keccak256(bytes(cid));
         bytes32 parentHash = bytes(parentCID).length > 0 
             ? keccak256(bytes(parentCID)) 
@@ -101,6 +99,7 @@ contract RecordRegistry is IRecordRegistry {
         address creator,
         address patient
     ) internal {
+        if (cidHash == bytes32(0)) revert EmptyCID();
         if (_records[cidHash].exists) revert RecordExists();
 
         uint8 version = 1;
