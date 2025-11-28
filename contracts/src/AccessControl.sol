@@ -34,6 +34,7 @@ contract AccessControl is IAccessControl {
     
     // Organization members (để track bác sĩ thuộc org nào)
     mapping(address => address[]) public orgMembers; // org => doctors[]
+    mapping(address => mapping(address => bool)) public isMemberOfOrg;
 
     // ================ CONSTRUCTOR ================
     constructor(address ministryAddress) {
@@ -132,9 +133,6 @@ contract AccessControl is IAccessControl {
             active: true
         });
         
-        // Add to org members
-        orgMembers[msg.sender].push(doctor);
-        
         emit DoctorVerified(doctor, msg.sender, credential);
     }
 
@@ -157,6 +155,67 @@ contract AccessControl is IAccessControl {
         });
         
         emit DoctorVerified(doctor, msg.sender, credential);
+    }
+
+    // ================ ORGANIZATION MEMBERSHIP ================
+    /**
+    * @notice Tổ chức thêm bác sĩ vào danh sách thành viên
+    * @dev Membership khác với Verification!
+    *      - Verification: Xác nhận chứng chỉ hành nghề
+    *      - Membership: Bác sĩ làm việc tại tổ chức này
+    * @param doctor Địa chỉ bác sĩ
+    */
+    function addMember(address org, address doctor) external {
+        // Only verified organizations may modify their members
+        if ((_roles[msg.sender] & VERIFIED_ORG) == 0) revert NotAuthorized();
+        if (msg.sender != org) revert NotAuthorized();
+
+        // Doctor must have DOCTOR role
+        if ((_roles[doctor] & DOCTOR) == 0) revert NotAuthorized();
+
+        // Already a member -> no-op
+        if (isMemberOfOrg[org][doctor]) {
+            return;
+        }
+
+        // Add relationship
+        isMemberOfOrg[org][doctor] = true;
+        orgMembers[org].push(doctor);
+
+        emit MemberAdded(org, doctor);
+    }
+
+    /**
+    * @notice Tổ chức xóa bác sĩ khỏi danh sách thành viên
+    * @param doctor Địa chỉ bác sĩ
+    */
+    function removeMember(address org, address doctor) external {
+        // Only verified organizations may modify their members
+        if ((_roles[msg.sender] & VERIFIED_ORG) == 0) revert NotAuthorized();
+        if (msg.sender != org) revert NotAuthorized();
+
+        // Must already be a member
+        if (!isMemberOfOrg[org][doctor]) {
+            return;
+        }
+
+        // Remove membership flag
+        isMemberOfOrg[org][doctor] = false;
+
+        // Remove from list (swap & pop)
+        address[] storage list = orgMembers[org];
+        uint256 len = list.length;
+
+        for (uint256 i = 0; i < len; ++i) {
+            if (list[i] == doctor) {
+                // Swap-with-last then pop
+                list[i] = list[len - 1];
+                list.pop();
+                break;
+            }
+        }
+
+        emit MemberRemoved(org, doctor);
     }
 
     // ================ REVOKE VERIFICATION ================

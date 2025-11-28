@@ -13,6 +13,8 @@ interface IAccessControl {
     event DoctorVerified(address indexed doctor, address indexed verifier, string credential);
     event OrganizationVerified(address indexed org, string name);
     event VerificationRevoked(address indexed user, address indexed revoker);
+    event MemberAdded(address indexed org, address indexed doctor);
+    event MemberRemoved(address indexed org, address indexed doctor);
 
     error AlreadyRegistered();
     error NotAuthorized();
@@ -32,6 +34,10 @@ interface IAccessControl {
     // Revocation
     function revokeDoctorVerification(address doctor) external;
     function revokeOrgVerification(address org) external;
+
+    // Member management
+    function addMember(address org, address doctor) external;
+    function removeMember(address org, address doctor) external;
 
     // View functions
     function isPatient(address user) external view returns (bool);
