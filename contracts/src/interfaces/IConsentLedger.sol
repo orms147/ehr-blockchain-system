@@ -124,6 +124,18 @@ interface IConsentLedger {
         uint40 expireAt
     ) external;
 
+    /**
+     * @notice Grant consent using specific record delegation authority
+     * @dev Requires msg.sender to have active consent with allowDelegate=true for this rootCID
+     */
+    function grantUsingRecordDelegation(
+        address patient,
+        address newGrantee,
+        string calldata rootCID,
+        bytes32 encKeyHash,
+        uint40 expireAt
+    ) external;
+
     // Authorization
     function authorizeContract(address contractAddress, bool allowed) external;
 

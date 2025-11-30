@@ -344,6 +344,45 @@ contract ConsentLedger is EIP712, ReentrancyGuard, IConsentLedger {
         emit AccessGrantedViaDelegation(patient, newGrantee, msg.sender, rootCidHash);
     }
 
+    /**
+     * @notice Grant consent using specific record delegation authority
+     * ✅ Accepts string CID, hashes immediately
+     * ✅ Checks if msg.sender has allowDelegate=true for this specific record
+     */
+    function grantUsingRecordDelegation(
+        address patient,
+        address newGrantee,
+        string calldata rootCID,
+        bytes32 encKeyHash,
+        uint40 expireAt
+    ) external override nonReentrant {
+        if (bytes(rootCID).length == 0) revert EmptyCID();
+        bytes32 rootCidHash = keccak256(bytes(rootCID));
+
+        // Check if msg.sender has active consent with allowDelegate=true
+        bytes32 senderKey = keccak256(abi.encode(patient, msg.sender, rootCidHash));
+        Consent memory senderConsent = _consents[senderKey];
+
+        if (!senderConsent.active) revert Unauthorized();
+        if (senderConsent.expireAt != FOREVER && block.timestamp > senderConsent.expireAt) {
+            revert Unauthorized();
+        }
+        if (!senderConsent.allowDelegate) revert Unauthorized();
+
+        // Grant access to newGrantee
+        _grantConsent(
+            patient,
+            newGrantee,
+            rootCidHash,
+            encKeyHash,
+            expireAt,
+            false, // Sub-delegates cannot grant update rights by default
+            false  // Sub-delegates cannot grant further delegation rights by default
+        );
+
+        emit AccessGrantedViaDelegation(patient, newGrantee, msg.sender, rootCidHash);
+    }
+
     // ================ VIEW FUNCTIONS ================
 
     /**
