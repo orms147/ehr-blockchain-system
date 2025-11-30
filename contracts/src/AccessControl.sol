@@ -37,13 +37,20 @@ contract AccessControl is IAccessControl {
     mapping(address => mapping(address => bool)) public isMemberOfOrg;
 
     // ================ CONSTRUCTOR ================
-    constructor(address ministryAddress) {
+    constructor (address ministryAddress) {
         if (ministryAddress == address(0)) revert InvalidAddress();
-        
+
         MINISTRY_OF_HEALTH = ministryAddress;
-        _roles[ministryAddress] = MINISTRY | VERIFIED_ORG;
-        
-        emit UserRegistered(ministryAddress, "MINISTRY");
+        _roles[ministryAddress] = MINISTRY | ORGANIZATION | VERIFIED_ORG;
+
+        orgVerifications[ministryAddress] = Verification({
+             verifier: ministryAddress,
+             credential: "Ministry of Health",
+             verifiedAt: uint40(block.timestamp),
+             active: true
+           });
+
+        emit UserRegistered(ministryAddress, "Ministry of Health");
     }
 
     // ================ MODIFIERS ================
@@ -214,7 +221,8 @@ contract AccessControl is IAccessControl {
      */
     function revokeDoctorVerification(address doctor) external override {
         Verification storage verif = doctorVerifications[doctor];
-        
+        if (!verif.active) revert NotAuthorized();
+
         // Chỉ verifier hoặc Ministry mới revoke được
         if (msg.sender != verif.verifier && msg.sender != MINISTRY_OF_HEALTH) {
             revert NotAuthorized();

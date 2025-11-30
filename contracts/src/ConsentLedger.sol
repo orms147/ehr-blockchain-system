@@ -51,7 +51,7 @@ contract ConsentLedger is EIP712, ReentrancyGuard, IConsentLedger {
     uint256 private constant ACTIVE_BIT = 41;
 
     // ================ CONSTRUCTOR ================
-    constructor(address admin_) EIP712("EHR Consent Ledger", "3") {
+    constructor(address admin_) EIP712("EHR Consent Ledger", "1") {
         if (admin_ == address(0)) revert Unauthorized();
         admin = admin_;
         authorizedContracts[admin_] = true;
@@ -95,7 +95,8 @@ contract ConsentLedger is EIP712, ReentrancyGuard, IConsentLedger {
         bool includeUpdates,
         bool allowDelegate
     ) external override onlyAuthorized nonReentrant {
-        bytes32 rootCidHash = keccak256(bytes(rootCID));  // ✅ Hash immediately
+        if (bytes(rootCID).length == 0) revert EmptyCID();
+        bytes32 rootCidHash = keccak256(bytes(rootCID));
         
         _grantConsent(
             patient,
@@ -148,6 +149,7 @@ contract ConsentLedger is EIP712, ReentrancyGuard, IConsentLedger {
         
         nonces[patient] = currentNonce + 1;
 
+        if (bytes(rootCID).length == 0) revert EmptyCID();
         bytes32 rootCidHash = keccak256(bytes(rootCID));
         
         _grantConsent(
@@ -198,15 +200,10 @@ contract ConsentLedger is EIP712, ReentrancyGuard, IConsentLedger {
         emit ConsentGranted(patient, grantee, rootCidHash, finalExpiry, allowDelegate);
     }
 
-    // ================ REVOKE CONSENT ================
-
-    /**
-     * @notice Patient revokes consent
-     * ✅ Accepts string CID, hashes internally
-     */
     function revoke(address grantee, string calldata rootCID) 
         external override nonReentrant 
     {
+        if (bytes(rootCID).length == 0) revert EmptyCID();
         bytes32 rootCidHash = keccak256(bytes(rootCID));
         bytes32 key = keccak256(abi.encode(msg.sender, grantee, rootCidHash));
         Consent storage c = _consents[key];
@@ -331,6 +328,7 @@ contract ConsentLedger is EIP712, ReentrancyGuard, IConsentLedger {
         uint40 expiresAt = uint40(data & EXPIRES_MASK);
         if (block.timestamp > expiresAt) revert NoActiveDelegation();
 
+        if (bytes(rootCID).length == 0) revert EmptyCID();
         bytes32 rootCidHash = keccak256(bytes(rootCID));
 
         _grantConsent(
