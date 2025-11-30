@@ -113,40 +113,28 @@ contract AccessControl is IAccessControl {
     }
 
     /**
-     * @notice Tổ chức đã verified có thể verify bác sĩ
+     * @notice Tổ chức đã verified hoặc Ministry có thể verify bác sĩ
      * @param doctor Địa chỉ bác sĩ cần verify
      * @param credential Chứng chỉ (VD: "Bác sĩ Nội khoa - Bệnh viện X")
      */
-    function verifyDoctor(address doctor, string calldata credential) 
-        external override onlyVerifiedOrg 
-    {
+    // VERIFIED ORG can verify doctor
+    function verifyDoctor(address doctor, string calldata credential) external override onlyVerifiedOrg {
+        _verifyDoctor(doctor, credential);
+    }
+
+    // VERIFIED by MINISTRY (implements interface)
+    function verifyDoctorByMinistry(address doctor, string calldata credential) external override onlyMinistry {
+        _verifyDoctor(doctor, credential);
+    }
+
+    // VERIFIED ORG can verify doctor
+    function _verifyDoctor(address doctor, string memory credential) internal {
         if ((_roles[doctor] & DOCTOR) == 0) revert NotAuthorized();
         
         // Add verified flag
         _roles[doctor] |= VERIFIED_DOCTOR;
         
         // Record verification
-        doctorVerifications[doctor] = Verification({
-            verifier: msg.sender,
-            credential: credential,
-            verifiedAt: uint40(block.timestamp),
-            active: true
-        });
-        
-        emit DoctorVerified(doctor, msg.sender, credential);
-    }
-
-    /**
-     * @notice Bộ Y Tế có thể verify bác sĩ trực tiếp
-     * @dev Dùng cho bác sĩ tự do xin chứng chỉ hành nghề
-     */
-    function verifyDoctorByMinistry(address doctor, string calldata credential) 
-        external override onlyMinistry 
-    {
-        if ((_roles[doctor] & DOCTOR) == 0) revert NotAuthorized();
-        
-        _roles[doctor] |= VERIFIED_DOCTOR;
-        
         doctorVerifications[doctor] = Verification({
             verifier: msg.sender,
             credential: credential,
