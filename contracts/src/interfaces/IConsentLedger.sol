@@ -107,6 +107,7 @@ interface IConsentLedger {
     ) external;
 
     function delegateAuthorityBySig(
+        address patient,
         address delegatee,
         uint40 duration,
         bool allowSubDelegate,
