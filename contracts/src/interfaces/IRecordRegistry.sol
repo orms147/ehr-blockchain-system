@@ -43,6 +43,7 @@ interface IRecordRegistry {
     error MaxVersionReached();
     error EmptyCID();
     error InvalidAddress();
+    error RecordHasChildren();
     error Unauthorized();
 
     // Add records (accepts string, stores hash)

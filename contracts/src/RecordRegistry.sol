@@ -146,7 +146,29 @@ contract RecordRegistry is IRecordRegistry {
         
         Record storage rec = _records[oldHash];
         if (!rec.exists) revert RecordNotExist();
-        if (rec.owner != msg.sender) revert NotOwner();
+        
+        // Check permissions:
+        // 1. Check Children (Áp dụng cho TẤT CẢ)
+        // Nếu hồ sơ này đã có con, tuyệt đối không được sửa để bảo toàn tính nhất quán
+        if (_parentChildren[oldHash].length > 0) {
+            revert RecordHasChildren(); 
+        }
+
+        // 2. Check Permissions & Time Lock
+        bool isOwner = msg.sender == rec.owner;
+        bool isCreator = msg.sender == rec.createdBy;
+        
+        if (!isOwner) {
+            if (isCreator) {
+                // Bác sĩ chỉ được sửa trong 24h
+                if (block.timestamp > rec.createdAt + 1 days) {
+                    revert Unauthorized(); 
+                }
+            } else {
+                revert Unauthorized(); // Người lạ
+            }
+        }
+
         if (_records[newHash].exists) revert RecordExists();
 
         // Copy data to new hash
@@ -180,20 +202,6 @@ contract RecordRegistry is IRecordRegistry {
             _ownerRecords[rec.owner][idx - 1] = newHash;
             _ownerRecordIndex[rec.owner][newHash] = idx;
             delete _ownerRecordIndex[rec.owner][oldHash];
-        }
-
-        // ✅ FIX: Move children if this record is a parent
-        bytes32[] memory myChildren = _parentChildren[oldHash];
-        if (myChildren.length > 0) {
-            _parentChildren[newHash] = myChildren;
-            delete _parentChildren[oldHash];
-
-            // Update parent reference in all children
-            for (uint256 i = 0; i < myChildren.length; i++) {
-                if (_records[myChildren[i]].exists) {
-                    _records[myChildren[i]].parentCidHash = newHash;
-                }
-            }
         }
 
         // Delete old record
@@ -230,24 +238,6 @@ contract RecordRegistry is IRecordRegistry {
         _ownerRecordIndex[newOwner][cidHash] = _ownerRecords[newOwner].length;
         
         emit OwnershipTransferred(previousOwner, newOwner, cidHash);
-    }
-
-    // ============ ACCESS CONTROL ============
-    /**
-     * @notice Check if user can access record
-     * ✅ Simplified - checks ConsentLedger with string CID
-     * ⚠️ Caller must provide plaintext CID (from off-chain storage)
-     */
-    function canAccessRecord(address user, bytes32 cidHash) public view  returns (bool) {
-        Record storage rec = _records[cidHash];
-        if (!rec.exists) return false;
-        
-        // Owner can always access
-        if (user == rec.owner) return true;
-        
-        // ⚠️ Cannot check ConsentLedger without plaintext CID
-        // This function is limited - use off-chain check instead
-        return false;
     }
 
     /**

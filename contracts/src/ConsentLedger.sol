@@ -240,6 +240,7 @@ contract ConsentLedger is EIP712, ReentrancyGuard, IConsentLedger {
      * ✅ Deadline already included in DELEGATION_PERMIT_TYPEHASH
      */
     function delegateAuthorityBySig(
+        address patient,
         address delegatee,
         uint40 duration,
         bool allowSubDelegate,
@@ -252,7 +253,6 @@ contract ConsentLedger is EIP712, ReentrancyGuard, IConsentLedger {
             revert InvalidDuration();
         }
 
-        address patient = msg.sender;
         uint256 currentNonce = nonces[patient];
 
         bytes32 structHash = keccak256(abi.encode(

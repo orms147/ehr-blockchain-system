@@ -37,7 +37,7 @@ interface IEHRSystem {
     function rejectAccessRequest(bytes32 reqId) external;
 
     function addRecord(string calldata cid, string calldata parentCID, string calldata recordType) external;
-    function delegateAuthorityBySig(address delegatee, uint40 duration, bool allowSubDelegate, uint256 deadline, bytes calldata signature) external;
+    function delegateAuthorityBySig(address patient, address delegatee, uint40 duration, bool allowSubDelegate, uint256 deadline, bytes calldata signature) external;
     function revokeDelegation(address delegatee) external;
 
     function accessRequests(bytes32 reqId) external view returns (AccessRequest memory);
