@@ -35,12 +35,12 @@ contract RecordRegistryTest is TestHelpers {
     event RecordAdded(
         address indexed owner,
         bytes32 indexed cidHash,
-        bytes32 indexed parentCidHash,
+        bytes32 parentCidHash,
         bytes32 recordTypeHash,
         uint40 timestamp
     );
     event RecordUpdated(bytes32 indexed oldCidHash, bytes32 indexed newCidHash, address indexed owner);
-    event OwnershipTransferred(bytes32 indexed cidHash, address indexed oldOwner, address indexed newOwner);
+    event OwnershipTransferred(address indexed previousOwner, address indexed newOwner, bytes32 indexed cidHash);
     
     function setUp() public {
         // Setup accounts
@@ -79,7 +79,7 @@ contract RecordRegistryTest is TestHelpers {
         bytes32 expectedCidHash = keccak256(bytes(CID_1));
         bytes32 expectedTypeHash = keccak256(bytes(RECORD_TYPE_GENERAL));
         
-        vm.expectEmit(true, true, true, false);
+        vm.expectEmit(true, true, false, false);
         emit RecordAdded(patient1, expectedCidHash, bytes32(0), expectedTypeHash, 0);
         
         vm.prank(patient1);
@@ -103,7 +103,7 @@ contract RecordRegistryTest is TestHelpers {
         bytes32 expectedCidHash = keccak256(bytes(CID_1));
         bytes32 expectedParentHash = keccak256(bytes(PARENT_CID));
         
-        vm.expectEmit(true, true, true, false);
+        vm.expectEmit(true, true, false, false);
         emit RecordAdded(patient1, expectedCidHash, expectedParentHash, keccak256(bytes(RECORD_TYPE_LAB)), 0);
         
         vm.prank(patient1);
@@ -191,27 +191,24 @@ contract RecordRegistryTest is TestHelpers {
         recordRegistry.getRecord(keccak256(bytes(CID_1)));
     }
     
-    function test_UpdateRecordCID_WithChildren_Success() public {
+    function test_UpdateRecordCID_WithChildren_Revert() public {
         // Add parent and child
         vm.startPrank(patient1);
         recordRegistry.addRecord(PARENT_CID, "", RECORD_TYPE_GENERAL);
         recordRegistry.addRecord(CID_1, PARENT_CID, RECORD_TYPE_LAB);
         
-        // Update parent CID
+        // Update parent CID -> Should FAIL now because of strict integrity check
         string memory newParentCID = "QmNewParent";
+        vm.expectRevert(IRecordRegistry.RecordHasChildren.selector);
         recordRegistry.updateRecordCID(PARENT_CID, newParentCID);
         vm.stopPrank();
-        
-        // Verify child still references correct parent
-        bytes32[] memory children = recordRegistry.getChildRecords(keccak256(bytes(newParentCID)));
-        assertEq(children.length, 1, "Should still have 1 child");
     }
     
     function test_UpdateRecordCID_RevertWhen_NotOwner() public {
         vm.prank(patient1);
         recordRegistry.addRecord(CID_1, "", RECORD_TYPE_GENERAL);
         
-        vm.expectRevert(IRecordRegistry.NotOwner.selector);
+        vm.expectRevert(IRecordRegistry.Unauthorized.selector);
         vm.prank(patient2);
         recordRegistry.updateRecordCID(CID_1, CID_2);
     }
@@ -242,7 +239,7 @@ contract RecordRegistryTest is TestHelpers {
         bytes32 cidHash = keccak256(bytes(CID_1));
         
         vm.expectEmit(true, true, true, false);
-        emit OwnershipTransferred(cidHash, patient1, patient2);
+        emit OwnershipTransferred(patient1, patient2, cidHash);
         
         vm.prank(patient1);
         recordRegistry.transferOwnership(cidHash, patient2);
@@ -344,22 +341,64 @@ contract RecordRegistryTest is TestHelpers {
         assertFalse(recordRegistry.recordExists("NonExistent"), "Record should not exist");
     }
     
-    // ========== ACCESS CONTROL TESTS ==========
-    
-    function test_CanAccessRecord_Owner() public {
+    // ========== NEW UPDATE LOGIC TESTS ==========
+
+    function test_UpdateRecord_RevertWhen_HasChildren() public {
+        // 1. Setup: Patient creates Parent + Child
+        vm.startPrank(patient1);
+        recordRegistry.addRecord(PARENT_CID, "", RECORD_TYPE_GENERAL);
+        recordRegistry.addRecord(CID_1, PARENT_CID, RECORD_TYPE_LAB);
+        vm.stopPrank();
+
+        // 2. Try to update Parent (should fail because it has children)
         vm.prank(patient1);
-        recordRegistry.addRecord(CID_1, "", RECORD_TYPE_GENERAL);
-        
-        bytes32 cidHash = keccak256(bytes(CID_1));
-        assertTrue(recordRegistry.canAccessRecord(patient1, cidHash), "Owner should have access");
+        vm.expectRevert(IRecordRegistry.RecordHasChildren.selector);
+        recordRegistry.updateRecordCID(PARENT_CID, "NewParentCID");
     }
-    
-    function test_CanAccessRecord_NonOwner_NoConsent() public {
-        vm.prank(patient1);
-        recordRegistry.addRecord(CID_1, "", RECORD_TYPE_GENERAL);
-        
-        bytes32 cidHash = keccak256(bytes(CID_1));
-        assertFalse(recordRegistry.canAccessRecord(doctor1, cidHash), "Non-owner without consent should not have access");
+
+    function test_UpdateRecord_Doctor_TimeLock_Success() public {
+        // 1. Doctor creates record for Patient
+        vm.prank(doctor1);
+        recordRegistry.addRecordByDoctor(CID_1, "", RECORD_TYPE_GENERAL, patient1);
+
+        // 2. Fast forward 23 hours (within 24h limit)
+        vm.warp(block.timestamp + 23 hours);
+
+        // 3. Doctor updates record
+        vm.prank(doctor1);
+        recordRegistry.updateRecordCID(CID_1, CID_2);
+
+        // Verify update
+        assertTrue(recordRegistry.recordExists(keccak256(bytes(CID_2))));
+    }
+
+    function test_UpdateRecord_Doctor_TimeLock_Revert() public {
+        // 1. Doctor creates record
+        vm.prank(doctor1);
+        recordRegistry.addRecordByDoctor(CID_1, "", RECORD_TYPE_GENERAL, patient1);
+
+        // 2. Fast forward 25 hours (over 24h limit)
+        vm.warp(block.timestamp + 25 hours);
+
+        // 3. Doctor tries to update -> Fail
+        vm.prank(doctor1);
+        vm.expectRevert(IRecordRegistry.Unauthorized.selector);
+        recordRegistry.updateRecordCID(CID_1, CID_2);
+    }
+
+    function test_UpdateRecord_Doctor_RevertWhen_HasChildren() public {
+        // 1. Doctor creates Parent
+        vm.prank(doctor1);
+        recordRegistry.addRecordByDoctor(PARENT_CID, "", RECORD_TYPE_GENERAL, patient1);
+
+        // 2. Doctor creates Child (linked to Parent)
+        vm.prank(doctor1);
+        recordRegistry.addRecordByDoctor(CID_1, PARENT_CID, RECORD_TYPE_LAB, patient1);
+
+        // 3. Doctor tries to update Parent (within 24h but has children) -> Fail
+        vm.prank(doctor1);
+        vm.expectRevert(IRecordRegistry.RecordHasChildren.selector);
+        recordRegistry.updateRecordCID(PARENT_CID, "NewParentCID");
     }
     
     // ========== HASH-ONLY STORAGE VERIFICATION ==========
@@ -400,7 +439,7 @@ contract RecordRegistryTest is TestHelpers {
     
     function test_EdgeCase_GetMaxChildrenLimit() public view {
         uint8 limit = recordRegistry.getMaxChildrenLimit();
-        assertEq(limit, 10, "Max children should be 10");
+        assertEq(limit, 100, "Max children should be 100");
     }
 }
 

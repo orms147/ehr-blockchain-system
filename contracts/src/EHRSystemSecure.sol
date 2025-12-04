@@ -4,145 +4,49 @@ pragma solidity ^0.8.24;
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/Pausable.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
+import "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
 import "./interfaces/IAccessControl.sol";
 import "./interfaces/IRecordRegistry.sol";
 import "./interfaces/IConsentLedger.sol";
+import "./interfaces/IEHRSystemSecure.sol";
 
-/**
- * @title EHRSystemSecure - Complete Implementation
- * @notice Main contract coordinating the EHR system with:
- * - 2-step approval (requester → patient → complete)
- * - Patient consent required
- * - Request expiry
- * - Nonce-based request IDs (no collision)
- * - Time delay between approvals (security)
- */
-contract EHRSystemSecure is Ownable, Pausable, ReentrancyGuard {
+contract EHRSystemSecure is IEHRSystem, Ownable, Pausable, ReentrancyGuard, EIP712 {
+    using ECDSA for bytes32;
 
-    // ================ IMMUTABLES ================
+    // Typehash EIP-712 signature
+    bytes32 private constant CONFIRM_TYPEHASH = keccak256("ConfirmRequest(bytes32 reqId)");
+
+    // Immutable
     IAccessControl public immutable accessControl;
     IRecordRegistry public immutable recordRegistry;
     IConsentLedger public immutable consentLedger;
 
-    // ================ ENUMS ================
-    enum RequestType { DirectAccess, FullDelegation }
-    
-    enum RequestStatus {
-        Pending,
-        RequesterApproved,
-        PatientApproved,
-        Completed,
-        Rejected
-    }
-
-    // ================ STRUCTS ================
-    /**
-     * @dev Access request with proper structure
-     * ✅ FIX: Added expiry, patient approval tracking
-     */
-    struct AccessRequest {
-        address requester;
-        address patient;
-        string rootCID;
-        bytes32 encKeyHash;
-        RequestType reqType;
-        uint40 expiry;
-        uint40 consentDuration;
-        uint40 firstApprovalTime;
-        RequestStatus status;
-    }
-
-    // ================ STORAGE ================
-    mapping(bytes32 => AccessRequest) private _accessRequests;
-    
-    // ✅ FIX: Nonce-based request ID generation
+    // Storage
+    mapping(bytes32 => IEHRSystem.AccessRequest) private _accessRequests;
     uint256 private _requestNonce;
-
-    // ================ CONSTANTS ================
-    uint40 private constant MIN_APPROVAL_DELAY = 1 minutes;  // Reduced from 1 hour for better UX
+    
+    // Constant
+    uint40 private constant MIN_APPROVAL_DELAY = 1 minutes;  
     uint40 private constant MAX_REQUEST_VALIDITY = 30 days;
     uint40 private constant DEFAULT_CONSENT_DURATION = 30 days;
     uint40 private constant MAX_DELEGATION_DURATION = 365 days;
 
-    // ================ EVENTS ================
-    event SystemInitialized(
-        address indexed accessControl,
-        address indexed recordRegistry,
-        address indexed consentLedger
-    );
-
-    event AccessRequested(
-        bytes32 indexed reqId,
-        address indexed requester,
-        address indexed patient,
-        string rootCID,
-        RequestType reqType,
-        uint40 expiry
-    );
-
-    event RequestApprovedByRequester(
-        bytes32 indexed reqId,
-        address indexed requester,
-        uint40 timestamp
-    );
-
-    event RequestApprovedByPatient(
-        bytes32 indexed reqId,
-        address indexed patient,
-        uint40 timestamp
-    );
-
-    event RequestCompleted(
-        bytes32 indexed reqId,
-        address indexed requester,
-        address indexed patient,
-        RequestType reqType
-    );
-
-    event RequestRejected(
-        bytes32 indexed reqId,
-        address indexed rejectedBy,
-        uint40 timestamp
-    );
-
-    // ================ ERRORS ================
-    error InvalidRequest();
-    error RequestExpired();
-    error NotParty();
-    error AlreadyProcessed();
-    error ApprovalTooSoon();
-    error InvalidDuration();
-
-    // ================ CONSTRUCTOR ================
+    // Constructor
     constructor(
         address accessControlAddr,
         address recordRegistryAddr,
         address consentLedgerAddr
-    ) Ownable(msg.sender) {
+    ) EIP712("EHR System Secure", "1") Ownable(msg.sender) {
         accessControl = IAccessControl(accessControlAddr);
         recordRegistry = IRecordRegistry(recordRegistryAddr);
         consentLedger = IConsentLedger(consentLedgerAddr);
 
-        emit SystemInitialized(
-            accessControlAddr,
-            recordRegistryAddr,
-            consentLedgerAddr
-        );
+        emit SystemInitialized(accessControlAddr, recordRegistryAddr, consentLedgerAddr);
     }
 
-    // ================ REQUEST ACCESS ================
+    // Function
 
-    /**
-     * @notice Request access to patient records or delegation authority
-     * ✅ FIX: Proper validation, nonce-based ID, expiry
-     * 
-     * @param patient Patient address
-     * @param rootCID Root record CID (for DirectAccess)
-     * @param reqType DirectAccess or FullDelegation
-     * @param encKeyHash Encryption key hash (for DirectAccess)
-     * @param consentDurationHours How long consent lasts (0 = default)
-     * @param validForHours How long request is valid
-     */
     function requestAccess(
         address patient,
         string calldata rootCID,
@@ -170,16 +74,11 @@ contract EHRSystemSecure is Ownable, Pausable, ReentrancyGuard {
         // Validate based on request type
         bool requesterIsPatient = accessControl.isPatient(msg.sender);
         
-        if (reqType == RequestType.DirectAccess) {
-            // Direct access: doctor/org requests patient's record
-            if (requesterIsPatient) revert InvalidRequest();
-            if (bytes(rootCID).length == 0) revert InvalidRequest();
-            if (encKeyHash == bytes32(0)) revert InvalidRequest();
-            
-            bool isDoctor = accessControl.isDoctor(msg.sender);
-            bool isOrg = accessControl.isOrganization(msg.sender);
-            if (!isDoctor && !isOrg) revert InvalidRequest();
-            
+        // Validate Request Type
+        if (reqType == RequestType.DirectAccess || reqType == RequestType.RecordDelegation) {
+            if (bytes(rootCID).length == 0) revert InvalidRequest(); // required record cid
+        } else if (reqType == RequestType.FullDelegation) {
+            if (bytes(rootCID).length > 0) revert InvalidRequest(); // > 1 record
         } else {
             // Full delegation: doctor/org requests delegation authority
             if (requesterIsPatient) revert InvalidRequest();
@@ -189,7 +88,6 @@ contract EHRSystemSecure is Ownable, Pausable, ReentrancyGuard {
             if (!isDoctor && !isOrg) revert InvalidRequest();
         }
 
-        // ✅ FIX: Generate unique request ID with nonce
         bytes32 reqId = keccak256(abi.encode(
             msg.sender,
             patient,
@@ -240,24 +138,20 @@ contract EHRSystemSecure is Ownable, Pausable, ReentrancyGuard {
         );
     }
 
-    // ================ APPROVE REQUEST ================
+    // Approve request
+    function confirmAccessRequest(bytes32 reqId) external whenNotPaused nonReentrant {
+        _processConfirmation(reqId, msg.sender);
+    }
 
-    /**
-     * @notice Approve access request
-     * ✅ FIX: 2-step approval with time delay
-     * Flow: Requester confirms → Patient approves → Complete (with delay)
-     */
-    function approveRequest(bytes32 reqId) 
-        external whenNotPaused nonReentrant 
-    {
+    function _processConfirmation(bytes32 reqId, address approver) internal {
         AccessRequest storage req = _accessRequests[reqId];
         
         // Validate request
         _requireValidRequest(req);
 
         // Check if caller is a party
-        bool isRequester = msg.sender == req.requester;
-        bool isPatient = msg.sender == req.patient;
+        bool isRequester = approver == req.requester;   // msg.sender = doctor
+        bool isPatient = approver == req.patient;
         
         if (!isRequester && !isPatient) revert NotParty();
 
@@ -269,11 +163,11 @@ contract EHRSystemSecure is Ownable, Pausable, ReentrancyGuard {
             if (isRequester) {
                 req.status = RequestStatus.RequesterApproved;
                 req.firstApprovalTime = now40;
-                emit RequestApprovedByRequester(reqId, msg.sender, now40);
+                emit RequestApprovedByRequester(reqId, approver, now40);
             } else {
                 req.status = RequestStatus.PatientApproved;
                 req.firstApprovalTime = now40;
-                emit RequestApprovedByPatient(reqId, msg.sender, now40);
+                emit RequestApprovedByPatient(reqId, approver, now40);
             }
             return;
         }
@@ -289,7 +183,6 @@ contract EHRSystemSecure is Ownable, Pausable, ReentrancyGuard {
 
         if (!canComplete) revert AlreadyProcessed();
 
-        // ✅ FIX: Check approval delay (security measure)
         if (now40 < req.firstApprovalTime + MIN_APPROVAL_DELAY) {
             revert ApprovalTooSoon();
         }
@@ -298,12 +191,30 @@ contract EHRSystemSecure is Ownable, Pausable, ReentrancyGuard {
         _completeRequest(reqId, req);
     }
 
-    // ================ REJECT REQUEST ================
+    function confirmAccessRequestWithSignature(
+        bytes32 reqId, 
+        bytes calldata signature
+    ) 
+        external 
+        whenNotPaused 
+        nonReentrant 
+    {
+        AccessRequest storage req = _accessRequests[reqId];
 
-    /**
-     * @notice Reject access request
-     * Either party can reject
-     */
+        bytes32 structHash = keccak256(abi.encode(
+            CONFIRM_TYPEHASH,
+            reqId
+        ));
+
+        bytes32 hash = _hashTypedDataV4(structHash);
+
+        address signer = ECDSA.recover(hash, signature);
+
+        if (signer != req.patient) revert("Invalid Signature");
+
+        _processConfirmation(reqId, signer);
+    }
+
     function rejectRequest(bytes32 reqId) 
         external whenNotPaused nonReentrant 
     {
@@ -319,12 +230,7 @@ contract EHRSystemSecure is Ownable, Pausable, ReentrancyGuard {
         emit RequestRejected(reqId, msg.sender, uint40(block.timestamp));
     }
 
-    // ================ INTERNAL FUNCTIONS ================
-
-    /**
-     * @notice Complete approved request
-     * ✅ FIX: Patient consent is REQUIRED (patient must approve)
-     */
+    // Internal func
     function _completeRequest(bytes32 reqId, AccessRequest storage req) 
         internal 
     {
@@ -342,16 +248,27 @@ contract EHRSystemSecure is Ownable, Pausable, ReentrancyGuard {
                 req.rootCID,
                 req.encKeyHash,
                 expireAt,
-                true,
-                false
+                true,       // includeUpdates
+                false       // delegation false
+            );
+        } else if (req.reqType == RequestType.RecordDelegation) {
+            
+            consentLedger.grantInternal(
+                req.patient,
+                req.requester,
+                req.rootCID,
+                req.encKeyHash,
+                uint40(block.timestamp) + req.consentDuration,
+                true,  // includeUpdates
+                true   // allowDelegate = TRUE 
             );
         } else {
-            // Grant full delegation authority
+        // FullDelegation
             consentLedger.grantDelegationInternal(
                 req.patient,
                 req.requester,
                 req.consentDuration,
-                true
+                true // allowSubDelegate
             );
         }
 
@@ -363,9 +280,6 @@ contract EHRSystemSecure is Ownable, Pausable, ReentrancyGuard {
         );
     }
 
-    /**
-     * @notice Validate request is processable
-     */
     function _requireValidRequest(AccessRequest storage req) internal view {
         if (req.expiry == 0) revert InvalidRequest();
         if (block.timestamp > req.expiry) revert RequestExpired();
@@ -379,27 +293,17 @@ contract EHRSystemSecure is Ownable, Pausable, ReentrancyGuard {
         }
     }
 
-    // ================ VIEW FUNCTIONS ================
-
-    /**
-     * @notice Get access request details
-     */
+    // View function
     function getAccessRequest(bytes32 reqId) 
         external view returns (AccessRequest memory) 
     {
         return _accessRequests[reqId];
     }
 
-    /**
-     * @notice Get current request nonce
-     */
     function getCurrentNonce() external view returns (uint256) {
         return _requestNonce;
     }
 
-    /**
-     * @notice Get system constants
-     */
     function getSystemConstants() external pure returns (
         uint40 minApprovalDelay,
         uint40 maxRequestValidity,
@@ -413,8 +317,6 @@ contract EHRSystemSecure is Ownable, Pausable, ReentrancyGuard {
             MAX_DELEGATION_DURATION
         );
     }
-
-    // ================ EMERGENCY PAUSE ================
 
     function pause() external onlyOwner {
         _pause();

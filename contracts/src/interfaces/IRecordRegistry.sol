@@ -7,32 +7,18 @@ interface IRecordRegistry {
         bytes32 parentCidHash;  // keccak256(parentCID)
         address createdBy;
         address owner;
-        bytes32 recordTypeHash;
+        bytes32 recordTypeHash; // medical record name
         uint40 createdAt;
         uint8 version;
-        bool exists;
+        bool exists;            // bytes32 and uint have default values ​​→ hard to distinguish /dɪˈstɪŋɡwɪʃ/ between empty and existing 
     }
 
-    event RecordAdded(
-        address indexed owner,
-        bytes32 indexed cidHash,
-        bytes32 parentCidHash,
-        bytes32 recordTypeHash,
-        uint40 timestamp
-    );
+    // Event
+    event RecordAdded (address indexed owner, bytes32 indexed cidHash, bytes32 parentCidHash, bytes32 recordTypeHash, uint40 timestamp);
+    event RecordUpdated(bytes32 indexed oldCidHash, bytes32 indexed newCidHash, address indexed owner);
+    event OwnershipTransferred(address indexed previousOwner, address indexed newOwner, bytes32 indexed cidHash);
 
-    event RecordUpdated(
-        bytes32 indexed oldCidHash,
-        bytes32 indexed newCidHash,
-        address indexed owner
-    );
-
-    event OwnershipTransferred(
-        address indexed previousOwner,
-        address indexed newOwner,
-        bytes32 indexed cidHash
-    );
-
+    // Error
     error NotPatient();
     error NotDoctor();
     error NotOwner();
@@ -46,14 +32,10 @@ interface IRecordRegistry {
     error RecordHasChildren();
     error Unauthorized();
 
-    // Add records (accepts string, stores hash)
-    function addRecord(
-        string calldata cid,
-        string calldata parentCID,
-        string calldata recordType
-    ) external;
-
-    function addRecordByDoctor(
+    // Function
+    function addRecord (string calldata cid, string calldata parentCID, string calldata recordType) external;
+    
+    function addRecordByDoctor(     // create new record; or as update existed record 
         string calldata cid,
         string calldata parentCID,
         string calldata recordType,
@@ -71,7 +53,7 @@ interface IRecordRegistry {
         address newOwner
     ) external;
 
-    // View functions - hash-based
+    // View function
     function getRecord(bytes32 cidHash) external view returns (Record memory);
     function getRecordByString(string calldata cid) external view returns (Record memory);
     
@@ -86,4 +68,5 @@ interface IRecordRegistry {
     function recordExists(bytes32 cidHash) external view returns (bool);
     function recordExistsByString(string calldata cid) external view returns (bool);
     function getMaxChildrenLimit() external pure returns (uint8);
+
 }

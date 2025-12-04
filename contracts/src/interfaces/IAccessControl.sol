@@ -4,22 +4,24 @@ pragma solidity ^0.8.24;
 interface IAccessControl {
     struct Verification {
         address verifier;
-        string credential;
-        uint40 verifiedAt;
+        string credential;      
+        uint40 verifiedAt;      // unit32 = 4,29 bil secs = 136 years
         bool active;
-    }
+    }       
 
+    // Event
     event UserRegistered(address indexed user, string roleType);
     event DoctorVerified(address indexed doctor, address indexed verifier, string credential);
     event OrganizationVerified(address indexed org, string name);
-    event VerificationRevoked(address indexed user, address indexed revoker);
     event MemberAdded(address indexed org, address indexed doctor);
     event MemberRemoved(address indexed org, address indexed doctor);
+    event VerificationRevoked(address indexed user, address indexed revoker);
 
+    // Error
     error AlreadyRegistered();
     error NotAuthorized();
     error InvalidAddress();
-    error NotVerifiedOrg();
+    error NotVerifiedOrg();     // only verified org may verify doctors
 
     // Registration
     function registerAsPatient() external;
@@ -34,7 +36,7 @@ interface IAccessControl {
     // Revocation
     function revokeDoctorVerification(address doctor) external;
     function revokeOrgVerification(address org) external;
-
+    
     // Member management
     function addMember(address org, address doctor) external;
     function removeMember(address org, address doctor) external;
@@ -56,7 +58,7 @@ interface IAccessControl {
 
     function getOrgVerification(address org) external view returns (
         address verifier,
-        string memory orgName,
+        string memory orgName,      //don't need credential cus only legit or not
         uint40 verifiedAt,
         bool isVerified
     );
@@ -72,5 +74,6 @@ interface IAccessControl {
         bool isMinistry_
     );
 
-    function MINISTRY_OF_HEALTH() external view returns (address);
+    function MINISTRY_OF_HEALTH() external view returns (address);  // As declare a variable
+
 }

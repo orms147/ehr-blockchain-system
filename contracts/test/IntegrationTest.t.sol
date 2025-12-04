@@ -7,6 +7,7 @@ import "../src/RecordRegistry.sol";
 import "../src/ConsentLedger.sol";
 import "../src/EHRSystemSecure.sol";
 import "../src/DoctorUpdate.sol";
+import "../src/interfaces/IEHRSystemSecure.sol";
 import "./helpers/TestHelpers.sol";
 
 /**
@@ -72,6 +73,9 @@ contract IntegrationTest is TestHelpers {
         vm.prank(address(this));
         recordRegistry.setConsentLedger(address(consentLedger));
         
+        vm.prank(address(this));
+        recordRegistry.authorizeContract(address(doctorUpdate), true);
+        
         vm.startPrank(ministry);
         consentLedger.authorizeContract(address(ehrSystem), true);
         consentLedger.authorizeContract(address(doctorUpdate), true);
@@ -102,7 +106,7 @@ contract IntegrationTest is TestHelpers {
         ehrSystem.requestAccess(
             patient1,
             CID_GENERAL,
-            EHRSystemSecure.RequestType.DirectAccess,
+            IEHRSystem.RequestType.DirectAccess,
             DOCTOR_KEY,
             0,
             0
@@ -112,20 +116,20 @@ contract IntegrationTest is TestHelpers {
             doctor1,
             patient1,
             CID_GENERAL,
-            EHRSystemSecure.RequestType.DirectAccess,
+            IEHRSystem.RequestType.DirectAccess,
             uint256(0)
         ));
         
         // Step 5: Patient approves request
         vm.prank(patient1);
-        ehrSystem.approveRequest(reqId);
+        ehrSystem.confirmAccessRequest(reqId);
         
         // Step 6: Wait for approval delay
         vm.warp(block.timestamp + 1 minutes + 1);
         
         // Step 7: Doctor confirms
         vm.prank(doctor1);
-        ehrSystem.approveRequest(reqId);
+        ehrSystem.confirmAccessRequest(reqId);
         
         // Step 8: Verify doctor has access
         assertTrue(
@@ -145,9 +149,18 @@ contract IntegrationTest is TestHelpers {
         // Setup: Verify doctor
         _setupVerifiedDoctor(doctor1, org1);
         
+        // Explicitly register to ensure doctor role (fix for NotDoctor error)
+        vm.prank(doctor1);
+        accessControl.registerAsDoctor();
+        
         // Step 1: Patient registers
         vm.prank(patient1);
         accessControl.registerAsPatient();
+        
+        // Debug checks
+        bool isDoc = accessControl.isDoctor(doctor1);
+        require(isDoc, "Debug: doctor1 is NOT a doctor");
+        require(address(doctorUpdate.accessControl()) == address(accessControl), "Debug: AccessControl address mismatch");
         
         // Step 2: Doctor creates record for patient
         vm.prank(doctor1);

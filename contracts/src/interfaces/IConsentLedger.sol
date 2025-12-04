@@ -3,14 +3,14 @@ pragma solidity ^0.8.24;
 
 interface IConsentLedger {
     struct Consent {
-        address patient;
+        address patient;        // owner
         address grantee;
-        bytes32 rootCidHash;  // ✅ Changed from string rootCID - no plaintext storage
+        bytes32 rootCidHash;  
         bytes32 encKeyHash;
         uint40 issuedAt;
         uint40 expireAt;
         bool active;
-        bool includeUpdates;
+        bool includeUpdates;    //Grantee has rights to see update (children) record
         bool allowDelegate;
     }
 
@@ -21,6 +21,7 @@ interface IConsentLedger {
         bool active;
     }
 
+    // Event
     event ConsentGranted(
         address indexed patient,
         address indexed grantee,
@@ -54,20 +55,23 @@ interface IConsentLedger {
         address indexed byDelegatee,
         bytes32 rootCidHash
     );
-
+    
     event AuthorizedContract(address indexed contractAddress, bool allowed);
-
+ 
+    // Error
     error Unauthorized();
-    error InvalidExpire();
-    error InvalidNonce();
-    error InvalidSignature();
-    error DeadlinePassed();
+    error InvalidExpire();          // expired consent
+    error InvalidNonce();           // EIP-712 signatures (anti replay attack )
+    error InvalidSignature();       
+    error DeadlinePassed();         
     error NoActiveDelegation();
-    error InvalidDuration();
+    error InvalidDuration();        // too long/short time
     error EmptyCID();
 
+    // function
+    
     // Grant consent - accepts string CID for UX, stores hash only
-    function grantInternal(
+    function grantInternal( 
         address patient,
         address grantee,
         string calldata rootCID,
@@ -85,15 +89,15 @@ interface IConsentLedger {
         uint40 expireAt,
         bool includeUpdates,
         bool allowDelegate,
-        uint256 deadline,
+        uint256 deadline,           // anti replay attack : request accept -> wait for accept
         bytes calldata signature
     ) external;
 
-    // Revoke consent
-    function revoke(address grantee, string calldata rootCID) external;
+    // Revoke
+    function revoke (address grantee, string calldata rootCID) external;
 
     // Delegation
-    function grantDelegation(
+    function grantDelegation (
         address delegatee,
         uint40 duration,
         bool allowSubDelegate
@@ -106,7 +110,7 @@ interface IConsentLedger {
         bool allowSubDelegate
     ) external;
 
-    function delegateAuthorityBySig(
+     function delegateAuthorityBySig(
         address patient,
         address delegatee,
         uint40 duration,
@@ -125,10 +129,6 @@ interface IConsentLedger {
         uint40 expireAt
     ) external;
 
-    /**
-     * @notice Grant consent using specific record delegation authority
-     * @dev Requires msg.sender to have active consent with allowDelegate=true for this rootCID
-     */
     function grantUsingRecordDelegation(
         address patient,
         address newGrantee,
@@ -153,8 +153,7 @@ interface IConsentLedger {
         string calldata rootCID
     ) external view returns (Consent memory);
 
-    function getDelegation(address patient, address delegatee)
-        external view returns (Delegation memory);
+    function getDelegation(address patient, address delegatee) external view returns (Delegation memory);
 
     function getNonce(address patient) external view returns (uint256);
 }

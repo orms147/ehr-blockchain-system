@@ -57,13 +57,13 @@ contract EHRSystemTest is Test {
         recordRegistry.updateRecordCID("CID_1", "CID_2");
         
         // Check if data preserved
-        IRecordRegistry.Record memory rec = recordRegistry.getRecord("CID_2");
+        IRecordRegistry.Record memory rec = recordRegistry.getRecordByString("CID_2");
         assertEq(rec.owner, patient, "Owner should be preserved");
         assertEq(rec.cidHash, keccak256(bytes("CID_2")), "CID hash mismatch");
         
         // Old record should be gone
         vm.expectRevert();
-        recordRegistry.getRecord("CID_1");
+        recordRegistry.getRecordByString("CID_1");
         vm.stopPrank();
     }
 

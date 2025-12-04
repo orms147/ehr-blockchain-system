@@ -86,7 +86,7 @@ contract ConsentLedgerTest is TestHelpers {
             abi.encode(
                 keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"),
                 keccak256(bytes("EHR Consent Ledger")),
-                keccak256(bytes("3")),
+                keccak256(bytes("1")),
                 block.chainid,
                 address(consentLedger)
             )
@@ -216,6 +216,7 @@ contract ConsentLedgerTest is TestHelpers {
     }
     
     function test_GrantInternal_RevertWhen_ExpiredTimestamp() public {
+        vm.warp(1000); // Advance time to avoid 0 underflow
         vm.expectRevert(IConsentLedger.InvalidExpire.selector);
         vm.prank(authorizedContract);
         consentLedger.grantInternal(
@@ -491,6 +492,7 @@ contract ConsentLedgerTest is TestHelpers {
         
         vm.prank(patient1);
         consentLedger.delegateAuthorityBySig(
+            patient1, // Added patient address
             relative,
             duration,
             false,
@@ -529,39 +531,6 @@ contract ConsentLedgerTest is TestHelpers {
         consentLedger.revokeDelegation(relative);
     }
     
-    function test_GrantUsingDelegation_Success() public {
-        // Setup: Grant delegation
-        vm.prank(patient1);
-        consentLedger.grantDelegation(relative, 7 days, false);
-        
-        // Relative grants consent to doctor using delegation
-        uint40 expireAt = uint40(block.timestamp + 1 days);
-        
-        vm.prank(relative);
-        consentLedger.grantUsingDelegation(
-            patient1,
-            doctor1,
-            CID_1,
-            ENC_KEY_1,
-            expireAt
-        );
-        
-        // Verify consent granted
-        assertTrue(consentLedger.canAccess(patient1, doctor1, CID_1), "Doctor should have access");
-    }
-    
-    function test_GrantUsingDelegation_RevertWhen_NoDelegation() public {
-        vm.expectRevert(IConsentLedger.NoActiveDelegation.selector);
-        vm.prank(relative);
-        consentLedger.grantUsingDelegation(
-            patient1,
-            doctor1,
-            CID_1,
-            ENC_KEY_1,
-            uint40(block.timestamp + 1 days)
-        );
-    }
-    
     function test_GrantUsingDelegation_RevertWhen_DelegationExpired() public {
         // Grant delegation
         vm.prank(patient1);
@@ -578,6 +547,88 @@ contract ConsentLedgerTest is TestHelpers {
             CID_1,
             ENC_KEY_1,
             uint40(block.timestamp + 1 days)
+        );
+    }
+
+    function test_GrantUsingRecordDelegation_Success() public {
+        // 1. Patient grants access to doctor1 with allowDelegate = true
+        vm.prank(authorizedContract);
+        consentLedger.grantInternal(
+            patient1,
+            doctor1,
+            CID_1,
+            ENC_KEY_1,
+            uint40(block.timestamp + 30 days),
+            false,
+            true // allowDelegate = true
+        );
+
+        // 2. Doctor1 grants access to doctor2 using record delegation
+        vm.prank(doctor1);
+        consentLedger.grantUsingRecordDelegation(
+            patient1,
+            doctor2,
+            CID_1,
+            ENC_KEY_1,
+            uint40(block.timestamp + 7 days)
+        );
+
+        // 3. Verify access
+        assertTrue(consentLedger.canAccess(patient1, doctor2, CID_1));
+    }
+
+    function test_GrantUsingRecordDelegation_RevertWhen_NoDelegateRight() public {
+        // 1. Patient grants access to doctor1 with allowDelegate = FALSE
+        vm.prank(authorizedContract);
+        consentLedger.grantInternal(
+            patient1,
+            doctor1,
+            CID_1,
+            ENC_KEY_1,
+            uint40(block.timestamp + 30 days),
+            false,
+            false // allowDelegate = false
+        );
+
+        // 2. Doctor1 tries to grant access to doctor2
+        vm.expectRevert(IConsentLedger.Unauthorized.selector);
+        vm.prank(doctor1);
+        consentLedger.grantUsingRecordDelegation(
+            patient1,
+            doctor2,
+            CID_1,
+            ENC_KEY_1,
+            uint40(block.timestamp + 7 days)
+        );
+    }
+
+    function test_GrantUsingRecordDelegation_RevertWhen_ConsentExpired() public {
+        // 1. Patient grants access to doctor1 (valid for 1 day)
+        uint40 expireAt = uint40(block.timestamp + 1 days);
+        
+        vm.prank(authorizedContract);
+        consentLedger.grantInternal(
+            patient1,
+            doctor1,
+            CID_1,
+            ENC_KEY_1,
+            expireAt,
+            false,
+            true
+        );
+
+        // 2. Warp past expiry
+        vm.warp(expireAt + 1);
+
+        // 3. Doctor1 tries to grant access
+        vm.expectRevert(IConsentLedger.Unauthorized.selector);
+        vm.prank(doctor1);
+        consentLedger.grantUsingRecordDelegation(
+            patient1,
+            doctor2,
+            CID_1,
+            ENC_KEY_1,
+            uint40(block.timestamp + 7 days)
         );
     }
     
