@@ -40,10 +40,8 @@ export const web3AuthWallet = (): Wallet => ({
             },
         });
 
-        return {
-            connector: Web3AuthConnector({
-                web3AuthInstance,
-            }),
-        };
+        return Web3AuthConnector({
+            web3AuthInstance,
+        });
     },
 });

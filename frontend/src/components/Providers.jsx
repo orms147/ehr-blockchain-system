@@ -1,4 +1,3 @@
-'use client';
 
 import * as React from 'react';
 import {
@@ -10,11 +9,11 @@ import {
     QueryClientProvider,
 } from "@tanstack/react-query";
 import { WagmiProvider } from 'wagmi';
-import { config } from '../config/wagmi';
+import { config } from '@/config/wagmi';
 
 const queryClient = new QueryClient();
 
-export function Providers({ children }: { children: React.ReactNode }) {
+export function Providers({ children }) {
     return (
         <WagmiProvider config={config}>
             <QueryClientProvider client={queryClient}>

@@ -1,4 +1,3 @@
-"use client";
 import React from 'react';
 import { Users, FileText, Clock } from 'lucide-react';
 import StatCard from '@/components/admin/StatCard';

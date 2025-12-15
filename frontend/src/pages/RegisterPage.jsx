@@ -1,5 +1,3 @@
-'use client';
-
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Shield, User, Stethoscope } from 'lucide-react';
@@ -20,7 +18,7 @@ export default function RegisterPage() {
         role: ''
     });
 
-    const handleSubmit = async (e: React.FormEvent) => {
+    const handleSubmit = async (e) => {
         e.preventDefault();
         setLoading(true);
         // Simulate API call

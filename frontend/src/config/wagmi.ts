@@ -5,11 +5,11 @@ import {
     metaMaskWallet,
     coinbaseWallet,
 } from '@rainbow-me/rainbowkit/wallets';
-import { web3AuthWallet } from '../lib/web3auth-wallet';
+// import { web3AuthWallet } from '../lib/web3auth-wallet';
 import { sepolia } from 'wagmi/chains';
 import { createConfig, http } from 'wagmi';
 
-const projectId = process.env.NEXT_PUBLIC_PROJECT_ID || 'YOUR_PROJECT_ID';
+const projectId = import.meta.env.VITE_WALLET_CONNECT_PROJECT_ID || 'c07c08929bda531398544edc0da85917';
 
 const connectors = connectorsForWallets(
     [
@@ -19,7 +19,7 @@ const connectors = connectorsForWallets(
                 rainbowWallet,
                 metaMaskWallet,
                 walletConnectWallet,
-                web3AuthWallet(),
+                // web3AuthWallet,
             ],
         },
     ],

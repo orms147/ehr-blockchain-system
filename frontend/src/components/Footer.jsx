@@ -1,4 +1,3 @@
-"use client";
 import React from 'react';
 import { Shield, Twitter, Github, Linkedin, Mail } from 'lucide-react';
 import { toast } from '@/components/ui/use-toast';

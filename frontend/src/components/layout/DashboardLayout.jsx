@@ -1,7 +1,5 @@
-"use client";
 import React, { useState } from 'react';
-import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
     LayoutDashboard,
     User,
@@ -17,8 +15,13 @@ import { toast } from '@/components/ui/use-toast';
 
 const DashboardLayout = ({ children }) => {
     const [isSidebarOpen, setSidebarOpen] = useState(false);
-    const pathname = usePathname();
-    const navigate = useRouter().push;
+    const location = useLocation();
+    const navigate = useNavigate();
+    const pathname = location.pathname;
+
+    const handleNavigate = (path) => {
+        navigate(path);
+    };
 
     const toggleSidebar = () => setSidebarOpen(!isSidebarOpen);
 
@@ -77,7 +80,7 @@ const DashboardLayout = ({ children }) => {
                         return (
                             <Link
                                 key={item.path}
-                                href={item.path}
+                                to={item.path}
                                 onClick={() => setSidebarOpen(false)}
                                 className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${isActive
                                     ? 'bg-blue-50 text-blue-700 font-medium'

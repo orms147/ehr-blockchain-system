@@ -1,4 +1,3 @@
-"use client";
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Menu, X, Shield } from 'lucide-react';
