@@ -5,6 +5,14 @@ import "./interfaces/IRecordRegistry.sol";
 import "./interfaces/IAccessControl.sol";
 import "./interfaces/IConsentLedger.sol";
 
+/**
+ * @title RecordRegistry - Privacy-Safe Version
+ * @notice All functions use bytes32 cidHash instead of string CID
+ * @dev Frontend MUST compute keccak256(bytes(cid)) off-chain before calling
+ * 
+ * SECURITY: This version NEVER receives plaintext CID on-chain.
+ * The CID only exists in frontend/IPFS, never in blockchain calldata.
+ */
 contract RecordRegistry is IRecordRegistry {
     IAccessControl public immutable accessControl;
     IConsentLedger public consentLedger;
@@ -12,112 +20,115 @@ contract RecordRegistry is IRecordRegistry {
     address public immutable deployer;
 
     // Storage
-
     mapping(bytes32 => Record) private _records;
     
     // Owner records (stores hashes)
     mapping(address => bytes32[]) private _ownerRecords;
-    mapping(bytes32 => bytes32[]) private _parentChildren;      //next records
+    mapping(bytes32 => bytes32[]) private _parentChildren;
 
-    // Record index mapping : patient address => (cidHash => index+1)
+    // Record index mapping: patient address => (cidHash => index+1)
     mapping(address => mapping(bytes32 => uint256)) private _ownerRecordIndex;
 
     // Authorized contracts (e.g. DoctorUpdate)
     mapping(address => bool) public authorizedContracts;
 
-    // Constant
-    uint40 private constant FOREVER = type(uint40).max;
+    // Constants
     uint8 private constant MAX_CHILDREN = 100;
 
     // Constructor
-    constructor (IAccessControl _accesscontrol) {
-        accessControl = _accesscontrol;
+    constructor(IAccessControl _accessControl) {
+        accessControl = _accessControl;
         deployer = msg.sender;
     }
 
-    // Modifier
+    // Modifiers
     modifier onlyRecordOwner(bytes32 cidHash) {
         if (_records[cidHash].owner != msg.sender) revert NotOwner();
         _;
     }
 
-    // FUNCTION
+    // ============ ADMIN FUNCTIONS ============
 
-    // Admin
     function setConsentLedger(address _consentLedger) external {
-        require(msg.sender == deployer, "Only deployer");  // Access control
+        require(msg.sender == deployer, "Only deployer");
+        require(_consentLedger != address(0), "zero");
         require(address(consentLedger) == address(0), "Already set");
         consentLedger = IConsentLedger(_consentLedger);
     }
 
-    /**
-     * @notice Authorize a contract to add records (e.g. DoctorUpdate)
-     */
     function authorizeContract(address contractAddr, bool isAuthorized) external {
         require(msg.sender == deployer, "Only deployer");
         authorizedContracts[contractAddr] = isAuthorized;
     }
 
-    // Add record
-    function addRecord (string calldata cid, string calldata parentCID, string calldata recordType) external {
-        if (!accessControl.isPatient(msg.sender)) revert NotPatient();
-        if (bytes(cid).length == 0) revert EmptyCID();
-        
-        //hash CID record + parent record (if existed)
-        bytes32 cidHash = keccak256(bytes(cid));            //keccak(bytes)
-        bytes32 parentHash = bytes(parentCID).length > 0    //check parent empty ? 
-            ? keccak256(bytes(parentCID)) 
-            : bytes32(0);         
+    // ============ WRITE FUNCTIONS (Hash-based) ============
 
-        _addRecord(cidHash, parentHash, recordType, msg.sender, msg.sender);
+    /**
+     * @notice Patient adds their own record
+     * @param cidHash keccak256(bytes(cid)) - computed OFF-CHAIN
+     * @param parentCidHash keccak256(bytes(parentCID)) or bytes32(0) if root
+     * @param recordTypeHash keccak256(bytes(recordType)) - computed OFF-CHAIN
+     */
+    function addRecord(
+        bytes32 cidHash,
+        bytes32 parentCidHash,
+        bytes32 recordTypeHash
+    ) external override {
+        if (!accessControl.isPatient(msg.sender)) revert NotPatient();
+        if (cidHash == bytes32(0)) revert EmptyCID();
+        
+        _addRecord(cidHash, parentCidHash, recordTypeHash, msg.sender, msg.sender);
     }
 
+    /**
+     * @notice Doctor/authorized contract adds record for patient
+     * @param cidHash keccak256(bytes(cid)) - computed OFF-CHAIN
+     * @param parentCidHash keccak256(bytes(parentCID)) or bytes32(0) if root
+     * @param recordTypeHash keccak256(bytes(recordType)) - computed OFF-CHAIN
+     * @param patient Patient address who will own the record
+     */
     function addRecordByDoctor(
-        string calldata cid,
-        string calldata parentCID,
-        string calldata recordType,
+        bytes32 cidHash,
+        bytes32 parentCidHash,
+        bytes32 recordTypeHash,
         address patient
     ) external override {
         // Allow Doctor OR Authorized Contract
         if (!accessControl.isDoctor(msg.sender) && !authorizedContracts[msg.sender]) {
             revert NotDoctor();
         }
-        if (bytes(cid).length == 0) revert EmptyCID();
+        if (cidHash == bytes32(0)) revert EmptyCID();
         
-        bytes32 cidHash = keccak256(bytes(cid));
-        bytes32 parentHash = bytes(parentCID).length > 0 
-            ? keccak256(bytes(parentCID)) 
-            : bytes32(0);
-            
-        _addRecord(cidHash, parentHash, recordType, msg.sender, patient);
+        _addRecord(cidHash, parentCidHash, recordTypeHash, msg.sender, patient);
     }
 
+    /**
+     * @dev Internal function to add a record
+     */
     function _addRecord(
         bytes32 cidHash,
         bytes32 parentCidHash,
-        string memory recordType,
+        bytes32 recordTypeHash,
         address creator,
         address patient
     ) internal {
         if (cidHash == bytes32(0)) revert EmptyCID();
         if (_records[cidHash].exists) revert RecordExists();
 
-        // Update version, push this record in mapping record (_parentChildren)
+        // Update version, push this record in parent's children
         uint8 version = 1;
-        if (parentCidHash != bytes32(0)) {          
+        if (parentCidHash != bytes32(0)) {
             if (!_records[parentCidHash].exists) revert ParentNotExist();
-            version = _records[parentCidHash].version + 1;      // Record version = pre + 1
+            version = _records[parentCidHash].version + 1;
             
-            // OPTION (?), maybe cannot > 100  !!! 
             if (_parentChildren[parentCidHash].length >= MAX_CHILDREN) {
                 revert TooManyChildren();
             }
             _parentChildren[parentCidHash].push(cidHash);
         }
 
-        // Add record struct to mapping (cidHash -> Record ) 
+        // Add record struct
         uint40 now40 = uint40(block.timestamp);
-        bytes32 recordTypeHash = keccak256(bytes(recordType));      //Hash record's name
 
         _records[cidHash] = Record({
             cidHash: cidHash,
@@ -137,41 +148,45 @@ contract RecordRegistry is IRecordRegistry {
         emit RecordAdded(patient, cidHash, parentCidHash, recordTypeHash, now40);
     }
 
-    // Update function 
-    // Actually: replace it with another record
-    function updateRecordCID(string calldata oldCID, string calldata newCID) external override {
-        bytes32 oldHash = keccak256(bytes(oldCID));
-        bytes32 newHash = keccak256(bytes(newCID));
-        
-        Record storage rec = _records[oldHash];
+    /**
+     * @notice Update record CID (for corrections within time limit)
+     * @param oldCidHash Hash of old CID
+     * @param newCidHash Hash of new CID
+     */
+    function updateRecordCID(
+        bytes32 oldCidHash,
+        bytes32 newCidHash
+    ) external override {
+        Record storage rec = _records[oldCidHash];
         if (!rec.exists) revert RecordNotExist();
         
-        // Check permissions : Cannot update if thí record has children
-        if (_parentChildren[oldHash].length > 0) {
-            revert RecordHasChildren(); 
+        // Cannot update if this record has children
+        if (_parentChildren[oldCidHash].length > 0) {
+            revert RecordHasChildren();
         }
 
-        // Check Permissions & Time Lock
+        // Check permissions & time lock
         bool isOwner = msg.sender == rec.owner;
         bool isCreator = msg.sender == rec.createdBy;
         
         if (!isOwner) {
             if (isCreator) {
-                // Doctor can only fix it within 24 hours
+                // Doctor can only fix within 24 hours
                 if (block.timestamp > rec.createdAt + 1 days) {
-                    revert Unauthorized(); 
+                    revert Unauthorized();
                 }
             } else {
-                revert Unauthorized(); 
+                revert Unauthorized();
             }
         }
 
-        // If new record exist 
-        if (_records[newHash].exists) revert RecordExists();
+        // Check new record doesn't exist
+        if (_records[newCidHash].exists) revert RecordExists();
+        if (newCidHash == bytes32(0)) revert EmptyCID();
 
         // Copy data to new hash
-        _records[newHash] = Record({
-            cidHash: newHash,
+        _records[newCidHash] = Record({
+            cidHash: newCidHash,
             parentCidHash: rec.parentCidHash,
             createdBy: rec.createdBy,
             owner: rec.owner,
@@ -181,54 +196,45 @@ contract RecordRegistry is IRecordRegistry {
             exists: true
         });
 
-        // Update _parentChildren mapping
+        // Update parent's children array
         if (rec.parentCidHash != bytes32(0)) {
-            bytes32[] storage children = _parentChildren[rec.parentCidHash];    // All children record (hashCID)
-            for (uint256 i = 0; i < children.length; i++) {     // Loop find index
-                if (children[i] == oldHash) {
-                    children[i] = newHash;
+            bytes32[] storage children = _parentChildren[rec.parentCidHash];
+            for (uint256 i = 0; i < children.length; i++) {
+                if (children[i] == oldCidHash) {
+                    children[i] = newCidHash;
                     break;
                 }
             }
         }
 
         // Update owner records
-        uint256 idx = _ownerRecordIndex[rec.owner][oldHash];    // Get old record index 
+        uint256 idx = _ownerRecordIndex[rec.owner][oldCidHash];
         if (idx > 0) {
-            _ownerRecords[rec.owner][idx - 1] = newHash;        // -1 cuz start at 0 index
-            _ownerRecordIndex[rec.owner][newHash] = idx;
-            delete _ownerRecordIndex[rec.owner][oldHash];       // Delete = set -> deffault
+            _ownerRecords[rec.owner][idx - 1] = newCidHash;
+            _ownerRecordIndex[rec.owner][newCidHash] = idx;
+            delete _ownerRecordIndex[rec.owner][oldCidHash];
         }
 
         address recordOwner = rec.owner;
 
-        // // Update children
-        // bytes32[] memory myChildren = _parentChildren[oldHash];
-        // if (myChildren.length > 0) {
-        //     _parentChildren[newHash] = myChildren;
-        //     delete _parentChildren[oldHash];
-
-        //     for (uint256 i = 0; i < myChildren.length; i++) {
-        //         if (_records[myChildren[i]].exists) {
-        //             _records[myChildren[i]].parentCidHash = newHash;
-        //         }
-        //     }
-        // }
-
         // Delete old record
-        delete _records[oldHash];  
+        delete _records[oldCidHash];
 
-        emit RecordUpdated(oldHash, newHash, recordOwner);
+        emit RecordUpdated(oldCidHash, newCidHash, recordOwner);
     }
-    
-    // Transfer ownership from doctor to patient
+
+    /**
+     * @notice Transfer record ownership
+     * @param cidHash Record to transfer
+     * @param newOwner New owner address
+     */
     function transferOwnership(
         bytes32 cidHash,
         address newOwner
     ) external override onlyRecordOwner(cidHash) {
         if (newOwner == address(0)) revert InvalidAddress();
         
-        Record storage rec = _records[cidHash]; // Get REcord struct 
+        Record storage rec = _records[cidHash];
         address previousOwner = rec.owner;
         
         // Remove from old owner
@@ -252,14 +258,9 @@ contract RecordRegistry is IRecordRegistry {
         emit OwnershipTransferred(previousOwner, newOwner, cidHash);
     }
 
-    // View function
-    function getRecord(bytes32 cidHash) external view override returns (Record memory) {
-        if (!_records[cidHash].exists) revert RecordNotExist();
-        return _records[cidHash];
-    }
+    // ============ VIEW FUNCTIONS ============
 
-    function getRecordByString(string calldata cid) external view override returns (Record memory) {
-        bytes32 cidHash = keccak256(bytes(cid));
+    function getRecord(bytes32 cidHash) external view override returns (Record memory) {
         if (!_records[cidHash].exists) revert RecordNotExist();
         return _records[cidHash];
     }
@@ -281,11 +282,6 @@ contract RecordRegistry is IRecordRegistry {
     }
 
     function recordExists(bytes32 cidHash) external view override returns (bool) {
-        return _records[cidHash].exists;
-    }
-
-    function recordExistsByString(string calldata cid) external view override returns (bool) {
-        bytes32 cidHash = keccak256(bytes(cid));
         return _records[cidHash].exists;
     }
 

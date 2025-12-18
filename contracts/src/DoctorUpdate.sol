@@ -7,12 +7,11 @@ import "./interfaces/IRecordRegistry.sol";
 import "./interfaces/IConsentLedger.sol";
 
 /**
- * @title DoctorUpdate - Complete Implementation
- * @notice Allows doctors to create records for patients with:
- * - Flexible record types (no hardcoding)
- * - Configurable access duration with limits
- * - Emergency access with witness validation
- * - Proper validation
+ * @title DoctorUpdate - Privacy-Safe Version
+ * @notice All functions use bytes32 cidHash instead of string CID
+ * @dev Frontend MUST compute keccak256(bytes(cid)) off-chain before calling
+ * 
+ * SECURITY: This version NEVER receives plaintext CID on-chain.
  */
 contract DoctorUpdate is ReentrancyGuard {
 
@@ -56,12 +55,7 @@ contract DoctorUpdate is ReentrancyGuard {
         uint40 expireAt
     );
 
-    event AccessExtended(
-        address indexed patient,
-        address indexed doctor,
-        bytes32 indexed cidHash,
-        uint40 newExpiry
-    );
+
 
     // ================ ERRORS ================
     error NotDoctor();
@@ -88,48 +82,35 @@ contract DoctorUpdate is ReentrancyGuard {
         _;
     }
 
-    // ================ MAIN FUNCTION ================
+    // ================ MAIN FUNCTION (Hash-based) ================
 
     /**
      * @notice Doctor creates record for patient with automatic consent grants
-     * @param cid IPFS CID of the new record
-     * @param parentCID Parent record CID (empty if root)
-     * @param recordType Type of record (e.g., "Diagnosis", "Lab Result", "Prescription")
+     * @param cidHash keccak256(bytes(cid)) - computed OFF-CHAIN
+     * @param parentCidHash keccak256(bytes(parentCID)) or bytes32(0) if root
+     * @param recordTypeHash keccak256(bytes(recordType)) - computed OFF-CHAIN
      * @param patient Patient address
-     * @param patientEncKeyHash Encryption key hash for patient
      * @param doctorEncKeyHash Encryption key hash for doctor
      * @param doctorAccessHours How long doctor can access (0 = use default)
      */
     function addRecordByDoctor(
-        string calldata cid,
-        string calldata parentCID,
-        string calldata recordType,
+        bytes32 cidHash,
+        bytes32 parentCidHash,
+        bytes32 recordTypeHash,
         address patient,
-        bytes32 patientEncKeyHash,
         bytes32 doctorEncKeyHash,
         uint40 doctorAccessHours
     ) external onlyDoctor nonReentrant {
         // Validate inputs
         if (patient == address(0)) revert InvalidParameter();
         if (!accessControl.isPatient(patient)) revert NotPatient();
-        if (bytes(cid).length == 0) revert InvalidParameter();
-        if (bytes(recordType).length == 0) revert InvalidParameter();
+        if (cidHash == bytes32(0)) revert InvalidParameter();
 
         // Create record (owner = patient)
-        recordRegistry.addRecordByDoctor(cid, parentCID, recordType, patient);
+        recordRegistry.addRecordByDoctor(cidHash, parentCidHash, recordTypeHash, patient);
 
-        // Grant patient permanent access (if key provided)
-        if (patientEncKeyHash != bytes32(0)) {
-            consentLedger.grantInternal(
-                patient,
-                patient,
-                cid,
-                patientEncKeyHash,
-                0, // forever
-                true,
-                true
-            );
-        }
+        // NOTE: Patient does NOT need consent entry
+        // canAccess(patient, patient, ...) returns true by default
 
         // Grant doctor temporary access (if key provided)
         uint40 expireAt;
@@ -137,7 +118,7 @@ contract DoctorUpdate is ReentrancyGuard {
             expireAt = _grantDoctorAccess(
                 patient,
                 msg.sender,
-                cid,
+                cidHash,
                 doctorEncKeyHash,
                 doctorAccessHours
             );
@@ -146,27 +127,25 @@ contract DoctorUpdate is ReentrancyGuard {
         emit RecordAddedByDoctor(
             msg.sender,
             patient,
-            keccak256(bytes(cid)),
-            bytes(parentCID).length > 0 ? keccak256(bytes(parentCID)) : bytes32(0),
-            keccak256(bytes(recordType)),
+            cidHash,
+            parentCidHash,
+            recordTypeHash,
             expireAt
         );
     }
 
-    // ================ EMERGENCY ACCESS ================
+    // ================ EMERGENCY ACCESS (Hash-based) ================
 
     /**
      * @notice Grant emergency access with witness validation
-     * @dev Requires at least 2 witnesses (doctors or org members)
-     * @param patient Patient address
-     * @param cid Record CID to access
+     * @param cidHash keccak256(bytes(cid)) - computed OFF-CHAIN
      * @param encKeyHash Encryption key hash
-     * @param justification Reason for emergency access
+     * @param justification Reason for emergency access (OK as string - not sensitive)
      * @param witnesses Array of witness addresses
      */
     function grantEmergencyAccess(
         address patient,
-        string calldata cid,
+        bytes32 cidHash,
         bytes32 encKeyHash,
         string calldata justification,
         address[] calldata witnesses
@@ -175,6 +154,7 @@ contract DoctorUpdate is ReentrancyGuard {
         if (witnesses.length < MIN_WITNESSES) revert InsufficientWitnesses();
         if (bytes(justification).length == 0) revert InvalidParameter();
         if (encKeyHash == bytes32(0)) revert InvalidParameter();
+        if (cidHash == bytes32(0)) revert InvalidParameter();
 
         // Validate witnesses
         _validateWitnesses(witnesses);
@@ -184,7 +164,7 @@ contract DoctorUpdate is ReentrancyGuard {
         consentLedger.grantInternal(
             patient,
             msg.sender,
-            cid,
+            cidHash,
             encKeyHash,
             expireAt,
             true,
@@ -194,60 +174,29 @@ contract DoctorUpdate is ReentrancyGuard {
         emit EmergencyAccessGranted(
             msg.sender,
             patient,
-            keccak256(bytes(cid)),
+            cidHash,
             justification,
             witnesses,
             expireAt
         );
     }
 
-    // ================ EXTEND ACCESS ================
-
-    /**
-     * @notice Doctor extends their existing access
-     * @dev Useful for ongoing treatment
-     */
-    function extendDoctorAccess(
-        address patient,
-        string calldata cid,
-        bytes32 encKeyHash,
-        uint40 additionalHours
-    ) external onlyDoctor nonReentrant {
-        if (!accessControl.isPatient(patient)) revert NotPatient();
-        if (encKeyHash == bytes32(0)) revert InvalidParameter();
-
-        uint40 expireAt = _grantDoctorAccess(
-            patient,
-            msg.sender,
-            cid,
-            encKeyHash,
-            additionalHours
-        );
-
-        emit AccessExtended(patient, msg.sender, keccak256(bytes(cid)), expireAt);
-    }
-
     // ================ INTERNAL FUNCTIONS ================
 
-    /**
-     * @notice Internal function to grant doctor access with validation
-     */
     function _grantDoctorAccess(
         address patient,
         address doctor,
-        string calldata cid,
+        bytes32 cidHash,
         bytes32 encKeyHash,
         uint40 accessHours
     ) internal returns (uint40 expireAt) {
         uint40 duration;
 
-        // Use default if not specified
         if (accessHours == 0) {
             duration = DEFAULT_DOCTOR_ACCESS;
         } else {
             duration = accessHours * 1 hours;
 
-            // Validate duration
             if (duration < MIN_DOCTOR_ACCESS || duration > MAX_DOCTOR_ACCESS) {
                 revert InvalidAccessDuration();
             }
@@ -258,35 +207,29 @@ contract DoctorUpdate is ReentrancyGuard {
         consentLedger.grantInternal(
             patient,
             doctor,
-            cid,
+            cidHash,
             encKeyHash,
             expireAt,
             true,
             false
         );
 
-        emit TemporaryAccessGranted(patient, doctor, keccak256(bytes(cid)), expireAt, duration);
+        emit TemporaryAccessGranted(patient, doctor, cidHash, expireAt, duration);
     }
 
-    /**
-     * @notice Validate emergency access witnesses
-     */
     function _validateWitnesses(address[] calldata witnesses) internal view {
         uint256 witnessCount = witnesses.length;
 
         for (uint256 i; i < witnessCount;) {
             address witness = witnesses[i];
 
-            // Cannot be the requesting doctor
             if (witness == msg.sender) revert InvalidWitness();
 
-            // Must be doctor or organization member
             bool isValidWitness = accessControl.isDoctor(witness) ||
                                  accessControl.isOrganization(witness);
 
             if (!isValidWitness) revert InvalidWitness();
 
-            // Check for duplicate witnesses
             for (uint256 j = i + 1; j < witnessCount;) {
                 if (witnesses[j] == witness) revert InvalidWitness();
                 unchecked { ++j; }
@@ -298,9 +241,6 @@ contract DoctorUpdate is ReentrancyGuard {
 
     // ================ VIEW FUNCTIONS ================
 
-    /**
-     * @notice Get access duration limits
-     */
     function getAccessLimits() external pure returns (
         uint40 minHours,
         uint40 maxHours,

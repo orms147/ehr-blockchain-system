@@ -95,7 +95,8 @@ contract AccessControl is IAccessControl{
     
     function verifyOrganization(address org, string calldata orgName) external override onlyMinistry {
         if ((_roles[org] & ORGANIZATION) == 0) revert NotAuthorized();
-        
+        if (org == address(0)) revert InvalidAddress();
+
         // Add verified flag
         _roles[org] |= VERIFIED_ORG;
         

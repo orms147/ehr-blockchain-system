@@ -6,14 +6,20 @@ import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
 import {IConsentLedger} from "src/interfaces/IConsentLedger.sol";
 
+/**
+ * @title ConsentLedger - Privacy-Safe Version
+ * @notice All functions use bytes32 cidHash instead of string CID
+ * @dev Frontend MUST compute keccak256(bytes(cid)) off-chain before calling
+ * 
+ * SECURITY: This version NEVER receives plaintext CID on-chain.
+ * The CID only exists in frontend/IPFS, never in blockchain calldata.
+ */
 contract ConsentLedger is EIP712, ReentrancyGuard, IConsentLedger {
     using ECDSA for bytes32;
 
-    // Type hash (for off-chain sign)
-        // Struct name = ConsentPermit
-        // Fields = patient, grantee, rootCID, encKeyHash, expireAt, ...
+    // EIP-712 TypeHash - now signs over bytes32 cidHash, not string
     bytes32 private constant CONSENT_PERMIT_TYPEHASH = keccak256(
-        "ConsentPermit(address patient,address grantee,string rootCID,bytes32 encKeyHash,uint256 expireAt,bool includeUpdates,bool allowDelegate,uint256 deadline,uint256 nonce)"
+        "ConsentPermit(address patient,address grantee,bytes32 rootCidHash,bytes32 encKeyHash,uint256 expireAt,bool includeUpdates,bool allowDelegate,uint256 deadline,uint256 nonce)"
     );
 
     bytes32 private constant DELEGATION_PERMIT_TYPEHASH = keccak256(
@@ -21,43 +27,39 @@ contract ConsentLedger is EIP712, ReentrancyGuard, IConsentLedger {
     );
 
     // Storage
-
-    // Key : bytes32 = keccak256(patient, grantee, rootCidHash)
+    // Key: bytes32 = keccak256(patient, grantee, rootCidHash)
     mapping(bytes32 => Consent) private _consents;
     
     // Delegation: patient => delegatee => packed data
     mapping(address => mapping(address => uint256)) private _delegations;
-                                        //uint256 : 0–39 : expiresAt (uint40)       (Lowest bit)
-                                        //          40   : allowSubDelegate
-                                        //          41   : active
     
     // Nonces for replay protection
     mapping(address => uint256) public nonces;
     
-    // Authorization (contract hav permit to call)
-    mapping(address => bool) public authorizedContracts;        //admin as default
+    // Authorization
+    mapping(address => bool) public authorizedContracts;
 
     address public immutable admin;
 
-    // CONSTANT
+    // Constants
     uint40 private constant FOREVER = type(uint40).max;
     uint40 private constant MAX_DURATION = 5 * 365 days;
-    uint40 private constant MIN_DURATION = 1 days;          //cannot spam
+    uint40 private constant MIN_DURATION = 1 days;
 
-    // Delegation bit positions (packed data _delegations)
-    uint256 private constant EXPIRES_MASK = 0xFFFFFFFFFF;      // 10 * 4 = 40 bits  (Lowest bit -> expiresAt)
-    uint256 private constant ALLOW_SUB_DELEGATE_BIT = 40;      // allowSubDelegate
-    uint256 private constant ACTIVE_BIT = 41;                  // active
+    // Delegation bit positions
+    uint256 private constant EXPIRES_MASK = 0xFFFFFFFFFF;
+    uint256 private constant ALLOW_SUB_DELEGATE_BIT = 40;
+    uint256 private constant ACTIVE_BIT = 41;
 
-    // Constructors
-    constructor (address admin_) EIP712("EHR Consent Ledger", "1") {
+    // Constructor
+    constructor(address admin_) EIP712("EHR Consent Ledger", "2") {
         if (admin_ == address(0)) revert Unauthorized();
         admin = admin_;
         authorizedContracts[admin_] = true;
         emit AuthorizedContract(admin_, true);
     }
 
-    // Modifier
+    // Modifiers
     modifier onlyAuthorized() {
         if (!authorizedContracts[msg.sender] && msg.sender != admin) revert Unauthorized();
         _;
@@ -68,28 +70,35 @@ contract ConsentLedger is EIP712, ReentrancyGuard, IConsentLedger {
         _;
     }
 
-    // Authorization
+    // ============ AUTHORIZATION ============
+
     function authorizeContract(address contractAddress, bool allowed) external override onlyAdmin {
         if (contractAddress == address(0)) revert Unauthorized();
         authorizedContracts[contractAddress] = allowed;
         emit AuthorizedContract(contractAddress, allowed);
     }
 
+    /// @notice Get the EIP-712 domain separator
+    function DOMAIN_SEPARATOR() external view returns (bytes32) {
+        return _domainSeparatorV4();
+    }
 
-    // Grant access --------------------------------------------------------
-    // When patient agrees to request access to 1 record from doctor, system call this func
+    // ============ GRANT CONSENT (Hash-based) ============
+
+    /**
+     * @notice Grant consent (called by authorized contracts)
+     * @param rootCidHash keccak256(bytes(rootCID)) - computed OFF-CHAIN
+     */
     function grantInternal(
         address patient,
         address grantee,
-        string calldata rootCID,
+        bytes32 rootCidHash,
         bytes32 encKeyHash,
         uint40 expireAt,
         bool includeUpdates,
         bool allowDelegate
     ) external override onlyAuthorized nonReentrant {
-        if (bytes(rootCID).length == 0) revert EmptyCID();
-
-        bytes32 rootCidHash = keccak256(bytes(rootCID));  // hash immediately
+        if (rootCidHash == bytes32(0)) revert EmptyCID();
         
         _grantConsent(
             patient,
@@ -102,11 +111,15 @@ contract ConsentLedger is EIP712, ReentrancyGuard, IConsentLedger {
         );
     }
 
-    // grant by patient's sig
+    /**
+     * @notice Grant consent via patient signature
+     * @dev Signature is over cidHash (bytes32), NOT plaintext CID
+     * @param rootCidHash keccak256(bytes(rootCID)) - computed OFF-CHAIN
+     */
     function grantBySig(
         address patient,
         address grantee,
-        string calldata rootCID,
+        bytes32 rootCidHash,
         bytes32 encKeyHash,
         uint40 expireAt,
         bool includeUpdates,
@@ -115,32 +128,30 @@ contract ConsentLedger is EIP712, ReentrancyGuard, IConsentLedger {
         bytes calldata signature
     ) external override nonReentrant {
         if (block.timestamp > deadline) revert DeadlinePassed();
+        if (rootCidHash == bytes32(0)) revert EmptyCID();
         
         uint256 currentNonce = nonces[patient];
         
-        // CONSENT_PERMIT_TYPEHASH ~ correct data type order
+        // Struct hash now uses bytes32 cidHash directly (no keccak of string)
         bytes32 structHash = keccak256(abi.encode(
             CONSENT_PERMIT_TYPEHASH,
             patient,
             grantee,
-            keccak256(bytes(rootCID)),
+            rootCidHash,    // Already a hash
             encKeyHash,
             expireAt,
             includeUpdates,
             allowDelegate,
-            deadline,       
+            deadline,
             currentNonce
         ));
 
-        bytes32 digest = _hashTypedDataV4(structHash);      //create digest = keccak256("\x19\x01" || domainSeparator || structHash)
+        bytes32 digest = _hashTypedDataV4(structHash);
         address signer = digest.recover(signature);
         
         if (signer != patient) revert InvalidSignature();
         
         nonces[patient] = currentNonce + 1;
-
-        if (bytes(rootCID).length == 0) revert EmptyCID();
-        bytes32 rootCidHash = keccak256(bytes(rootCID));
         
         _grantConsent(
             patient,
@@ -156,7 +167,7 @@ contract ConsentLedger is EIP712, ReentrancyGuard, IConsentLedger {
     function _grantConsent(
         address patient,
         address grantee,
-        bytes32 rootCidHash,  // bytes32 parameter
+        bytes32 rootCidHash,
         bytes32 encKeyHash,
         uint40 expireAt,
         bool includeUpdates,
@@ -174,7 +185,7 @@ contract ConsentLedger is EIP712, ReentrancyGuard, IConsentLedger {
         _consents[consentKey] = Consent({
             patient: patient,
             grantee: grantee,
-            rootCidHash: rootCidHash,  // store hash only
+            rootCidHash: rootCidHash,
             encKeyHash: encKeyHash,
             issuedAt: now40,
             expireAt: finalExpiry,
@@ -186,23 +197,26 @@ contract ConsentLedger is EIP712, ReentrancyGuard, IConsentLedger {
         emit ConsentGranted(patient, grantee, rootCidHash, finalExpiry, allowDelegate);
     }
 
-    // Revoke --------------------------------------------------------
-    function revoke (address grantee, string calldata rootCID) external override nonReentrant {
-        bytes32 rootCidHash = keccak256(bytes(rootCID));
+    // ============ REVOKE (Hash-based) ============
+
+    /**
+     * @notice Revoke consent
+     * @param rootCidHash keccak256(bytes(rootCID)) - computed OFF-CHAIN
+     */
+    function revoke(address grantee, bytes32 rootCidHash) external override nonReentrant {
         bytes32 key = keccak256(abi.encode(msg.sender, grantee, rootCidHash));
         Consent storage c = _consents[key];
         
         if (!c.active) revert Unauthorized();
-        if (c.patient != msg.sender) revert Unauthorized();     //check owner
+        if (c.patient != msg.sender) revert Unauthorized();
         
-        c.active = false;       //revoke
+        c.active = false;
         
         emit ConsentRevoked(msg.sender, grantee, rootCidHash, uint40(block.timestamp));
     }
 
-    // Delegate - grant/revoke --------------------------------------------------------
+    // ============ DELEGATION ============
 
-    // Patient grant Delegate
     function grantDelegation(
         address delegatee,
         uint40 duration,
@@ -211,7 +225,6 @@ contract ConsentLedger is EIP712, ReentrancyGuard, IConsentLedger {
         _grantDelegation(msg.sender, delegatee, duration, allowSubDelegate);
     }
 
-    // System : Master grantee send request all record + delegate rights; patient OK -> run this fn
     function grantDelegationInternal(
         address patient,
         address delegatee,
@@ -221,7 +234,6 @@ contract ConsentLedger is EIP712, ReentrancyGuard, IConsentLedger {
         _grantDelegation(patient, delegatee, duration, allowSubDelegate);
     }
 
-    // Authority off-chain delegate sig
     function delegateAuthorityBySig(
         address patient,
         address delegatee,
@@ -271,43 +283,41 @@ contract ConsentLedger is EIP712, ReentrancyGuard, IConsentLedger {
 
         uint40 expiresAt = uint40(block.timestamp) + duration;
 
-        //packed data (expiresAt + allowSubDelegate + active) in _delegations
         uint256 packed = 
             uint256(expiresAt) |
-            (allowSubDelegate ? (1 << ALLOW_SUB_DELEGATE_BIT) : 0) |      //if allow -> put in 40th bit
-            (1 << ACTIVE_BIT);      //41th bit
+            (allowSubDelegate ? (1 << ALLOW_SUB_DELEGATE_BIT) : 0) |
+            (1 << ACTIVE_BIT);
 
         _delegations[patient][delegatee] = packed;
 
         emit DelegationGranted(patient, delegatee, expiresAt, allowSubDelegate);
     }
 
-    // Revoke delegate
     function revokeDelegation(address delegatee) external override nonReentrant {
-        //get packed data
         uint256 data = _delegations[msg.sender][delegatee];
 
         if (data == 0 || ((data >> ACTIVE_BIT) & 1) == 0) {
             revert NoActiveDelegation();
         }
 
-        //remove active flag (AND with mask hav ACTIVE_BIT = 0)
         _delegations[msg.sender][delegatee] = data & ~(1 << ACTIVE_BIT);
         
         emit DelegationRevoked(msg.sender, delegatee);
     }
 
-    // Using delegate ------------------------------------------------
+    // ============ USING DELEGATION (Hash-based) ============
 
-    // Master Grant using delegate rights to grant
+    /**
+     * @notice Delegatee grants access to someone else
+     * @param rootCidHash keccak256(bytes(rootCID)) - computed OFF-CHAIN
+     */
     function grantUsingDelegation(
         address patient,
         address newGrantee,
-        string calldata rootCID,
+        bytes32 rootCidHash,
         bytes32 encKeyHash,
         uint40 expireAt
     ) external override nonReentrant {
-        // Check delegation
         uint256 data = _delegations[patient][msg.sender];
         
         if (((data >> ACTIVE_BIT) & 1) == 0) revert NoActiveDelegation();
@@ -315,9 +325,7 @@ contract ConsentLedger is EIP712, ReentrancyGuard, IConsentLedger {
         uint40 expiresAt = uint40(data & EXPIRES_MASK);
         if (block.timestamp > expiresAt) revert NoActiveDelegation();
 
-        if (bytes(rootCID).length == 0) revert EmptyCID();
-        
-        bytes32 rootCidHash = keccak256(bytes(rootCID));
+        if (rootCidHash == bytes32(0)) revert EmptyCID();
 
         _grantConsent(
             patient,
@@ -332,50 +340,54 @@ contract ConsentLedger is EIP712, ReentrancyGuard, IConsentLedger {
         emit AccessGrantedViaDelegation(patient, newGrantee, msg.sender, rootCidHash);
     }
 
-    // Grantee, who have delegate 1 record, share this record
+    /**
+     * @notice Grant using per-record delegation
+     * @param rootCidHash keccak256(bytes(rootCID)) - computed OFF-CHAIN
+     */
     function grantUsingRecordDelegation(
         address patient,
         address newGrantee,
-        string calldata rootCID,
+        bytes32 rootCidHash,
         bytes32 encKeyHash,
         uint40 expireAt
     ) external override nonReentrant {
-        if (bytes(rootCID).length == 0) revert EmptyCID();
-        bytes32 rootCidHash = keccak256(bytes(rootCID));
+        if (rootCidHash == bytes32(0)) revert EmptyCID();
 
-        // check if msg.sender has active consent (allowDelegate=true)
         bytes32 senderKey = keccak256(abi.encode(patient, msg.sender, rootCidHash));
-        Consent memory senderConsent = _consents[senderKey];        // Get consent info
+        Consent memory senderConsent = _consents[senderKey];
 
         if (!senderConsent.active) revert Unauthorized();
         if (senderConsent.expireAt != FOREVER && block.timestamp > senderConsent.expireAt) {
             revert Unauthorized();
         }
-        if (!senderConsent.allowDelegate) revert Unauthorized();    // anti attacker : has access record only
+        if (!senderConsent.allowDelegate) revert Unauthorized();
 
-        // grant access to newGrantee
         _grantConsent(
             patient,
             newGrantee,
             rootCidHash,
             encKeyHash,
             expireAt,
-            false, // subdelegates cannot grant 
-            false  // subdelegates cannot grant 
+            false,
+            false
         );
 
         emit AccessGrantedViaDelegation(patient, newGrantee, msg.sender, rootCidHash);
     }
 
-    // View function --------------------------------------------------------
+    // ============ VIEW FUNCTIONS (Hash-based) ============
+
+    /**
+     * @notice Check if user can access record
+     * @param cidHash keccak256(bytes(cid)) - computed OFF-CHAIN
+     */
     function canAccess(
         address patient,
         address grantee,
-        string calldata cid
+        bytes32 cidHash
     ) external view override returns (bool) {
         if (patient == grantee) return true;
 
-        bytes32 cidHash = keccak256(bytes(cid));
         bytes32 key = keccak256(abi.encode(patient, grantee, cidHash));
         Consent memory c = _consents[key];
 
@@ -385,12 +397,15 @@ contract ConsentLedger is EIP712, ReentrancyGuard, IConsentLedger {
         return true;
     }
     
+    /**
+     * @notice Get consent details
+     * @param rootCidHash keccak256(bytes(rootCID))
+     */
     function getConsent(
         address patient,
         address grantee,
-        string calldata rootCID
+        bytes32 rootCidHash
     ) external view override returns (Consent memory) {
-        bytes32 rootCidHash = keccak256(bytes(rootCID));
         bytes32 key = keccak256(abi.encode(patient, grantee, rootCidHash));
         return _consents[key];
     }

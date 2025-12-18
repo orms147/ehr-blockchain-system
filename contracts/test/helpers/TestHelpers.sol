@@ -5,155 +5,35 @@ import "forge-std/Test.sol";
 
 /**
  * @title TestHelpers
- * @notice Utility functions for testing EHR System
+ * @notice Base contract for tests with common utilities
  */
 contract TestHelpers is Test {
+    // Common constants for testing
+    bytes32 constant CID_HASH_1 = keccak256("QmTestCID1");
+    bytes32 constant CID_HASH_2 = keccak256("QmTestCID2");
+    bytes32 constant CID_HASH_3 = keccak256("QmTestCID3");
     
-    // ================ EIP-712 HELPERS ================
+    bytes32 constant PARENT_CID_HASH = bytes32(0);
     
-    /**
-     * @notice Generate EIP-712 signature for consent permit
-     */
-    function signConsentPermit(
-        uint256 privateKey,
-        address patient,
-        address grantee,
-        string memory rootCID,
-        bytes32 encKeyHash,
-        uint40 expireAt,
-        bool includeUpdates,
-        bool allowDelegate,
-        uint256 nonce,
-        uint256 deadline,
-        bytes32 domainSeparator,
-        bytes32 permitTypeHash
-    ) internal pure returns (bytes memory) {
-        bytes32 structHash = keccak256(abi.encode(
-            permitTypeHash,
-            patient,
-            grantee,
-            keccak256(bytes(rootCID)),
-            encKeyHash,
-            expireAt,
-            includeUpdates,
-            allowDelegate,
-            deadline,
-            nonce
-        ));
-        
-        bytes32 digest = keccak256(abi.encodePacked(
-            "\x19\x01",
-            domainSeparator,
-            structHash
-        ));
-        
-        (uint8 v, bytes32 r, bytes32 s) = vm.sign(privateKey, digest);
-        return abi.encodePacked(r, s, v);
+    bytes32 constant RECORD_TYPE_DIAGNOSIS = keccak256("Diagnosis");
+    bytes32 constant RECORD_TYPE_LAB = keccak256("LabResult");
+    bytes32 constant RECORD_TYPE_PRESCRIPTION = keccak256("Prescription");
+    
+    bytes32 constant ENC_KEY_HASH_1 = keccak256("encKey1");
+    bytes32 constant ENC_KEY_HASH_2 = keccak256("encKey2");
+
+    // Helper to create a deterministic address
+    function createAddress(string memory name) internal pure returns (address) {
+        return address(uint160(uint256(keccak256(abi.encodePacked(name)))));
     }
     
-    /**
-     * @notice Generate EIP-712 signature for delegation permit
-     */
-    function signDelegationPermit(
-        uint256 privateKey,
-        address patient,
-        address delegatee,
-        uint40 duration,
-        bool allowSubDelegate,
-        uint256 nonce,
-        uint256 deadline,
-        bytes32 domainSeparator,
-        bytes32 delegationTypeHash
-    ) internal pure returns (bytes memory) {
-        bytes32 structHash = keccak256(abi.encode(
-            delegationTypeHash,
-            patient,
-            delegatee,
-            duration,
-            allowSubDelegate,
-            deadline,
-            nonce
-        ));
-        
-        bytes32 digest = keccak256(abi.encodePacked(
-            "\x19\x01",
-            domainSeparator,
-            structHash
-        ));
-        
-        (uint8 v, bytes32 r, bytes32 s) = vm.sign(privateKey, digest);
-        return abi.encodePacked(r, s, v);
-    }
-    
-    // ================ TIME HELPERS ================
-    
-    /**
-     * @notice Warp to future time
-     */
-    function warpToFuture(uint256 seconds_) internal {
-        vm.warp(block.timestamp + seconds_);
-    }
-    
-    /**
-     * @notice Warp to past time
-     */
-    function warpToPast(uint256 seconds_) internal {
-        vm.warp(block.timestamp - seconds_);
-    }
-    
-    /**
-     * @notice Get current timestamp as uint40
-     */
-    function now40() internal view returns (uint40) {
+    // Helper to get current timestamp as uint40
+    function nowU40() internal view returns (uint40) {
         return uint40(block.timestamp);
     }
     
-    // ================ TEST DATA GENERATORS ================
-    
-    /**
-     * @notice Generate test CID
-     */
-    function generateCID(uint256 seed) internal pure returns (string memory) {
-        return string(abi.encodePacked("QmTest", vm.toString(seed)));
-    }
-    
-    /**
-     * @notice Generate test encryption key hash
-     */
-    function generateEncKeyHash(uint256 seed) internal pure returns (bytes32) {
-        return keccak256(abi.encodePacked("enc-key", seed));
-    }
-    
-    /**
-     * @notice Generate test address
-     */
-    function generateAddress(uint256 seed) internal pure returns (address) {
-        return address(uint160(uint256(keccak256(abi.encodePacked("address", seed)))));
-    }
-    
-    // ================ ASSERTION HELPERS ================
-    
-    /**
-     * @notice Assert that two bytes32 arrays are equal
-     */
-    function assertEq(bytes32[] memory a, bytes32[] memory b) internal pure override {
-        require(a.length == b.length, "Array length mismatch");
-        for (uint256 i = 0; i < a.length; i++) {
-            require(a[i] == b[i], "Array element mismatch");
-        }
-    }
-    
-    /**
-     * @notice Assert that array contains element
-     */
-    function assertContains(bytes32[] memory arr, bytes32 element) internal pure {
-        bool found = false;
-        for (uint256 i = 0; i < arr.length; i++) {
-            if (arr[i] == element) {
-                found = true;
-                break;
-            }
-        }
-        require(found, "Element not found in array");
+    // Helper for time manipulation
+    function skipTime(uint256 duration) internal {
+        vm.warp(block.timestamp + duration);
     }
 }

@@ -1,16 +1,21 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
+/**
+ * @title IConsentLedger - Privacy-Safe Version
+ * @notice All functions use bytes32 cidHash instead of string CID
+ * @dev Frontend MUST compute keccak256(bytes(cid)) off-chain
+ */
 interface IConsentLedger {
     struct Consent {
-        address patient;        // owner
+        address patient;
         address grantee;
-        bytes32 rootCidHash;  
+        bytes32 rootCidHash;    // Only hash stored
         bytes32 encKeyHash;
         uint40 issuedAt;
         uint40 expireAt;
         bool active;
-        bool includeUpdates;    //Grantee has rights to see update (children) record
+        bool includeUpdates;
         bool allowDelegate;
     }
 
@@ -21,7 +26,7 @@ interface IConsentLedger {
         bool active;
     }
 
-    // Event
+    // Events
     event ConsentGranted(
         address indexed patient,
         address indexed grantee,
@@ -58,46 +63,64 @@ interface IConsentLedger {
     
     event AuthorizedContract(address indexed contractAddress, bool allowed);
  
-    // Error
+    // Errors
     error Unauthorized();
-    error InvalidExpire();          // expired consent
-    error InvalidNonce();           // EIP-712 signatures (anti replay attack )
-    error InvalidSignature();       
-    error DeadlinePassed();         
+    error InvalidExpire();
+    error InvalidNonce();
+    error InvalidSignature();
+    error DeadlinePassed();
     error NoActiveDelegation();
-    error InvalidDuration();        // too long/short time
+    error InvalidDuration();
     error EmptyCID();
 
-    // function
-    
-    // Grant consent - accepts string CID for UX, stores hash only
-    function grantInternal( 
+    // ============ CONSENT FUNCTIONS (Hash-based) ============
+
+    /**
+     * @notice Grant consent (called by authorized contracts)
+     * @param patient Patient address
+     * @param grantee Who receives access
+     * @param rootCidHash keccak256(bytes(rootCID)) - computed OFF-CHAIN
+     * @param encKeyHash Hash of encryption key
+     * @param expireAt Expiration timestamp (0 = forever)
+     * @param includeUpdates Can access child records
+     * @param allowDelegate Can delegate access to others
+     */
+    function grantInternal(
         address patient,
         address grantee,
-        string calldata rootCID,
+        bytes32 rootCidHash,
         bytes32 encKeyHash,
         uint40 expireAt,
         bool includeUpdates,
         bool allowDelegate
     ) external;
 
+    /**
+     * @notice Grant consent via patient signature (EIP-712)
+     * @dev Signature must be over cidHash, not plaintext CID
+     */
     function grantBySig(
         address patient,
         address grantee,
-        string calldata rootCID,
+        bytes32 rootCidHash,
         bytes32 encKeyHash,
         uint40 expireAt,
         bool includeUpdates,
         bool allowDelegate,
-        uint256 deadline,           // anti replay attack : request accept -> wait for accept
+        uint256 deadline,
         bytes calldata signature
     ) external;
 
-    // Revoke
-    function revoke (address grantee, string calldata rootCID) external;
+    /**
+     * @notice Revoke consent
+     * @param grantee Who to revoke from
+     * @param rootCidHash Hash of the CID to revoke
+     */
+    function revoke(address grantee, bytes32 rootCidHash) external;
 
-    // Delegation
-    function grantDelegation (
+    // ============ DELEGATION FUNCTIONS ============
+
+    function grantDelegation(
         address delegatee,
         uint40 duration,
         bool allowSubDelegate
@@ -110,7 +133,7 @@ interface IConsentLedger {
         bool allowSubDelegate
     ) external;
 
-     function delegateAuthorityBySig(
+    function delegateAuthorityBySig(
         address patient,
         address delegatee,
         uint40 duration,
@@ -121,36 +144,54 @@ interface IConsentLedger {
 
     function revokeDelegation(address delegatee) external;
 
+    /**
+     * @notice Delegatee grants access to someone else
+     * @param rootCidHash keccak256(bytes(rootCID)) - computed OFF-CHAIN
+     */
     function grantUsingDelegation(
         address patient,
         address newGrantee,
-        string calldata rootCID,
+        bytes32 rootCidHash,
         bytes32 encKeyHash,
         uint40 expireAt
     ) external;
 
+    /**
+     * @notice Grant using per-record delegation
+     * @param rootCidHash keccak256(bytes(rootCID)) - computed OFF-CHAIN
+     */
     function grantUsingRecordDelegation(
         address patient,
         address newGrantee,
-        string calldata rootCID,
+        bytes32 rootCidHash,
         bytes32 encKeyHash,
         uint40 expireAt
     ) external;
 
-    // Authorization
+    // ============ ADMIN FUNCTIONS ============
+
     function authorizeContract(address contractAddress, bool allowed) external;
 
-    // View functions - accept string CID, hash internally
+    // ============ VIEW FUNCTIONS (Hash-based) ============
+
+    /**
+     * @notice Check if user can access record
+     * @param cidHash keccak256(bytes(cid)) - computed OFF-CHAIN
+     */
     function canAccess(
         address patient,
         address grantee,
-        string calldata cid
+        bytes32 cidHash
     ) external view returns (bool);
 
+    /**
+     * @notice Get consent details
+     * @param rootCidHash keccak256(bytes(rootCID))
+     */
     function getConsent(
         address patient,
         address grantee,
-        string calldata rootCID
+        bytes32 rootCidHash
     ) external view returns (Consent memory);
 
     function getDelegation(address patient, address delegatee) external view returns (Delegation memory);

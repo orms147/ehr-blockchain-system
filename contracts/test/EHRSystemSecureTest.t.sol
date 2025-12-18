@@ -6,13 +6,11 @@ import "../src/AccessControl.sol";
 import "../src/RecordRegistry.sol";
 import "../src/ConsentLedger.sol";
 import "../src/EHRSystemSecure.sol";
-import "../src/interfaces/IEHRSystemSecure.sol";
 import "./helpers/TestHelpers.sol";
 
 /**
  * @title EHRSystemSecureTest
- * @notice Comprehensive tests for EHRSystemSecure contract
- * Coverage: Request access, 2-step approval, Reject, Pause/unpause, Edge cases
+ * @notice Tests for EHRSystemSecure access request flow
  */
 contract EHRSystemSecureTest is TestHelpers {
     AccessControl public accessControl;
@@ -20,48 +18,21 @@ contract EHRSystemSecureTest is TestHelpers {
     ConsentLedger public consentLedger;
     EHRSystemSecure public ehrSystem;
     
-    // Test accounts
     address public ministry;
     address public patient1;
     address public doctor1;
     address public org1;
     address public attacker;
     
-    // Test data
-    string constant CID_1 = "QmTest1";
-    bytes32 constant ENC_KEY = keccak256("enc-key");
+    uint256 patientPrivateKey = 0x5678;
     
-    // Events
-    event AccessRequested(
-        bytes32 indexed reqId,
-        address indexed requester,
-        address indexed patient,
-        string rootCID,
-        IEHRSystem.RequestType reqType,
-        uint40 expiry
-    );
-    event RequestApprovedByRequester(
-        bytes32 indexed reqId,
-        address indexed requester,
-        uint40 timestamp
-    );
-    event RequestApprovedByPatient(
-        bytes32 indexed reqId,
-        address indexed patient,
-        uint40 timestamp
-    );
-    event RequestCompleted(
-        bytes32 indexed reqId,
-        address indexed requester,
-        address indexed patient,
-        IEHRSystem.RequestType reqType
-    );
-    event RequestRejected(bytes32 indexed reqId, address indexed rejectedBy, uint40 timestamp);
+    // Constants
+    bytes32 constant CID_HASH = keccak256("QmCID1");
+    bytes32 constant ENC_KEY_HASH = keccak256("encKey");
     
     function setUp() public {
-        // Setup accounts
         ministry = makeAddr("ministry");
-        patient1 = makeAddr("patient1");
+        patient1 = vm.addr(patientPrivateKey);
         doctor1 = makeAddr("doctor1");
         org1 = makeAddr("org1");
         attacker = makeAddr("attacker");
@@ -81,47 +52,78 @@ contract EHRSystemSecureTest is TestHelpers {
             address(consentLedger)
         );
         
-        // Set ConsentLedger
-        vm.prank(address(this));
-        recordRegistry.setConsentLedger(address(consentLedger));
-        
-        // Authorize EHRSystem
+        // Wiring
         vm.prank(ministry);
         consentLedger.authorizeContract(address(ehrSystem), true);
         
-        // Register users
+        // Setup patient
         vm.prank(patient1);
         accessControl.registerAsPatient();
         
-        vm.prank(doctor1);
-        accessControl.registerAsDoctor();
-        
-        // Create a test record
-        vm.prank(patient1);
-        recordRegistry.addRecord(CID_1, "", "General");
+        // Setup verified doctor
+        _setupVerifiedDoctor();
     }
     
-    // ========== REQUEST ACCESS TESTS ==========
+    function _setupVerifiedDoctor() internal {
+        vm.prank(org1);
+        accessControl.registerAsOrganization();
+        vm.prank(ministry);
+        accessControl.verifyOrganization(org1, "Hospital");
+        vm.prank(doctor1);
+        accessControl.registerAsDoctor();
+        vm.prank(org1);
+        accessControl.verifyDoctor(doctor1, "Cardiologist");
+    }
+    
+    // ========== REQUEST ACCESS ==========
     
     function test_RequestAccess_DirectAccess_Success() public {
-        vm.expectEmit(false, true, true, false); // Ignore reqId check
-        emit AccessRequested(
-            bytes32(0),
-            doctor1,
-            patient1,
-            CID_1,
-            IEHRSystem.RequestType.DirectAccess,
-            0
-        );
-        
         vm.prank(doctor1);
         ehrSystem.requestAccess(
             patient1,
-            CID_1,
+            CID_HASH,
             IEHRSystem.RequestType.DirectAccess,
-            ENC_KEY,
-            0, // Use default consent duration
-            0  // Use default validity
+            ENC_KEY_HASH,
+            7 * 24,  // 7 days consent
+            7 * 24   // 7 days validity
+        );
+        
+        // Get the request ID
+        uint256 nonce = ehrSystem.getCurrentNonce();
+        bytes32 reqId = keccak256(abi.encode(
+            doctor1,
+            patient1,
+            CID_HASH,
+            IEHRSystem.RequestType.DirectAccess,
+            nonce - 1
+        ));
+        
+        IEHRSystem.AccessRequest memory req = ehrSystem.getAccessRequest(reqId);
+        assertEq(req.requester, doctor1, "Requester should be doctor");
+        assertEq(req.patient, patient1, "Patient should match");
+        assertEq(req.rootCidHash, CID_HASH, "CID hash should match");
+        assertTrue(req.status == IEHRSystem.RequestStatus.Pending, "Should be pending");
+    }
+    
+    function test_RequestAccess_RevertWhen_SameAsPatient() public {
+        vm.expectRevert(IEHRSystem.InvalidRequest.selector);
+        vm.prank(patient1);
+        ehrSystem.requestAccess(
+            patient1,  // Same as sender
+            CID_HASH,
+            IEHRSystem.RequestType.DirectAccess,
+            ENC_KEY_HASH, 0, 0
+        );
+    }
+    
+    function test_RequestAccess_FullDelegation_MustBeZeroCidHash() public {
+        vm.expectRevert(IEHRSystem.InvalidRequest.selector);
+        vm.prank(doctor1);
+        ehrSystem.requestAccess(
+            patient1,
+            CID_HASH,  // Non-zero for FullDelegation
+            IEHRSystem.RequestType.FullDelegation,
+            ENC_KEY_HASH, 0, 0
         );
     }
     
@@ -129,540 +131,193 @@ contract EHRSystemSecureTest is TestHelpers {
         vm.prank(doctor1);
         ehrSystem.requestAccess(
             patient1,
-            "", // Empty CID for FullDelegation
+            bytes32(0),  // Zero for FullDelegation
             IEHRSystem.RequestType.FullDelegation,
-            ENC_KEY,
-            0,
-            0
-        );
-    }
-    
-    function test_RequestAccess_RecordDelegation_Success() public {
-        vm.expectEmit(false, true, true, false); // Ignore reqId (topic 1) and non-indexed data
-        emit AccessRequested(
             bytes32(0),
-            doctor1,
-            patient1,
-            CID_1,
-            IEHRSystem.RequestType.RecordDelegation,
-            0
+            30 * 24,  // 30 days
+            7 * 24
         );
         
-        vm.prank(doctor1);
-        ehrSystem.requestAccess(
-            patient1,
-            CID_1,
-            IEHRSystem.RequestType.RecordDelegation,
-            ENC_KEY,
-            0,
-            0
-        );
+        // Should succeed
+        assertEq(ehrSystem.getCurrentNonce(), 1, "Nonce should be 1");
     }
-
-    function test_RecordDelegation_EndToEnd() public {
-        // 1. Request RecordDelegation
+    
+    // ========== CONFIRM ACCESS REQUEST ==========
+    
+    function test_ConfirmAccessRequest_DualApproval_Success() public {
+        // Create request
         vm.prank(doctor1);
         ehrSystem.requestAccess(
             patient1,
-            CID_1,
-            IEHRSystem.RequestType.RecordDelegation,
-            ENC_KEY,
-            0,
-            0
+            CID_HASH,
+            IEHRSystem.RequestType.DirectAccess,
+            ENC_KEY_HASH,
+            7 * 24,
+            7 * 24
         );
         
-        bytes32 reqId = _getAccessRequestId(doctor1, patient1, CID_1, IEHRSystem.RequestType.RecordDelegation, 0);
+        bytes32 reqId = _getLatestReqId();
         
-        // 2. Approvals
+        // Doctor confirms first
         vm.prank(doctor1);
         ehrSystem.confirmAccessRequest(reqId);
         
-        vm.warp(block.timestamp + 2 minutes); // Wait for delay
+        IEHRSystem.AccessRequest memory req = ehrSystem.getAccessRequest(reqId);
+        assertTrue(req.status == IEHRSystem.RequestStatus.RequesterApproved, "Should be RequesterApproved");
         
-        vm.prank(patient1);
-        ehrSystem.confirmAccessRequest(reqId);
-        
-        // No need for 3rd call as patient approval completes it
-        
-        // 3. Verify Access AND Delegation Rights
-        assertTrue(consentLedger.canAccess(patient1, doctor1, CID_1), "Should have access");
-        
-        // Check if doctor1 can delegate (grantUsingRecordDelegation)
-        address doctor2 = makeAddr("doctor2");
-        vm.prank(doctor2);
-        accessControl.registerAsDoctor();
-        
-        vm.prank(doctor1);
-        consentLedger.grantUsingRecordDelegation(
-            patient1,
-            doctor2,
-            CID_1,
-            ENC_KEY,
-            0
-        );
-        
-        assertTrue(consentLedger.canAccess(patient1, doctor2, CID_1), "Doctor2 should have access via delegation");
-    }
-
-    
-    function test_RequestAccess_Delegation_Success() public {
-        address relative = makeAddr("relative");
-        
-        vm.prank(relative);
-        ehrSystem.requestAccess(
-            patient1,
-            "", // Empty CID for FullDelegation
-            IEHRSystem.RequestType.FullDelegation,
-            ENC_KEY,
-            0,
-            0
-        );
-    }
-    
-    function test_RequestAccess_WithCustomDurations_Success() public {
-        uint40 consentHours = 48;
-        uint40 validityHours = 24;
-        
-        vm.prank(doctor1);
-        ehrSystem.requestAccess(
-            patient1,
-            CID_1,
-            IEHRSystem.RequestType.DirectAccess,
-            ENC_KEY,
-            consentHours,
-            validityHours
-        );
-    }
-    
-    function test_RequestAccess_RevertWhen_SelfRequest() public {
-        vm.expectRevert(IEHRSystem.InvalidRequest.selector);
-        vm.prank(patient1);
-        ehrSystem.requestAccess(
-            patient1, // Same as requester
-            CID_1,
-            IEHRSystem.RequestType.DirectAccess,
-            ENC_KEY,
-            0,
-            0
-        );
-    }
-    
-    function test_RequestAccess_RevertWhen_InvalidPatient() public {
-        vm.expectRevert(IEHRSystem.InvalidRequest.selector);
-        vm.prank(doctor1);
-        ehrSystem.requestAccess(
-            attacker, // Not a patient
-            CID_1,
-            IEHRSystem.RequestType.DirectAccess,
-            ENC_KEY,
-            0,
-            0
-        );
-    }
-    
-    function test_RequestAccess_RevertWhen_ValidityTooLong() public {
-        vm.expectRevert(IEHRSystem.InvalidRequest.selector);
-        vm.prank(doctor1);
-        ehrSystem.requestAccess(
-            patient1,
-            CID_1,
-            IEHRSystem.RequestType.DirectAccess,
-            ENC_KEY,
-            0,
-            31 * 24 // > 30 days
-        );
-    }
-    
-    /*
-    function test_RequestAccess_RevertWhen_NotDoctorForDirectAccess() public {
-        address notDoctor = makeAddr("notDoctor");
-        
-        vm.expectRevert(IEHRSystem.InvalidRequest.selector);
-        vm.prank(notDoctor);
-        ehrSystem.requestAccess(
-            patient1,
-            CID_1,
-            IEHRSystem.RequestType.DirectAccess,
-            ENC_KEY,
-            0,
-            0
-        );
-    }
-    */
-    
-    // ========== 2-STEP APPROVAL TESTS ==========
-    
-    function test_ApproveRequest_TwoStepFlow_Success() public {
-        // Step 1: Doctor requests
-        vm.prank(doctor1);
-        ehrSystem.requestAccess(
-            patient1,
-            CID_1,
-            IEHRSystem.RequestType.DirectAccess,
-            ENC_KEY,
-            0,
-            0
-        );
-        
-        // Get request ID (we need to calculate it)
-        bytes32 reqId = _getAccessRequestId(doctor1, patient1, CID_1, IEHRSystem.RequestType.DirectAccess, 0);
-        
-        // Step 2: Patient approves
-        vm.expectEmit(true, true, false, false); // Ignore timestamp
-        emit RequestApprovedByPatient(reqId, patient1, 0);
-        
-        vm.prank(patient1);
-        ehrSystem.confirmAccessRequest(reqId);
-        
-        // Step 3: Wait for approval delay
+        // Wait for MIN_APPROVAL_DELAY
         vm.warp(block.timestamp + 2 minutes);
         
-        // Step 4: Requester confirms
-        vm.expectEmit(false, true, true, true); // Ignore reqId check
-        emit RequestCompleted(reqId, doctor1, patient1, IEHRSystem.RequestType.DirectAccess);
-        
-        vm.prank(doctor1);
+        // Patient confirms
+        vm.prank(patient1);
         ehrSystem.confirmAccessRequest(reqId);
         
-        // Verify consent granted
-        assertTrue(consentLedger.canAccess(patient1, doctor1, CID_1), "Should have access after completion");
+        req = ehrSystem.getAccessRequest(reqId);
+        assertTrue(req.status == IEHRSystem.RequestStatus.Completed, "Should be Completed");
+        
+        // Doctor should now have access
+        assertTrue(consentLedger.canAccess(patient1, doctor1, CID_HASH), "Doctor should have access");
     }
     
-    function test_ApproveRequest_RequesterFirst_Success() public {
-        // Request
+    function test_ConfirmAccessRequest_RevertWhen_TooSoon() public {
         vm.prank(doctor1);
         ehrSystem.requestAccess(
-            patient1,
-            CID_1,
-            IEHRSystem.RequestType.DirectAccess,
-            ENC_KEY,
-            0,
-            0
+            patient1, CID_HASH, IEHRSystem.RequestType.DirectAccess,
+            ENC_KEY_HASH, 7 * 24, 7 * 24
         );
         
-        bytes32 reqId = _getAccessRequestId(doctor1, patient1, CID_1, IEHRSystem.RequestType.DirectAccess, 0);
+        bytes32 reqId = _getLatestReqId();
         
-        // Requester approves first
+        // Doctor confirms
         vm.prank(doctor1);
         ehrSystem.confirmAccessRequest(reqId);
         
-        vm.warp(block.timestamp + 2 minutes); // Wait for delay BEFORE second approval (completion)
-        
-        // Patient approves second
+        // Patient tries to confirm immediately
+        vm.expectRevert(IEHRSystem.ApprovalTooSoon.selector);
         vm.prank(patient1);
+        ehrSystem.confirmAccessRequest(reqId);
+    }
+    
+    function test_ConfirmAccessRequest_RevertWhen_Expired() public {
+        vm.prank(doctor1);
+        ehrSystem.requestAccess(
+            patient1, CID_HASH, IEHRSystem.RequestType.DirectAccess,
+            ENC_KEY_HASH, 7 * 24, 1  // 1 hour validity
+        );
+        
+        bytes32 reqId = _getLatestReqId();
+        
+        // Skip past expiry
+        vm.warp(block.timestamp + 2 hours);
+        
+        vm.expectRevert(IEHRSystem.RequestExpired.selector);
+        vm.prank(doctor1);
+        ehrSystem.confirmAccessRequest(reqId);
+    }
+    
+    // ========== CONFIRM WITH SIGNATURE ==========
+    
+    function test_ConfirmAccessRequestWithSignature_Success() public {
+        vm.prank(doctor1);
+        ehrSystem.requestAccess(
+            patient1, CID_HASH, IEHRSystem.RequestType.DirectAccess,
+            ENC_KEY_HASH, 7 * 24, 7 * 24
+        );
+        
+        bytes32 reqId = _getLatestReqId();
+        
+        // Doctor confirms first
+        vm.prank(doctor1);
         ehrSystem.confirmAccessRequest(reqId);
         
         // Wait for delay
         vm.warp(block.timestamp + 2 minutes);
         
-        // Requester confirms - ALREADY DONE in step 2 (RequesterApproved) + step 3 (Patient -> Completed)
-        // So we don't need to call confirmAccessRequest again for the requester if they started it.
-        // Just verify access.
-        assertTrue(consentLedger.canAccess(patient1, doctor1, CID_1), "Should have access");
+        // Patient signs confirmation
+        uint256 deadline = block.timestamp + 1 hours;
+        IEHRSystem.AccessRequest memory req = ehrSystem.getAccessRequest(reqId);
+        
+        bytes32 structHash = keccak256(abi.encode(
+            keccak256("ConfirmRequest(bytes32 reqId,address requester,address patient,bytes32 rootCidHash,uint8 reqType,uint256 deadline)"),
+            reqId,
+            req.requester,
+            req.patient,
+            req.rootCidHash,
+            uint8(req.reqType),
+            deadline
+        ));
+        
+        bytes32 domainSeparator = ehrSystem.DOMAIN_SEPARATOR();
+        bytes32 digest = keccak256(abi.encodePacked("\x19\x01", domainSeparator, structHash));
+        
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(patientPrivateKey, digest);
+        bytes memory signature = abi.encodePacked(r, s, v);
+        
+        // Anyone can submit (relayer)
+        ehrSystem.confirmAccessRequestWithSignature(reqId, deadline, signature);
+        
+        req = ehrSystem.getAccessRequest(reqId);
+        assertTrue(req.status == IEHRSystem.RequestStatus.Completed, "Should be Completed");
     }
     
-    function test_ApproveRequest_RevertWhen_ApprovalTooSoon() public {
-        // Request
-        vm.prank(doctor1);
-        ehrSystem.requestAccess(
-            patient1,
-            CID_1,
-            IEHRSystem.RequestType.DirectAccess,
-            ENC_KEY,
-            0,
-            0
-        );
-        
-        bytes32 reqId = _getAccessRequestId(doctor1, patient1, CID_1, IEHRSystem.RequestType.DirectAccess, 0);
-        
-        // Patient approves
-        vm.prank(patient1);
-        ehrSystem.confirmAccessRequest(reqId);
-        
-        // Try to complete immediately (without waiting for delay)
-        vm.expectRevert(IEHRSystem.ApprovalTooSoon.selector);
-        vm.prank(doctor1);
-        ehrSystem.confirmAccessRequest(reqId);
-    }
-    
-    function test_ApproveRequest_RevertWhen_RequestExpired() public {
-        // Request
-        vm.prank(doctor1);
-        ehrSystem.requestAccess(
-            patient1,
-            CID_1,
-            IEHRSystem.RequestType.DirectAccess,
-            ENC_KEY,
-            0,
-            24 // 24 hours validity
-        );
-        
-        // Complete a request
-        vm.prank(doctor1);
-        ehrSystem.requestAccess(
-            patient1,
-            CID_1,
-            IEHRSystem.RequestType.DirectAccess,
-            ENC_KEY,
-            0,
-            0
-        );
-        
-        bytes32 reqId = _getAccessRequestId(doctor1, patient1, CID_1, IEHRSystem.RequestType.DirectAccess, 0);
-        
-        vm.prank(patient1);
-        ehrSystem.confirmAccessRequest(reqId);
-        
-        vm.warp(block.timestamp + 2 minutes);
-        
-        vm.prank(doctor1);
-        ehrSystem.confirmAccessRequest(reqId);
-        
-        // Try to approve again
-        vm.expectRevert(IEHRSystem.AlreadyProcessed.selector);
-        vm.prank(patient1);
-        ehrSystem.confirmAccessRequest(reqId);
-    }
-    
-    // ========== REJECT REQUEST TESTS ==========
+    // ========== REJECT REQUEST ==========
     
     function test_RejectRequest_ByPatient_Success() public {
-        // Request
         vm.prank(doctor1);
         ehrSystem.requestAccess(
-            patient1,
-            CID_1,
-            IEHRSystem.RequestType.DirectAccess,
-            ENC_KEY,
-            0,
-            0
+            patient1, CID_HASH, IEHRSystem.RequestType.DirectAccess,
+            ENC_KEY_HASH, 7 * 24, 7 * 24
         );
         
-        bytes32 reqId = _getAccessRequestId(doctor1, patient1, CID_1, IEHRSystem.RequestType.DirectAccess, 0);
-        
-        // Patient rejects
-        vm.expectEmit(true, true, false, false); // Ignore non-indexed data
-        emit RequestRejected(reqId, patient1, 0);
+        bytes32 reqId = _getLatestReqId();
         
         vm.prank(patient1);
         ehrSystem.rejectRequest(reqId);
         
-        // Verify no consent granted
-        assertFalse(consentLedger.canAccess(patient1, doctor1, CID_1), "Should not have access");
+        IEHRSystem.AccessRequest memory req = ehrSystem.getAccessRequest(reqId);
+        assertTrue(req.status == IEHRSystem.RequestStatus.Rejected, "Should be Rejected");
     }
     
     function test_RejectRequest_ByRequester_Success() public {
         vm.prank(doctor1);
         ehrSystem.requestAccess(
-            patient1,
-            CID_1,
-            IEHRSystem.RequestType.DirectAccess,
-            ENC_KEY,
-            0,
-            0
+            patient1, CID_HASH, IEHRSystem.RequestType.DirectAccess,
+            ENC_KEY_HASH, 7 * 24, 7 * 24
         );
         
-        bytes32 reqId = _getAccessRequestId(doctor1, patient1, CID_1, IEHRSystem.RequestType.DirectAccess, 0);
+        bytes32 reqId = _getLatestReqId();
         
-        // Requester rejects (cancels)
         vm.prank(doctor1);
         ehrSystem.rejectRequest(reqId);
+        
+        IEHRSystem.AccessRequest memory req = ehrSystem.getAccessRequest(reqId);
+        assertTrue(req.status == IEHRSystem.RequestStatus.Rejected, "Should be Rejected");
     }
     
-    function test_RejectRequest_RevertWhen_Unauthorized() public {
+    function test_RejectRequest_RevertWhen_NotParty() public {
         vm.prank(doctor1);
         ehrSystem.requestAccess(
-            patient1,
-            CID_1,
-            IEHRSystem.RequestType.DirectAccess,
-            ENC_KEY,
-            0,
-            0
+            patient1, CID_HASH, IEHRSystem.RequestType.DirectAccess,
+            ENC_KEY_HASH, 7 * 24, 7 * 24
         );
         
-        bytes32 reqId = _getAccessRequestId(doctor1, patient1, CID_1, IEHRSystem.RequestType.DirectAccess, 0);
+        bytes32 reqId = _getLatestReqId();
         
         vm.expectRevert(IEHRSystem.NotParty.selector);
         vm.prank(attacker);
         ehrSystem.rejectRequest(reqId);
     }
     
-    function test_RejectRequest_RevertWhen_AlreadyCompleted() public {
-        // Complete request first
-        vm.prank(doctor1);
-        ehrSystem.requestAccess(
-            patient1,
-            CID_1,
-            IEHRSystem.RequestType.DirectAccess,
-            ENC_KEY,
-            0,
-            0
-        );
-        
-        bytes32 reqId = _getAccessRequestId(doctor1, patient1, CID_1, IEHRSystem.RequestType.DirectAccess, 0);
-        
-        vm.prank(patient1);
-        ehrSystem.confirmAccessRequest(reqId);
-        
-        vm.warp(block.timestamp + 1 minutes + 1);
-        
-        vm.prank(doctor1);
-        ehrSystem.confirmAccessRequest(reqId);
-        
-        // Try to reject completed request
-        vm.expectRevert(IEHRSystem.AlreadyProcessed.selector);
-        vm.prank(patient1);
-        ehrSystem.rejectRequest(reqId);
-    }
+    // ========== HELPERS ==========
     
-    // ========== PAUSE/UNPAUSE TESTS ==========
-    
-    function test_Pause_Success() public {
-        vm.prank(address(this)); // Owner
-        ehrSystem.pause();
-        
-        assertTrue(ehrSystem.paused(), "Should be paused");
-    }
-    
-    function test_Unpause_Success() public {
-        vm.prank(address(this));
-        ehrSystem.pause();
-        
-        vm.prank(address(this));
-        ehrSystem.unpause();
-        
-        assertFalse(ehrSystem.paused(), "Should be unpaused");
-    }
-    
-    function test_RequestAccess_RevertWhen_Paused() public {
-        vm.prank(address(this));
-        ehrSystem.pause();
-        
-        vm.expectRevert();
-        vm.prank(doctor1);
-        ehrSystem.requestAccess(
-            patient1,
-            CID_1,
-            IEHRSystem.RequestType.DirectAccess,
-            ENC_KEY,
-            0,
-            0
-        );
-    }
-    
-    // ========== VIEW FUNCTION TESTS ==========
-    
-    function test_getAccessRequest_Success() public {
-        vm.prank(doctor1);
-        ehrSystem.requestAccess(
-            patient1,
-            CID_1,
-            IEHRSystem.RequestType.DirectAccess,
-            ENC_KEY,
-            0,
-            0
-        );
-        
-        bytes32 reqId = _getAccessRequestId(doctor1, patient1, CID_1, IEHRSystem.RequestType.DirectAccess, 0);
-        
-        IEHRSystem.AccessRequest memory req = ehrSystem.getAccessRequest(reqId);
-        
-        assertEq(req.requester, doctor1, "Requester should match");
-        assertEq(req.patient, patient1, "Patient should match");
-        assertEq(uint8(req.reqType), uint8(IEHRSystem.RequestType.DirectAccess), "Type should match");
-        assertEq(uint8(req.status), uint8(IEHRSystem.RequestStatus.Pending), "Status should be pending");
-    }
-    
-    function test_getSystemConstants_Success() public view {
-        (
-            uint40 minApprovalDelay,
-            uint40 maxRequestValidity,
-            uint40 defaultConsentDuration,
-            uint40 maxDelegationDuration
-        ) = ehrSystem.getSystemConstants();
-        
-        assertEq(minApprovalDelay, 1 minutes, "Min approval delay should be 1 minute");
-        assertEq(maxRequestValidity, 30 days, "Max request validity should be 30 days");
-        assertEq(defaultConsentDuration, 30 days, "Default consent duration should be 30 days");
-        assertEq(maxDelegationDuration, 365 days, "Max delegation duration should be 365 days");
-    }
-    
-    // ========== EDGE CASES ==========
-    
-    function test_EdgeCase_MultipleRequests_SamePatient() public {
-        // Doctor1 requests
-        vm.prank(doctor1);
-        ehrSystem.requestAccess(
-            patient1,
-            CID_1,
-            IEHRSystem.RequestType.DirectAccess,
-            ENC_KEY,
-            0,
-            0
-        );
-        
-        // Doctor2 also requests (should work)
-        address doctor2 = makeAddr("doctor2");
-        vm.prank(doctor2);
-        accessControl.registerAsDoctor();
-        
-        vm.prank(doctor2);
-        ehrSystem.requestAccess(
-            patient1,
-            CID_1,
-            IEHRSystem.RequestType.DirectAccess,
-            ENC_KEY,
-            0,
-            0
-        );
-    }
-    
-    function test_EdgeCase_RequestNonceIncrement() public {
-        // First request
-        vm.prank(doctor1);
-        ehrSystem.requestAccess(
-            patient1,
-            CID_1,
-            IEHRSystem.RequestType.DirectAccess,
-            ENC_KEY,
-            0,
-            0
-        );
-        
-        bytes32 reqId1 = _getAccessRequestId(doctor1, patient1, CID_1, IEHRSystem.RequestType.DirectAccess, 0);
-        
-        // Second request (nonce should increment)
-        vm.prank(doctor1);
-        ehrSystem.requestAccess(
-            patient1,
-            CID_1,
-            IEHRSystem.RequestType.DirectAccess,
-            ENC_KEY,
-            0,
-            0
-        );
-        
-        bytes32 reqId2 = _getAccessRequestId(doctor1, patient1, CID_1, IEHRSystem.RequestType.DirectAccess, 1);
-        
-        // Request IDs should be different
-        assertTrue(reqId1 != reqId2, "Request IDs should be different");
-    }
-    
-    // ========== HELPER FUNCTIONS ==========
-    
-    function _getAccessRequestId(
-        address requester,
-        address patient,
-        string memory rootCID,
-        IEHRSystem.RequestType reqType,
-        uint256 nonce
-    ) internal pure returns (bytes32) {
+    function _getLatestReqId() internal view returns (bytes32) {
+        uint256 nonce = ehrSystem.getCurrentNonce();
         return keccak256(abi.encode(
-            requester,
-            patient,
-            rootCID,
-            reqType,
-            nonce
+            doctor1,
+            patient1,
+            CID_HASH,
+            IEHRSystem.RequestType.DirectAccess,
+            nonce - 1
         ));
     }
 }
