@@ -1,0 +1,28 @@
+# Foundry artifacts
+/broadcast/
+/cache/
+/out/
+
+# Environment variables
+.env
+.env.local
+
+# Dependencies
+/lib/
+
+# Node (if using npm scripts)
+node_modules/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Sensitive files
+*.pem
+*.key
