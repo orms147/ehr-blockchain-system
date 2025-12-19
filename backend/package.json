@@ -1,0 +1,30 @@
+{
+    "name": "ehr-backend",
+    "version": "1.0.0",
+    "description": "EHR System Backend - Zero-knowledge key sharing",
+    "main": "src/app.js",
+    "type": "module",
+    "scripts": {
+        "dev": "nodemon src/app.js",
+        "start": "node src/app.js",
+        "db:generate": "prisma generate",
+        "db:migrate": "prisma migrate dev",
+        "db:push": "prisma db push",
+        "db:studio": "prisma studio"
+    },
+    "dependencies": {
+        "@prisma/client": "^6.0.0",
+        "cors": "^2.8.5",
+        "dotenv": "^16.4.5",
+        "express": "^4.21.0",
+        "express-rate-limit": "^7.4.0",
+        "helmet": "^8.0.0",
+        "jsonwebtoken": "^9.0.2",
+        "viem": "^2.21.0",
+        "zod": "^3.23.8"
+    },
+    "devDependencies": {
+        "nodemon": "^3.1.0",
+        "prisma": "^6.0.0"
+    }
+}

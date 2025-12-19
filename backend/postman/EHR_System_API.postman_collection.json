@@ -1,0 +1,444 @@
+{
+    "info": {
+        "name": "EHR System API",
+        "description": "API collection for EHR Blockchain System Backend\n\nBase URL: http://localhost:3001",
+        "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+    },
+    "variable": [
+        {
+            "key": "baseUrl",
+            "value": "http://localhost:3001",
+            "type": "string"
+        },
+        {
+            "key": "token",
+            "value": "",
+            "type": "string"
+        },
+        {
+            "key": "walletAddress",
+            "value": "0x71Ade4593711749Ea08a3552A59a832c1B40a955",
+            "type": "string"
+        }
+    ],
+    "item": [
+        {
+            "name": "Health",
+            "item": [
+                {
+                    "name": "Health Check",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{baseUrl}}/health",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "health"
+                            ]
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Authentication",
+            "item": [
+                {
+                    "name": "Get Nonce",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{baseUrl}}/api/auth/nonce/{{walletAddress}}",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "api",
+                                "auth",
+                                "nonce",
+                                "{{walletAddress}}"
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "Login",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"walletAddress\": \"{{walletAddress}}\",\n  \"message\": \"Sign this message to login to EHR System.\\n\\nNonce: YOUR_NONCE_HERE\\nTimestamp: 1234567890\",\n  \"signature\": \"0xYOUR_SIGNATURE_HERE\"\n}"
+                        },
+                        "url": {
+                            "raw": "{{baseUrl}}/api/auth/login",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "api",
+                                "auth",
+                                "login"
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "Register Public Key",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"publicKey\": \"0x04abc123...your_public_key\"\n}"
+                        },
+                        "url": {
+                            "raw": "{{baseUrl}}/api/auth/register-pubkey",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "api",
+                                "auth",
+                                "register-pubkey"
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "Get My Info",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{baseUrl}}/api/auth/me",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "api",
+                                "auth",
+                                "me"
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "Get User Public Key",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{baseUrl}}/api/auth/pubkey/{{walletAddress}}",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "api",
+                                "auth",
+                                "pubkey",
+                                "{{walletAddress}}"
+                            ]
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Records",
+            "item": [
+                {
+                    "name": "Create Record",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"cidHash\": \"0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef\",\n  \"recordTypeHash\": \"0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890\"\n}"
+                        },
+                        "url": {
+                            "raw": "{{baseUrl}}/api/records",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "api",
+                                "records"
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "Get My Records",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{baseUrl}}/api/records/my",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "api",
+                                "records",
+                                "my"
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "Get Record by CID Hash",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{baseUrl}}/api/records/0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "api",
+                                "records",
+                                "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
+                            ]
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Key Sharing",
+            "item": [
+                {
+                    "name": "Share Key",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"cidHash\": \"0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef\",\n  \"recipientAddress\": \"0x1234567890123456789012345678901234567890\",\n  \"encryptedPayload\": \"encrypted_cid_and_aes_key_here\"\n}"
+                        },
+                        "url": {
+                            "raw": "{{baseUrl}}/api/key-share",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "api",
+                                "key-share"
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "Get Keys Shared With Me",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{baseUrl}}/api/key-share/my",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "api",
+                                "key-share",
+                                "my"
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "Get Keys I Shared",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{baseUrl}}/api/key-share/sent",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "api",
+                                "key-share",
+                                "sent"
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "Claim Key",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{baseUrl}}/api/key-share/:id/claim",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "api",
+                                "key-share",
+                                ":id",
+                                "claim"
+                            ],
+                            "variable": [
+                                {
+                                    "key": "id",
+                                    "value": "key-share-id-here"
+                                }
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "Revoke Key Share",
+                    "request": {
+                        "method": "DELETE",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{baseUrl}}/api/key-share/:id",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "api",
+                                "key-share",
+                                ":id"
+                            ],
+                            "variable": [
+                                {
+                                    "key": "id",
+                                    "value": "key-share-id-here"
+                                }
+                            ]
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Access Logs",
+            "item": [
+                {
+                    "name": "Get Record Access Logs",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{baseUrl}}/api/access-logs/0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "api",
+                                "access-logs",
+                                "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "Get My Activity",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{baseUrl}}/api/access-logs/my/activity",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "api",
+                                "access-logs",
+                                "my",
+                                "activity"
+                            ]
+                        }
+                    }
+                }
+            ]
+        }
+    ]
+}

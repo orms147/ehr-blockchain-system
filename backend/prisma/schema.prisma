@@ -1,0 +1,81 @@
+// Prisma Schema for EHR Backend
+// Source of Truth for CID + AES keys (encrypted)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String   @id @default(uuid())
+  walletAddress String   @unique @db.VarChar(42)
+  publicKey     String?  @db.Text // For asymmetric encryption
+  nonce         String   @default(uuid()) // For signature verification
+  createdAt     DateTime @default(now())
+  lastLogin     DateTime?
+
+  ownedRecords   RecordMetadata[] @relation("owner")
+  createdRecords RecordMetadata[] @relation("creator")
+  sentKeys       KeyShare[]       @relation("sender")
+  receivedKeys   KeyShare[]       @relation("recipient")
+  accessLogs     AccessLog[]
+}
+
+model RecordMetadata {
+  id             String   @id @default(uuid())
+  cidHash        String   @unique @db.VarChar(66) // keccak256 hash, NOT plaintext CID
+  ownerAddress   String   @db.VarChar(42)
+  recordTypeHash String?  @db.VarChar(66)
+  createdBy      String   @db.VarChar(42)
+  createdAt      DateTime @default(now())
+
+  owner    User       @relation("owner", fields: [ownerAddress], references: [walletAddress])
+  creator  User       @relation("creator", fields: [createdBy], references: [walletAddress])
+  keyShares KeyShare[]
+}
+
+// Key Sharing - Backend as "blind mailbox"
+// Stores encrypted payload (CID + AES key) that only recipient can decrypt
+model KeyShare {
+  id               String    @id @default(uuid())
+  cidHash          String    @db.VarChar(66)
+  senderAddress    String    @db.VarChar(42)
+  recipientAddress String    @db.VarChar(42)
+
+  // Encrypted with recipient's public key
+  // Contains: { cid: "Qm...", aesKey: "..." }
+  // Backend CANNOT read this
+  encryptedPayload String @db.Text
+
+  status    String    @default("pending") // pending, claimed, revoked
+  createdAt DateTime  @default(now())
+  claimedAt DateTime?
+  expiresAt DateTime?
+
+  record    RecordMetadata @relation(fields: [cidHash], references: [cidHash])
+  sender    User           @relation("sender", fields: [senderAddress], references: [walletAddress])
+  recipient User           @relation("recipient", fields: [recipientAddress], references: [walletAddress])
+
+  @@unique([cidHash, senderAddress, recipientAddress])
+  @@index([recipientAddress, status])
+}
+
+model AccessLog {
+  id              String   @id @default(uuid())
+  cidHash         String   @db.VarChar(66)
+  accessorAddress String   @db.VarChar(42)
+  action          String   // SHARE_KEY, CLAIM_KEY, VIEW_METADATA, etc.
+  consentVerified Boolean  @default(false)
+  ipAddress       String?
+  userAgent       String?
+  createdAt       DateTime @default(now())
+
+  accessor User @relation(fields: [accessorAddress], references: [walletAddress])
+
+  @@index([cidHash])
+  @@index([accessorAddress])
+}
