@@ -52,7 +52,20 @@ export async function encryptData(data, key) {
     result.set(iv);
     result.set(new Uint8Array(encryptedData), iv.length);
 
-    return btoa(String.fromCharCode(...result));
+    // Use chunked base64 encoding to avoid stack overflow with large files
+    return arrayBufferToBase64(result);
+}
+
+// Helper: Convert ArrayBuffer to base64 without stack overflow
+function arrayBufferToBase64(buffer) {
+    const bytes = new Uint8Array(buffer);
+    let binary = '';
+    const chunkSize = 8192; // Process in chunks to avoid call stack exceeded
+    for (let i = 0; i < bytes.length; i += chunkSize) {
+        const chunk = bytes.subarray(i, i + chunkSize);
+        binary += String.fromCharCode.apply(null, chunk);
+    }
+    return btoa(binary);
 }
 
 // Decrypt data with AES-GCM
