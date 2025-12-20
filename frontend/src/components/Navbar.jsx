@@ -7,12 +7,9 @@ import { toast } from '@/components/ui/use-toast';
 const Navbar = () => {
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-    const handleConnectWallet = () => {
-        toast({
-            title: "Kết nối Ví",
-            description: "🚧 Tính năng này chưa được phát triển—nhưng đừng lo! Bạn có thể yêu cầu trong prompt tiếp theo! 🚀",
-            duration: 4000,
-        });
+    const handleLogin = () => {
+        // Navigate to login page
+        window.location.href = '/login';
     };
 
     const menuItems = [
@@ -60,10 +57,10 @@ const Navbar = () => {
                             transition={{ duration: 0.5, delay: 0.3 }}
                         >
                             <Button
-                                onClick={handleConnectWallet}
+                                onClick={handleLogin}
                                 className="bg-gradient-to-r from-blue-600 to-teal-600 hover:from-blue-700 hover:to-teal-700 text-white shadow-lg hover:shadow-xl transition-all duration-300"
                             >
-                                Kết nối Ví
+                                Đăng nhập
                             </Button>
                         </motion.div>
                     </div>
@@ -101,10 +98,10 @@ const Navbar = () => {
                                 </a>
                             ))}
                             <Button
-                                onClick={handleConnectWallet}
+                                onClick={handleLogin}
                                 className="bg-gradient-to-r from-blue-600 to-teal-600 hover:from-blue-700 hover:to-teal-700 text-white w-full"
                             >
-                                Kết nối Ví
+                                Đăng nhập
                             </Button>
                         </div>
                     </motion.div>

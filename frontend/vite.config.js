@@ -2,22 +2,53 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import path from 'path'
 import { fileURLToPath } from 'url'
+import { nodePolyfills } from 'vite-plugin-node-polyfills'
 
-// https://vite.dev/config/
 export default defineConfig({
-  plugins: [react()],
+  plugins: [
+    react(),
+    nodePolyfills({
+      // Enable global polyfills
+      globals: {
+        Buffer: true,
+        global: true,
+        process: true,
+      },
+      // Exclude packages that have issues
+      exclude: ['fs', 'http', 'https', 'net', 'tty', 'child_process'],
+      // Enable protocol imports
+      protocolImports: true,
+      // Override specific modules
+      overrides: {
+        process: 'process/browser',
+      },
+    }),
+  ],
   resolve: {
     alias: {
       "@": path.resolve(path.dirname(fileURLToPath(import.meta.url)), "./src"),
-      // Node.js polyfills
-      process: "process/browser",
-      stream: "stream-browserify",
-      zlib: "browserify-zlib",
-      util: "util",
+      // Force browser-compatible process
+      'process': 'process/browser',
     },
   },
   define: {
-    'process.env': {}, // Define process.env for libs that use it
-    global: 'globalThis', // Polyfill global for some Web3 libs
+    'process.env': {},
+    'global': 'globalThis',
+  },
+  optimizeDeps: {
+    include: ['buffer', 'process/browser', 'bn.js', '@web3auth/modal'],
+    esbuildOptions: {
+      define: {
+        global: 'globalThis',
+      },
+    },
+  },
+  build: {
+    commonjsOptions: {
+      transformMixedEsModules: true,
+      include: [/node_modules/],
+    },
   },
 })
+
+

@@ -7,11 +7,7 @@ import DnaAnimation from '@/components/DnaAnimation';
 
 const HeroSection = () => {
     const handleGetStarted = () => {
-        toast({
-            title: "Bắt đầu ngay",
-            description: "🚧 Tính năng này chưa được phát triển—nhưng đừng lo! Bạn có thể yêu cầu trong prompt tiếp theo! 🚀",
-            duration: 4000,
-        });
+        window.location.href = '/register';
     };
 
     return (
@@ -43,7 +39,7 @@ const HeroSection = () => {
                                 Hồ Sơ Y Tế
                                 <br />
                                 <span className="bg-gradient-to-r from-blue-600 to-teal-600 bg-clip-text text-transparent whitespace-nowrap">
-                                    Bảo Mật & Phi Tập Trung
+                                    An Toàn & Tiện Lợi
                                 </span>
                                 <br />
                                 Cho Mọi Người
@@ -55,8 +51,8 @@ const HeroSection = () => {
                                 transition={{ duration: 0.6, delay: 0.4 }}
                                 className="text-lg sm:text-xl text-slate-600 leading-relaxed max-w-2xl"
                             >
-                                Kiểm soát dữ liệu sức khỏe của bạn với hệ thống EHR dựa trên blockchain mang tính cách mạng của chúng tôi.
-                                Trải nghiệm bảo mật tuyệt đối, quyền riêng tư và truy cập tức thì vào hồ sơ y tế của bạn, mọi lúc, mọi nơi.
+                                Quản lý hồ sơ sức khỏe của bạn một cách an toàn và bảo mật.
+                                Truy cập thông tin y tế mọi lúc, mọi nơi - chỉ với một tài khoản.
                             </motion.p>
                         </div>
 
@@ -71,7 +67,7 @@ const HeroSection = () => {
                                 size="lg"
                                 className="bg-gradient-to-r from-blue-600 to-teal-600 hover:from-blue-700 hover:to-teal-700 text-white shadow-xl hover:shadow-2xl transition-all duration-300 text-lg px-8 py-6 group"
                             >
-                                Bắt đầu ngay
+                                Đăng ký miễn phí
                                 <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
                             </Button>
                             <Button

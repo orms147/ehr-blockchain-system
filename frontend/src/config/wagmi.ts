@@ -1,12 +1,11 @@
-import { getDefaultConfig, connectorsForWallets } from '@rainbow-me/rainbowkit';
+import { connectorsForWallets } from '@rainbow-me/rainbowkit';
 import {
     rainbowWallet,
     walletConnectWallet,
     metaMaskWallet,
     coinbaseWallet,
 } from '@rainbow-me/rainbowkit/wallets';
-// import { web3AuthWallet } from '../lib/web3auth-wallet';
-import { sepolia } from 'wagmi/chains';
+import { arbitrumSepolia } from 'wagmi/chains';
 import { createConfig, http } from 'wagmi';
 
 const projectId = import.meta.env.VITE_WALLET_CONNECT_PROJECT_ID || 'c07c08929bda531398544edc0da85917';
@@ -14,12 +13,12 @@ const projectId = import.meta.env.VITE_WALLET_CONNECT_PROJECT_ID || 'c07c08929bd
 const connectors = connectorsForWallets(
     [
         {
-            groupName: 'Recommended',
+            groupName: 'Ví được hỗ trợ',
             wallets: [
-                rainbowWallet,
                 metaMaskWallet,
+                rainbowWallet,
                 walletConnectWallet,
-                // web3AuthWallet,
+                coinbaseWallet,
             ],
         },
     ],
@@ -30,11 +29,11 @@ const connectors = connectorsForWallets(
 );
 
 export const config = createConfig({
-    chains: [sepolia],
+    chains: [arbitrumSepolia],
     transports: {
-        [sepolia.id]: http(),
+        [arbitrumSepolia.id]: http('https://sepolia-rollup.arbitrum.io/rpc'),
     },
     connectors,
-    ssr: true,
+    ssr: false,
 });
 
