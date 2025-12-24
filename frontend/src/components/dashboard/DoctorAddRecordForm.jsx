@@ -25,9 +25,9 @@ const DOCTOR_UPDATE_ADDRESS = process.env.NEXT_PUBLIC_DOCTOR_UPDATE_ADDRESS;
 const RECORD_REGISTRY_ADDRESS = process.env.NEXT_PUBLIC_RECORD_REGISTRY_ADDRESS;
 
 
-// Correct ABI matching RecordRegistry contract
+// ABI for DoctorUpdate.addRecordByDoctor (6 params with auto consent)
 const DOCTOR_UPDATE_ABI = parseAbi([
-    'function addRecordByDoctor(bytes32 cidHash, bytes32 parentCidHash, bytes32 recordTypeHash, address patient) external',
+    'function addRecordByDoctor(bytes32 cidHash, bytes32 parentCidHash, bytes32 recordTypeHash, address patient, bytes32 doctorEncKeyHash, uint40 doctorAccessHours) external',
 ]);
 
 const RECORD_TYPES = [
@@ -128,42 +128,49 @@ export default function DoctorAddRecordForm({ onSuccess }) {
             // 5. Ensure correct chain
             await ensureArbitrumSepolia(provider);
 
-            // 6. Submit on-chain via DoctorUpdate contract
+            // 6. Get Doctor's keypair first (need encKeyHash for on-chain call)
+            const doctorKeypair = await getOrCreateEncryptionKeypair(provider, walletAddress);
+
+            // Hash the doctor's public key for on-chain consent
+            const doctorEncKeyHash = keccak256(toBytes(doctorKeypair.publicKey));
+
+            // 7. Submit on-chain via DoctorUpdate contract (includes auto-consent for Doctor)
             const walletClient = createWalletClient({
                 chain: arbitrumSepolia,
                 transport: custom(provider),
             });
 
+            console.log('📝 Calling DoctorUpdate.addRecordByDoctor with auto-consent...');
 
             const txHash = await walletClient.writeContract({
-                address: RECORD_REGISTRY_ADDRESS,
+                address: DOCTOR_UPDATE_ADDRESS,
                 abi: DOCTOR_UPDATE_ABI,
                 functionName: 'addRecordByDoctor',
-                // Contract signature: (cidHash, parentCidHash, recordTypeHash, patient)
+                // DoctorUpdate signature: (cidHash, parentCidHash, recordTypeHash, patient, doctorEncKeyHash, doctorAccessHours)
                 args: [
                     cidHash,
                     '0x0000000000000000000000000000000000000000000000000000000000000000', // no parent
                     recordTypeHash,
                     patientAddress,
+                    doctorEncKeyHash,  // For on-chain consent
+                    168,               // 7 days = 168 hours
                 ],
                 account: walletAddress,
-                // Override gas to fix Web3Auth's broken gas estimation
-                gas: BigInt(300000),
+                gas: BigInt(500000), // Higher gas for DoctorUpdate (calls 2 contracts)
                 maxFeePerGas: parseGwei('1.0'),
                 maxPriorityFeePerGas: parseGwei('0.1'),
             });
 
-            // 6. Save to backend (metadata only - on-chain tx already done above)
+            console.log('✅ On-chain tx success:', txHash);
+
+            // 8. Save to backend (metadata only - on-chain tx already done above)
             await recordService.saveRecordMetadata(cidHash, recordTypeHash, patientAddress);
 
-            // 7. Prepare key sharing
+            // 9. Prepare key sharing for decryption
             const exportedKey = await exportAESKey(aesKey);
             const keyPayload = JSON.stringify({ cid, aesKey: exportedKey });
 
-            // 8. Get Doctor's keypair and Patient's public key for encryption
-            const doctorKeypair = await getOrCreateEncryptionKeypair(provider, walletAddress);
-
-            // 8a. ALWAYS save key for Doctor (creator) - so Doctor can decrypt and share later
+            // 10a. ALWAYS save key for Doctor (creator) - so Doctor can decrypt and share later
             const doctorEncryptedKey = encryptForRecipient(
                 keyPayload,
                 doctorKeypair.publicKey, // Encrypt with Doctor's own public key
@@ -178,7 +185,7 @@ export default function DoctorAddRecordForm({ onSuccess }) {
             });
             console.log('✅ Key saved for Doctor (creator)');
 
-            // 8b. Try to share key with patient (may fail if patient hasn't registered encryption key)
+            // 10b. Try to share key with patient (may fail if patient hasn't registered encryption key)
             let patientKeyShared = false;
             try {
                 const patientKeyResponse = await authService.getEncryptionKey(patientAddress);

@@ -360,12 +360,25 @@ export default function DoctorDashboardPage() {
                                                                 )}
                                                             </div>
                                                             <div>
-                                                                <p className="font-medium text-slate-900">
-                                                                    Hồ sơ từ: {record.senderAddress?.slice(0, 8)}...{record.senderAddress?.slice(-6)}
-                                                                </p>
-                                                                <p className="text-xs text-blue-600 font-medium">
-                                                                    👤 Bệnh nhân
-                                                                </p>
+                                                                {record.senderAddress?.toLowerCase() === walletAddress?.toLowerCase() ? (
+                                                                    <>
+                                                                        <p className="font-medium text-slate-900">
+                                                                            Hồ sơ bạn tạo cho bệnh nhân
+                                                                        </p>
+                                                                        <p className="text-xs text-teal-600 font-medium">
+                                                                            🩺 Do bạn tạo
+                                                                        </p>
+                                                                    </>
+                                                                ) : (
+                                                                    <>
+                                                                        <p className="font-medium text-slate-900">
+                                                                            Hồ sơ từ: {record.senderAddress?.slice(0, 8)}...{record.senderAddress?.slice(-6)}
+                                                                        </p>
+                                                                        <p className="text-xs text-blue-600 font-medium">
+                                                                            👤 Bệnh nhân chia sẻ
+                                                                        </p>
+                                                                    </>
+                                                                )}
                                                                 <p className="text-sm text-slate-500">
                                                                     CID: {record.cidHash?.slice(0, 16)}...
                                                                 </p>
@@ -404,7 +417,8 @@ export default function DoctorDashboardPage() {
                                                                         </>
                                                                     )}
                                                                 </Button>
-                                                                {record.status !== 'claimed' && (
+                                                                {/* Hide reject button if claimed OR if doctor is the creator */}
+                                                                {record.status !== 'claimed' && record.senderAddress?.toLowerCase() !== walletAddress?.toLowerCase() && (
                                                                     <Button
                                                                         size="sm"
                                                                         variant="outline"
