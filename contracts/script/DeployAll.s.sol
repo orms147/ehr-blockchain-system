@@ -47,12 +47,26 @@ contract DeployAll is Script {
         recordRegistry.setConsentLedger(address(consentLedger));
         recordRegistry.authorizeContract(address(doctorUpdate), true);
         console.log("RecordRegistry configured");
+        
+        // 7. Authorize Sponsor (for gas sponsorship - relayer backend)
+        address sponsor = vm.envOr("SPONSOR_ADDRESS", address(0));
+        if (sponsor != address(0)) {
+            accessControl.setRelayer(sponsor, true);
+            recordRegistry.authorizeSponsor(sponsor, true);
+            consentLedger.authorizeSponsor(sponsor, true);
+            console.log("Sponsor authorized on all contracts:", sponsor);
+        } else {
+            console.log("WARNING: SPONSOR_ADDRESS not set, skipping authorization");
+        }
 
-        // 7. Setup ConsentLedger
+
+        // 8. Setup ConsentLedger
         consentLedger.authorizeContract(address(ehrSystem), true);
         consentLedger.authorizeContract(address(doctorUpdate), true);
         console.log("ConsentLedger configured");
 
+
         vm.stopBroadcast();
+
     }
 }

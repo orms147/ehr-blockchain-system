@@ -36,6 +36,10 @@ interface IRecordRegistry {
         address indexed newOwner,
         bytes32 indexed cidHash
     );
+    event SponsorAuthorized(
+        address indexed sponsor,
+        bool isAuthorized
+    );
 
     // Errors
     error NotPatient();
@@ -50,6 +54,7 @@ interface IRecordRegistry {
     error InvalidAddress();
     error RecordHasChildren();
     error Unauthorized();
+    error NotSponsor();
 
     // ============ WRITE FUNCTIONS (Hash-based) ============
 
@@ -66,6 +71,20 @@ interface IRecordRegistry {
     ) external;
 
     /**
+     * @notice Authorized sponsor adds record on behalf of patient (for gas sponsorship)
+     * @param cidHash keccak256(bytes(cid)) - computed off-chain
+     * @param parentCidHash keccak256(bytes(parentCID)) or bytes32(0) if root
+     * @param recordTypeHash keccak256(bytes(recordType))
+     * @param patient Patient address who owns the record (must be registered patient)
+     */
+    function addRecordFor(
+        bytes32 cidHash,
+        bytes32 parentCidHash,
+        bytes32 recordTypeHash,
+        address patient
+    ) external;
+
+    /**
      * @notice Doctor/authorized contract adds record for patient
      * @param cidHash keccak256(bytes(cid)) - computed off-chain
      * @param parentCidHash keccak256(bytes(parentCID)) or bytes32(0) if root
@@ -78,6 +97,7 @@ interface IRecordRegistry {
         bytes32 recordTypeHash,
         address patient
     ) external;
+
 
     /**
      * @notice Update record CID (for corrections)

@@ -31,6 +31,9 @@ contract RecordRegistry is IRecordRegistry {
 
     // Authorized contracts (e.g. DoctorUpdate)
     mapping(address => bool) public authorizedContracts;
+    
+    // Authorized sponsors (EOAs that can add records on behalf of patients)
+    mapping(address => bool) public authorizedSponsors;
 
     // Constants
     uint8 private constant MAX_CHILDREN = 100;
@@ -60,6 +63,16 @@ contract RecordRegistry is IRecordRegistry {
         require(msg.sender == deployer, "Only deployer");
         authorizedContracts[contractAddr] = isAuthorized;
     }
+    
+    /// @notice Authorize sponsor address to add records on behalf of patients
+    /// @param sponsorAddr Sponsor wallet address (e.g., Ministry of Health relayer)
+    /// @param isAuthorized Whether to grant or revoke authorization
+    function authorizeSponsor(address sponsorAddr, bool isAuthorized) external {
+        require(msg.sender == deployer, "Only deployer");
+        authorizedSponsors[sponsorAddr] = isAuthorized;
+        emit SponsorAuthorized(sponsorAddr, isAuthorized);
+    }
+
 
     // ============ WRITE FUNCTIONS (Hash-based) ============
 
@@ -78,6 +91,29 @@ contract RecordRegistry is IRecordRegistry {
         if (cidHash == bytes32(0)) revert EmptyCID();
         
         _addRecord(cidHash, parentCidHash, recordTypeHash, msg.sender, msg.sender);
+    }
+
+    /**
+     * @notice Authorized sponsor adds record on behalf of patient (for gas sponsorship)
+     * @dev Allows Ministry of Health or other authorized sponsors to pay gas for patients
+     * @param cidHash keccak256(bytes(cid)) - computed OFF-CHAIN
+     * @param parentCidHash keccak256(bytes(parentCID)) or bytes32(0) if root
+     * @param recordTypeHash keccak256(bytes(recordType)) - computed OFF-CHAIN
+     * @param patient Patient address who will own the record (must be registered patient)
+     */
+    function addRecordFor(
+        bytes32 cidHash,
+        bytes32 parentCidHash,
+        bytes32 recordTypeHash,
+        address patient
+    ) external override {
+        // Only authorized sponsors can call this
+        if (!authorizedSponsors[msg.sender]) revert NotSponsor();
+        // Patient must be registered
+        if (!accessControl.isPatient(patient)) revert NotPatient();
+        if (cidHash == bytes32(0)) revert EmptyCID();
+        
+        _addRecord(cidHash, parentCidHash, recordTypeHash, patient, patient);
     }
 
     /**
@@ -101,6 +137,7 @@ contract RecordRegistry is IRecordRegistry {
         
         _addRecord(cidHash, parentCidHash, recordTypeHash, msg.sender, patient);
     }
+
 
     /**
      * @dev Internal function to add a record

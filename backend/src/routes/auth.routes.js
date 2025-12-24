@@ -177,4 +177,75 @@ router.get('/pubkey/:address', async (req, res, next) => {
     }
 });
 
+// ==================== NaCl Encryption Key Endpoints ====================
+
+// Schema for registering encryption key
+const encryptionKeySchema = z.object({
+    encryptionPublicKey: z.string().min(1),
+    signature: z.string().min(1),
+    message: z.string().min(1),
+});
+
+// POST /api/auth/encryption-key - Register NaCl encryption public key with signature verification
+router.post('/encryption-key', authenticate, async (req, res, next) => {
+    try {
+        const { encryptionPublicKey, signature, message } = encryptionKeySchema.parse(req.body);
+
+        // Verify signature proves wallet ownership
+        const isValid = await verifyMessage({
+            address: req.user.walletAddress,
+            message,
+            signature,
+        });
+
+        if (!isValid) {
+            return res.status(403).json({ error: 'Invalid signature - cannot verify wallet ownership' });
+        }
+
+        // Verify message contains the public key (prevent replay attacks)
+        if (!message.includes(encryptionPublicKey.substring(0, 20))) {
+            return res.status(400).json({ error: 'Message does not reference the public key' });
+        }
+
+        const user = await prisma.user.update({
+            where: { walletAddress: req.user.walletAddress },
+            data: { encryptionPublicKey }
+        });
+
+        res.json({
+            success: true,
+            encryptionPublicKey: user.encryptionPublicKey
+        });
+    } catch (error) {
+        next(error);
+    }
+});
+
+// GET /api/auth/encryption-key/:address - Get NaCl encryption public key of a user
+router.get('/encryption-key/:address', async (req, res, next) => {
+    try {
+        const address = req.params.address.toLowerCase();
+
+        const user = await prisma.user.findUnique({
+            where: { walletAddress: address },
+            select: { encryptionPublicKey: true, walletAddress: true }
+        });
+
+        if (!user) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+        if (!user.encryptionPublicKey) {
+            return res.status(404).json({ error: 'Encryption key not registered' });
+        }
+
+        res.json({
+            walletAddress: user.walletAddress,
+            encryptionPublicKey: user.encryptionPublicKey
+        });
+    } catch (error) {
+        next(error);
+    }
+});
+
 export default router;

@@ -62,6 +62,7 @@ interface IConsentLedger {
     );
     
     event AuthorizedContract(address indexed contractAddress, bool allowed);
+    event SponsorAuthorized(address indexed sponsor, bool allowed);
  
     // Errors
     error Unauthorized();
@@ -72,6 +73,7 @@ interface IConsentLedger {
     error NoActiveDelegation();
     error InvalidDuration();
     error EmptyCID();
+    error NotSponsor();
 
     // ============ CONSENT FUNCTIONS (Hash-based) ============
 
@@ -117,6 +119,15 @@ interface IConsentLedger {
      * @param rootCidHash Hash of the CID to revoke
      */
     function revoke(address grantee, bytes32 rootCidHash) external;
+    
+    /**
+     * @notice Sponsor revokes consent on behalf of patient (for gas sponsorship)
+     * @param patient Patient address who owns the consent
+     * @param grantee Who to revoke from
+     * @param rootCidHash Hash of the CID to revoke
+     */
+    function revokeFor(address patient, address grantee, bytes32 rootCidHash) external;
+
 
     // ============ DELEGATION FUNCTIONS ============
 

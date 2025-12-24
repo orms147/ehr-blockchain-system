@@ -39,7 +39,10 @@ const COMMON_ICD10_CODES = [
     { code: 'J18', name: 'Viêm phổi' },
 ];
 
-const UploadRecordModal = ({ open, onOpenChange, onSuccess }) => {
+const UploadRecordModal = ({ open, onOpenChange, onSuccess, parentRecord }) => {
+    // If parentRecord is provided, this is an update to an existing record
+    const isUpdateMode = !!parentRecord;
+
     const [mode, setMode] = useState(null);
     const [step, setStep] = useState(1);
     const [isLoading, setIsLoading] = useState(false);
@@ -231,8 +234,11 @@ const UploadRecordModal = ({ open, onOpenChange, onSuccess }) => {
             const cidHash = computeCidHash(cid);
             const recordTypeHash = computeCidHash(type);
 
-            // Store in backend
-            const result = await recordService.createRecord(cidHash, recordTypeHash);
+            // Store in backend (include parent if updating)
+            const parentCidHash = parentRecord?.cidHash || null;
+            const notes = mode === 'image' ? imageData.notes : formData.notes;
+            const result = await recordService.createRecord(cidHash, recordTypeHash, parentCidHash, title, notes, type);
+
 
             // Store locally with all needed info for viewing later
             const localRecords = JSON.parse(localStorage.getItem('ehr_local_records') || '{}');
@@ -317,10 +323,13 @@ const UploadRecordModal = ({ open, onOpenChange, onSuccess }) => {
                     <>
                         <DialogHeader>
                             <DialogTitle className="text-2xl text-center text-slate-900">
-                                Thêm Hồ sơ Y tế
+                                {isUpdateMode ? 'Cập nhật Hồ sơ Y tế' : 'Thêm Hồ sơ Y tế'}
                             </DialogTitle>
                             <p className="text-center text-slate-600 mt-2">
-                                Chọn cách bạn muốn thêm hồ sơ
+                                {isUpdateMode
+                                    ? `Tạo phiên bản mới cho hồ sơ: ${parentRecord?.title || parentRecord?.cidHash?.slice(0, 12)}...`
+                                    : 'Chọn cách bạn muốn thêm hồ sơ'
+                                }
                             </p>
                         </DialogHeader>
 
@@ -435,8 +444,8 @@ const UploadRecordModal = ({ open, onOpenChange, onSuccess }) => {
                                     // Upload zone
                                     <label
                                         className={`flex flex-col items-center justify-center border-2 border-dashed rounded-xl p-8 cursor-pointer transition-colors bg-white ${validationErrors.file
-                                                ? 'border-red-400 bg-red-50'
-                                                : 'border-slate-300 hover:border-blue-500 hover:bg-blue-50/50'
+                                            ? 'border-red-400 bg-red-50'
+                                            : 'border-slate-300 hover:border-blue-500 hover:bg-blue-50/50'
                                             }`}
                                     >
                                         <Camera className="w-12 h-12 text-slate-400 mb-3" />
@@ -674,8 +683,8 @@ const UploadRecordModal = ({ open, onOpenChange, onSuccess }) => {
                                                 icd10Name: icd.name
                                             }))}
                                             className={`px-3 py-1.5 text-xs rounded-full border transition-all ${formData.icd10Code === icd.code
-                                                    ? 'bg-purple-500 text-white border-purple-500'
-                                                    : 'bg-white text-slate-700 border-slate-300 hover:border-purple-400'
+                                                ? 'bg-purple-500 text-white border-purple-500'
+                                                : 'bg-white text-slate-700 border-slate-300 hover:border-purple-400'
                                                 }`}
                                         >
                                             {icd.code}

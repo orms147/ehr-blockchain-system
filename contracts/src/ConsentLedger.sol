@@ -38,6 +38,9 @@ contract ConsentLedger is EIP712, ReentrancyGuard, IConsentLedger {
     
     // Authorization
     mapping(address => bool) public authorizedContracts;
+    
+    // Authorized sponsors (EOAs that can revoke/reject on behalf of patients)
+    mapping(address => bool) public authorizedSponsors;
 
     address public immutable admin;
 
@@ -77,6 +80,14 @@ contract ConsentLedger is EIP712, ReentrancyGuard, IConsentLedger {
         authorizedContracts[contractAddress] = allowed;
         emit AuthorizedContract(contractAddress, allowed);
     }
+    
+    /// @notice Authorize sponsor address for revoke/reject on behalf of patients
+    function authorizeSponsor(address sponsorAddr, bool allowed) external onlyAdmin {
+        if (sponsorAddr == address(0)) revert Unauthorized();
+        authorizedSponsors[sponsorAddr] = allowed;
+        emit SponsorAuthorized(sponsorAddr, allowed);
+    }
+
 
     /// @notice Get the EIP-712 domain separator
     function DOMAIN_SEPARATOR() external view returns (bytes32) {
@@ -214,6 +225,27 @@ contract ConsentLedger is EIP712, ReentrancyGuard, IConsentLedger {
         
         emit ConsentRevoked(msg.sender, grantee, rootCidHash, uint40(block.timestamp));
     }
+    
+    /**
+     * @notice Sponsor revokes consent on behalf of patient (for gas sponsorship)
+     * @param patient Patient address who owns the consent
+     * @param grantee Who to revoke from
+     * @param rootCidHash keccak256(bytes(rootCID)) - computed OFF-CHAIN
+     */
+    function revokeFor(address patient, address grantee, bytes32 rootCidHash) external override nonReentrant {
+        if (!authorizedSponsors[msg.sender]) revert NotSponsor();
+        
+        bytes32 key = keccak256(abi.encode(patient, grantee, rootCidHash));
+        Consent storage c = _consents[key];
+        
+        if (!c.active) revert Unauthorized();
+        if (c.patient != patient) revert Unauthorized();
+        
+        c.active = false;
+        
+        emit ConsentRevoked(patient, grantee, rootCidHash, uint40(block.timestamp));
+    }
+
 
     // ============ DELEGATION ============
 

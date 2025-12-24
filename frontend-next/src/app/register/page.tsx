@@ -1,222 +1,294 @@
 "use client";
 
-import { useState } from 'react';
-import { motion } from 'framer-motion';
-import { Shield, User, Stethoscope, Loader2, CheckCircle } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Button } from '@/components/ui/button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { toast } from '@/components/ui/use-toast';
-import Navbar from '@/components/Navbar';
-import Footer from '@/components/Footer';
-import { Toaster } from '@/components/ui/toaster';
-import Link from 'next/link';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { motion } from 'framer-motion';
+import { useWeb3Auth } from '@web3auth/modal/react';
+import { User, Stethoscope, Loader2, CheckCircle, ArrowRight, Shield, Wallet, AlertTriangle } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { toast } from '@/components/ui/use-toast';
+import { relayerService } from '@/services';
 
 export default function RegisterPage() {
     const router = useRouter();
-    const [loading, setLoading] = useState(false);
-    const [success, setSuccess] = useState(false);
-    const [formData, setFormData] = useState({
-        fullName: '',
-        email: '',
-        role: ''
-    });
+    const { provider, isConnected } = useWeb3Auth();
 
-    const springConfig = { type: "spring", stiffness: 100, damping: 20 };
+    const [selectedRole, setSelectedRole] = useState<'patient' | 'doctor' | null>(null);
+    const [isRegistering, setIsRegistering] = useState(false);
+    const [step, setStep] = useState<'select' | 'confirm' | 'success'>('select');
+    const [walletAddress, setWalletAddress] = useState<string>('');
+    const [quota, setQuota] = useState<any>(null);
 
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        setLoading(true);
+    // Get wallet address and quota on load
+    useEffect(() => {
+        const init = async () => {
+            if (provider && isConnected) {
+                try {
+                    const accounts = await provider.request({ method: 'eth_accounts' }) as string[];
+                    if (accounts[0]) {
+                        setWalletAddress(accounts[0]);
 
-        // Simulate API call
-        await new Promise(resolve => setTimeout(resolve, 1500));
+                        // Fetch quota status
+                        try {
+                            const quotaData = await relayerService.getQuotaStatus();
+                            setQuota(quotaData);
+                        } catch (e) {
+                            console.log('Quota fetch skipped (not logged in yet)');
+                        }
+                    }
+                } catch (e) {
+                    console.error('Error getting address:', e);
+                }
+            }
+        };
+        init();
+    }, [provider, isConnected]);
 
-        setSuccess(true);
-        toast({
-            title: "Đăng ký thành công!",
-            description: `Chào mừng, ${formData.fullName}! Bạn đã đăng ký thành công với vai trò ${formData.role === 'Doctor' ? 'Bác sĩ' : 'Bệnh nhân'}.`,
-            className: "bg-green-50 border-green-200 text-green-800",
-        });
-
-        setLoading(false);
-
-        // Redirect after success
-        setTimeout(() => {
+    // Redirect if not connected
+    useEffect(() => {
+        if (!isConnected && !provider) {
             router.push('/login');
-        }, 2000);
+        }
+    }, [isConnected, provider, router]);
+
+    const handleRegister = async () => {
+        if (!selectedRole || !walletAddress) return;
+
+        setIsRegistering(true);
+        setStep('confirm');
+
+        try {
+            // Use backend relayer for gas sponsorship
+            const result = await relayerService.sponsoredRegister(selectedRole);
+
+            console.log('Registration result:', result);
+
+            setStep('success');
+
+            toast({
+                title: "Đăng ký thành công!",
+                description: result.alreadyRegistered
+                    ? "Bạn đã có role này trước đó"
+                    : selectedRole === 'patient'
+                        ? "Bạn đã đăng ký làm Bệnh nhân - Được tài trợ bởi hệ thống"
+                        : "Bạn đã đăng ký làm Bác sĩ. Vui lòng chờ xác thực.",
+                className: "bg-green-50 border-green-200 text-green-800",
+            });
+
+            // Save role to localStorage for profile page (multi-role support)
+            const existingRolesStr = localStorage.getItem('userRoles');
+            const existingRoles = existingRolesStr ? JSON.parse(existingRolesStr) : [];
+
+            // Add new role if not already exists
+            if (!existingRoles.includes(selectedRole)) {
+                existingRoles.push(selectedRole);
+                localStorage.setItem('userRoles', JSON.stringify(existingRoles));
+            }
+
+            // Set as active role
+            localStorage.setItem('activeRole', selectedRole);
+            localStorage.setItem('userRole', selectedRole); // Backward compatibility
+
+            // Redirect after success
+            setTimeout(() => {
+                router.push(selectedRole === 'patient' ? '/dashboard/patient' : '/dashboard/doctor');
+            }, 2000);
+
+
+
+        } catch (err: any) {
+            console.error('Registration error:', err);
+            setStep('select');
+
+            const errorMessage = err.response?.data?.error || err.message || 'Không thể đăng ký. Vui lòng thử lại.';
+
+            toast({
+                title: "Lỗi đăng ký",
+                description: errorMessage,
+                variant: "destructive",
+            });
+        } finally {
+            setIsRegistering(false);
+        }
     };
 
+    const springConfig = { type: "spring" as const, stiffness: 100, damping: 20 };
+
     return (
-        <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-teal-50 flex flex-col">
-            <Navbar />
+        <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-6">
+            <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={springConfig}
+                className="w-full max-w-2xl"
+            >
+                {/* Header */}
+                <div className="text-center mb-8">
+                    <h1 className="text-3xl font-bold text-white mb-2">
+                        Chọn vai trò của bạn
+                    </h1>
+                    <p className="text-slate-400">
+                        Đăng ký miễn phí - Được tài trợ bởi hệ thống
+                    </p>
+                    {walletAddress && (
+                        <p className="text-xs text-slate-500 mt-2 font-mono">
+                            Ví: {walletAddress.slice(0, 8)}...{walletAddress.slice(-6)}
+                        </p>
+                    )}
 
-            <main className="flex-1 flex items-center justify-center px-4 py-24">
-                <motion.div
-                    initial={{ opacity: 0, y: 30, scale: 0.95 }}
-                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                    transition={{ ...springConfig, delay: 0.1 }}
-                    className="w-full max-w-lg"
-                >
-                    <Card className="border-slate-200 shadow-2xl bg-white/90 backdrop-blur-sm overflow-hidden">
-                        <CardHeader className="text-center pb-8 border-b border-slate-100 bg-gradient-to-br from-white to-slate-50">
-                            <motion.div
-                                className="w-16 h-16 bg-gradient-to-br from-blue-600 to-teal-500 rounded-2xl mx-auto flex items-center justify-center mb-6 shadow-lg shadow-blue-500/30"
-                                initial={{ rotate: -10, scale: 0.8 }}
-                                animate={{ rotate: 3, scale: 1 }}
-                                whileHover={{ rotate: 8, scale: 1.1 }}
-                                transition={springConfig}
+                    {/* Quota Info */}
+                    {quota && !quota.registrationAvailable && (
+                        <div className="mt-4 p-3 rounded-lg bg-yellow-900/20 border border-yellow-600/30">
+                            <div className="flex items-center justify-center gap-2 text-yellow-400">
+                                <AlertTriangle className="w-4 h-4" />
+                                <span className="text-sm">Đã sử dụng đăng ký miễn phí</span>
+                            </div>
+                            <p className="text-xs text-yellow-500/80 mt-1">
+                                Kết nối ví có ETH để đăng ký thêm role
+                            </p>
+                        </div>
+                    )}
+                </div>
+
+                {/* Role Selection */}
+                {step === 'select' && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                        {/* Patient Card */}
+                        <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+                            <Card
+                                className={`cursor-pointer transition-all border-2 ${selectedRole === 'patient'
+                                    ? 'border-blue-500 bg-blue-50'
+                                    : 'border-slate-700 bg-slate-800/50 hover:border-blue-400'
+                                    }`}
+                                onClick={() => setSelectedRole('patient')}
                             >
-                                <Shield className="w-8 h-8 text-white" />
-                            </motion.div>
-                            <CardTitle className="text-3xl font-bold text-slate-900">Tạo Tài Khoản</CardTitle>
-                            <CardDescription className="text-lg text-slate-600 mt-2">
-                                Tham gia mạng lưới EHR blockchain bảo mật
-                            </CardDescription>
-                        </CardHeader>
-
-                        <CardContent className="p-8">
-                            {!success ? (
-                                <form onSubmit={handleSubmit} className="space-y-6">
-                                    <motion.div
-                                        className="space-y-2"
-                                        initial={{ opacity: 0, x: -20 }}
-                                        animate={{ opacity: 1, x: 0 }}
-                                        transition={{ delay: 0.2 }}
-                                    >
-                                        <Label htmlFor="fullName">Họ và Tên</Label>
-                                        <div className="relative group">
-                                            <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-blue-600 transition-colors" />
-                                            <Input
-                                                id="fullName"
-                                                placeholder="Nguyễn Văn A"
-                                                className="pl-10 transition-all duration-300 focus:ring-2 focus:ring-blue-500/20"
-                                                value={formData.fullName}
-                                                onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
-                                                required
-                                            />
-                                        </div>
-                                    </motion.div>
-
-                                    <motion.div
-                                        className="space-y-2"
-                                        initial={{ opacity: 0, x: -20 }}
-                                        animate={{ opacity: 1, x: 0 }}
-                                        transition={{ delay: 0.3 }}
-                                    >
-                                        <Label htmlFor="email">Địa chỉ Email</Label>
-                                        <Input
-                                            id="email"
-                                            type="email"
-                                            placeholder="nguyenvana@example.com"
-                                            className="transition-all duration-300 focus:ring-2 focus:ring-blue-500/20"
-                                            value={formData.email}
-                                            onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                                            required
-                                        />
-                                    </motion.div>
-
-                                    <motion.div
-                                        className="space-y-2"
-                                        initial={{ opacity: 0, x: -20 }}
-                                        animate={{ opacity: 1, x: 0 }}
-                                        transition={{ delay: 0.4 }}
-                                    >
-                                        <Label htmlFor="role">Tôi là...</Label>
-                                        <Select
-                                            value={formData.role}
-                                            onValueChange={(val) => setFormData({ ...formData, role: val })}
-                                            required
-                                        >
-                                            <SelectTrigger className="transition-all duration-300 focus:ring-2 focus:ring-blue-500/20">
-                                                <SelectValue placeholder="Chọn vai trò của bạn" />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="Patient">
-                                                    <div className="flex items-center gap-2">
-                                                        <User className="w-4 h-4 text-blue-600" />
-                                                        <span>Bệnh nhân</span>
-                                                    </div>
-                                                </SelectItem>
-                                                <SelectItem value="Doctor">
-                                                    <div className="flex items-center gap-2">
-                                                        <Stethoscope className="w-4 h-4 text-teal-600" />
-                                                        <span>Bác sĩ / Nhà cung cấp dịch vụ y tế</span>
-                                                    </div>
-                                                </SelectItem>
-                                            </SelectContent>
-                                        </Select>
-                                    </motion.div>
-
-                                    <motion.div
-                                        initial={{ opacity: 0, y: 20 }}
-                                        animate={{ opacity: 1, y: 0 }}
-                                        transition={{ delay: 0.5 }}
-                                    >
-                                        <motion.div
-                                            whileHover={{ scale: 1.02 }}
-                                            whileTap={{ scale: 0.98 }}
-                                        >
-                                            <Button
-                                                type="submit"
-                                                className="w-full h-12 text-lg bg-gradient-to-r from-blue-600 to-teal-600 hover:from-blue-700 hover:to-teal-700 text-white shadow-lg shadow-blue-500/30 hover:shadow-xl transition-all duration-300"
-                                                disabled={loading}
-                                            >
-                                                {loading ? (
-                                                    <>
-                                                        <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                                                        Đang tạo tài khoản...
-                                                    </>
-                                                ) : (
-                                                    'Đăng Ký'
-                                                )}
-                                            </Button>
-                                        </motion.div>
-                                    </motion.div>
-
-                                    <p className="text-xs text-center text-slate-500 mt-4">
-                                        Bằng cách đăng ký, bạn đồng ý với Điều khoản dịch vụ và Chính sách quyền riêng tư của chúng tôi.
+                                <CardContent className="p-8 text-center">
+                                    <div className={`w-20 h-20 rounded-2xl mx-auto mb-4 flex items-center justify-center ${selectedRole === 'patient' ? 'bg-blue-500' : 'bg-blue-600/20'
+                                        }`}>
+                                        <User className={`w-10 h-10 ${selectedRole === 'patient' ? 'text-white' : 'text-blue-400'
+                                            }`} />
+                                    </div>
+                                    <h3 className={`text-xl font-bold mb-2 ${selectedRole === 'patient' ? 'text-blue-900' : 'text-white'
+                                        }`}>
+                                        Bệnh nhân
+                                    </h3>
+                                    <p className={`text-sm ${selectedRole === 'patient' ? 'text-blue-700' : 'text-slate-400'
+                                        }`}>
+                                        Quản lý hồ sơ y tế cá nhân, cấp quyền truy cập cho bác sĩ
                                     </p>
-                                </form>
+                                    <ul className={`text-xs mt-4 text-left space-y-1 ${selectedRole === 'patient' ? 'text-blue-600' : 'text-slate-500'
+                                        }`}>
+                                        <li>✓ Upload hồ sơ y tế</li>
+                                        <li>✓ Mã hóa AES-256</li>
+                                        <li>✓ Chia sẻ cho bác sĩ</li>
+                                        <li>✓ Toàn quyền kiểm soát</li>
+                                    </ul>
+                                </CardContent>
+                            </Card>
+                        </motion.div>
+
+                        {/* Doctor Card */}
+                        <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+                            <Card
+                                className={`cursor-pointer transition-all border-2 ${selectedRole === 'doctor'
+                                    ? 'border-teal-500 bg-teal-50'
+                                    : 'border-slate-700 bg-slate-800/50 hover:border-teal-400'
+                                    }`}
+                                onClick={() => setSelectedRole('doctor')}
+                            >
+                                <CardContent className="p-8 text-center">
+                                    <div className={`w-20 h-20 rounded-2xl mx-auto mb-4 flex items-center justify-center ${selectedRole === 'doctor' ? 'bg-teal-500' : 'bg-teal-600/20'
+                                        }`}>
+                                        <Stethoscope className={`w-10 h-10 ${selectedRole === 'doctor' ? 'text-white' : 'text-teal-400'
+                                            }`} />
+                                    </div>
+                                    <h3 className={`text-xl font-bold mb-2 ${selectedRole === 'doctor' ? 'text-teal-900' : 'text-white'
+                                        }`}>
+                                        Bác sĩ
+                                    </h3>
+                                    <p className={`text-sm ${selectedRole === 'doctor' ? 'text-teal-700' : 'text-slate-400'
+                                        }`}>
+                                        Xem hồ sơ bệnh nhân được ủy quyền, thêm ghi chú điều trị
+                                    </p>
+                                    <ul className={`text-xs mt-4 text-left space-y-1 ${selectedRole === 'doctor' ? 'text-teal-600' : 'text-slate-500'
+                                        }`}>
+                                        <li>✓ Xem hồ sơ được chia sẻ</li>
+                                        <li>✓ Thêm chẩn đoán mới</li>
+                                        <li>✓ Yêu cầu xác thực</li>
+                                        <li>✓ Quản lý bệnh nhân</li>
+                                    </ul>
+                                </CardContent>
+                            </Card>
+                        </motion.div>
+                    </div>
+                )}
+
+                {/* Confirm Step */}
+                {step === 'confirm' && (
+                    <div className="text-center py-12">
+                        <Loader2 className="w-16 h-16 text-blue-500 animate-spin mx-auto mb-4" />
+                        <h3 className="text-xl font-semibold text-white mb-2">
+                            Đang đăng ký...
+                        </h3>
+                        <p className="text-slate-400">
+                            Hệ thống đang xử lý đăng ký của bạn
+                        </p>
+                    </div>
+                )}
+
+                {/* Success Step */}
+                {step === 'success' && (
+                    <div className="text-center py-12">
+                        <CheckCircle className="w-20 h-20 text-green-500 mx-auto mb-4" />
+                        <h3 className="text-2xl font-bold text-white mb-2">
+                            Đăng ký thành công!
+                        </h3>
+                        <p className="text-slate-400 mb-4">
+                            {selectedRole === 'patient'
+                                ? 'Chào mừng bạn đến với hệ thống EHR'
+                                : 'Tài khoản bác sĩ đã được tạo. Vui lòng chờ xác thực.'}
+                        </p>
+                        <p className="text-sm text-slate-500">
+                            Đang chuyển hướng...
+                        </p>
+                    </div>
+                )}
+
+                {/* Register Button */}
+                {step === 'select' && (
+                    <div className="flex justify-center">
+                        <Button
+                            size="lg"
+                            onClick={handleRegister}
+                            disabled={!selectedRole || isRegistering || (quota && !quota.registrationAvailable)}
+                            className="px-12 py-6 text-lg bg-gradient-to-r from-blue-600 to-teal-600 hover:from-blue-700 hover:to-teal-700"
+                        >
+                            {isRegistering ? (
+                                <Loader2 className="w-5 h-5 animate-spin mr-2" />
                             ) : (
-                                <motion.div
-                                    className="text-center py-8 space-y-4"
-                                    initial={{ opacity: 0, scale: 0.8 }}
-                                    animate={{ opacity: 1, scale: 1 }}
-                                    transition={springConfig}
-                                >
-                                    <motion.div
-                                        initial={{ scale: 0 }}
-                                        animate={{ scale: 1 }}
-                                        transition={{ type: "spring", stiffness: 200 }}
-                                    >
-                                        <CheckCircle className="w-20 h-20 text-green-500 mx-auto" />
-                                    </motion.div>
-                                    <h3 className="text-2xl font-bold text-slate-900">Đăng ký thành công!</h3>
-                                    <p className="text-slate-600">Đang chuyển hướng đến trang đăng nhập...</p>
-                                </motion.div>
+                                <Shield className="w-5 h-5 mr-2" />
                             )}
-                        </CardContent>
-                    </Card>
+                            Đăng ký miễn phí
+                            <ArrowRight className="w-5 h-5 ml-2" />
+                        </Button>
+                    </div>
+                )}
 
-                    <motion.p
-                        className="text-center text-sm text-slate-500 mt-6"
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        transition={{ delay: 0.6 }}
-                    >
-                        Đã có tài khoản?{' '}
-                        <Link href="/login" className="text-blue-600 hover:underline font-medium">
-                            Đăng nhập
-                        </Link>
-                    </motion.p>
-                </motion.div>
-            </main>
+                {/* Info */}
+                <p className="text-center text-xs text-slate-500 mt-8">
+                    Đăng ký được tài trợ bởi hệ thống.
+                    Mỗi tài khoản được đăng ký miễn phí 1 lần.
+                </p>
 
-            <Footer />
-            <Toaster />
+                {/* Quota display */}
+                {quota && (
+                    <div className="mt-4 text-center text-xs text-slate-400">
+                        <p>📤 Upload: {quota.uploadsRemaining}/100 còn lại tháng này</p>
+                        <p>❌ Revoke: {quota.revokesRemaining}/20 còn lại tháng này</p>
+                    </div>
+                )}
+            </motion.div>
         </div>
     );
 }

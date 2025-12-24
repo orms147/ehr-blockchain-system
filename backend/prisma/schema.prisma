@@ -13,23 +13,55 @@ datasource db {
 model User {
   id            String   @id @default(uuid())
   walletAddress String   @unique @db.VarChar(42)
-  publicKey     String?  @db.Text // For asymmetric encryption
+  publicKey     String?  @db.Text // For asymmetric encryption (legacy)
+  encryptionPublicKey String? @db.Text // NaCl x25519 public key for data encryption
   nonce         String   @default(uuid()) // For signature verification
   createdAt     DateTime @default(now())
   lastLogin     DateTime?
+
+  // OAuth info from Web3Auth
+  oauthProvider String?  // google, twitter, facebook, etc.
+  email         String?  @unique
+  
+  // Quota tracking for gas sponsorship
+  registrationSponsored Boolean  @default(false)  // 1 time only
+  uploadsThisMonth      Int      @default(0)      // max 100/month
+  revokesThisMonth      Int      @default(0)      // max 20/month
+  quotaResetDate        DateTime @default(now())  // reset monthly
+  
+  // If user connects own wallet with ETH, no quota limits
+  hasSelfWallet         Boolean  @default(false)
 
   ownedRecords   RecordMetadata[] @relation("owner")
   createdRecords RecordMetadata[] @relation("creator")
   sentKeys       KeyShare[]       @relation("sender")
   receivedKeys   KeyShare[]       @relation("recipient")
   accessLogs     AccessLog[]
+  archivedRequests ArchivedRequest[]
 }
+
+// Track requests that user has archived/hidden (instead of on-chain reject)
+model ArchivedRequest {
+  id            String   @id @default(uuid())
+  userAddress   String   @db.VarChar(42)
+  requestId     String   @db.VarChar(66)  // on-chain request ID (bytes32)
+  archivedAt    DateTime @default(now())
+  
+  user User @relation(fields: [userAddress], references: [walletAddress])
+  
+  @@unique([userAddress, requestId])
+  @@index([userAddress])
+}
+
 
 model RecordMetadata {
   id             String   @id @default(uuid())
   cidHash        String   @unique @db.VarChar(66) // keccak256 hash, NOT plaintext CID
   ownerAddress   String   @db.VarChar(42)
   recordTypeHash String?  @db.VarChar(66)
+  title          String?  @db.VarChar(255) // Human readable title
+  description    String?  @db.Text // Notes/description
+  recordType     String?  @db.VarChar(50) // e.g. "diagnosis", "prescription", "lab_result"
   createdBy      String   @db.VarChar(42)
   createdAt      DateTime @default(now())
 
@@ -37,6 +69,7 @@ model RecordMetadata {
   creator  User       @relation("creator", fields: [createdBy], references: [walletAddress])
   keyShares KeyShare[]
 }
+
 
 // Key Sharing - Backend as "blind mailbox"
 // Stores encrypted payload (CID + AES key) that only recipient can decrypt
@@ -46,10 +79,13 @@ model KeyShare {
   senderAddress    String    @db.VarChar(42)
   recipientAddress String    @db.VarChar(42)
 
-  // Encrypted with recipient's public key
+  // Encrypted with recipient's public key using NaCl box
   // Contains: { cid: "Qm...", aesKey: "..." }
   // Backend CANNOT read this
   encryptedPayload String @db.Text
+  
+  // Sender's NaCl public key (needed for nacl.box.open decryption)
+  senderPublicKey  String? @db.Text
 
   status    String    @default("pending") // pending, claimed, revoked
   createdAt DateTime  @default(now())
@@ -79,3 +115,155 @@ model AccessLog {
   @@index([cidHash])
   @@index([accessorAddress])
 }
+
+// Access Request tracking (mirrors on-chain requests)
+model AccessRequest {
+  id                 String   @id @default(uuid())
+  requestId          String   @unique @db.VarChar(66)  // on-chain bytes32 ID
+  requesterAddress   String   @db.VarChar(42)          // Doctor address
+  patientAddress     String   @db.VarChar(42)          // Patient address
+  cidHash            String   @db.VarChar(66)          // Record being requested
+  requestType        Int      @default(0)              // 0=VIEW_ONLY, 1=FULL_ACCESS, 2=EMERGENCY
+  status             String   @default("pending")       // pending, signed, claimed, rejected, expired
+  txHash             String?  @db.VarChar(66)          // On-chain transaction hash
+  signature          String?  @db.Text                  // Patient's EIP-712 signature (for Doctor to claim)
+  signatureDeadline  BigInt?                            // Deadline for signature validity
+  createdAt          DateTime @default(now())
+  deadline           DateTime                           // When request expires
+
+  @@index([patientAddress, status])
+  @@index([requesterAddress, status])
+}
+
+// Consent tracking (mirrors on-chain consents)
+model Consent {
+  id             String   @id @default(uuid())
+  patientAddress String   @db.VarChar(42)
+  granteeAddress String   @db.VarChar(42)
+  cidHash        String   @db.VarChar(66)
+  grantedAt      DateTime @default(now())
+  expiresAt      DateTime
+  status         String   @default("active")  // active, revoked, expired
+  
+  @@unique([patientAddress, granteeAddress, cidHash])
+  @@index([patientAddress])
+  @@index([granteeAddress])
+}
+
+// Doctor Verification Request - for Ministry/Org to verify doctors
+model VerificationRequest {
+  id               String   @id @default(uuid())
+  doctorAddress    String   @db.VarChar(42)
+  
+  // Doctor info
+  fullName         String
+  licenseNumber    String?   // Medical license number
+  specialty        String?   // Cardiology, Neurology, etc.
+  organization     String?   // Hospital/Clinic name
+  
+  // Documents
+  documentCid      String?   // IPFS CID of uploaded credentials
+  documentType     String?   // license, certificate, diploma
+  
+  // Status
+  status           String   @default("pending")  // pending, approved, rejected
+  reviewedBy       String?  @db.VarChar(42)      // Ministry/Org address
+  reviewedAt       DateTime?
+  rejectionReason  String?
+  
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  
+  @@index([doctorAddress])
+  @@index([status])
+}
+
+// Emergency Access - for doctors to access patient records in emergencies
+model EmergencyAccess {
+  id              String   @id @default(uuid())
+  doctorAddress   String   @db.VarChar(42)
+  patientAddress  String   @db.VarChar(42)
+  cidHash         String?  @db.VarChar(66)   // null = all records
+  
+  // Emergency details
+  reason          String                      // Why emergency access is needed
+  emergencyType   String   @default("medical")  // medical, accident, critical
+  location        String?                     // Hospital/location
+  
+  // Status
+  status          String   @default("active")  // active, expired, revoked
+  expiresAt       DateTime                    // Auto-expire after 24-48h
+  
+  // Audit trail
+  approvedBy      String?  @db.VarChar(42)   // Org admin who approved
+  revokedBy       String?  @db.VarChar(42)   // Who revoked early
+  revokedAt       DateTime?
+  
+  createdAt       DateTime @default(now())
+  
+  @@index([patientAddress])
+  @@index([doctorAddress])
+  @@index([status])
+}
+
+// Delegation - for patients to delegate access to family members
+model Delegation {
+  id              String   @id @default(uuid())
+  patientAddress  String   @db.VarChar(42)
+  delegateAddress String   @db.VarChar(42)   // Family member
+  
+  // Delegation scope
+  delegationType  String   @default("full")  // full, limited, emergency_only
+  
+  // Audit
+  status          String   @default("active")  // active, revoked
+  createdAt       DateTime @default(now())
+  revokedAt       DateTime?
+  
+  @@unique([patientAddress, delegateAddress])
+  @@index([patientAddress])
+  @@index([delegateAddress])
+}
+
+// Organization - Hospitals and clinics
+model Organization {
+  id              String   @id @default(uuid())
+  name            String
+  address         String   @db.VarChar(42)   // Organization wallet
+  
+  // Info
+  orgType         String   @default("hospital")  // hospital, clinic, ministry
+  licenseNumber   String?
+  location        String?
+  contactEmail    String?
+  
+  // Status
+  isVerified      Boolean  @default(false)
+  verifiedAt      DateTime?
+  verifiedBy      String?  @db.VarChar(42)
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  @@unique([address])
+  @@index([orgType])
+}
+
+// Organization Members - doctors/staff belonging to an org
+model OrganizationMember {
+  id              String   @id @default(uuid())
+  orgId           String
+  memberAddress   String   @db.VarChar(42)
+  role            String   @default("doctor")  // admin, doctor, nurse, staff
+  
+  status          String   @default("active")  // active, inactive
+  joinedAt        DateTime @default(now())
+  leftAt          DateTime?
+  
+  @@unique([orgId, memberAddress])
+  @@index([orgId])
+  @@index([memberAddress])
+}
+
+
+

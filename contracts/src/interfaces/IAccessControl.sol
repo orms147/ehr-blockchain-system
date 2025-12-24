@@ -16,6 +16,8 @@ interface IAccessControl {
     event MemberAdded(address indexed org, address indexed doctor);
     event MemberRemoved(address indexed org, address indexed doctor);
     event VerificationRevoked(address indexed user, address indexed revoker);
+    event RelayerUpdated(address indexed relayer, bool authorized);
+
 
     // Error
     error AlreadyRegistered();

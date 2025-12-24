@@ -86,10 +86,20 @@ export async function decryptData(encryptedBase64, key) {
 }
 
 // Create payload for key sharing (CID + AES key)
+// aesKey can be a CryptoKey object or already exported string
 export async function createKeySharePayload(cid, aesKey) {
-    const keyString = await exportAESKey(aesKey);
+    let keyString;
+    if (typeof aesKey === 'string') {
+        keyString = aesKey;
+    } else if (aesKey && aesKey.aesKey) {
+        // Handle { aesKey: 'string' } format
+        keyString = aesKey.aesKey;
+    } else {
+        keyString = await exportAESKey(aesKey);
+    }
     return JSON.stringify({ cid, aesKey: keyString });
 }
+
 
 // Parse key share payload
 export function parseKeySharePayload(payload) {

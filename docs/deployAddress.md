@@ -1,5 +1,0 @@
-AccessControl deployed at: 0xb94fcFd5258EDE37461390Abdda7C67d445f4B81
-ConsentLedger deployed at: 0x8c3f517a3a8E86B7f95C2ecF14dD13BFCe683e1a
-RecordRegistry deployed at: 0xAb6E00b822D21b33377b85790ed086A5772991b1
-EHRSystemSecure deployed at: 0x3ae3287679349ebA0cff3e521A9cD3F26468fe8B
-DoctorUpdate deployed at: 0x9E8b3da9f915476D2b089b1DC311d56cfdef225b

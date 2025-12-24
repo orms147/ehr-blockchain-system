@@ -3,11 +3,19 @@ import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import dotenv from 'dotenv';
+import { createServer } from 'http';
+import { initSocket } from './services/socket.service.js';
 
 import authRoutes from './routes/auth.routes.js';
 import recordRoutes from './routes/record.routes.js';
 import keyShareRoutes from './routes/keyShare.routes.js';
 import accessLogRoutes from './routes/accessLog.routes.js';
+import relayerRoutes from './routes/relayer.routes.js';
+import requestRoutes from './routes/request.routes.js';
+import verificationRoutes from './routes/verification.routes.js';
+import emergencyRoutes from './routes/emergency.routes.js';
+import delegationRoutes from './routes/delegation.routes.js';
+import orgRoutes from './routes/org.routes.js';
 import testRoutes from './routes/test.routes.js';
 import { errorHandler } from './middleware/errorHandler.js';
 
@@ -16,6 +24,12 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 3001;
 
+// Create HTTP server for Socket.io
+const server = createServer(app);
+
+// Initialize Socket.io
+initSocket(server);
+
 // Security middleware
 app.use(helmet());
 app.use(cors({
@@ -23,10 +37,10 @@ app.use(cors({
     credentials: true,
 }));
 
-// Rate limiting
+// Rate limiting - relaxed for development
 const limiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 100, // limit each IP to 100 requests per windowMs
+    max: 1000, // increased for dev: 1000 requests per 15 min
     message: { error: 'Too many requests, please try again later.' }
 });
 app.use('/api', limiter);
@@ -44,16 +58,23 @@ app.use('/api/auth', authRoutes);
 app.use('/api/records', recordRoutes);
 app.use('/api/key-share', keyShareRoutes);
 app.use('/api/access-logs', accessLogRoutes);
-app.use('/api/test', testRoutes); // Development only
+app.use('/api/relayer', relayerRoutes);       // Gas sponsorship
+app.use('/api/requests', requestRoutes);       // Access requests
+app.use('/api/verification', verificationRoutes);  // Doctor verification
+app.use('/api/emergency', emergencyRoutes);    // Emergency access
+app.use('/api/delegation', delegationRoutes);  // Family delegation
+app.use('/api/org', orgRoutes);                // Organization management
+app.use('/api/test', testRoutes);              // Development only
 
 // Error handling
 app.use(errorHandler);
 
-// Start server
-app.listen(PORT, () => {
+// Start server with Socket.io
+server.listen(PORT, () => {
     console.log(`🚀 EHR Backend running on port ${PORT}`);
     console.log(`📡 Chain ID: ${process.env.CHAIN_ID}`);
     console.log(`🔗 Frontend URL: ${process.env.FRONTEND_URL}`);
 });
 
 export default app;
+

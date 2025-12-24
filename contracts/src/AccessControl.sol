@@ -43,12 +43,18 @@ contract AccessControl is IAccessControl{
     mapping(address => address[]) public orgMembers; // org => doctors[]
     mapping(address => mapping(address => bool)) public isMemberOfOrg;
 
+    // Authorized relayers (for gas sponsorship)
+    mapping(address => bool) public authorizedRelayers;
+
     // Constructor
     constructor (address ministryAddress) {
         if (ministryAddress == address(0)) revert InvalidAddress();
 
         MINISTRY_OF_HEALTH = ministryAddress;
         _roles[ministryAddress] = MINISTRY | ORGANIZATION | VERIFIED_ORG;
+
+        // Ministry is also an authorized relayer by default
+        authorizedRelayers[ministryAddress] = true;
 
         orgVerifications[ministryAddress] = Verification({
              verifier: ministryAddress,
@@ -71,7 +77,20 @@ contract AccessControl is IAccessControl{
         _;
     }
 
-    // Register
+    modifier onlyRelayer() {
+        if (!authorizedRelayers[msg.sender]) revert NotAuthorized();
+        _;
+    }
+
+    // ============ RELAYER MANAGEMENT ============
+
+    function setRelayer(address relayer, bool authorized) external onlyMinistry {
+        if (relayer == address(0)) revert InvalidAddress();
+        authorizedRelayers[relayer] = authorized;
+        emit RelayerUpdated(relayer, authorized);
+    }
+
+    // ============ REGISTER (Self) ============
     
     function registerAsPatient() external override {
         // Allow multiple roles (e.g. Doctor can be Patient)
@@ -90,6 +109,25 @@ contract AccessControl is IAccessControl{
         _roles[msg.sender] |= ORGANIZATION;
         emit UserRegistered(msg.sender, "ORGANIZATION_UNVERIFIED");
     }
+
+    // ============ REGISTER (Relayer - for gas sponsorship) ============
+
+    /// @notice Register a user as Patient - called by authorized relayer
+    /// @param user The address to register as patient
+    function registerPatientFor(address user) external onlyRelayer {
+        if (user == address(0)) revert InvalidAddress();
+        _roles[user] |= PATIENT;
+        emit UserRegistered(user, "PATIENT");
+    }
+
+    /// @notice Register a user as Doctor - called by authorized relayer
+    /// @param user The address to register as doctor
+    function registerDoctorFor(address user) external onlyRelayer {
+        if (user == address(0)) revert InvalidAddress();
+        _roles[user] |= DOCTOR;
+        emit UserRegistered(user, "DOCTOR_UNVERIFIED");
+    }
+
 
     // Verification
     
