@@ -1,24 +1,44 @@
 // API Configuration and Base Service
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+
+// Helper to safely access localStorage (SSR-safe)
+const getStorageItem = (key) => {
+    if (typeof window !== 'undefined') {
+        return localStorage.getItem(key);
+    }
+    return null;
+};
+
+const setStorageItem = (key, value) => {
+    if (typeof window !== 'undefined') {
+        localStorage.setItem(key, value);
+    }
+};
+
+const removeStorageItem = (key) => {
+    if (typeof window !== 'undefined') {
+        localStorage.removeItem(key);
+    }
+};
 
 class ApiService {
     constructor() {
         this.baseUrl = API_BASE_URL;
-        this.token = localStorage.getItem('jwt_token');
+        this.token = null;
     }
 
     setToken(token) {
         this.token = token;
-        localStorage.setItem('jwt_token', token);
+        setStorageItem('jwt_token', token);
     }
 
     clearToken() {
         this.token = null;
-        localStorage.removeItem('jwt_token');
+        removeStorageItem('jwt_token');
     }
 
     getToken() {
-        return this.token || localStorage.getItem('jwt_token');
+        return this.token || getStorageItem('jwt_token');
     }
 
     async request(endpoint, options = {}) {

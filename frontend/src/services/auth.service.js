@@ -37,6 +37,11 @@ export const authService = {
         return api.get(`/api/auth/pubkey/${walletAddress}`);
     },
 
+    // Get another user's encryption public key
+    async getEncryptionKey(walletAddress) {
+        return api.get(`/api/auth/encryption-key/${walletAddress}`);
+    },
+
     // Logout
     logout() {
         api.clearToken();

@@ -52,7 +52,20 @@ export async function encryptData(data, key) {
     result.set(iv);
     result.set(new Uint8Array(encryptedData), iv.length);
 
-    return btoa(String.fromCharCode(...result));
+    // Use chunked base64 encoding to avoid stack overflow with large files
+    return arrayBufferToBase64(result);
+}
+
+// Helper: Convert ArrayBuffer to base64 without stack overflow
+function arrayBufferToBase64(buffer) {
+    const bytes = new Uint8Array(buffer);
+    let binary = '';
+    const chunkSize = 8192; // Process in chunks to avoid call stack exceeded
+    for (let i = 0; i < bytes.length; i += chunkSize) {
+        const chunk = bytes.subarray(i, i + chunkSize);
+        binary += String.fromCharCode.apply(null, chunk);
+    }
+    return btoa(binary);
 }
 
 // Decrypt data with AES-GCM
@@ -73,10 +86,20 @@ export async function decryptData(encryptedBase64, key) {
 }
 
 // Create payload for key sharing (CID + AES key)
+// aesKey can be a CryptoKey object or already exported string
 export async function createKeySharePayload(cid, aesKey) {
-    const keyString = await exportAESKey(aesKey);
+    let keyString;
+    if (typeof aesKey === 'string') {
+        keyString = aesKey;
+    } else if (aesKey && aesKey.aesKey) {
+        // Handle { aesKey: 'string' } format
+        keyString = aesKey.aesKey;
+    } else {
+        keyString = await exportAESKey(aesKey);
+    }
     return JSON.stringify({ cid, aesKey: keyString });
 }
+
 
 // Parse key share payload
 export function parseKeySharePayload(payload) {

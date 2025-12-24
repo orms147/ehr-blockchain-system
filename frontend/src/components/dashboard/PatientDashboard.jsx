@@ -1,37 +1,104 @@
-import React, { useState } from 'react';
+"use client";
+
+import React, { useState, useEffect } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui/use-toast';
-import { Plus } from 'lucide-react';
+import { Plus, Loader2, RefreshCw, FileX, Shield, Bell, FileText } from 'lucide-react';
+import { useWalletAddress } from '@/hooks/useWalletAddress';
+import { useEncryptionKey } from '@/hooks/useEncryptionKey';
 
 import RecordCard from '@/components/dashboard/RecordCard';
-import AccessListItem from '@/components/dashboard/AccessListItem';
-import RequestItem from '@/components/dashboard/RequestItem';
 import GrantAccessForm from '@/components/dashboard/GrantAccessForm';
 import RecordModal from '@/components/dashboard/RecordModal';
+import UploadRecordModal from '@/components/dashboard/UploadRecordModal';
+import AccessRequestList from '@/components/dashboard/AccessRequestList';
+import ConsentList from '@/components/dashboard/ConsentList';
+import QuotaDisplay from '@/components/dashboard/QuotaDisplay';
+import { recordService } from '@/services';
 
 const PatientDashboard = () => {
+    const { address, provider, loading: walletLoading } = useWalletAddress();
+
+    // Auto-register encryption key for NaCl key exchange with doctors
+    const { registered: encryptionKeyRegistered } = useEncryptionKey(provider, address);
+
+    // Debug: log the wallet state
+    console.log('Wallet state:', { address, walletLoading });
+
+
     const [selectedRecord, setSelectedRecord] = useState(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
+    const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
+    const [parentRecord, setParentRecord] = useState(null); // For update flow
 
-    // Mock Data
-    const [records] = useState([
-        { id: 1, type: 'Diagnosis', title: 'Seasonal Allergic Rhinitis', date: 'Oct 24, 2024', doctor: 'Dr. Sarah Wilson', verified: true, details: 'Patient presents with sneezing, congestion, and itchy eyes. Prescribed antihistamines.' },
-        { id: 2, type: 'Prescription', title: 'Amoxicillin 500mg', date: 'Oct 20, 2024', doctor: 'Dr. James Chen', verified: true, details: 'Take 1 capsule 3 times daily for 7 days for bacterial infection.' },
-        { id: 3, type: 'Lab', title: 'Complete Blood Count (CBC)', date: 'Sep 15, 2024', doctor: 'LabCorp Central', verified: true, details: 'All levels within normal range. Hemoglobin: 14.2 g/dL.' },
-        { id: 4, type: 'X-Ray', title: 'Chest X-Ray PA/Lat', date: 'Aug 10, 2024', doctor: 'Dr. Emily Hart', verified: true, details: 'Clear lung fields. No acute cardiopulmonary abnormalities.' },
-        { id: 5, type: 'Checkup', title: 'Annual Physical', date: 'Jun 05, 2024', doctor: 'Dr. Sarah Wilson', verified: false, details: 'Routine annual examination. BP 120/80, HR 72. Patient is in good health.' },
-    ]);
 
-    const [accessList, setAccessList] = useState([
-        { id: 1, doctorName: 'Dr. Sarah Wilson', accessScope: 'Full Access', expiryDate: 'Dec 31, 2024' },
-        { id: 2, doctorName: 'Dr. James Chen', accessScope: 'Read Only', expiryDate: 'Nov 15, 2024' },
-    ]);
+    // Real data from backend
+    const [records, setRecords] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
+    const [pendingRequestCount, setPendingRequestCount] = useState(0);
 
-    const [requests, setRequests] = useState([
-        { id: 1, requesterName: 'Dr. Michael Ross', requesterRole: 'Cardiologist', reason: 'Upcoming consultation regarding arrhythmia.' },
-        { id: 2, requesterName: 'City General Hospital', requesterRole: 'Emergency Dept', reason: 'Emergency admission access required.' },
-    ]);
+    // Fetch records from backend
+    const fetchRecords = async () => {
+        setLoading(true);
+        setError(null);
+        try {
+            const data = await recordService.getMyRecords();
+
+            // Transform backend data to frontend format
+            const transformedRecords = data.map((record, index) => {
+                const isCreatedBySelf = record.createdBy?.toLowerCase() === record.ownerAddress?.toLowerCase();
+                // Prefer recordType from backend, fallback to hash-based detection
+                const recordType = record.recordType || getRecordType(record.recordTypeHash);
+
+                return {
+                    id: record.id || index + 1,
+                    cidHash: record.cidHash,
+                    type: recordType,
+                    title: record.title || `${recordType} #${record.id || index + 1}`,
+                    description: record.description || null,
+                    date: new Date(record.createdAt).toLocaleDateString('vi-VN'),
+                    createdBy: record.createdBy,
+                    createdByDisplay: isCreatedBySelf
+                        ? 'Bạn'
+                        : record.createdBy
+                            ? `Bác sĩ ${record.createdBy.substring(0, 6)}...${record.createdBy.substring(38)}`
+                            : 'Không rõ',
+                    isCreatedByDoctor: !isCreatedBySelf,
+                    verified: true,
+                    details: `CID Hash: ${record.cidHash?.substring(0, 20)}...`,
+                    ownerAddress: record.ownerAddress,
+                };
+            });
+
+
+            setRecords(transformedRecords);
+        } catch (err) {
+            console.error('Error fetching records:', err);
+            setError(err.message || 'Không thể tải hồ sơ');
+            toast({
+                title: "Lỗi",
+                description: "Không thể tải danh sách hồ sơ. Vui lòng thử lại.",
+                variant: "destructive",
+            });
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    // Helper to determine record type from hash
+    const getRecordType = (typeHash) => {
+        if (!typeHash) return 'Record';
+        const types = ['Diagnosis', 'Prescription', 'Lab', 'X-Ray', 'Checkup'];
+        const index = parseInt(typeHash.substring(2, 4), 16) % types.length;
+        return types[index];
+    };
+
+    // Load records on mount
+    useEffect(() => {
+        fetchRecords();
+    }, []);
 
     // Handlers
     const handleViewDetails = (record) => {
@@ -39,137 +106,164 @@ const PatientDashboard = () => {
         setIsModalOpen(true);
     };
 
-    const handleRevoke = (id) => {
-        setAccessList(prev => prev.filter(item => item.id !== id));
-        toast({
-            title: "Access Revoked",
-            description: "The doctor's access has been successfully revoked.",
-            variant: "destructive",
-        });
-    };
-
     const handleGrantAccess = (data) => {
         toast({
-            title: "Access Granted",
-            description: `Access granted to ${data.address.substring(0, 6)}... for ${data.duration.replace('_', ' ')}.`,
-            className: "bg-green-50 border-green-200 text-green-800",
-        });
-        // In a real app, we would add this to the list
-    };
-
-    const handleApproveRequest = (id) => {
-        setRequests(prev => prev.filter(req => req.id !== id));
-        toast({
-            title: "Request Approved",
-            description: "Access has been granted to the requester.",
+            title: "Đã cấp quyền truy cập",
+            description: `Đã cấp quyền cho ${data.address.substring(0, 6)}... trong ${data.duration.replace('_', ' ')}.`,
             className: "bg-green-50 border-green-200 text-green-800",
         });
     };
 
-    const handleRejectRequest = (id) => {
-        setRequests(prev => prev.filter(req => req.id !== id));
+    const handleUploadSuccess = () => {
+        setIsUploadModalOpen(false);
+        fetchRecords();
         toast({
-            title: "Request Rejected",
-            description: "The access request has been denied.",
-            variant: "destructive",
+            title: "Tải lên thành công",
+            description: "Hồ sơ y tế đã được lưu an toàn.",
+            className: "bg-green-50 border-green-200 text-green-800",
         });
+    };
+
+    const handleRequestApproved = (request) => {
+        // Refresh data after approval
+        fetchRecords();
+    };
+
+    // Handle update record - opens upload modal with parent record
+    const handleUpdateRecord = (record) => {
+        setParentRecord(record);
+        setIsUploadModalOpen(true);
+    };
+
+    // Clear parent record when upload modal closes
+    const handleUploadModalClose = (open) => {
+        setIsUploadModalOpen(open);
+        if (!open) {
+            setParentRecord(null);
+        }
     };
 
     return (
         <div className="max-w-6xl mx-auto">
+            {/* Header with Quota */}
             <div className="mb-8">
-                <h1 className="text-3xl font-bold text-slate-900">My Health Portal</h1>
-                <p className="text-slate-500 mt-2">Manage your medical records and access permissions securely.</p>
+                <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6">
+                    <div>
+                        <h1 className="text-3xl font-bold text-slate-900">Cổng thông tin Sức khỏe</h1>
+                        <p className="text-slate-500 mt-2">Quản lý hồ sơ y tế và quyền truy cập một cách an toàn.</p>
+                    </div>
+
+                    {/* Quota Display */}
+                    <div className="lg:w-80">
+                        <QuotaDisplay walletAddress={address} />
+                    </div>
+                </div>
             </div>
 
             <Tabs defaultValue="records" className="space-y-6">
-                <TabsList className="bg-white border border-slate-200 p-1 rounded-xl w-full sm:w-auto grid grid-cols-3 sm:flex h-auto">
-                    <TabsTrigger value="records" className="rounded-lg px-6 py-2.5 data-[state=active]:bg-blue-50 data-[state=active]:text-blue-700">
-                        My Records
+                <TabsList className="bg-white border border-slate-200 p-1 rounded-xl w-full sm:w-auto grid grid-cols-4 sm:flex h-auto">
+                    <TabsTrigger value="records" className="rounded-lg px-4 py-2.5 data-[state=active]:bg-blue-50 data-[state=active]:text-blue-700">
+                        <FileText className="w-4 h-4 mr-2" />
+                        Hồ sơ
                     </TabsTrigger>
-                    <TabsTrigger value="access" className="rounded-lg px-6 py-2.5 data-[state=active]:bg-blue-50 data-[state=active]:text-blue-700">
-                        Access Control
+                    <TabsTrigger value="requests" className="rounded-lg px-4 py-2.5 data-[state=active]:bg-blue-50 data-[state=active]:text-blue-700 relative">
+                        <Bell className="w-4 h-4 mr-2" />
+                        Yêu cầu
                     </TabsTrigger>
-                    <TabsTrigger value="requests" className="rounded-lg px-6 py-2.5 data-[state=active]:bg-blue-50 data-[state=active]:text-blue-700 relative">
-                        Requests
-                        {requests.length > 0 && (
-                            <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[10px] flex items-center justify-center rounded-full">
-                                {requests.length}
-                            </span>
-                        )}
+                    <TabsTrigger value="consents" className="rounded-lg px-4 py-2.5 data-[state=active]:bg-blue-50 data-[state=active]:text-blue-700">
+                        <Shield className="w-4 h-4 mr-2" />
+                        Đã cấp quyền
+                    </TabsTrigger>
+                    <TabsTrigger value="grant" className="rounded-lg px-4 py-2.5 data-[state=active]:bg-blue-50 data-[state=active]:text-blue-700">
+                        <Plus className="w-4 h-4 mr-2" />
+                        Cấp mới
                     </TabsTrigger>
                 </TabsList>
 
                 {/* Tab 1: My Records */}
                 <TabsContent value="records" className="outline-none">
                     <div className="flex justify-between items-center mb-6">
-                        <h2 className="text-xl font-semibold text-slate-900">Medical History</h2>
-                        <Button className="bg-blue-600 hover:bg-blue-700 text-white gap-2">
-                            <Plus className="w-4 h-4" /> Add Record
+                        <div className="flex items-center gap-4">
+                            <h2 className="text-xl font-semibold text-slate-900">Lịch sử Y tế</h2>
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={fetchRecords}
+                                disabled={loading}
+                                className="text-slate-500 hover:text-slate-700"
+                            >
+                                <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+                            </Button>
+                        </div>
+                        <Button
+                            onClick={() => setIsUploadModalOpen(true)}
+                            className="bg-blue-600 hover:bg-blue-700 text-white gap-2"
+                        >
+                            <Plus className="w-4 h-4" /> Thêm hồ sơ
                         </Button>
                     </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                        {records.map(record => (
-                            <RecordCard
-                                key={record.id}
-                                record={record}
-                                onViewDetails={handleViewDetails}
-                            />
-                        ))}
-                    </div>
-                </TabsContent>
 
-                {/* Tab 2: Access Control */}
-                <TabsContent value="access" className="outline-none">
-                    <div className="grid lg:grid-cols-3 gap-8">
-                        <div className="lg:col-span-2 space-y-6">
-                            <div className="mb-4">
-                                <h2 className="text-xl font-semibold text-slate-900">Active Access</h2>
-                                <p className="text-slate-500 text-sm">Doctors and institutions that can view your records.</p>
-                            </div>
-                            <div className="space-y-4">
-                                {accessList.map(access => (
-                                    <AccessListItem
-                                        key={access.id}
-                                        access={access}
-                                        onRevoke={handleRevoke}
-                                    />
-                                ))}
-                                {accessList.length === 0 && (
-                                    <div className="text-center py-12 bg-slate-50 rounded-xl border border-dashed border-slate-300">
-                                        <p className="text-slate-500">No active access permissions granted.</p>
-                                    </div>
-                                )}
-                            </div>
+                    {/* Loading State */}
+                    {loading && (
+                        <div className="flex items-center justify-center py-20">
+                            <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
+                            <span className="ml-3 text-slate-600">Đang tải hồ sơ...</span>
                         </div>
-                        <div>
-                            <GrantAccessForm onGrant={handleGrantAccess} />
-                        </div>
-                    </div>
-                </TabsContent>
+                    )}
 
-                {/* Tab 3: Requests */}
-                <TabsContent value="requests" className="outline-none">
-                    <div className="max-w-2xl">
-                        <div className="mb-6">
-                            <h2 className="text-xl font-semibold text-slate-900">Pending Requests</h2>
-                            <p className="text-slate-500 text-sm">Review requests from healthcare providers.</p>
+                    {/* Error State */}
+                    {error && !loading && (
+                        <div className="text-center py-20 bg-red-50 rounded-xl border border-red-200">
+                            <p className="text-red-600 mb-4">{error}</p>
+                            <Button onClick={fetchRecords} variant="outline" className="border-red-300 text-red-600">
+                                Thử lại
+                            </Button>
                         </div>
-                        <div className="space-y-4">
-                            {requests.map(req => (
-                                <RequestItem
-                                    key={req.id}
-                                    request={req}
-                                    onApprove={handleApproveRequest}
-                                    onReject={handleRejectRequest}
+                    )}
+
+                    {/* Empty State */}
+                    {!loading && !error && records.length === 0 && (
+                        <div className="text-center py-20 bg-slate-50 rounded-xl border border-dashed border-slate-300">
+                            <FileX className="w-12 h-12 text-slate-400 mx-auto mb-4" />
+                            <p className="text-slate-500 mb-4">Chưa có hồ sơ y tế nào.</p>
+                            <Button onClick={() => setIsUploadModalOpen(true)} className="bg-blue-600 hover:bg-blue-700 text-white">
+                                <Plus className="w-4 h-4 mr-2" /> Thêm hồ sơ đầu tiên
+                            </Button>
+                        </div>
+                    )}
+
+                    {/* Records Grid */}
+                    {!loading && !error && records.length > 0 && (
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                            {records.map(record => (
+                                <RecordCard
+                                    key={record.id}
+                                    record={record}
+                                    onViewDetails={handleViewDetails}
                                 />
                             ))}
-                            {requests.length === 0 && (
-                                <div className="text-center py-12 bg-slate-50 rounded-xl border border-dashed border-slate-300">
-                                    <p className="text-slate-500">No pending access requests.</p>
-                                </div>
-                            )}
                         </div>
+                    )}
+                </TabsContent>
+
+                {/* Tab 2: Access Requests */}
+                <TabsContent value="requests" className="outline-none">
+                    <AccessRequestList
+                        walletAddress={address}
+                        provider={provider}
+                        onApproved={handleRequestApproved}
+                    />
+                </TabsContent>
+
+                {/* Tab 3: Active Consents (Revoke) */}
+                <TabsContent value="consents" className="outline-none">
+                    <ConsentList walletAddress={address} />
+                </TabsContent>
+
+                {/* Tab 4: Grant New Access */}
+                <TabsContent value="grant" className="outline-none">
+                    <div className="max-w-lg">
+                        <GrantAccessForm onGrant={handleGrantAccess} />
                     </div>
                 </TabsContent>
             </Tabs>
@@ -178,6 +272,14 @@ const PatientDashboard = () => {
                 record={selectedRecord}
                 open={isModalOpen}
                 onOpenChange={setIsModalOpen}
+                onUpdate={handleUpdateRecord}
+            />
+
+            <UploadRecordModal
+                open={isUploadModalOpen}
+                onOpenChange={handleUploadModalClose}
+                onSuccess={handleUploadSuccess}
+                parentRecord={parentRecord}
             />
         </div>
     );

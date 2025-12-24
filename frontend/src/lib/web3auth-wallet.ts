@@ -3,7 +3,7 @@ import { Web3AuthConnector } from "@web3auth/web3auth-wagmi-connector";
 import { Web3Auth } from "@web3auth/modal";
 import { EthereumPrivateKeyProvider } from "@web3auth/ethereum-provider";
 import { CHAIN_NAMESPACES, WEB3AUTH_NETWORK } from "@web3auth/base";
-import { sepolia } from 'wagmi/chains';
+import { arbitrumSepolia } from 'wagmi/chains';
 
 export const web3AuthWallet = (): Wallet => ({
     id: 'web3auth',
@@ -11,7 +11,8 @@ export const web3AuthWallet = (): Wallet => ({
     iconUrl: 'https://web3auth.io/images/w3a-L-Favicon-1.svg',
     iconBackground: '#fff',
     createConnector: (walletDetails: WalletDetailsParams) => {
-        const chain = sepolia;
+        // Use Arbitrum Sepolia as the default chain (where contracts are deployed)
+        const chain = arbitrumSepolia;
         const chainConfig = {
             chainNamespace: CHAIN_NAMESPACES.EIP155,
             chainId: "0x" + chain.id.toString(16),
