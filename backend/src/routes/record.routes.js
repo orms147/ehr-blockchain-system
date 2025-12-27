@@ -36,6 +36,43 @@ router.post('/', authenticate, async (req, res, next) => {
             return res.status(409).json({ error: 'Record already exists' });
         }
 
+        // SECURITY: If updating a record (parentCidHash provided), verify user has read access
+        if (parentCidHash) {
+            const parentRecord = await prisma.recordMetadata.findUnique({
+                where: { cidHash: parentCidHash.toLowerCase() }
+            });
+
+            if (!parentRecord) {
+                console.log('📤 [UPLOAD] Parent record not found');
+                return res.status(404).json({ error: 'Hồ sơ gốc không tồn tại' });
+            }
+
+            // Check if user is the owner
+            const isOwner = parentRecord.ownerAddress?.toLowerCase() === walletAddress.toLowerCase();
+
+            // Check if user has active keyShare (read access)
+            const hasKeyShare = await prisma.keyShare.findFirst({
+                where: {
+                    cidHash: parentCidHash.toLowerCase(),
+                    recipientAddress: walletAddress.toLowerCase(),
+                    status: { in: ['pending', 'claimed'] }, // Active access
+                    OR: [
+                        { expiresAt: null },
+                        { expiresAt: { gt: new Date() } }
+                    ]
+                }
+            });
+
+            if (!isOwner && !hasKeyShare) {
+                console.log('📤 [UPLOAD] ❌ User does not have read access to parent record');
+                return res.status(403).json({
+                    error: 'Bạn phải xem hồ sơ gốc trước khi cập nhật. Vui lòng yêu cầu quyền truy cập.'
+                });
+            }
+
+            console.log(`📤 [UPLOAD] ✅ Access verified: isOwner=${isOwner}, hasKeyShare=${!!hasKeyShare}`);
+        }
+
         // Check quota first
         console.log('📤 [UPLOAD] Checking quota...');
         const quota = await relayerService.getQuotaStatus(walletAddress);
@@ -74,6 +111,7 @@ router.post('/', authenticate, async (req, res, next) => {
                 ownerAddress: walletAddress,
                 createdBy: walletAddress,
                 recordTypeHash: recordTypeHash?.toLowerCase(),
+                parentCidHash: parentCidHash?.toLowerCase() || null,
                 title: title || null,
                 description: description || null,
                 recordType: recordType || null,
@@ -209,6 +247,130 @@ router.get('/my', authenticate, async (req, res, next) => {
         });
 
         res.json(records);
+    } catch (error) {
+        next(error);
+    }
+});
+
+// GET /api/records/chain/:cidHash - Get record chain (parent, children, siblings)
+router.get('/chain/:cidHash', authenticate, async (req, res, next) => {
+    try {
+        const cidHash = req.params.cidHash.toLowerCase();
+
+        // Get the current record
+        const record = await prisma.recordMetadata.findUnique({
+            where: { cidHash }
+        });
+
+        if (!record) {
+            return res.status(404).json({ error: 'Record not found' });
+        }
+
+        // Get parent record (if exists)
+        let parent = null;
+        if (record.parentCidHash) {
+            parent = await prisma.recordMetadata.findUnique({
+                where: { cidHash: record.parentCidHash }
+            });
+        }
+
+        // Get children records
+        const children = await prisma.recordMetadata.findMany({
+            where: { parentCidHash: cidHash },
+            orderBy: { createdAt: 'asc' }
+        });
+
+        // Get siblings (records with same parent)
+        let siblings = [];
+        if (record.parentCidHash) {
+            siblings = await prisma.recordMetadata.findMany({
+                where: {
+                    parentCidHash: record.parentCidHash,
+                    NOT: { cidHash: cidHash }
+                },
+                orderBy: { createdAt: 'asc' }
+            });
+        }
+
+        // Calculate version number (position in chain from root)
+        let version = 1;
+        let currentParent = record.parentCidHash;
+        while (currentParent) {
+            version++;
+            const parentRecord = await prisma.recordMetadata.findUnique({
+                where: { cidHash: currentParent }
+            });
+            currentParent = parentRecord?.parentCidHash || null;
+        }
+
+        res.json({
+            current: record,
+            parent,
+            children,
+            siblings,
+            version,
+            childCount: children.length,
+            hasParent: !!parent,
+            hasChildren: children.length > 0
+        });
+    } catch (error) {
+        next(error);
+    }
+});
+
+// GET /api/records/chain-cids/:cidHash - Get ALL cidHashes in a chain (for chain-wide sharing)
+// Given any CID in the chain, returns all CIDs from root to all leaves
+router.get('/chain-cids/:cidHash', authenticate, async (req, res, next) => {
+    try {
+        const startCidHash = req.params.cidHash.toLowerCase();
+        const allCids = new Set();
+
+        // Helper function to traverse up to root
+        const findRoot = async (cidHash) => {
+            let current = cidHash;
+            const ancestors = [];
+            while (current) {
+                ancestors.push(current);
+                allCids.add(current);
+                const record = await prisma.recordMetadata.findUnique({
+                    where: { cidHash: current },
+                    select: { parentCidHash: true }
+                });
+                current = record?.parentCidHash || null;
+            }
+            return ancestors[ancestors.length - 1]; // root is last
+        };
+
+        // Helper function to traverse down to all children
+        const findAllChildren = async (cidHash) => {
+            allCids.add(cidHash);
+            const children = await prisma.recordMetadata.findMany({
+                where: { parentCidHash: cidHash },
+                select: { cidHash: true }
+            });
+            for (const child of children) {
+                await findAllChildren(child.cidHash);
+            }
+        };
+
+        // Find root first
+        const rootCid = await findRoot(startCidHash);
+
+        // Then find all children from root
+        await findAllChildren(rootCid);
+
+        // Get all records with details
+        const records = await prisma.recordMetadata.findMany({
+            where: { cidHash: { in: Array.from(allCids) } },
+            orderBy: { createdAt: 'asc' }
+        });
+
+        res.json({
+            rootCidHash: rootCid,
+            chainCids: Array.from(allCids),
+            records,
+            count: allCids.size
+        });
     } catch (error) {
         next(error);
     }

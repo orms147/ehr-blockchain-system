@@ -116,7 +116,6 @@ export default function ProfilePage() {
                     return pk.startsWith('0x') ? pk : `0x${pk}`;
                 }
             } catch (err) {
-                console.log(`Method ${method} not available, trying next...`);
             }
         }
 

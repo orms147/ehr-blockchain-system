@@ -68,7 +68,6 @@ const DashboardLayout = ({ children }) => {
         try {
             await disconnect();
         } catch (e) {
-            console.log('Disconnect error:', e);
         }
 
         toast({
@@ -82,6 +81,7 @@ const DashboardLayout = ({ children }) => {
         if (role === 'doctor') return { label: 'Bác sĩ', subLabel: 'Chuyên gia y tế', initials: 'BS' };
         if (role === 'admin') return { label: 'Quản trị', subLabel: 'Super Admin', initials: 'AD' };
         if (role === 'organization') return { label: 'Tổ chức', subLabel: 'Đơn vị y tế', initials: 'TC' };
+        if (role === 'ministry') return { label: 'Bộ Y tế', subLabel: 'Quản lý hệ thống', initials: 'BY' };
         return { label: 'Bệnh nhân', subLabel: 'Truy cập tiêu chuẩn', initials: 'BN' };
     };
 
@@ -92,6 +92,7 @@ const DashboardLayout = ({ children }) => {
         if (role === 'doctor') return '/dashboard/doctor';
         if (role === 'admin') return '/dashboard/admin';
         if (role === 'organization') return '/dashboard/organization';
+        if (role === 'ministry') return '/dashboard/ministry';
         return '/dashboard/patient';
     };
 

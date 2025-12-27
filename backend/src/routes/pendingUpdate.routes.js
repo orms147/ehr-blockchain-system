@@ -1,0 +1,446 @@
+// Pending Update Routes - Doctor update approval flow
+import { Router } from 'express';
+import { z } from 'zod';
+import { authenticate } from '../middleware/auth.js';
+import prisma from '../config/database.js';
+import { keccak256, toBytes } from 'viem';
+import { emitToUser } from '../services/socket.service.js';
+
+const router = Router();
+
+// Validation schemas
+const createPendingUpdateSchema = z.object({
+    parentCidHash: z.string().regex(/^0x[a-fA-F0-9]{64}$/),
+    patientAddress: z.string().regex(/^0x[a-fA-F0-9]{40}$/),
+    encryptedContent: z.string(), // Base64 encrypted FHIR bundle
+    recordType: z.string().max(50).optional(),
+    title: z.string().max(255).optional(),
+});
+
+const claimUpdateSchema = z.object({
+    cidHash: z.string().regex(/^0x[a-fA-F0-9]{64}$/),
+    txHash: z.string().regex(/^0x[a-fA-F0-9]{64}$/),
+    cid: z.string().min(1), // IPFS CID
+    aesKey: z.string().min(1), // AES key string
+});
+
+// Helper: Calculate content hash
+function calculateContentHash(content) {
+    return keccak256(toBytes(content));
+}
+
+// POST /api/pending-updates - Create pending update (Doctor)
+router.post('/', authenticate, async (req, res, next) => {
+    try {
+        const { parentCidHash, patientAddress, encryptedContent, recordType, title } =
+            createPendingUpdateSchema.parse(req.body);
+        const doctorAddress = req.user.walletAddress.toLowerCase();
+
+
+        // Verify parent record exists
+        const parentRecord = await prisma.recordMetadata.findUnique({
+            where: { cidHash: parentCidHash.toLowerCase() }
+        });
+
+        if (!parentRecord) {
+            return res.status(404).json({ error: 'Hồ sơ gốc không tồn tại' });
+        }
+
+        // Auto-detect patientAddress from parent record's owner
+        // This ensures we always use the correct patient even if frontend sends wrong address
+        const actualPatientAddress = parentRecord.ownerAddress.toLowerCase();
+
+        // Verify doctor has access to this record (keyShare exists)
+        const hasAccess = await prisma.keyShare.findFirst({
+            where: {
+                cidHash: parentCidHash.toLowerCase(),
+                recipientAddress: doctorAddress,
+                status: { in: ['pending', 'claimed'] },
+                OR: [
+                    { expiresAt: null },
+                    { expiresAt: { gt: new Date() } }
+                ]
+            }
+        });
+
+        if (!hasAccess) {
+            return res.status(403).json({
+                error: 'Bạn không có quyền truy cập hồ sơ này. Vui lòng yêu cầu quyền truy cập trước.'
+            });
+        }
+
+        // Check if this record already has children (updates)
+        const existingChild = await prisma.recordMetadata.findFirst({
+            where: { parentCidHash: parentCidHash.toLowerCase() }
+        });
+
+        if (existingChild) {
+            return res.status(400).json({
+                error: 'Hồ sơ này đã có bản cập nhật. Vui lòng cập nhật từ phiên bản mới nhất.',
+                latestCidHash: existingChild.cidHash
+            });
+        }
+
+        // Calculate content hash for integrity
+        const contentHash = calculateContentHash(encryptedContent);
+
+        // Set expiry (7 days from now)
+        const expiresAt = new Date();
+        expiresAt.setDate(expiresAt.getDate() + 7);
+
+        // Create pending update
+        const pendingUpdate = await prisma.pendingUpdate.create({
+            data: {
+                doctorAddress,
+                patientAddress: actualPatientAddress, // Use auto-detected from parent record
+                parentCidHash: parentCidHash.toLowerCase(),
+                encryptedContent,
+                contentHash,
+                recordType: recordType || null,
+                title: title || null,
+                status: 'pending',
+                expiresAt,
+            }
+        });
+
+        // Notify patient via WebSocket
+        emitToUser(patientAddress.toLowerCase(), 'pending_update:new', {
+            id: pendingUpdate.id,
+            doctorAddress,
+            parentCidHash: parentCidHash.toLowerCase(),
+            title: title || 'Cập nhật hồ sơ',
+        });
+
+        console.log(`✅ Pending update created: ${pendingUpdate.id} by ${doctorAddress}`);
+
+        res.status(201).json({
+            success: true,
+            pendingUpdate: {
+                id: pendingUpdate.id,
+                status: pendingUpdate.status,
+                expiresAt: pendingUpdate.expiresAt,
+            },
+            message: 'Yêu cầu cập nhật đã được gửi. Chờ bệnh nhân phê duyệt.'
+        });
+    } catch (error) {
+        next(error);
+    }
+});
+
+// GET /api/pending-updates/incoming - Get updates for me (Patient)
+router.get('/incoming', authenticate, async (req, res, next) => {
+    try {
+        const patientAddress = req.user.walletAddress.toLowerCase();
+
+        const updates = await prisma.pendingUpdate.findMany({
+            where: {
+                patientAddress,
+                status: 'pending',
+                expiresAt: { gt: new Date() }, // Not expired
+            },
+            orderBy: { createdAt: 'desc' },
+        });
+
+        res.json({
+            count: updates.length,
+            updates,
+        });
+    } catch (error) {
+        next(error);
+    }
+});
+
+// GET /api/pending-updates/outgoing - Get updates I created (Doctor)
+router.get('/outgoing', authenticate, async (req, res, next) => {
+    try {
+        const doctorAddress = req.user.walletAddress.toLowerCase();
+
+        const updates = await prisma.pendingUpdate.findMany({
+            where: {
+                doctorAddress,
+                status: { in: ['pending', 'approved'] }, // Show pending and approved
+            },
+            orderBy: { createdAt: 'desc' },
+        });
+
+        res.json({
+            count: updates.length,
+            updates,
+        });
+    } catch (error) {
+        next(error);
+    }
+});
+
+// GET /api/pending-updates/approved - Get approved updates ready to claim (Doctor)
+router.get('/approved', authenticate, async (req, res, next) => {
+    try {
+        const doctorAddress = req.user.walletAddress.toLowerCase();
+
+        const updates = await prisma.pendingUpdate.findMany({
+            where: {
+                doctorAddress,
+                status: 'approved',
+            },
+            orderBy: { approvedAt: 'desc' },
+        });
+
+        res.json({
+            count: updates.length,
+            updates,
+        });
+    } catch (error) {
+        next(error);
+    }
+});
+
+// GET /api/pending-updates/:id - Get update details
+router.get('/:id', authenticate, async (req, res, next) => {
+    try {
+        const { id } = req.params;
+        const userAddress = req.user.walletAddress.toLowerCase();
+
+        const update = await prisma.pendingUpdate.findUnique({
+            where: { id },
+        });
+
+        if (!update) {
+            return res.status(404).json({ error: 'Không tìm thấy yêu cầu cập nhật' });
+        }
+
+        // Check access - only doctor or patient can view
+        if (update.doctorAddress !== userAddress && update.patientAddress !== userAddress) {
+            return res.status(403).json({ error: 'Không có quyền xem yêu cầu này' });
+        }
+
+        res.json(update);
+    } catch (error) {
+        next(error);
+    }
+});
+
+// POST /api/pending-updates/:id/approve - Approve update (Patient)
+router.post('/:id/approve', authenticate, async (req, res, next) => {
+    try {
+        const { id } = req.params;
+        const patientAddress = req.user.walletAddress.toLowerCase();
+
+        const update = await prisma.pendingUpdate.findUnique({
+            where: { id },
+        });
+
+        if (!update) {
+            return res.status(404).json({ error: 'Không tìm thấy yêu cầu cập nhật' });
+        }
+
+        if (update.patientAddress !== patientAddress) {
+            return res.status(403).json({ error: 'Chỉ bệnh nhân mới có thể phê duyệt' });
+        }
+
+        if (update.status !== 'pending') {
+            return res.status(400).json({ error: `Yêu cầu này đã ${update.status}` });
+        }
+
+        if (new Date() > update.expiresAt) {
+            return res.status(400).json({ error: 'Yêu cầu đã hết hạn' });
+        }
+
+        // Update status to approved
+        const updated = await prisma.pendingUpdate.update({
+            where: { id },
+            data: {
+                status: 'approved',
+                approvedAt: new Date(),
+            },
+        });
+
+        // Notify doctor via WebSocket
+        emitToUser(update.doctorAddress, 'pending_update:approved', {
+            id: update.id,
+            patientAddress,
+            title: update.title,
+        });
+
+        console.log(`✅ Pending update approved: ${id} by ${patientAddress}`);
+
+        res.json({
+            success: true,
+            message: 'Đã phê duyệt yêu cầu cập nhật. Bác sĩ có thể xác nhận.',
+            update: updated,
+        });
+    } catch (error) {
+        next(error);
+    }
+});
+
+// POST /api/pending-updates/:id/reject - Reject update (Patient)
+router.post('/:id/reject', authenticate, async (req, res, next) => {
+    try {
+        const { id } = req.params;
+        const patientAddress = req.user.walletAddress.toLowerCase();
+
+        const update = await prisma.pendingUpdate.findUnique({
+            where: { id },
+        });
+
+        if (!update) {
+            return res.status(404).json({ error: 'Không tìm thấy yêu cầu cập nhật' });
+        }
+
+        if (update.patientAddress !== patientAddress) {
+            return res.status(403).json({ error: 'Chỉ bệnh nhân mới có thể từ chối' });
+        }
+
+        if (update.status !== 'pending') {
+            return res.status(400).json({ error: `Yêu cầu này đã ${update.status}` });
+        }
+
+        // Update status to rejected
+        await prisma.pendingUpdate.update({
+            where: { id },
+            data: { status: 'rejected' },
+        });
+
+        // Notify doctor via WebSocket
+        emitToUser(update.doctorAddress, 'pending_update:rejected', {
+            id: update.id,
+            patientAddress,
+            title: update.title,
+        });
+
+        console.log(`❌ Pending update rejected: ${id} by ${patientAddress}`);
+
+        res.json({
+            success: true,
+            message: 'Đã từ chối yêu cầu cập nhật.',
+        });
+    } catch (error) {
+        next(error);
+    }
+});
+
+// POST /api/pending-updates/:id/claim - Claim approved update (Doctor)
+router.post('/:id/claim', authenticate, async (req, res, next) => {
+    try {
+        const { id } = req.params;
+        const { cidHash, txHash, cid, aesKey } = claimUpdateSchema.parse(req.body);
+        const doctorAddress = req.user.walletAddress.toLowerCase();
+
+        const update = await prisma.pendingUpdate.findUnique({
+            where: { id },
+        });
+
+        if (!update) {
+            return res.status(404).json({ error: 'Không tìm thấy yêu cầu cập nhật' });
+        }
+
+        if (update.doctorAddress !== doctorAddress) {
+            return res.status(403).json({ error: 'Chỉ bác sĩ tạo yêu cầu mới có thể xác nhận' });
+        }
+
+        if (update.status !== 'approved') {
+            return res.status(400).json({
+                error: update.status === 'pending'
+                    ? 'Yêu cầu chưa được bệnh nhân phê duyệt'
+                    : `Yêu cầu này đã ${update.status}`
+            });
+        }
+
+        // Update status to claimed with txHash and cidHash
+        const claimed = await prisma.pendingUpdate.update({
+            where: { id },
+            data: {
+                status: 'claimed',
+                cidHash: cidHash.toLowerCase(),
+                txHash,
+                claimedAt: new Date(),
+            },
+        });
+
+        // Also create record metadata
+        await prisma.recordMetadata.create({
+            data: {
+                cidHash: cidHash.toLowerCase(),
+                ownerAddress: update.patientAddress, // Patient owns the record
+                createdBy: doctorAddress, // Doctor created it
+                parentCidHash: update.parentCidHash,
+                title: update.title || null,
+                recordType: update.recordType || null,
+            },
+        });
+
+        // Get AES key from parent record's encryptedContent
+        // The encryptedContent stored in pendingUpdate contains the AES key needed to decrypt
+        const expiresIn7Days = new Date();
+        expiresIn7Days.setDate(expiresIn7Days.getDate() + 7);
+
+        // Create proper key payload with CID and AES key (standard format)
+        const keyPayload = JSON.stringify({ cid, aesKey });
+
+        // Create KeyShare for Patient (owner) - permanent access
+        await prisma.keyShare.upsert({
+            where: {
+                cidHash_senderAddress_recipientAddress: {
+                    cidHash: cidHash.toLowerCase(),
+                    senderAddress: doctorAddress,
+                    recipientAddress: update.patientAddress,
+                }
+            },
+            update: {
+                status: 'pending',
+                encryptedPayload: keyPayload, // Standard format {cid, aesKey}
+            },
+            create: {
+                cidHash: cidHash.toLowerCase(),
+                senderAddress: doctorAddress,
+                recipientAddress: update.patientAddress,
+                encryptedPayload: keyPayload,
+                status: 'pending', // Patient can access immediately
+            },
+        });
+
+        // Create KeyShare for Doctor - access for 7 days
+        await prisma.keyShare.upsert({
+            where: {
+                cidHash_senderAddress_recipientAddress: {
+                    cidHash: cidHash.toLowerCase(),
+                    senderAddress: update.patientAddress,
+                    recipientAddress: doctorAddress,
+                }
+            },
+            update: {
+                status: 'claimed',
+                expiresAt: expiresIn7Days,
+            },
+            create: {
+                cidHash: cidHash.toLowerCase(),
+                senderAddress: update.patientAddress,
+                recipientAddress: doctorAddress,
+                encryptedPayload: keyPayload, // Standard format {cid, aesKey}
+                status: 'claimed', // Doctor has access
+                expiresAt: expiresIn7Days,
+            },
+        });
+
+        console.log(`✅ KeyShares created for patient ${update.patientAddress} and doctor ${doctorAddress}`);
+
+        // Notify patient via WebSocket
+        emitToUser(update.patientAddress, 'pending_update:claimed', {
+            id: update.id,
+            cidHash: cidHash.toLowerCase(),
+            doctorAddress,
+        });
+
+        console.log(`✅ Pending update claimed: ${id}, cidHash: ${cidHash.slice(0, 20)}...`);
+
+        res.json({
+            success: true,
+            message: 'Đã xác nhận cập nhật on-chain.',
+            update: claimed,
+        });
+    } catch (error) {
+        next(error);
+    }
+});
+
+export default router;

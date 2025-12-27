@@ -19,10 +19,11 @@ import { EHR_SYSTEM_ABI } from '@/abi/EHRSystemSecure';
 
 const EHR_SYSTEM_ADDRESS = process.env.NEXT_PUBLIC_EHR_SYSTEM_ADDRESS;
 
-
+// Request types matching contract enum
 const REQUEST_TYPES = [
-    { value: 0, label: 'Chỉ xem', description: 'Xem hồ sơ nhưng không tải về' },
-    { value: 1, label: 'Truy cập đầy đủ', description: 'Xem và tải về hồ sơ' },
+    { value: 0, label: 'Truy cập trực tiếp', description: 'Xem hồ sơ được chỉ định', enabled: true },
+    { value: 1, label: 'Ủy quyền đầy đủ', description: 'Được ủy quyền toàn bộ hồ sơ', enabled: false, comingSoon: true },
+    { value: 2, label: 'Ủy quyền theo hồ sơ', description: 'Được chia sẻ lại quyền truy cập', enabled: false, comingSoon: true },
 ];
 
 export default function RequestAccessForm({ onSuccess }) {
@@ -146,38 +147,24 @@ export default function RequestAccessForm({ onSuccess }) {
                     chain: arbitrumSepolia,
                     transport: http(),
                 });
-
-                console.log('Waiting for receipt of tx:', txHash);
                 const receipt = await publicClient.waitForTransactionReceipt({
                     hash: txHash,
                     confirmations: 1,
                 });
-
-                console.log('Receipt received, logs count:', receipt.logs.length);
-
                 // Parse AccessRequested event from logs
                 for (let i = 0; i < receipt.logs.length; i++) {
                     const log = receipt.logs[i];
-                    console.log(`Log ${i}:`, {
-                        address: log.address,
-                        topics: log.topics,
-                        data: log.data
-                    });
-
                     try {
                         const decoded = decodeEventLog({
                             abi: EHR_SYSTEM_ABI,
                             data: log.data,
                             topics: log.topics,
                         });
-                        console.log(`Log ${i} decoded:`, decoded);
                         if (decoded.eventName === 'AccessRequested') {
                             onChainReqId = decoded.args.reqId;
-                            console.log('✅ Found on-chain reqId:', onChainReqId);
                             break;
                         }
                     } catch (e) {
-                        console.log(`Log ${i} not AccessRequested event:`, e.message);
                     }
                 }
 
@@ -192,8 +179,6 @@ export default function RequestAccessForm({ onSuccess }) {
             // This ensures when Patient approves via signature, consent will be created!
             if (onChainReqId) {
                 try {
-                    console.log('🔐 Pre-approving as requester for reqId:', onChainReqId);
-
                     const walletClient = createWalletClient({
                         chain: arbitrumSepolia,
                         transport: custom(provider),
@@ -214,16 +199,11 @@ export default function RequestAccessForm({ onSuccess }) {
                         maxFeePerGas: parseGwei('1.0'),
                         maxPriorityFeePerGas: parseGwei('0.1'),
                     });
-
-                    console.log('✅ Pre-approval tx hash:', preApproveTxHash);
-
                     // Wait for confirmation
                     await publicClient.waitForTransactionReceipt({
                         hash: preApproveTxHash,
                         confirmations: 1,
                     });
-
-                    console.log('✅ Request now in RequesterApproved state!');
                 } catch (preApproveError) {
                     console.error('Pre-approval failed:', preApproveError);
                     // Don't fail the whole request - backend will still be created
@@ -327,19 +307,31 @@ export default function RequestAccessForm({ onSuccess }) {
                     {/* Request Type */}
                     <div className="space-y-2">
                         <Label>Loại yêu cầu</Label>
-                        <div className="grid grid-cols-2 gap-3">
+                        <div className="grid grid-cols-1 gap-2">
                             {REQUEST_TYPES.map((type) => (
                                 <button
                                     key={type.value}
                                     type="button"
-                                    onClick={() => setRequestType(type.value)}
-                                    className={`p-3 rounded-xl border-2 text-left transition-all ${requestType === type.value
-                                        ? 'border-teal-500 bg-teal-50'
-                                        : 'border-slate-200 hover:border-teal-300'
+                                    onClick={() => type.enabled && setRequestType(type.value)}
+                                    disabled={!type.enabled}
+                                    className={`p-3 rounded-xl border-2 text-left transition-all relative ${!type.enabled
+                                        ? 'border-slate-200 bg-slate-50 opacity-60 cursor-not-allowed'
+                                        : requestType === type.value
+                                            ? 'border-teal-500 bg-teal-50'
+                                            : 'border-slate-200 hover:border-teal-300'
                                         }`}
                                 >
-                                    <p className="font-medium text-slate-900">{type.label}</p>
-                                    <p className="text-xs text-slate-500">{type.description}</p>
+                                    <div className="flex items-center justify-between">
+                                        <div>
+                                            <p className="font-medium text-slate-900">{type.label}</p>
+                                            <p className="text-xs text-slate-500">{type.description}</p>
+                                        </div>
+                                        {type.comingSoon && (
+                                            <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">
+                                                Sắp ra mắt
+                                            </span>
+                                        )}
+                                    </div>
                                 </button>
                             ))}
                         </div>

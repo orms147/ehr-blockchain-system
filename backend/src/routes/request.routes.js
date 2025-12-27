@@ -83,10 +83,11 @@ router.get('/incoming', authenticate, async (req, res, next) => {
         const archivedIds = new Set(archivedRequests.map(r => r.requestId));
 
         // Get requests from database (stored when Doctor creates request)
+        // Include both pending and signed (patient approved but doctor hasn't claimed)
         const requests = await prisma.accessRequest.findMany({
             where: {
                 patientAddress: patientAddress,
-                status: 'pending',
+                status: { in: ['pending', 'signed'] },
             },
             orderBy: { createdAt: 'desc' },
         });
@@ -322,19 +323,33 @@ router.post('/approve-with-sig', authenticate, async (req, res, next) => {
         // If encrypted key payload provided, create KeyShare entry for Doctor
         // Status 'awaiting_claim' means Doctor must claim on-chain before accessing
         if (encryptedKeyPayload && cidHash) {
-            // Create KeyShare so Doctor can retrieve encrypted key AFTER on-chain claim
-            await prisma.keyShare.create({
-                data: {
+            // Create or update KeyShare so Doctor can retrieve encrypted key AFTER on-chain claim
+            // Use upsert to handle case where KeyShare already exists
+            await prisma.keyShare.upsert({
+                where: {
+                    cidHash_senderAddress_recipientAddress: {
+                        cidHash: cidHash,
+                        senderAddress: patientAddress,
+                        recipientAddress: request.requesterAddress,
+                    }
+                },
+                update: {
+                    encryptedPayload: encryptedKeyPayload,
+                    senderPublicKey: senderPublicKey || null,
+                    status: 'awaiting_claim',
+                    expiresAt: new Date(Number(deadline) * 1000),
+                },
+                create: {
                     senderAddress: patientAddress,
                     recipientAddress: request.requesterAddress,
                     cidHash: cidHash,
                     encryptedPayload: encryptedKeyPayload,
                     senderPublicKey: senderPublicKey || null,
-                    status: 'awaiting_claim', // NOT 'pending' - must claim on-chain first
+                    status: 'awaiting_claim',
                     expiresAt: new Date(Number(deadline) * 1000),
                 },
             });
-            console.log(`✅ KeyShare created for Doctor ${request.requesterAddress} (awaiting on-chain claim)`);
+            console.log(`✅ KeyShare created/updated for Doctor ${request.requesterAddress} (awaiting on-chain claim)`);
         }
 
         res.json({

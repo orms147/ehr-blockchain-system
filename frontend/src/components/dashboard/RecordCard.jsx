@@ -55,7 +55,7 @@ const RecordCard = ({ record, onViewDetails }) => {
                     <div className={`p-3 rounded-xl ${getColor(record.type)}`}>
                         {getIcon(record.type)}
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex flex-wrap gap-1">
                         <Badge variant="secondary" className="bg-slate-100 text-slate-600 text-xs">
                             {getTypeLabel(record.type)}
                         </Badge>

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
-import { ChevronDown, User, Stethoscope, Building2, ShieldCheck, Check } from 'lucide-react';
+import { ChevronDown, User, Stethoscope, Building2, ShieldCheck, Check, Landmark } from 'lucide-react';
 import { useRouter, usePathname } from 'next/navigation';
 
 const ROLE_CONFIG = {
@@ -22,6 +22,12 @@ const ROLE_CONFIG = {
         icon: Building2,
         color: 'bg-orange-100 text-orange-700',
         dashboard: '/dashboard/organization'
+    },
+    ministry: {
+        label: 'Bộ Y tế',
+        icon: Landmark,
+        color: 'bg-red-100 text-red-700',
+        dashboard: '/dashboard/ministry'
     },
     admin: {
         label: 'Quản trị',
@@ -142,8 +148,8 @@ export function RoleSwitcher() {
                                         key={role}
                                         onClick={() => handleRoleSwitch(role)}
                                         className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${isActive
-                                                ? 'bg-blue-50 text-blue-700'
-                                                : 'hover:bg-slate-50 text-slate-700'
+                                            ? 'bg-blue-50 text-blue-700'
+                                            : 'hover:bg-slate-50 text-slate-700'
                                             }`}
                                     >
                                         <Icon className="w-5 h-5" />

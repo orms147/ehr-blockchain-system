@@ -112,7 +112,6 @@ export default function AccessRequestList({ walletAddress, provider, onApproved 
                         aesKey: localRecord.aesKey,
                     });
                     encryptedKeyPayload = encryptForRecipient(keyPayload, doctorPubKey, myKeypair.secretKey);
-                    console.log('✅ Encrypted key payload created for Doctor');
                 } else {
                     console.warn('⚠️ No local record or Doctor pubkey, key will not be shared');
                 }
@@ -266,7 +265,14 @@ export default function AccessRequestList({ walletAddress, provider, onApproved 
                     </div>
 
                     <div className="flex items-center gap-2">
-                        {!isArchived && !expired && (
+                        {/* Show different UI based on request status */}
+                        {request.status === 'signed' && (
+                            <Badge className="bg-amber-100 text-amber-800">
+                                <Clock className="w-3 h-3 mr-1" />
+                                Chờ bác sĩ xác nhận
+                            </Badge>
+                        )}
+                        {!isArchived && !expired && request.status !== 'signed' && (
                             <>
                                 <Button
                                     size="sm"

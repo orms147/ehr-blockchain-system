@@ -17,7 +17,6 @@ async function retryWithBackoff(fn, maxRetries = 3, baseDelay = 1000) {
             console.warn(`Upload attempt ${i + 1}/${maxRetries} failed:`, error.message);
             if (i < maxRetries - 1) {
                 const delay = baseDelay * Math.pow(2, i);
-                console.log(`Retrying in ${delay}ms...`);
                 await new Promise(resolve => setTimeout(resolve, delay));
             }
         }
@@ -77,6 +76,17 @@ export const ipfsService = {
         }
 
         return await response.text();
+    },
+
+    // Upload already-encrypted content to IPFS
+    // For cases where content is pre-encrypted (e.g., pending updates)
+    async uploadEncrypted({ encryptedData, metadata = {} }) {
+        // Just use regular upload - encryptedData is already encrypted string
+        const cid = await this.upload(encryptedData, {
+            name: metadata.title || 'Encrypted Record',
+            type: metadata.recordType || 'medical-record',
+        });
+        return { cid };
     },
 
     // Get IPFS URL

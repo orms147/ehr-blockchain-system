@@ -203,6 +203,7 @@ router.get('/my', authenticate, async (req, res, next) => {
 
                 return {
                     ...ks,
+                    parentCidHash: ks.record?.parentCidHash || null, // For chain grouping
                     senderPublicKey: ks.senderPublicKey || ks.sender?.encryptionPublicKey || null,
                     hasOnChainAccess, // Frontend can use this to hide revoked records
                 };

@@ -5,7 +5,7 @@ import DashboardLayout from '@/components/layout/DashboardLayout';
 import { motion } from 'framer-motion';
 import {
     Stethoscope, Users, FileText, Clock, AlertCircle, Loader2,
-    RefreshCw, Eye, EyeOff, Lock, Unlock, Send, Plus, Award, UserPlus, XCircle
+    RefreshCw, Eye, EyeOff, Lock, Unlock, Send, Plus, Award, UserPlus, XCircle, Edit
 } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -18,6 +18,8 @@ import RequestAccessForm from '@/components/dashboard/RequestAccessForm';
 import DoctorVerificationForm from '@/components/dashboard/DoctorVerificationForm';
 import DoctorAddRecordForm from '@/components/dashboard/DoctorAddRecordForm';
 import PendingClaims from '@/components/dashboard/PendingClaims';
+import PendingUpdateClaims from '@/components/dashboard/PendingUpdateClaims';
+import UploadRecordModal from '@/components/dashboard/UploadRecordModal';
 import { useWalletAddress } from '@/hooks/useWalletAddress';
 import { useEncryptionKey } from '@/hooks/useEncryptionKey';
 import { useSocket } from '@/hooks/useSocket';
@@ -27,6 +29,7 @@ import { useSocket } from '@/hooks/useSocket';
 interface KeyShare {
     id: string;
     cidHash: string;
+    parentCidHash?: string; // For chain grouping
     senderAddress: string;
     encryptedPayload: string;
     senderPublicKey?: string;  // NaCl public key for decryption
@@ -60,18 +63,25 @@ export default function DoctorDashboardPage() {
     const [decrypting, setDecrypting] = useState(false);
     const [decryptedContent, setDecryptedContent] = useState<DecryptedContent | null>(null);
     const [rejectingId, setRejectingId] = useState<string | null>(null);
+    const [updateModalOpen, setUpdateModalOpen] = useState(false);
+    const [recordToUpdate, setRecordToUpdate] = useState<KeyShare | null>(null);
 
     // Auto-register encryption key on login
     const { registered: encryptionKeyRegistered } = useEncryptionKey(provider, walletAddress);
 
     const springConfig = { type: "spring" as const, stiffness: 100, damping: 20 };
 
-    // Fetch shared records
+    // Fetch shared records - group by chain and show only latest
     const fetchSharedRecords = useCallback(async () => {
         setLoading(true);
         try {
             const records = await keyShareService.getReceivedKeys();
-            setSharedRecords(records);
+
+            // Group records by chain - only show latest (ones not referenced as parent)
+            const parentCidHashes = new Set(records.map((r: KeyShare) => r.parentCidHash).filter(Boolean));
+            const latestRecords = records.filter((r: KeyShare) => !parentCidHashes.has(r.cidHash));
+
+            setSharedRecords(latestRecords);
         } catch (err) {
             console.error('Error fetching shared records:', err);
             toast({
@@ -97,21 +107,34 @@ export default function DoctorDashboardPage() {
     // WebSocket real-time updates
     useSocket({
         'record:shared': () => {
-            console.log('🔄 Real-time: New record shared, refreshing...');
             fetchSharedRecords();
         },
         'consent:updated': () => {
-            console.log('🔄 Real-time: Consent updated, refreshing...');
             fetchSharedRecords();
         },
         'access_revoked': (data: any) => {
-            console.log('🔄 Real-time: Access revoked, refreshing...', data);
             toast({
                 title: "Quyền truy cập đã bị thu hồi",
                 description: "Bệnh nhân đã thu hồi quyền xem một hồ sơ.",
                 variant: "destructive",
             });
             fetchSharedRecords();
+        },
+        'pending_update:approved': (data: any) => {
+            toast({
+                title: "✅ Cập nhật được chấp nhận!",
+                description: `Bệnh nhân đã duyệt yêu cầu cập nhật "${data.title || 'hồ sơ'}". Bạn có thể tiến hành.`,
+                className: "bg-green-50 border-green-200 text-green-800",
+            });
+            // Could refresh pending updates list here if needed
+        },
+        'pending_update:rejected': (data: any) => {
+            toast({
+                title: "❌ Cập nhật bị từ chối",
+                description: `Bệnh nhân đã từ chối yêu cầu cập nhật "${data.title || 'hồ sơ'}".`,
+                variant: "destructive",
+            });
+            // Could refresh pending updates list here if needed
         },
     });
 
@@ -157,21 +180,61 @@ export default function DoctorDashboardPage() {
             // Get my (Doctor's) NaCl keypair for decryption
             const myKeypair = await getOrCreateEncryptionKeypair(provider, walletAddress);
 
-            // Decrypt the payload using NaCl box.open
-            // Requires sender's public key and my secret key
-            let decryptedPayload: string;
-            if (senderPubKey) {
-                // Use NaCl decryption
-                decryptedPayload = naclDecrypt(payload, senderPubKey, myKeypair.secretKey);
-            } else {
-                // Fallback to old base64 decode for legacy shares
-                console.warn('No senderPublicKey, trying legacy base64 decode');
-                decryptedPayload = atob(payload);
+            // Decrypt the payload - try multiple methods
+            let keyData: { cid?: string; aesKey?: string; encryptedData?: string; metadata?: { cid?: string } };
+
+            try {
+                // Try NaCl decryption first (normal shared records)
+                if (senderPubKey) {
+                    const decryptedPayload = naclDecrypt(payload, senderPubKey, myKeypair.secretKey);
+                    keyData = JSON.parse(decryptedPayload);
+                } else {
+                    throw new Error('No sender public key');
+                }
+            } catch (naclError) {
+                // If NaCl fails, try base64 decode (doctor-created records)
+                try {
+                    const decoded = atob(payload);
+                    keyData = JSON.parse(decoded);
+                } catch (base64Error) {
+                    // Try direct JSON parse
+                    try {
+                        keyData = JSON.parse(payload);
+                    } catch {
+                        throw new Error('Không thể giải mã key. Format không hợp lệ.');
+                    }
+                }
             }
 
-            const { cid, aesKey } = parseKeySharePayload(decryptedPayload);
+            // Extract CID and AES key from keyData
+            let cid: string;
+            let aesKey: string;
 
-            const encryptedContent = await ipfsService.download(cid);
+            if (keyData.encryptedData && keyData.aesKey) {
+                // Format from doctor update: {encryptedData, aesKey, metadata}
+                cid = keyData.metadata?.cid || '';
+                aesKey = keyData.aesKey;
+                // If no CID in metadata, we can still try to use encryptedData directly
+                if (!cid && keyData.encryptedData) {
+                    // encryptedData is already the content, use it directly below
+                }
+            } else if (keyData.cid && keyData.aesKey) {
+                // Normal format: {cid, aesKey}
+                cid = keyData.cid;
+                aesKey = keyData.aesKey;
+            } else {
+                throw new Error('Key data format không hợp lệ');
+            }
+
+            let encryptedContent: string;
+            if (cid) {
+                encryptedContent = await ipfsService.download(cid);
+            } else if (keyData.encryptedData) {
+                // For doctor-created records, encryptedData might be the actual content
+                encryptedContent = keyData.encryptedData;
+            } else {
+                throw new Error('Không tìm thấy CID hoặc encryptedData');
+            }
 
             const key = await importAESKey(aesKey);
             const content = await decryptData(encryptedContent, key);
@@ -251,18 +314,6 @@ export default function DoctorDashboardPage() {
                     <p className="text-slate-500 mt-2">Quản lý và truy cập hồ sơ bệnh nhân được ủy quyền.</p>
                 </motion.div>
 
-                {/* Pending Claims - Show approved requests ready to claim */}
-                <div className="mb-6">
-                    <PendingClaims
-                        walletAddress={walletAddress}
-                        provider={provider}
-                        onClaimed={() => {
-                            fetchSharedRecords();
-                            fetchOutgoingRequests();
-                        }}
-                    />
-                </div>
-
                 {/* Stats Grid */}
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
                     {stats.map((stat, index) => (
@@ -283,6 +334,25 @@ export default function DoctorDashboardPage() {
                             </Card>
                         </motion.div>
                     ))}
+                </div>
+
+                {/* Pending Claims Section */}
+                <div className="space-y-4 mb-8">
+                    <PendingClaims
+                        walletAddress={walletAddress}
+                        provider={provider}
+                        onClaimed={() => {
+                            fetchSharedRecords();
+                            fetchOutgoingRequests();
+                        }}
+                    />
+                    <PendingUpdateClaims
+                        walletAddress={walletAddress}
+                        provider={provider}
+                        onClaimed={() => {
+                            fetchSharedRecords();
+                        }}
+                    />
                 </div>
 
                 {/* Tabs */}
@@ -417,6 +487,20 @@ export default function DoctorDashboardPage() {
                                                                         </>
                                                                     )}
                                                                 </Button>
+                                                                {/* Only show Update button if doctor has already viewed the record */}
+                                                                {record.status === 'claimed' && (
+                                                                    <Button
+                                                                        size="sm"
+                                                                        onClick={() => {
+                                                                            setRecordToUpdate(record);
+                                                                            setUpdateModalOpen(true);
+                                                                        }}
+                                                                        className="bg-blue-600 hover:bg-blue-700"
+                                                                    >
+                                                                        <Edit className="w-4 h-4 mr-1" />
+                                                                        Cập nhật
+                                                                    </Button>
+                                                                )}
                                                                 {/* Hide reject button if claimed OR if doctor is the creator */}
                                                                 {record.status !== 'claimed' && record.senderAddress?.toLowerCase() !== walletAddress?.toLowerCase() && (
                                                                     <Button
@@ -585,6 +669,27 @@ export default function DoctorDashboardPage() {
                     </TabsContent>
                 </Tabs>
             </div>
+
+            {/* Update Record Modal */}
+            <UploadRecordModal
+                open={updateModalOpen}
+                onOpenChange={(open: boolean) => {
+                    setUpdateModalOpen(open);
+                    if (!open) setRecordToUpdate(null);
+                }}
+                parentRecord={recordToUpdate ? {
+                    cidHash: recordToUpdate.cidHash,
+                    title: `Update for ${recordToUpdate.cidHash.slice(0, 16)}...`,
+                    ownerAddress: recordToUpdate.senderAddress // Patient's address
+                } : undefined}
+                isDoctorUpdate={true}
+                patientAddress={recordToUpdate?.senderAddress || null}
+                onSuccess={() => {
+                    setUpdateModalOpen(false);
+                    setRecordToUpdate(null);
+                    fetchSharedRecords();
+                }}
+            />
         </DashboardLayout>
     );
 }

@@ -13,26 +13,31 @@ import { Button } from '@/components/ui/button';
 import {
     CheckCircle2, Calendar, User, Lock, Unlock, Loader2,
     FileText, Copy, ExternalLink, AlertCircle, Image as ImageIcon,
-    Download, RefreshCw
+    Download, RefreshCw, Edit, History, Eye
 } from 'lucide-react';
 import { toast } from '@/components/ui/use-toast';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ipfsService, importAESKey, decryptData, keyShareService } from '@/services';
+import { ipfsService, importAESKey, decryptData, keyShareService, recordService } from '@/services';
 import { getOrCreateEncryptionKeypair, decryptFromSender } from '@/services/nacl-crypto';
 import AccessManagementTab from './AccessManagementTab';
 import { useWalletAddress } from '@/hooks/useWalletAddress';
 
-const RecordModal = ({ record, open, onOpenChange, onUpdate }) => {
+const RecordModal = ({ record, open, onOpenChange, onUpdate, onViewRecord }) => {
     const [isDecrypting, setIsDecrypting] = useState(false);
     const [decryptedData, setDecryptedData] = useState(null);
     const [decryptError, setDecryptError] = useState(null);
     const [isDownloading, setIsDownloading] = useState(false);
     const [activeTab, setActiveTab] = useState('content');
+    const [chainRecords, setChainRecords] = useState([]);
+    const [loadingChain, setLoadingChain] = useState(false);
+    const [historyRecords, setHistoryRecords] = useState([]);
+    const [loadingHistory, setLoadingHistory] = useState(false);
+    const [selectedChainRecord, setSelectedChainRecord] = useState(null);
+    const [chainDecryptedData, setChainDecryptedData] = useState(null);
+    const [chainDecrypting, setChainDecrypting] = useState(false);
     const { address: walletAddress, provider, loading: walletLoading } = useWalletAddress();
 
     // Debug wallet address
-    console.log('RecordModal - walletAddress:', walletAddress, 'loading:', walletLoading);
-
     // Copy to clipboard function
     const copyToClipboard = async (text) => {
         try {
@@ -57,8 +62,109 @@ const RecordModal = ({ record, open, onOpenChange, onUpdate }) => {
             setDecryptedData(null);
             setDecryptError(null);
             setActiveTab('content');
+            setChainRecords([]);
+            setSelectedChainRecord(null);
+            setChainDecryptedData(null);
         }
     }, [open]);
+
+    // Fetch chain records when history tab is active
+    useEffect(() => {
+        if (activeTab === 'history' && record?.cidHash && open) {
+            const fetchChain = async () => {
+                setLoadingChain(true);
+                try {
+                    const chainData = await recordService.getChainCids(record.cidHash);
+                    // Sort by creation time (oldest first for timeline)
+                    const sorted = (chainData.records || []).sort(
+                        (a, b) => new Date(a.createdAt) - new Date(b.createdAt)
+                    );
+                    setChainRecords(sorted);
+                } catch (err) {
+                    console.error('Failed to fetch chain:', err);
+                }
+                setLoadingChain(false);
+            };
+            fetchChain();
+        }
+    }, [activeTab, record?.cidHash, open]);
+
+    // Handle viewing an old record version from chain
+    const handleViewChainRecord = async (oldRecord) => {
+        setChainDecrypting(true);
+        setChainDecryptedData(null);
+        setSelectedChainRecord(oldRecord);
+
+        try {
+            // Try to get key from localStorage (owner's records)
+            const localRecords = JSON.parse(localStorage.getItem('ehr_local_records') || '{}');
+            const localData = localRecords[oldRecord.cidHash];
+
+            let cid, aesKeyString;
+
+            if (localData) {
+                cid = localData.cid;
+                aesKeyString = localData.aesKey;
+                console.log('📦 Using local key for old record:', oldRecord.cidHash.slice(0, 16));
+            } else {
+                // Try to fetch from keyShare (for shared records)
+                const sharedKey = await keyShareService.getKeyForRecord(oldRecord.cidHash);
+
+                if (!sharedKey) {
+                    throw new Error('Không tìm thấy key giải mã cho hồ sơ này.');
+                }
+
+                // Try to decrypt the keyShare
+                const myKeypair = await getOrCreateEncryptionKeypair(provider, walletAddress);
+
+                try {
+                    const decrypted = decryptFromSender(
+                        sharedKey.encryptedPayload,
+                        sharedKey.senderPublicKey,
+                        myKeypair.secretKey
+                    );
+                    const keyData = JSON.parse(decrypted);
+                    cid = keyData.cid;
+                    aesKeyString = keyData.aesKey;
+                } catch {
+                    // Try base64/JSON parse fallback
+                    try {
+                        const decoded = atob(sharedKey.encryptedPayload);
+                        const keyData = JSON.parse(decoded);
+                        cid = keyData.cid;
+                        aesKeyString = keyData.aesKey;
+                    } catch {
+                        const keyData = JSON.parse(sharedKey.encryptedPayload);
+                        cid = keyData.cid;
+                        aesKeyString = keyData.aesKey;
+                    }
+                }
+            }
+
+            // Download and decrypt
+            const encryptedContent = await ipfsService.download(cid);
+            const key = await importAESKey(aesKeyString);
+            const content = await decryptData(encryptedContent, key);
+
+            setChainDecryptedData(content);
+            toast({
+                title: "Giải mã thành công!",
+                description: `Đang hiển thị phiên bản: ${oldRecord.title || 'Không có tiêu đề'}`,
+                className: "bg-green-50 border-green-200 text-green-800",
+            });
+
+        } catch (err) {
+            console.error('Chain record decrypt error:', err);
+            toast({
+                title: "Lỗi giải mã",
+                description: err instanceof Error ? err.message : 'Không thể giải mã hồ sơ cũ',
+                variant: "destructive",
+            });
+            setSelectedChainRecord(null);
+        } finally {
+            setChainDecrypting(false);
+        }
+    };
 
     if (!record) return null;
 
@@ -87,11 +193,8 @@ const RecordModal = ({ record, open, onOpenChange, onUpdate }) => {
             if (localData) {
                 cid = localData.cid;
                 aesKeyString = localData.aesKey;
-                console.log('📦 Using local key for decryption');
             } else {
                 // 2. Fetch shared key from backend (for records shared by others)
-                console.log('🔑 Fetching shared key from backend...');
-
                 if (!provider || !walletAddress) {
                     throw new Error('Chưa kết nối ví. Vui lòng đăng nhập lại.');
                 }
@@ -106,19 +209,49 @@ const RecordModal = ({ record, open, onOpenChange, onUpdate }) => {
                 // Decrypt the shared key using NaCl
                 const myKeypair = await getOrCreateEncryptionKeypair(provider, walletAddress);
 
-                // Decrypt the encrypted payload using sender's public key
-                const decryptedPayload = decryptFromSender(
-                    sharedKey.encryptedPayload,
-                    sharedKey.senderPublicKey,
-                    myKeypair.secretKey
-                );
+                let keyData;
 
-                // Parse the payload to get CID and AES key
-                const keyData = JSON.parse(decryptedPayload);
-                cid = keyData.cid;
-                aesKeyString = keyData.aesKey;
+                try {
+                    // Try NaCl decrypt first (normal shared records)
+                    const decryptedPayload = decryptFromSender(
+                        sharedKey.encryptedPayload,
+                        sharedKey.senderPublicKey,
+                        myKeypair.secretKey
+                    );
+                    keyData = JSON.parse(decryptedPayload);
+                } catch (naclError) {
+                    // If NaCl fails, try parsing as raw base64 (doctor-created records)
+                    try {
+                        const decoded = atob(sharedKey.encryptedPayload);
+                        keyData = JSON.parse(decoded);
+                    } catch (base64Error) {
+                        // Try parsing as direct JSON (some edge cases)
+                        try {
+                            keyData = JSON.parse(sharedKey.encryptedPayload);
+                        } catch {
+                            throw new Error('Không thể giải mã key. Format không hợp lệ.');
+                        }
+                    }
+                }
 
-                console.log('✅ Shared key decrypted successfully');
+                // Extract CID and AES key from keyData
+                if (keyData.encryptedData && keyData.aesKey) {
+                    // Format from doctor update: {encryptedData, aesKey, metadata}
+                    cid = keyData.metadata?.cid || null;
+                    aesKeyString = keyData.aesKey;
+                    // If no CID in metadata, we need to get it from IPFS upload
+                    if (!cid) {
+                        // For doctor-created records, CID is in the record metadata
+                        const recordMeta = await recordService.getByHash(record.cidHash);
+                        cid = recordMeta?.cid;
+                    }
+                } else if (keyData.cid && keyData.aesKey) {
+                    // Normal format: {cid, aesKey}
+                    cid = keyData.cid;
+                    aesKeyString = keyData.aesKey;
+                } else {
+                    throw new Error('Key data format không hợp lệ');
+                }
             }
 
             // 3. Download encrypted data from IPFS
@@ -145,7 +278,6 @@ const RecordModal = ({ record, open, onOpenChange, onUpdate }) => {
                             fromDoctor: true, // Mark as received from Doctor
                         };
                         localStorage.setItem('ehr_local_records', JSON.stringify(localRecords));
-                        console.log('💾 Saved shared key to localStorage for re-sharing');
                     }
                 } catch (e) {
                     console.error('Error saving shared key to localStorage:', e);
@@ -249,7 +381,7 @@ const RecordModal = ({ record, open, onOpenChange, onUpdate }) => {
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="sm:max-w-[700px] max-h-[85vh] overflow-y-auto bg-white">
                 <DialogHeader>
-                    <div className="flex items-start justify-between pr-8">
+                    <div className="flex items-start justify-between">
                         <div>
                             <Badge variant="secondary" className="mb-2">
                                 {record.type}
@@ -258,11 +390,26 @@ const RecordModal = ({ record, open, onOpenChange, onUpdate }) => {
                                 {record.title}
                             </DialogTitle>
                         </div>
-                        {record.verified && (
-                            <Badge className="bg-teal-50 text-teal-700 border-teal-200">
-                                <CheckCircle2 className="w-3 h-3 mr-1" /> Verified
-                            </Badge>
-                        )}
+                        <div className="flex items-center gap-2">
+                            {record.verified && (
+                                <Badge className="bg-teal-50 text-teal-700 border-teal-200">
+                                    <CheckCircle2 className="w-3 h-3 mr-1" /> Verified
+                                </Badge>
+                            )}
+                            {onUpdate && (
+                                <Button
+                                    onClick={() => {
+                                        onOpenChange(false);
+                                        onUpdate(record);
+                                    }}
+                                    className="bg-blue-600 hover:bg-blue-700 text-white"
+                                    size="sm"
+                                >
+                                    <Edit className="w-4 h-4 mr-1" />
+                                    Cập nhật
+                                </Button>
+                            )}
+                        </div>
                     </div>
                     <DialogDescription>
                         Ngày tạo: {record.date}
@@ -270,9 +417,10 @@ const RecordModal = ({ record, open, onOpenChange, onUpdate }) => {
                 </DialogHeader>
 
                 <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-                    <TabsList className="grid w-full grid-cols-2 mb-4">
+                    <TabsList className="grid w-full grid-cols-3 mb-4">
                         <TabsTrigger value="content">📄 Nội dung</TabsTrigger>
-                        <TabsTrigger value="access">🔐 Quyền truy cập</TabsTrigger>
+                        <TabsTrigger value="history">📅 Lịch sử</TabsTrigger>
+                        <TabsTrigger value="access">🔐 Quyền</TabsTrigger>
                     </TabsList>
 
                     <TabsContent value="content" className="mt-0">
@@ -450,6 +598,176 @@ const RecordModal = ({ record, open, onOpenChange, onUpdate }) => {
                                             </pre>
                                         </div>
                                     )}
+                                </div>
+                            )}
+                        </div>
+                    </TabsContent>
+
+                    <TabsContent value="history" className="mt-0">
+                        <div className="py-4">
+                            {loadingChain ? (
+                                <div className="flex items-center justify-center py-8">
+                                    <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
+                                    <span className="ml-2 text-slate-600">Đang tải lịch sử...</span>
+                                </div>
+                            ) : chainRecords.length > 1 ? (
+                                <div className="space-y-4">
+                                    <div className="flex items-center gap-2 text-sm text-slate-600 mb-4">
+                                        <History className="w-4 h-4" />
+                                        <span>Chuỗi hồ sơ có {chainRecords.length} phiên bản</span>
+                                    </div>
+
+                                    {/* Timeline of all versions */}
+                                    {chainRecords.map((r, idx) => {
+                                        const isCurrent = r.cidHash === record.cidHash;
+                                        const isFirst = idx === 0;
+                                        const isLast = idx === chainRecords.length - 1;
+
+                                        return (
+                                            <div
+                                                key={r.cidHash}
+                                                className={`relative pl-6 ${!isLast ? 'pb-4' : ''} border-l-2 ${isCurrent ? 'border-blue-500' : 'border-slate-300'}`}
+                                            >
+                                                <div className={`absolute -left-2 top-0 w-4 h-4 rounded-full ${isCurrent ? 'bg-blue-500' : 'bg-slate-400'}`}></div>
+                                                <div className={`p-3 rounded-lg border ${isCurrent ? 'bg-blue-50 border-blue-200' : 'bg-slate-50 border-slate-200'}`}>
+                                                    <div className="flex items-center justify-between mb-1">
+                                                        <span className={`font-medium ${isCurrent ? 'text-blue-900' : 'text-slate-700'}`}>
+                                                            {isCurrent ? '📌 Phiên bản hiện tại' : isFirst ? '📝 Hồ sơ gốc' : `📄 Phiên bản ${idx + 1}`}
+                                                        </span>
+                                                        <div className="flex items-center gap-1">
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="sm"
+                                                                onClick={() => copyToClipboard(r.cidHash)}
+                                                                className="h-6 w-6 p-0"
+                                                            >
+                                                                <Copy className="w-3 h-3" />
+                                                            </Button>
+                                                            {!isCurrent && (
+                                                                <Button
+                                                                    variant="ghost"
+                                                                    size="sm"
+                                                                    onClick={() => handleViewChainRecord(r)}
+                                                                    disabled={chainDecrypting}
+                                                                    className={`h-6 w-6 p-0 ${selectedChainRecord?.cidHash === r.cidHash ? 'bg-blue-100' : ''}`}
+                                                                >
+                                                                    {chainDecrypting && selectedChainRecord?.cidHash === r.cidHash ? (
+                                                                        <Loader2 className="w-3 h-3 animate-spin" />
+                                                                    ) : (
+                                                                        <Eye className="w-3 h-3" />
+                                                                    )}
+                                                                </Button>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                    <p className={`text-sm ${isCurrent ? 'text-blue-700' : 'text-slate-600'}`}>
+                                                        {r.title || 'Không có tiêu đề'}
+                                                    </p>
+                                                    <p className={`text-xs mt-1 ${isCurrent ? 'text-blue-500' : 'text-slate-500'}`}>
+                                                        {new Date(r.createdAt).toLocaleDateString('vi-VN')}
+                                                    </p>
+                                                    <p className="text-xs text-slate-400 font-mono mt-1">
+                                                        {r.cidHash?.slice(0, 18)}...
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+
+                                    {/* Display selected old record content */}
+                                    {selectedChainRecord && chainDecryptedData && (
+                                        <div className="mt-6 p-4 bg-amber-50 border border-amber-200 rounded-lg">
+                                            <div className="flex items-center justify-between mb-3">
+                                                <h4 className="font-medium text-amber-900">
+                                                    📜 Nội dung phiên bản: {selectedChainRecord.title || 'Không có tiêu đề'}
+                                                </h4>
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    onClick={() => {
+                                                        setSelectedChainRecord(null);
+                                                        setChainDecryptedData(null);
+                                                    }}
+                                                    className="h-6 text-xs"
+                                                >
+                                                    Đóng
+                                                </Button>
+                                            </div>
+                                            <div className="text-sm text-amber-800">
+                                                {chainDecryptedData.notes && (
+                                                    <p className="mb-2"><strong>Ghi chú:</strong> {chainDecryptedData.notes}</p>
+                                                )}
+                                                {chainDecryptedData.title && (
+                                                    <p className="mb-2"><strong>Tiêu đề:</strong> {chainDecryptedData.title}</p>
+                                                )}
+                                                {chainDecryptedData.type && (
+                                                    <p className="mb-2"><strong>Loại:</strong> {chainDecryptedData.type}</p>
+                                                )}
+                                                {chainDecryptedData.entry && (
+                                                    <div className="mt-3">
+                                                        <p className="font-medium mb-1">Dữ liệu FHIR:</p>
+                                                        <pre className="text-xs bg-white p-2 rounded border overflow-x-auto max-h-60">
+                                                            {JSON.stringify(chainDecryptedData.entry, null, 2)}
+                                                        </pre>
+                                                    </div>
+                                                )}
+                                                {/* Support both imageBase64 and attachment.data formats */}
+                                                {(chainDecryptedData.imageBase64 || chainDecryptedData.attachment?.data) && (
+                                                    <div className="mt-3">
+                                                        <p className="font-medium mb-1">Hình ảnh:</p>
+                                                        <img
+                                                            src={chainDecryptedData.imageBase64 ||
+                                                                `data:${chainDecryptedData.attachment?.contentType || 'image/jpeg'};base64,${chainDecryptedData.attachment?.data}`}
+                                                            alt={chainDecryptedData.attachment?.fileName || "Record image"}
+                                                            className="max-w-full h-auto rounded border"
+                                                        />
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            ) : record.parentCidHash ? (
+                                <div className="space-y-4">
+                                    <div className="flex items-center gap-2 text-sm text-slate-600 mb-4">
+                                        <History className="w-4 h-4" />
+                                        <span>Đây là bản cập nhật của hồ sơ trước đó</span>
+                                    </div>
+                                    <div className="relative pl-6 pb-4 border-l-2 border-blue-500">
+                                        <div className="absolute -left-2 top-0 w-4 h-4 bg-blue-500 rounded-full"></div>
+                                        <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
+                                            <p className="font-medium text-blue-900">Phiên bản hiện tại</p>
+                                            <p className="text-sm text-blue-700">{record.title}</p>
+                                            <p className="text-xs text-blue-500 mt-1">{record.date}</p>
+                                        </div>
+                                    </div>
+                                    <div className="relative pl-6 border-l-2 border-slate-300">
+                                        <div className="absolute -left-2 top-0 w-4 h-4 bg-slate-400 rounded-full"></div>
+                                        <div className="p-3 bg-slate-50 rounded-lg border border-slate-200">
+                                            <div className="flex items-center justify-between">
+                                                <span className="font-medium text-slate-700">Phiên bản trước</span>
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    onClick={() => copyToClipboard(record.parentCidHash)}
+                                                    className="h-6 w-6 p-0"
+                                                >
+                                                    <Copy className="w-3 h-3" />
+                                                </Button>
+                                            </div>
+                                            <p className="text-xs text-slate-500 font-mono mt-1">
+                                                {record.parentCidHash?.slice(0, 20)}...
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="text-center py-8 bg-slate-50 rounded-xl">
+                                    <History className="w-12 h-12 text-slate-400 mx-auto mb-3" />
+                                    <p className="text-slate-600 font-medium">Đây là hồ sơ gốc</p>
+                                    <p className="text-sm text-slate-500 mt-1">
+                                        Chưa có lịch sử chỉnh sửa
+                                    </p>
                                 </div>
                             )}
                         </div>

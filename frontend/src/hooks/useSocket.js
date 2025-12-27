@@ -27,7 +27,6 @@ export function useSocket(handlers = {}, showNotifications = true) {
             : null;
 
         if (!token) {
-            console.log('useSocket: No JWT token, skipping connection');
             return;
         }
 
@@ -44,11 +43,9 @@ export function useSocket(handlers = {}, showNotifications = true) {
 
         // Connection events
         socket.on('connect', () => {
-            console.log('🔌 WebSocket connected');
         });
 
         socket.on('disconnect', (reason) => {
-            console.log('🔌 WebSocket disconnected:', reason);
         });
 
         socket.on('connect_error', (error) => {
@@ -58,7 +55,6 @@ export function useSocket(handlers = {}, showNotifications = true) {
         // Register event handlers
         Object.entries(handlersRef.current).forEach(([event, handler]) => {
             socket.on(event, (data) => {
-                console.log(`📨 Received event: ${event}`, data);
                 handler(data);
             });
         });

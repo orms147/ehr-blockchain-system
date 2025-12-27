@@ -39,18 +39,13 @@ export function useEnsureArbitrumSepolia() {
             const currentChainId = await provider.request({
                 method: "eth_chainId"
             });
-
-            console.log('🔗 Current chain:', currentChainId, 'Target:', TARGET_CHAIN.chainIdHex);
-
             // If already on correct chain, no need to switch
             if (currentChainId === TARGET_CHAIN.chainIdHex) {
-                console.log('✅ Already on correct chain');
                 setLoading(false);
                 return true;
             }
 
             // Try to switch using wallet_switchEthereumChain (provider-based)
-            console.log('🔄 Switching chain...');
             try {
                 await provider.request({
                     method: 'wallet_switchEthereumChain',
@@ -59,7 +54,6 @@ export function useEnsureArbitrumSepolia() {
             } catch (switchError) {
                 // Error code 4902 means chain doesn't exist, need to add it
                 if (switchError.code === 4902 || switchError.message?.includes('chain')) {
-                    console.log('➕ Chain not found, adding...');
                     try {
                         await provider.request({
                             method: 'wallet_addEthereumChain',
@@ -93,7 +87,6 @@ export function useEnsureArbitrumSepolia() {
             while (Date.now() - startTime < maxWaitMs) {
                 const newChainId = await provider.request({ method: 'eth_chainId' });
                 if (newChainId === TARGET_CHAIN.chainIdHex) {
-                    console.log('✅ Chain switch complete, stabilizing...');
                     await new Promise(resolve => setTimeout(resolve, 1000)); // Wait for wallet to stabilize
                     setLoading(false);
                     return true;

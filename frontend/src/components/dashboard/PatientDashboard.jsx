@@ -15,7 +15,9 @@ import UploadRecordModal from '@/components/dashboard/UploadRecordModal';
 import AccessRequestList from '@/components/dashboard/AccessRequestList';
 import ConsentList from '@/components/dashboard/ConsentList';
 import QuotaDisplay from '@/components/dashboard/QuotaDisplay';
+import PendingUpdatesSection from '@/components/dashboard/PendingUpdatesSection';
 import { recordService } from '@/services';
+import { useSocket } from '@/hooks/useSocket';
 
 const PatientDashboard = () => {
     const { address, provider, loading: walletLoading } = useWalletAddress();
@@ -24,9 +26,6 @@ const PatientDashboard = () => {
     const { registered: encryptionKeyRegistered } = useEncryptionKey(provider, address);
 
     // Debug: log the wallet state
-    console.log('Wallet state:', { address, walletLoading });
-
-
     const [selectedRecord, setSelectedRecord] = useState(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
@@ -55,10 +54,12 @@ const PatientDashboard = () => {
                 return {
                     id: record.id || index + 1,
                     cidHash: record.cidHash,
+                    parentCidHash: record.parentCidHash || null,
                     type: recordType,
                     title: record.title || `${recordType} #${record.id || index + 1}`,
                     description: record.description || null,
                     date: new Date(record.createdAt).toLocaleDateString('vi-VN'),
+                    createdAt: new Date(record.createdAt),
                     createdBy: record.createdBy,
                     createdByDisplay: isCreatedBySelf
                         ? 'Bạn'
@@ -72,8 +73,15 @@ const PatientDashboard = () => {
                 };
             });
 
+            // Filter to show only latest versions (records that are not parent of another record)
+            // A record is "outdated" if another record has it as parentCidHash
+            const parentCidHashes = new Set(transformedRecords.map(r => r.parentCidHash).filter(Boolean));
+            const latestRecords = transformedRecords.filter(r => !parentCidHashes.has(r.cidHash));
 
-            setRecords(transformedRecords);
+            // Sort by creation date (newest first)
+            latestRecords.sort((a, b) => b.createdAt - a.createdAt);
+
+            setRecords(latestRecords);
         } catch (err) {
             console.error('Error fetching records:', err);
             setError(err.message || 'Không thể tải hồ sơ');
@@ -99,6 +107,33 @@ const PatientDashboard = () => {
     useEffect(() => {
         fetchRecords();
     }, []);
+
+    // WebSocket: Auto-refresh when doctor claims pending update
+    // WebSocket: Auto-refresh when events occur
+    useSocket({
+        'pending_update:claimed': (data) => {
+            toast({
+                title: "📋 Hồ sơ mới!",
+                description: "Bác sĩ vừa thêm hồ sơ mới cho bạn. Đang cập nhật...",
+                className: "bg-blue-50 border-blue-200 text-blue-800",
+            });
+            fetchRecords();
+        },
+        'pending_update:new': (data) => {
+            toast({
+                title: "🩺 Yêu cầu cập nhật mới!",
+                description: `Bác sĩ muốn cập nhật hồ sơ "${data.title || 'mới'}". Vui lòng xem xét.`,
+                className: "bg-amber-50 border-amber-200 text-amber-800",
+            });
+        },
+        'consent:updated': (data) => {
+            toast({
+                title: "🔒 Quyền truy cập đã thay đổi",
+                description: "Có thay đổi về quyền truy cập hồ sơ.",
+                className: "bg-slate-50 border-slate-200 text-slate-800",
+            });
+        },
+    });
 
     // Handlers
     const handleViewDetails = (record) => {
@@ -158,6 +193,11 @@ const PatientDashboard = () => {
                         <QuotaDisplay walletAddress={address} />
                     </div>
                 </div>
+            </div>
+
+            {/* Pending Doctor Updates */}
+            <div className="mb-6">
+                <PendingUpdatesSection walletAddress={address} onUpdated={fetchRecords} />
             </div>
 
             <Tabs defaultValue="records" className="space-y-6">
@@ -280,6 +320,7 @@ const PatientDashboard = () => {
                 onOpenChange={handleUploadModalClose}
                 onSuccess={handleUploadSuccess}
                 parentRecord={parentRecord}
+                existingRecords={records}
             />
         </div>
     );

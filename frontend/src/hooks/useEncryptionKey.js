@@ -35,7 +35,6 @@ export function useEncryptionKey(provider, walletAddress) {
             try {
                 const existing = await api.get(`/api/auth/encryption-key/${walletAddress}`);
                 if (existing.encryptionPublicKey === keypair.publicKey) {
-                    console.log('✅ Encryption key already registered');
                     setRegistered(true);
                     setLoading(false);
                     return;
@@ -60,8 +59,6 @@ export function useEncryptionKey(provider, walletAddress) {
                 signature,
                 message,
             });
-
-            console.log('✅ Encryption key registered on backend');
             setRegistered(true);
         } catch (err) {
             console.error('Failed to register encryption key:', err);

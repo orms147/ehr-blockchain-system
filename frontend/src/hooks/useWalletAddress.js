@@ -15,15 +15,8 @@ export function useWalletAddress() {
     useEffect(() => {
         const getAddress = async () => {
             // Debug: check full web3Auth state including init status
-            console.log('useWalletAddress - web3Auth state:', {
-                isConnected: web3Auth?.isConnected,
-                hasProvider: !!web3Auth?.provider,
-                status: web3Auth?.status,  // Check init status
-            });
-
             // If Web3Auth is still initializing, keep waiting
             if (web3Auth?.status === 'not_ready' || web3Auth?.status === 'connecting') {
-                console.log('useWalletAddress - still initializing, waiting...');
                 return; // Don't set loading=false, wait for status change
             }
 

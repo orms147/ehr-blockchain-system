@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Share2, Loader2, CheckCircle, AlertCircle, FileText, Wallet } from 'lucide-react';
 import { toast } from '@/components/ui/use-toast';
-import { keyShareService, authService, relayerService } from '@/services';
+import { keyShareService, authService, relayerService, recordService } from '@/services';
 import { encryptForRecipient, getOrCreateEncryptionKeypair } from '@/services/nacl-crypto';
 import { useWalletAddress } from '@/hooks/useWalletAddress';
 import { signGrantConsent, computeCidHash, computeEncKeyHash, getDeadline } from '@/utils/eip712';
@@ -25,17 +25,31 @@ const GrantAccessForm = ({ onGrant }) => {
     const { address: walletAddress, provider } = useWalletAddress();
 
     // Load local records and quota on mount
+    // Only show LATEST records (ones without children)
     useEffect(() => {
-        try {
-            const records = JSON.parse(localStorage.getItem('ehr_local_records') || '{}');
-            const recordList = Object.entries(records).map(([cidHash, data]) => ({
-                cidHash,
-                ...data
-            }));
-            setLocalRecords(recordList);
-        } catch (e) {
-            console.error('Error loading local records:', e);
-        }
+        const loadRecords = async () => {
+            try {
+                const records = JSON.parse(localStorage.getItem('ehr_local_records') || '{}');
+                const recordList = Object.entries(records).map(([cidHash, data]) => ({
+                    cidHash,
+                    ...data
+                }));
+
+                // Fetch backend records to check which have children (outdated)
+                const backendRecords = await recordService.getMyRecords();
+                const parentCidHashes = new Set(backendRecords.map(r => r.parentCidHash).filter(Boolean));
+
+                // Filter to only show latest (no child references it as parent)
+                const latestRecords = recordList.filter(r => !parentCidHashes.has(r.cidHash));
+                setLocalRecords(latestRecords);
+            } catch (e) {
+                console.error('Error loading local records:', e);
+                // Fallback to all records if backend fails
+                const records = JSON.parse(localStorage.getItem('ehr_local_records') || '{}');
+                setLocalRecords(Object.entries(records).map(([cidHash, data]) => ({ cidHash, ...data })));
+            }
+        };
+        loadRecords();
 
         // Load quota status
         relayerService.getQuotaStatus().then(setQuotaInfo).catch(console.error);
@@ -131,8 +145,6 @@ const GrantAccessForm = ({ onGrant }) => {
 
             // 2. Get nonce from contract (MUST from contract, not backend)
             const nonce = await getNonce(walletAddress);
-            console.log('📋 Current nonce from contract:', nonce);
-
             // 3. Prepare on-chain consent parameters
             const expireAt = getExpiryTimestamp();
             const deadline = getDeadline(1); // 1 hour validity
@@ -158,9 +170,6 @@ const GrantAccessForm = ({ onGrant }) => {
                 deadline,
                 nonce,
             });
-
-            console.log('✍️ EIP-712 signature obtained');
-
             // 5. Try sponsored grant (if quota available), else self-pay
             let txHash;
             const quota = quotaInfo || await relayerService.getQuotaStatus();
@@ -181,7 +190,6 @@ const GrantAccessForm = ({ onGrant }) => {
                 txHash = result.txHash;
             } else {
                 // Self-pay
-                console.log('💳 Quota exhausted, user paying gas');
                 toast({
                     title: "Hết quota miễn phí",
                     description: "Bạn sẽ trả gas cho giao dịch này",
@@ -198,34 +206,47 @@ const GrantAccessForm = ({ onGrant }) => {
                     signature,
                 });
             }
+            // 6. Get ALL CIDs in the chain for sharing ALL keys
+            let chainCids = [selectedRecord];
+            try {
+                const chainData = await recordService.getChainCids(selectedRecord);
+                chainCids = chainData.chainCids || [selectedRecord];
+            } catch (e) {
+                console.warn('Could not fetch chain CIDs, sharing single record:', e);
+            }
 
-            console.log('✅ On-chain consent granted:', txHash);
-
-            // 6. Get patient's keypair and encrypt for doctor
+            // 7. Get patient's keypair
             const patientKeypair = await getOrCreateEncryptionKeypair(provider, walletAddress);
 
-            const payload = JSON.stringify({
-                cid: recordData.cid,
-                aesKey: recordData.aesKey,
-            });
+            // 8. Share keys for ALL records in the chain
+            const allLocalRecords = JSON.parse(localStorage.getItem('ehr_local_records') || '{}');
 
-            const encryptedPayload = encryptForRecipient(
-                payload,
-                doctorKeyResponse.encryptionPublicKey,
-                patientKeypair.secretKey
-            );
+            for (const chainCidHash of chainCids) {
+                const chainRecordData = allLocalRecords[chainCidHash];
+                if (!chainRecordData?.cid || !chainRecordData?.aesKey) {
+                    console.warn(`Missing local key for ${chainCidHash.slice(0, 16)}...`);
+                    continue;
+                }
 
-            // 7. Share encrypted key via backend (for key exchange, consent is on-chain)
-            await keyShareService.shareKey({
-                cidHash: selectedRecord,
-                recipientAddress: address.toLowerCase(),
-                encryptedPayload: encryptedPayload,
-                senderPublicKey: patientKeypair.publicKey,
-                expiresAt: getExpiryDate(),
-            });
+                const payload = JSON.stringify({
+                    cid: chainRecordData.cid,
+                    aesKey: chainRecordData.aesKey,
+                });
 
-            console.log('✅ Key shared with Doctor');
+                const encryptedPayload = encryptForRecipient(
+                    payload,
+                    doctorKeyResponse.encryptionPublicKey,
+                    patientKeypair.secretKey
+                );
 
+                await keyShareService.shareKey({
+                    cidHash: chainCidHash,
+                    recipientAddress: address.toLowerCase(),
+                    encryptedPayload: encryptedPayload,
+                    senderPublicKey: patientKeypair.publicKey,
+                    expiresAt: getExpiryDate(),
+                });
+            }
             toast({
                 title: "Chia sẻ thành công! (On-chain)",
                 description: `Đã cấp quyền on-chain + chia sẻ key cho ${address.slice(0, 8)}...`,

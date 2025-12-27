@@ -39,26 +39,18 @@ export async function ensureCorrectChain(provider) {
 
     // Check if already on correct chain
     const currentChainId = await getCurrentChainId();
-    console.log(`🔗 Current chain: ${currentChainId}, Target: ${TARGET_CHAIN.chainIdHex}`);
-
     if (currentChainId === TARGET_CHAIN.chainIdHex) {
-        console.log('✅ Already on correct chain');
         return true; // Already on correct chain
     }
-
-    console.log('🔄 Switching chain...');
-
     try {
         // Try to switch to target chain
         await provider.request({
             method: 'wallet_switchEthereumChain',
             params: [{ chainId: TARGET_CHAIN.chainIdHex }],
         });
-        console.log('📤 Chain switch request sent');
     } catch (switchError) {
         // Error code 4902 means chain doesn't exist, need to add it
         if (switchError.code === 4902 || switchError.message?.includes('chain')) {
-            console.log('➕ Chain not found, adding...');
             try {
                 await provider.request({
                     method: 'wallet_addEthereumChain',
@@ -90,13 +82,11 @@ export async function ensureCorrectChain(provider) {
         if (newChainId === TARGET_CHAIN.chainIdHex) {
             // CRITICAL: Wait longer for wallet to fully stabilize after chain switch
             // Web3Auth/MetaMask internal state takes time to sync
-            console.log('✅ Chain switched, waiting for wallet to stabilize...');
             await new Promise(resolve => setTimeout(resolve, 1500)); // Increased to 1.5 seconds
 
             // Double-check chain is still correct after delay
             const verifyChainId = await getCurrentChainId();
             if (verifyChainId === TARGET_CHAIN.chainIdHex) {
-                console.log('✅ Chain switch complete and verified');
                 return true;
             }
         }

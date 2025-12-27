@@ -132,7 +132,6 @@ export default function LoginPage() {
 
                 // If nonce error, auto-retry with fresh nonce (one attempt)
                 if (error.message?.includes('nonce') || error.message?.includes('Nonce')) {
-                    console.log('🔄 Invalid nonce, auto-retrying with fresh nonce...');
                     try {
                         const walletClient = createWalletClient({
                             chain: arbitrumSepolia,

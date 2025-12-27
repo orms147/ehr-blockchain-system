@@ -139,9 +139,6 @@ export default function DoctorAddRecordForm({ onSuccess }) {
                 chain: arbitrumSepolia,
                 transport: custom(provider),
             });
-
-            console.log('📝 Calling DoctorUpdate.addRecordByDoctor with auto-consent...');
-
             const txHash = await walletClient.writeContract({
                 address: DOCTOR_UPDATE_ADDRESS,
                 abi: DOCTOR_UPDATE_ABI,
@@ -160,9 +157,6 @@ export default function DoctorAddRecordForm({ onSuccess }) {
                 maxFeePerGas: parseGwei('1.0'),
                 maxPriorityFeePerGas: parseGwei('0.1'),
             });
-
-            console.log('✅ On-chain tx success:', txHash);
-
             // 8. Save to backend (metadata only - on-chain tx already done above)
             await recordService.saveRecordMetadata(cidHash, recordTypeHash, patientAddress);
 
@@ -206,7 +200,6 @@ export default function DoctorAddRecordForm({ onSuccess }) {
                         senderPublicKey: doctorKeypair.publicKey,
                     });
                     patientKeyShared = true;
-                    console.log('✅ Key shared with Patient');
                 } else {
                     throw new Error('Patient has no encryption public key');
                 }

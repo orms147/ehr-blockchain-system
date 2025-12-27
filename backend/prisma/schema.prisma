@@ -59,6 +59,7 @@ model RecordMetadata {
   cidHash        String   @unique @db.VarChar(66) // keccak256 hash, NOT plaintext CID
   ownerAddress   String   @db.VarChar(42)
   recordTypeHash String?  @db.VarChar(66)
+  parentCidHash  String?  @db.VarChar(66) // For record chain - links to parent record
   title          String?  @db.VarChar(255) // Human readable title
   description    String?  @db.Text // Notes/description
   recordType     String?  @db.VarChar(50) // e.g. "diagnosis", "prescription", "lab_result"
@@ -68,6 +69,8 @@ model RecordMetadata {
   owner    User       @relation("owner", fields: [ownerAddress], references: [walletAddress])
   creator  User       @relation("creator", fields: [createdBy], references: [walletAddress])
   keyShares KeyShare[]
+  
+  @@index([parentCidHash])
 }
 
 
@@ -265,5 +268,34 @@ model OrganizationMember {
   @@index([memberAddress])
 }
 
-
-
+// Pending Updates - Doctor update requiring patient approval
+model PendingUpdate {
+  id                String   @id @default(uuid())
+  doctorAddress     String   @db.VarChar(42)
+  patientAddress    String   @db.VarChar(42)
+  parentCidHash     String   @db.VarChar(66)  // Record being updated
+  
+  // Encrypted content (stored before on-chain)
+  encryptedContent  String   @db.Text        // Encrypted FHIR bundle (base64)
+  contentHash       String   @db.VarChar(66)  // keccak256 of content for integrity
+  recordType        String?  @db.VarChar(50)
+  title             String?  @db.VarChar(255)
+  
+  // Status tracking
+  status            String   @default("pending")  // pending, approved, claimed, rejected, expired
+  
+  // Approval
+  approvedAt        DateTime?
+  
+  // Claim
+  cidHash           String?  @db.VarChar(66)  // Set after IPFS upload
+  txHash            String?  @db.VarChar(66)  // On-chain tx
+  claimedAt         DateTime?
+  
+  // Metadata
+  createdAt         DateTime @default(now())
+  expiresAt         DateTime                  // Auto-expire pending updates (7 days)
+  
+  @@index([patientAddress, status])
+  @@index([doctorAddress, status])
+}

@@ -1,8 +1,8 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { motion } from 'framer-motion';
-import { CheckCircle2, Loader2, Clock, RefreshCw, Gift } from 'lucide-react';
+import { CheckCircle2, Loader2, Clock, RefreshCw, Gift, Timer } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -14,18 +14,36 @@ import { arbitrumSepolia } from 'viem/chains';
 import { EHR_SYSTEM_ABI } from '@/abi/EHRSystemSecure';
 
 const EHR_SYSTEM_ADDRESS = process.env.NEXT_PUBLIC_EHR_SYSTEM_ADDRESS;
+const MIN_APPROVAL_DELAY = 15; // 15 seconds
 
+// Helper to calculate seconds remaining
+function getSecondsRemaining(createdAt) {
+    const createdTime = new Date(createdAt).getTime();
+    const now = Date.now();
+    const elapsed = Math.floor((now - createdTime) / 1000);
+    const remaining = MIN_APPROVAL_DELAY - elapsed;
+    return Math.max(0, remaining);
+}
 
 export default function PendingClaims({ walletAddress, provider, onClaimed }) {
     const [claims, setClaims] = useState([]);
     const [loading, setLoading] = useState(true);
     const [processingId, setProcessingId] = useState(null);
+    const [countdown, setCountdown] = useState({}); // { requestId: secondsRemaining }
 
     const fetchClaims = async () => {
         setLoading(true);
         try {
             const response = await requestService.getSignedRequests();
-            setClaims(response.requests || []);
+            const newClaims = response.requests || [];
+            setClaims(newClaims);
+
+            // Initialize countdown for each claim
+            const newCountdown = {};
+            newClaims.forEach(claim => {
+                newCountdown[claim.requestId] = getSecondsRemaining(claim.createdAt);
+            });
+            setCountdown(newCountdown);
         } catch (err) {
             console.error('Error fetching claims:', err);
             toast({
@@ -42,16 +60,42 @@ export default function PendingClaims({ walletAddress, provider, onClaimed }) {
         if (walletAddress) {
             fetchClaims();
 
-            // Auto-refresh every 30 seconds to pick up new approved requests
-            const interval = setInterval(() => {
-                fetchClaims();
-            }, 30000);
-
+            // Auto-refresh every 30 seconds
+            const interval = setInterval(fetchClaims, 30000);
             return () => clearInterval(interval);
         }
     }, [walletAddress]);
 
+    // Countdown timer effect
+    useEffect(() => {
+        const timer = setInterval(() => {
+            setCountdown(prev => {
+                const updated = { ...prev };
+                let hasChanges = false;
+                Object.keys(updated).forEach(id => {
+                    if (updated[id] > 0) {
+                        updated[id] = updated[id] - 1;
+                        hasChanges = true;
+                    }
+                });
+                return hasChanges ? updated : prev;
+            });
+        }, 1000);
+
+        return () => clearInterval(timer);
+    }, []);
+
     const handleClaim = async (claim) => {
+        // Check if still waiting
+        if (countdown[claim.requestId] > 0) {
+            toast({
+                title: `⏳ Vui lòng chờ ${countdown[claim.requestId]} giây`,
+                description: "Cần đợi ít nhất 15 giây sau khi yêu cầu được tạo.",
+                variant: "destructive",
+            });
+            return;
+        }
+
         if (!provider) {
             toast({ title: "Lỗi", description: "Không có provider", variant: "destructive" });
             return;
@@ -59,10 +103,8 @@ export default function PendingClaims({ walletAddress, provider, onClaimed }) {
 
         setProcessingId(claim.requestId);
         try {
-            // 1. Ensure correct chain
             await ensureArbitrumSepolia(provider);
 
-            // 2. Create wallet client
             const walletClient = createWalletClient({
                 chain: arbitrumSepolia,
                 transport: custom(provider),
@@ -72,16 +114,6 @@ export default function PendingClaims({ walletAddress, provider, onClaimed }) {
                 title: "Đang xác nhận on-chain...",
                 description: "Vui lòng xác nhận giao dịch trong ví.",
             });
-
-            // Debug log to trace exact values being sent
-            console.log('🔍 Claim debug:', {
-                requestId: claim.requestId,
-                signatureDeadline: claim.signatureDeadline,
-                signature: claim.signature,
-                contractAddress: EHR_SYSTEM_ADDRESS,
-            });
-
-            // 3. Call confirmAccessRequestWithSignature (Doctor pays gas)
             const txHash = await walletClient.writeContract({
                 address: EHR_SYSTEM_ADDRESS,
                 abi: EHR_SYSTEM_ABI,
@@ -92,10 +124,6 @@ export default function PendingClaims({ walletAddress, provider, onClaimed }) {
                 maxFeePerGas: parseGwei('1.0'),
                 maxPriorityFeePerGas: parseGwei('0.1'),
             });
-
-            console.log('Claim tx hash:', txHash);
-
-            // 4. Mark as claimed in backend
             await requestService.markClaimed(claim.requestId, txHash);
 
             toast({
@@ -104,13 +132,8 @@ export default function PendingClaims({ walletAddress, provider, onClaimed }) {
                 className: "bg-green-50 border-green-200 text-green-800",
             });
 
-            // Refresh list
             fetchClaims();
-
-            // Notify parent
-            if (onClaimed) {
-                onClaimed(claim);
-            }
+            if (onClaimed) onClaimed(claim);
 
         } catch (err) {
             console.error('Claim error:', err);
@@ -126,6 +149,14 @@ export default function PendingClaims({ walletAddress, provider, onClaimed }) {
                 toast({
                     title: "Đã từ chối",
                     description: "Bạn đã từ chối xác nhận giao dịch.",
+                    variant: "destructive",
+                });
+            } else if (errorMsg.includes('ApprovalTooSoon') || errorMsg.includes('0x3d693ada')) {
+                // Reset countdown to 15 seconds
+                setCountdown(prev => ({ ...prev, [claim.requestId]: MIN_APPROVAL_DELAY }));
+                toast({
+                    title: "⏳ Vui lòng chờ thêm",
+                    description: "Cần đợi ít nhất 15 giây. Đếm ngược đã được cập nhật.",
                     variant: "destructive",
                 });
             } else {
@@ -150,7 +181,7 @@ export default function PendingClaims({ walletAddress, provider, onClaimed }) {
     }
 
     if (claims.length === 0) {
-        return null; // Don't show anything if no pending claims
+        return null;
     }
 
     return (
@@ -172,41 +203,57 @@ export default function PendingClaims({ walletAddress, provider, onClaimed }) {
             </CardHeader>
             <CardContent>
                 <div className="space-y-3">
-                    {claims.map((claim) => (
-                        <motion.div
-                            key={claim.requestId}
-                            initial={{ opacity: 0, y: 10 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            className="flex items-center justify-between p-3 bg-white rounded-xl border border-green-200"
-                        >
-                            <div>
-                                <p className="text-sm font-medium text-slate-800">
-                                    Bệnh nhân: {claim.patientAddress?.slice(0, 8)}...{claim.patientAddress?.slice(-6)}
-                                </p>
-                                <div className="flex items-center gap-2 mt-1">
-                                    <Clock className="w-3 h-3 text-slate-400" />
-                                    <span className="text-xs text-slate-500">
-                                        Đã ký: {new Date(claim.createdAt).toLocaleString('vi-VN')}
-                                    </span>
-                                </div>
-                            </div>
-                            <Button
-                                size="sm"
-                                onClick={() => handleClaim(claim)}
-                                disabled={processingId === claim.requestId}
-                                className="bg-green-600 hover:bg-green-700"
+                    {claims.map((claim) => {
+                        const secondsLeft = countdown[claim.requestId] || 0;
+                        const isWaiting = secondsLeft > 0;
+                        const isProcessing = processingId === claim.requestId;
+
+                        return (
+                            <motion.div
+                                key={claim.requestId}
+                                initial={{ opacity: 0, y: 10 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                className="flex items-center justify-between p-3 bg-white rounded-xl border border-green-200"
                             >
-                                {processingId === claim.requestId ? (
-                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                <div>
+                                    <p className="text-sm font-medium text-slate-800">
+                                        Bệnh nhân: {claim.patientAddress?.slice(0, 8)}...{claim.patientAddress?.slice(-6)}
+                                    </p>
+                                    <div className="flex items-center gap-2 mt-1">
+                                        <Clock className="w-3 h-3 text-slate-400" />
+                                        <span className="text-xs text-slate-500">
+                                            Đã ký: {new Date(claim.createdAt).toLocaleString('vi-VN')}
+                                        </span>
+                                    </div>
+                                </div>
+
+                                {isWaiting ? (
+                                    <div className="flex items-center gap-2 text-amber-600">
+                                        <Timer className="w-4 h-4 animate-pulse" />
+                                        <span className="text-sm font-medium">
+                                            Chờ {secondsLeft}s
+                                        </span>
+                                    </div>
                                 ) : (
-                                    <>
-                                        <CheckCircle2 className="w-4 h-4 mr-1" />
-                                        Nhận truy cập
-                                    </>
+                                    <Button
+                                        size="sm"
+                                        onClick={() => handleClaim(claim)}
+                                        disabled={isProcessing}
+                                        className="bg-green-600 hover:bg-green-700"
+                                    >
+                                        {isProcessing ? (
+                                            <Loader2 className="w-4 h-4 animate-spin" />
+                                        ) : (
+                                            <>
+                                                <CheckCircle2 className="w-4 h-4 mr-1" />
+                                                Nhận truy cập
+                                            </>
+                                        )}
+                                    </Button>
                                 )}
-                            </Button>
-                        </motion.div>
-                    ))}
+                            </motion.div>
+                        );
+                    })}
                 </div>
                 <p className="text-xs text-slate-500 mt-3 text-center">
                     Bạn sẽ trả phí gas khi nhận quyền truy cập

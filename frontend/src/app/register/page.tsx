@@ -61,9 +61,6 @@ export default function RegisterPage() {
         try {
             // Use backend relayer for gas sponsorship
             const result = await relayerService.sponsoredRegister(selectedRole);
-
-            console.log('Registration result:', result);
-
             setStep('success');
 
             toast({

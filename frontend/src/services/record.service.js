@@ -41,6 +41,22 @@ export const recordService = {
         return api.get(`/api/records/${cidHash}`);
     },
 
+    // Alias for getRecord (backwards compatibility)
+    async getByHash(cidHash) {
+        return this.getRecord(cidHash);
+    },
+
+    // Get record chain (parent, children, siblings, version)
+    async getRecordChain(cidHash) {
+        return api.get(`/api/records/chain/${cidHash}`);
+    },
+
+    // Get ALL cidHashes in a chain (for chain-wide sharing)
+    // Given any CID, returns all CIDs from root to all leaves
+    async getChainCids(cidHash) {
+        return api.get(`/api/records/chain-cids/${cidHash}`);
+    },
+
     // Get list of who has access to a record (only owner can view)
     async getAccessList(cidHash) {
         return api.get(`/api/records/${cidHash}/access`);

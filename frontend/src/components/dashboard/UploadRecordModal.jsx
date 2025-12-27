@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -14,7 +14,8 @@ import {
 } from 'lucide-react';
 import { toast } from '@/components/ui/use-toast';
 
-import { recordService, ipfsService, computeCidHash, generateAESKey, exportAESKey, encryptData } from '@/services';
+import { recordService, ipfsService, computeCidHash, generateAESKey, exportAESKey, encryptData, pendingUpdateService } from '@/services';
+import { encryptForRecipient } from '@/services/nacl-crypto';
 
 // Record types 
 const RECORD_TYPES = [
@@ -39,7 +40,7 @@ const COMMON_ICD10_CODES = [
     { code: 'J18', name: 'Viêm phổi' },
 ];
 
-const UploadRecordModal = ({ open, onOpenChange, onSuccess, parentRecord }) => {
+const UploadRecordModal = ({ open, onOpenChange, onSuccess, parentRecord, existingRecords = [], isDoctorUpdate = false, patientAddress = null }) => {
     // If parentRecord is provided, this is an update to an existing record
     const isUpdateMode = !!parentRecord;
 
@@ -48,6 +49,9 @@ const UploadRecordModal = ({ open, onOpenChange, onSuccess, parentRecord }) => {
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState(null);
     const [validationErrors, setValidationErrors] = useState({});
+
+    // Selected parent for creating child record (if not using parentRecord prop)
+    const [selectedParent, setSelectedParent] = useState(null);
 
     // Image preview
     const [imagePreview, setImagePreview] = useState(null);
@@ -98,6 +102,24 @@ const UploadRecordModal = ({ open, onOpenChange, onSuccess, parentRecord }) => {
         setValidationErrors(errors);
         return Object.keys(errors).length === 0;
     };
+
+    // Reset state when modal opens
+    useEffect(() => {
+        if (open) {
+            // Reset all state when modal opens
+            setMode(null);
+            setStep(1);
+            setUploadResult(null);
+            setError(null);
+            setValidationErrors({});
+            setSelectedParent(parentRecord || null);
+            // Reset image/file state
+            if (imagePreview) URL.revokeObjectURL(imagePreview);
+            setImagePreview(null);
+            setImageData({ title: '', type: 'other', file: null, fileName: '', notes: '' });
+            if (fileInputRef.current) fileInputRef.current.value = '';
+        }
+    }, [open, parentRecord]);
 
     // Handle file selection with preview
     const handleFileChange = (e) => {
@@ -234,9 +256,49 @@ const UploadRecordModal = ({ open, onOpenChange, onSuccess, parentRecord }) => {
             const cidHash = computeCidHash(cid);
             const recordTypeHash = computeCidHash(type);
 
-            // Store in backend (include parent if updating)
-            const parentCidHash = parentRecord?.cidHash || null;
+            // Store in backend
+            const effectiveParent = parentRecord || selectedParent;
+            const parentCidHash = effectiveParent?.cidHash || null;
             const notes = mode === 'image' ? imageData.notes : formData.notes;
+
+            // Check if this is a doctor update (needs approval flow)
+            if (isDoctorUpdate && patientAddress) {
+                // Doctor update flow: Create pending update instead of direct upload
+                // Encrypt content for storage (will be uploaded to IPFS after approval)
+                const contentToStore = JSON.stringify({
+                    encryptedData,
+                    aesKey: aesKeyString,
+                    metadata: { title, type, notes, parentCidHash }
+                });
+                const base64Content = btoa(contentToStore);
+
+                await pendingUpdateService.createPendingUpdate({
+                    parentCidHash,
+                    patientAddress,
+                    encryptedContent: base64Content,
+                    recordType: type,
+                    title,
+                });
+
+                setUploadResult({
+                    id: 'pending',
+                    cidHash: 'pending',
+                    title,
+                    isPending: true,
+                });
+                setStep(3);
+
+                toast({
+                    title: "Yêu cầu đã gửi!",
+                    description: "Đang chờ bệnh nhân phê duyệt cập nhật.",
+                    className: "bg-amber-50 border-amber-200 text-amber-800",
+                });
+
+                if (onSuccess) onSuccess();
+                return;
+            }
+
+            // Normal flow: Direct upload (Patient or non-approval flow)
             const result = await recordService.createRecord(cidHash, recordTypeHash, parentCidHash, title, notes, type);
 
 
@@ -333,7 +395,7 @@ const UploadRecordModal = ({ open, onOpenChange, onSuccess, parentRecord }) => {
                             </p>
                         </DialogHeader>
 
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 py-8">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 py-4">
                             <button
                                 onClick={() => setMode('image')}
                                 className="group p-8 rounded-2xl border-2 border-slate-200 hover:border-blue-500 hover:bg-blue-50/50 transition-all text-left bg-white"

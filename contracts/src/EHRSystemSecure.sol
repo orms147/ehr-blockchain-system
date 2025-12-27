@@ -37,7 +37,7 @@ contract EHRSystemSecure is IEHRSystem, Ownable, Pausable, ReentrancyGuard, EIP7
     uint256 private _requestNonce;
     
     // Constants
-    uint40 private constant MIN_APPROVAL_DELAY = 1 minutes;
+    uint40 private constant MIN_APPROVAL_DELAY = 15 seconds;
     uint40 private constant MAX_REQUEST_VALIDITY = 30 days;
     uint40 private constant DEFAULT_CONSENT_DURATION = 30 days;
     uint40 private constant MAX_DELEGATION_DURATION = 365 days;

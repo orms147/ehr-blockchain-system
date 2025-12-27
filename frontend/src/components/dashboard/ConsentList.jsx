@@ -45,7 +45,6 @@ export default function ConsentList({ walletAddress }) {
             const quotaData = await relayerService.getQuotaStatus();
             setQuota(quotaData);
         } catch (err) {
-            console.log('Quota fetch skipped');
         }
     };
 
