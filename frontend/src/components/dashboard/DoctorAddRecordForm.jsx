@@ -177,7 +177,6 @@ export default function DoctorAddRecordForm({ onSuccess }) {
                 encryptedPayload: doctorEncryptedKey,
                 senderPublicKey: doctorKeypair.publicKey,
             });
-            console.log('✅ Key saved for Doctor (creator)');
 
             // 10b. Try to share key with patient (may fail if patient hasn't registered encryption key)
             let patientKeyShared = false;

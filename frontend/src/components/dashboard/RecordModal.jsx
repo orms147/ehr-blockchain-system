@@ -105,7 +105,6 @@ const RecordModal = ({ record, open, onOpenChange, onUpdate, onViewRecord }) => 
             if (localData) {
                 cid = localData.cid;
                 aesKeyString = localData.aesKey;
-                console.log('📦 Using local key for old record:', oldRecord.cidHash.slice(0, 16));
             } else {
                 // Try to fetch from keyShare (for shared records)
                 const sharedKey = await keyShareService.getKeyForRecord(oldRecord.cidHash);

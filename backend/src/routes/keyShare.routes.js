@@ -270,7 +270,6 @@ router.get('/record/:cidHash', authenticate, async (req, res, next) => {
             if (ownerAddress) {
                 const hasOnChainConsent = await checkConsent(ownerAddress, requesterAddress, cidHashLower);
                 if (!hasOnChainConsent) {
-                    console.log(`🚫 [KEY-SHARE] On-chain consent revoked for ${requesterAddress} on ${cidHashLower.slice(0, 20)}`);
                     return res.status(403).json({
                         error: 'Quyền truy cập đã bị thu hồi',
                         message: 'Chủ sở hữu đã thu hồi quyền truy cập hồ sơ này',

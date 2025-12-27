@@ -419,8 +419,6 @@ router.post('/:id/claim', authenticate, async (req, res, next) => {
             doctorAddress,
         });
 
-        console.log(`✅ Pending update claimed: ${id}, cidHash: ${cidHash.slice(0, 20)}...`);
-
         res.json({
             success: true,
             message: 'Đã xác nhận cập nhật on-chain.',

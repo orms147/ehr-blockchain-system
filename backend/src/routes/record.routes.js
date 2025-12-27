@@ -23,7 +23,6 @@ router.post('/', authenticate, async (req, res, next) => {
     try {
         const { cidHash, recordTypeHash, parentCidHash, title, description, recordType } = createRecordSchema.parse(req.body);
         const walletAddress = req.user.walletAddress;
-        console.log(`📤 [UPLOAD] User: ${walletAddress}, cidHash: ${cidHash.slice(0, 20)}..., title: ${title || 'N/A'}`);
 
         // Check if record already exists
         const existing = await prisma.recordMetadata.findUnique({
@@ -69,7 +68,6 @@ router.post('/', authenticate, async (req, res, next) => {
 
         // Check quota first
         const quota = await relayerService.getQuotaStatus(walletAddress);
-        console.log('📤 [UPLOAD] Quota status:', JSON.stringify(quota));
 
         if (!quota.hasSelfWallet && quota.uploadsRemaining <= 0) {
             return res.status(429).json({
@@ -396,8 +394,6 @@ router.delete('/:cidHash/access/:address', authenticate, async (req, res, next) 
         const targetAddress = req.params.address.toLowerCase();
         const callerAddress = req.user.walletAddress.toLowerCase();
 
-        console.log(`🔐 [REVOKE] Caller: ${callerAddress} revoking ${targetAddress} from ${cidHash.slice(0, 20)}...`);
-
         // 1. Verify record exists and caller is owner
         const record = await prisma.recordMetadata.findUnique({
             where: { cidHash }
@@ -476,8 +472,6 @@ router.delete('/:cidHash/access/:address', authenticate, async (req, res, next) 
             revokedBy: callerAddress,
         });
 
-        console.log(`🔐 [REVOKE] ✅ Access revoked for ${targetAddress} (on-chain + DB)`);
-
         res.json({
             success: true,
             message: 'Đã thu hồi quyền truy cập on-chain',
@@ -521,8 +515,6 @@ router.get('/:cidHash/access', authenticate, async (req, res, next) => {
                 createdAt: true,
             }
         });
-
-        console.log(`🔑 [ACCESS-LIST] cidHash: ${cidHash.slice(0, 20)}..., found ${keyShares.length} key shares:`, keyShares.map(ks => ks.recipientAddress));
 
         res.json({
             cidHash,

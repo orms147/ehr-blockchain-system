@@ -18,13 +18,6 @@ const AccessManagementTab = ({ record, currentUserAddress, onAccessRevoked }) =>
 
     const isOwner = record?.ownerAddress?.toLowerCase() === currentUserAddress?.toLowerCase();
 
-    // Debug ownership check
-    console.log('AccessManagement - Owner check:', {
-        recordOwner: record?.ownerAddress?.toLowerCase(),
-        currentUser: currentUserAddress?.toLowerCase(),
-        isOwner
-    });
-
     const loadAccessList = async () => {
         if (!record?.cidHash || !isOwner) return;
 

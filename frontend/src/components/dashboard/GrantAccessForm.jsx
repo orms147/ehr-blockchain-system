@@ -176,7 +176,6 @@ const GrantAccessForm = ({ onGrant }) => {
 
             if (quota.uploadsRemaining > 0) {
                 // Sponsored by relayer
-                console.log('💸 Using sponsored grant (quota available)');
                 const result = await relayerService.grantConsent({
                     granteeAddress: address,
                     cidHash: rootCidHash,

@@ -349,7 +349,6 @@ router.post('/approve-with-sig', authenticate, async (req, res, next) => {
                     expiresAt: new Date(Number(deadline) * 1000),
                 },
             });
-            console.log(`✅ KeyShare created/updated for Doctor ${request.requesterAddress} (awaiting on-chain claim)`);
         }
 
         res.json({

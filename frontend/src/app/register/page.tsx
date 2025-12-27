@@ -33,8 +33,8 @@ export default function RegisterPage() {
                         try {
                             const quotaData = await relayerService.getQuotaStatus();
                             setQuota(quotaData);
-                        } catch (e) {
-                            console.log('Quota fetch skipped (not logged in yet)');
+                        } catch {
+                            // Quota fetch fails before login, silently ignore
                         }
                     }
                 } catch (e) {

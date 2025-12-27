@@ -90,7 +90,6 @@ export default function PendingUpdateClaims({ walletAddress, provider, onClaimed
 
             const cidHash = keccak256(toBytes(cid));
 
-            console.log('📦 IPFS uploaded:', cid.slice(0, 20) + '...');
             // 4. Create wallet client
             const walletClient = createWalletClient({
                 chain: arbitrumSepolia,
