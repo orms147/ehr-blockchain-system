@@ -398,9 +398,6 @@ router.post('/mark-claimed', authenticate, async (req, res, next) => {
                 status: 'pending',
             },
         });
-
-        console.log(`✅ KeyShare activated for Doctor ${doctorAddress}, records updated: ${updatedKeyShare.count}`);
-
         res.json({
             success: true,
             message: 'Request marked as claimed.',

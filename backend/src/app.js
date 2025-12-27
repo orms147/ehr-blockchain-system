@@ -73,9 +73,6 @@ app.use(errorHandler);
 
 // Start server with Socket.io
 server.listen(PORT, () => {
-    console.log(`🚀 EHR Backend running on port ${PORT}`);
-    console.log(`📡 Chain ID: ${process.env.CHAIN_ID}`);
-    console.log(`🔗 Frontend URL: ${process.env.FRONTEND_URL}`);
 });
 
 export default app;

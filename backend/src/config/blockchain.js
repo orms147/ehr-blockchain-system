@@ -58,21 +58,12 @@ export const CONTRACT_ADDRESSES = {
 // Helper: Check if user has consent to access a record
 export async function checkConsent(patientAddress, granteeAddress, cidHash) {
     try {
-        console.log('🔍 checkConsent called with:', {
-            patientAddress,
-            granteeAddress,
-            cidHash,
-            contract: CONTRACT_ADDRESSES.ConsentLedger,
-        });
-
         const hasAccess = await publicClient.readContract({
             address: CONTRACT_ADDRESSES.ConsentLedger,
             abi: CONSENT_LEDGER_ABI,
             functionName: 'canAccess',
             args: [patientAddress, granteeAddress, cidHash],
         });
-
-        console.log('🔍 checkConsent result:', hasAccess);
         return hasAccess;
     } catch (error) {
         console.error('Error checking consent:', error);

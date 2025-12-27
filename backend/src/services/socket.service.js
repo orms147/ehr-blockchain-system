@@ -39,11 +39,7 @@ export function initSocket(server) {
         // Join room by wallet address (lowercase for consistency)
         const room = socket.user.walletAddress.toLowerCase();
         socket.join(room);
-
-        console.log('🔌 WS connected:', room);
-
         socket.on('disconnect', () => {
-            console.log('🔌 WS disconnected:', room);
         });
 
         // Error handling
@@ -51,8 +47,6 @@ export function initSocket(server) {
             console.error('Socket error:', err);
         });
     });
-
-    console.log('🔌 Socket.io initialized');
 }
 
 /**

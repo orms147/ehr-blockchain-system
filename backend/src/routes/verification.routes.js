@@ -63,7 +63,6 @@ router.get('/status', authenticate, async (req, res, next) => {
                     }),
                 ]);
             } catch (e) {
-                console.log('Error checking on-chain status:', e.message);
             }
         }
 

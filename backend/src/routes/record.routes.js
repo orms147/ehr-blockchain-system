@@ -21,7 +21,6 @@ const createRecordSchema = z.object({
 // POST /api/records - Upload record with quota check and on-chain registration
 router.post('/', authenticate, async (req, res, next) => {
     try {
-        console.log('📤 [UPLOAD] Received upload request');
         const { cidHash, recordTypeHash, parentCidHash, title, description, recordType } = createRecordSchema.parse(req.body);
         const walletAddress = req.user.walletAddress;
         console.log(`📤 [UPLOAD] User: ${walletAddress}, cidHash: ${cidHash.slice(0, 20)}..., title: ${title || 'N/A'}`);
@@ -32,7 +31,6 @@ router.post('/', authenticate, async (req, res, next) => {
         });
 
         if (existing) {
-            console.log('📤 [UPLOAD] Record already exists, returning 409');
             return res.status(409).json({ error: 'Record already exists' });
         }
 
@@ -43,7 +41,6 @@ router.post('/', authenticate, async (req, res, next) => {
             });
 
             if (!parentRecord) {
-                console.log('📤 [UPLOAD] Parent record not found');
                 return res.status(404).json({ error: 'Hồ sơ gốc không tồn tại' });
             }
 
@@ -64,22 +61,17 @@ router.post('/', authenticate, async (req, res, next) => {
             });
 
             if (!isOwner && !hasKeyShare) {
-                console.log('📤 [UPLOAD] ❌ User does not have read access to parent record');
                 return res.status(403).json({
                     error: 'Bạn phải xem hồ sơ gốc trước khi cập nhật. Vui lòng yêu cầu quyền truy cập.'
                 });
             }
-
-            console.log(`📤 [UPLOAD] ✅ Access verified: isOwner=${isOwner}, hasKeyShare=${!!hasKeyShare}`);
         }
 
         // Check quota first
-        console.log('📤 [UPLOAD] Checking quota...');
         const quota = await relayerService.getQuotaStatus(walletAddress);
         console.log('📤 [UPLOAD] Quota status:', JSON.stringify(quota));
 
         if (!quota.hasSelfWallet && quota.uploadsRemaining <= 0) {
-            console.log('📤 [UPLOAD] Quota exceeded, returning 429');
             return res.status(429).json({
                 error: 'Đã hết quota upload tháng này. Vui lòng kết nối ví có ETH để tiếp tục.',
                 quota
@@ -88,7 +80,6 @@ router.post('/', authenticate, async (req, res, next) => {
 
         // Submit on-chain via relayer (this will also decrement quota)
         let txResult = null;
-        console.log('📤 [UPLOAD] Starting on-chain transaction via relayer...');
         try {
             txResult = await relayerService.sponsorUploadRecord(
                 walletAddress,
@@ -96,7 +87,6 @@ router.post('/', authenticate, async (req, res, next) => {
                 parentCidHash?.toLowerCase() || '0x0000000000000000000000000000000000000000000000000000000000000000',
                 recordTypeHash?.toLowerCase() || '0x0000000000000000000000000000000000000000000000000000000000000000'
             );
-            console.log('📤 [UPLOAD] ✅ On-chain tx SUCCESS:', txResult?.txHash);
         } catch (txError) {
             console.error('📤 [UPLOAD] ❌ On-chain tx FAILED:', txError.message);
             console.error('📤 [UPLOAD] Full error:', txError);
@@ -163,9 +153,6 @@ router.post('/save-only', authenticate, async (req, res, next) => {
         const { cidHash, recordTypeHash, ownerAddress, encryptedPayload, senderPublicKey, title, description, recordType } = saveOnlySchema.parse(req.body);
         const creatorAddress = req.user.walletAddress.toLowerCase();
         const patientAddress = ownerAddress.toLowerCase();
-
-        console.log(`📤 [SAVE-ONLY] Doctor ${creatorAddress} saving record for patient ${patientAddress}`);
-
         // Check if record already exists
         const existing = await prisma.recordMetadata.findUnique({
             where: { cidHash: cidHash.toLowerCase() }
@@ -205,7 +192,6 @@ router.post('/save-only', authenticate, async (req, res, next) => {
                     expiresAt,
                 }
             });
-            console.log(`📤 [SAVE-ONLY] ✅ KeyShare created for Doctor with 7-day access`);
         }
 
         // Log access
@@ -217,9 +203,6 @@ router.post('/save-only', authenticate, async (req, res, next) => {
                 consentVerified: true,
             }
         });
-
-        console.log(`📤 [SAVE-ONLY] ✅ Record saved: ${record.id}`);
-
         res.status(201).json({
             id: record.id,
             cidHash: record.cidHash,
@@ -444,9 +427,7 @@ router.delete('/:cidHash/access/:address', authenticate, async (req, res, next) 
         let txResult = null;
         let onChainRevokeSkipped = false;
         try {
-            console.log(`🔐 [REVOKE] Calling on-chain revokeFor...`);
             txResult = await relayerService.sponsorRevoke(callerAddress, targetAddress, cidHash);
-            console.log(`🔐 [REVOKE] ✅ On-chain revoke SUCCESS: ${txResult?.txHash}`);
         } catch (txError) {
             // Check if quota exhausted
             if (txError.message === 'QUOTA_EXHAUSTED_USE_OWN_WALLET') {
@@ -463,7 +444,6 @@ router.delete('/:cidHash/access/:address', authenticate, async (req, res, next) 
             const isNoConsentError = noConsentErrors.some(e => txError.message?.includes(e));
 
             if (isNoConsentError) {
-                console.log(`🔐 [REVOKE] No on-chain consent found, proceeding with DB-only revoke`);
                 onChainRevokeSkipped = true;
             } else {
                 console.error(`🔐 [REVOKE] ❌ On-chain revoke FAILED:`, txError.message);

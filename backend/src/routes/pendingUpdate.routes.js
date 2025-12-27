@@ -110,9 +110,6 @@ router.post('/', authenticate, async (req, res, next) => {
             parentCidHash: parentCidHash.toLowerCase(),
             title: title || 'Cập nhật hồ sơ',
         });
-
-        console.log(`✅ Pending update created: ${pendingUpdate.id} by ${doctorAddress}`);
-
         res.status(201).json({
             success: true,
             pendingUpdate: {
@@ -260,9 +257,6 @@ router.post('/:id/approve', authenticate, async (req, res, next) => {
             patientAddress,
             title: update.title,
         });
-
-        console.log(`✅ Pending update approved: ${id} by ${patientAddress}`);
-
         res.json({
             success: true,
             message: 'Đã phê duyệt yêu cầu cập nhật. Bác sĩ có thể xác nhận.',
@@ -307,9 +301,6 @@ router.post('/:id/reject', authenticate, async (req, res, next) => {
             patientAddress,
             title: update.title,
         });
-
-        console.log(`❌ Pending update rejected: ${id} by ${patientAddress}`);
-
         res.json({
             success: true,
             message: 'Đã từ chối yêu cầu cập nhật.',
@@ -421,9 +412,6 @@ router.post('/:id/claim', authenticate, async (req, res, next) => {
                 expiresAt: expiresIn7Days,
             },
         });
-
-        console.log(`✅ KeyShares created for patient ${update.patientAddress} and doctor ${doctorAddress}`);
-
         // Notify patient via WebSocket
         emitToUser(update.patientAddress, 'pending_update:claimed', {
             id: update.id,

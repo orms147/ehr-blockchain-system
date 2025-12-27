@@ -356,9 +356,6 @@ export async function sponsorGrantConsent(
         where: { walletAddress: patient },
         data: { uploadsThisMonth: { increment: 1 } },
     });
-
-    console.log(`✅ Sponsored grantConsent for ${patient} -> ${granteeAddress}`);
-
     return { txHash: hash, receipt };
 }
 

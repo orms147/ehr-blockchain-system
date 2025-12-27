@@ -41,20 +41,9 @@ router.post('/', authenticate, async (req, res, next) => {
         const recipientIsOwner = record.ownerAddress.toLowerCase() === recipientLower;
 
         // DEBUG: Log for troubleshooting
-        console.log('🔍 KeyShare consent check:', {
-            sender: senderAddress,
-            recipient: recipientLower,
-            recordOwner: record.ownerAddress,
-            recordCreator: record.createdBy,
-            isOwner,
-            isCreator,
-            recipientIsOwner,
-        });
-
         // CASE 1: Creator shares (Doctor→Anyone flow)
         // Creator who made the record can always share
         if (isCreator) {
-            console.log('🔓 Creator sharing: consent check skipped');
             // Proceed without consent check
         }
         // CASE 2: Owner shares (Patient→Doctor flow)
@@ -71,7 +60,6 @@ router.post('/', authenticate, async (req, res, next) => {
                     code: 'NO_ONCHAIN_CONSENT_FOR_RECIPIENT'
                 });
             }
-            console.log('✅ Owner sharing: on-chain consent verified');
         }
         // CASE 3: Grantee re-shares (delegated access)
         // Sender must have consent from owner
@@ -82,12 +70,10 @@ router.post('/', authenticate, async (req, res, next) => {
                 cidHashLower
             );
             if (!senderHasConsent) {
-                console.log('❌ Grantee sharing without consent');
                 return res.status(403).json({
                     error: 'No on-chain consent found. Request access first.'
                 });
             }
-            console.log('✅ Grantee sharing: consent verified');
         }
 
         // Create or update key share
@@ -179,7 +165,6 @@ router.get('/my', authenticate, async (req, res, next) => {
                 // Skip consent check if recipient is the record creator (Doctor-created records)
                 const isCreator = ks.record?.createdBy?.toLowerCase() === recipientAddress;
                 if (isCreator) {
-                    console.log(`[KEY-SHARE] Skipping consent check - recipient is record creator`);
                     return {
                         ...ks,
                         senderPublicKey: ks.senderPublicKey || ks.sender?.encryptionPublicKey || null,
