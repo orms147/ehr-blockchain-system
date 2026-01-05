@@ -39,12 +39,21 @@ router.get('/nonce/:address', async (req, res, next) => {
             });
         }
 
-        // Return nonce for signing
-        const message = `Sign this message to login to EHR System.\n\nNonce: ${user.nonce}\nTimestamp: ${Date.now()}`;
+        // Always generate fresh nonce on each request (SIWE standard)
+        const crypto = await import('crypto');
+        const freshNonce = crypto.randomUUID();
+
+        await prisma.user.update({
+            where: { walletAddress: address },
+            data: { nonce: freshNonce }
+        });
+
+        // Return message with fresh nonce for signing
+        const message = `Sign this message to login to EHR System.\n\nNonce: ${freshNonce}\nTimestamp: ${Date.now()}`;
 
         res.json({
             message,
-            nonce: user.nonce
+            nonce: freshNonce
         });
     } catch (error) {
         next(error);

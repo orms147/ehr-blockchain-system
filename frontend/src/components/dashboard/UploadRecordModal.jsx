@@ -118,6 +118,23 @@ const UploadRecordModal = ({ open, onOpenChange, onSuccess, parentRecord, existi
             setImagePreview(null);
             setImageData({ title: '', type: 'other', file: null, fileName: '', notes: '' });
             if (fileInputRef.current) fileInputRef.current.value = '';
+            // Reset text form data
+            setFormData({
+                recordTitle: '',
+                recordType: '',
+                patientName: '',
+                patientDob: '',
+                patientGender: '',
+                patientInsuranceId: '',
+                facilityName: '',
+                doctorName: '',
+                examDate: new Date().toISOString().split('T')[0],
+                icd10Code: '',
+                icd10Name: '',
+                diagnosisVN: '',
+                treatment: '',
+                notes: '',
+            });
         }
     }, [open, parentRecord]);
 

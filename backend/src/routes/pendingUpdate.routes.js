@@ -362,8 +362,20 @@ router.post('/:id/claim', authenticate, async (req, res, next) => {
 
         // Get AES key from parent record's encryptedContent
         // The encryptedContent stored in pendingUpdate contains the AES key needed to decrypt
-        const expiresIn7Days = new Date();
-        expiresIn7Days.setDate(expiresIn7Days.getDate() + 7);
+
+        // SYNC EXPIRY: Get doctor's access expiry from parent record's KeyShare
+        // This ensures doctor cannot extend access indefinitely by creating updates
+        const parentKeyShare = await prisma.keyShare.findFirst({
+            where: {
+                cidHash: update.parentCidHash.toLowerCase(),
+                recipientAddress: doctorAddress,
+                status: { notIn: ['revoked'] },
+            },
+            select: { expiresAt: true }
+        });
+
+        // Use parent's expiresAt, or if null (permanent access for owner), use null
+        const doctorExpiresAt = parentKeyShare?.expiresAt || null;
 
         // Create proper key payload with CID and AES key (standard format)
         const keyPayload = JSON.stringify({ cid, aesKey });
@@ -401,7 +413,7 @@ router.post('/:id/claim', authenticate, async (req, res, next) => {
             },
             update: {
                 status: 'claimed',
-                expiresAt: expiresIn7Days,
+                expiresAt: doctorExpiresAt,
             },
             create: {
                 cidHash: cidHash.toLowerCase(),
@@ -409,7 +421,7 @@ router.post('/:id/claim', authenticate, async (req, res, next) => {
                 recipientAddress: doctorAddress,
                 encryptedPayload: keyPayload, // Standard format {cid, aesKey}
                 status: 'claimed', // Doctor has access
-                expiresAt: expiresIn7Days,
+                expiresAt: doctorExpiresAt,
             },
         });
         // Notify patient via WebSocket

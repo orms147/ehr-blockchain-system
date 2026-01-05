@@ -287,8 +287,12 @@ export default function DoctorDashboardPage() {
         fetchOutgoingRequests();
     };
 
-    // Calculate unique patients (1 patient with multiple records = 1 patient)
-    const uniquePatients = new Set(sharedRecords.map((r: KeyShare) => r.senderAddress?.toLowerCase())).size;
+    // Calculate unique patients (exclude doctor's own address when they create records)
+    const uniquePatients = new Set(
+        sharedRecords
+            .map((r: KeyShare) => r.senderAddress?.toLowerCase())
+            .filter((addr: string | undefined) => addr && addr !== walletAddress?.toLowerCase())
+    ).size;
 
     const stats = [
         { icon: Users, label: 'Bệnh nhân', value: uniquePatients.toString(), color: 'from-blue-500 to-blue-600' },
@@ -455,13 +459,23 @@ export default function DoctorDashboardPage() {
                                                                 <p className="text-xs text-slate-400">
                                                                     Chia sẻ lúc: {new Date(record.createdAt).toLocaleString('vi-VN')}
                                                                 </p>
-                                                                {record.expiresAt && (
-                                                                    <p className={`text-xs font-medium ${new Date(record.expiresAt) < new Date() ? 'text-red-500' : 'text-orange-500'}`}>
-                                                                        ⏱️ {new Date(record.expiresAt) < new Date()
-                                                                            ? 'Đã hết hạn'
-                                                                            : `Hết hạn: ${new Date(record.expiresAt).toLocaleString('vi-VN')}`}
-                                                                    </p>
-                                                                )}
+                                                                {record.expiresAt && (() => {
+                                                                    const now = new Date();
+                                                                    const expiry = new Date(record.expiresAt);
+                                                                    const diffMs = expiry.getTime() - now.getTime();
+                                                                    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+                                                                    const diffHours = Math.floor((diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+                                                                    const isExpired = diffMs <= 0;
+                                                                    return (
+                                                                        <p className={`text-xs font-medium ${isExpired ? 'text-red-500' : diffDays < 1 ? 'text-orange-500' : 'text-green-600'}`}>
+                                                                            ⏱️ {isExpired
+                                                                                ? 'Đã hết hạn'
+                                                                                : diffDays > 0
+                                                                                    ? `Còn ${diffDays} ngày ${diffHours} giờ`
+                                                                                    : `Còn ${diffHours} giờ`}
+                                                                        </p>
+                                                                    );
+                                                                })()}
                                                             </div>
                                                         </div>
                                                         <div className="flex flex-wrap items-center gap-2">
@@ -492,6 +506,18 @@ export default function DoctorDashboardPage() {
                                                                     <Button
                                                                         size="sm"
                                                                         onClick={() => {
+                                                                            // Check if this record has children (not latest)
+                                                                            const hasChildren = sharedRecords.some(
+                                                                                (r: KeyShare) => r.parentCidHash === record.cidHash
+                                                                            );
+                                                                            if (hasChildren) {
+                                                                                toast({
+                                                                                    title: "⚠️ Đây không phải bản mới nhất!",
+                                                                                    description: "Hồ sơ này đã có bản cập nhật mới hơn. Vui lòng cập nhật từ bản mới nhất.",
+                                                                                    variant: "destructive",
+                                                                                });
+                                                                                return;
+                                                                            }
                                                                             setRecordToUpdate(record);
                                                                             setUpdateModalOpen(true);
                                                                         }}

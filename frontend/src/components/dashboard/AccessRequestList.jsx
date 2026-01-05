@@ -248,6 +248,10 @@ export default function AccessRequestList({ walletAddress, provider, onApproved 
                             <p className="font-medium text-slate-900">
                                 Bác sĩ: {request.requesterAddress?.slice(0, 8)}...{request.requesterAddress?.slice(-6)}
                             </p>
+                            {/* Show which record doctor wants access to */}
+                            <p className="text-sm text-slate-600 mt-1">
+                                📋 Hồ sơ: {request.recordTitle || `${request.cidHash?.slice(0, 12)}...`}
+                            </p>
                             <div className="flex items-center gap-2 mt-1">
                                 <Badge className={typeInfo.color}>
                                     {typeInfo.label}
