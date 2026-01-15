@@ -8,6 +8,8 @@ const router = Router();
 router.get('/:cidHash', authenticate, async (req, res, next) => {
     try {
         const cidHash = req.params.cidHash.toLowerCase();
+        console.log('[ACCESS_LOG] Request for cidHash:', cidHash);
+        console.log('[ACCESS_LOG] User wallet:', req.user.walletAddress);
 
         // Verify ownership
         const record = await prisma.recordMetadata.findUnique({
@@ -15,10 +17,15 @@ router.get('/:cidHash', authenticate, async (req, res, next) => {
         });
 
         if (!record) {
+            console.log('[ACCESS_LOG] Record not found');
             return res.status(404).json({ error: 'Record not found' });
         }
 
-        if (record.ownerAddress !== req.user.walletAddress) {
+        console.log('[ACCESS_LOG] Record ownerAddress:', record.ownerAddress);
+        console.log('[ACCESS_LOG] Match:', record.ownerAddress.toLowerCase() === req.user.walletAddress.toLowerCase());
+
+        if (record.ownerAddress.toLowerCase() !== req.user.walletAddress.toLowerCase()) {
+            console.log('[ACCESS_LOG] Ownership check FAILED');
             return res.status(403).json({ error: 'Only owner can view access logs' });
         }
 
@@ -29,6 +36,7 @@ router.get('/:cidHash', authenticate, async (req, res, next) => {
             take: 100 // Limit to last 100 logs
         });
 
+        console.log('[ACCESS_LOG] Found', logs.length, 'logs for cidHash:', cidHash);
         res.json(logs);
     } catch (error) {
         next(error);

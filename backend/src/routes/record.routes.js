@@ -421,7 +421,6 @@ router.delete('/:cidHash/access/:address', authenticate, async (req, res, next) 
 
         // 3. Try on-chain revoke (may not exist for doctor-created records)
         let txResult = null;
-        let onChainRevokeSkipped = false;
         try {
             txResult = await relayerService.sponsorRevoke(callerAddress, targetAddress, cidHash);
         } catch (txError) {
@@ -440,7 +439,8 @@ router.delete('/:cidHash/access/:address', authenticate, async (req, res, next) 
             const isNoConsentError = noConsentErrors.some(e => txError.message?.includes(e));
 
             if (isNoConsentError) {
-                onChainRevokeSkipped = true;
+                // No on-chain consent exists - OK for doctor-created records, continue to delete KeyShare
+                console.log(`🔐 [REVOKE] Skipping on-chain (no consent exists for doctor-created record)`);
             } else {
                 console.error(`🔐 [REVOKE] ❌ On-chain revoke FAILED:`, txError.message);
                 return res.status(500).json({

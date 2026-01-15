@@ -15,10 +15,103 @@ const createOrgSchema = z.object({
     contactEmail: z.string().email().optional(),
 });
 
+// Schema for ORG application (hybrid flow)
+const applyOrgSchema = z.object({
+    orgName: z.string().min(2).max(200),
+    description: z.string().max(1000).optional(),
+    contactEmail: z.string().email(),
+    licenseNumber: z.string().optional(),
+    orgType: z.enum(['hospital', 'clinic']).default('hospital'),
+});
+
 const addMemberSchema = z.object({
     memberAddress: z.string().regex(/^0x[a-fA-F0-9]{40}$/),
     role: z.enum(['admin', 'doctor', 'nurse', 'staff']).default('doctor'),
 });
+
+// ============ ORG APPLICATION ROUTES (Hybrid Flow) ============
+
+// POST /api/org/apply - Submit application to become ORG
+router.post('/apply', authenticate, async (req, res, next) => {
+    try {
+        const data = applyOrgSchema.parse(req.body);
+        const applicantAddress = req.user.walletAddress.toLowerCase();
+
+        // Check if already has pending application
+        const existingPending = await prisma.orgApplication.findFirst({
+            where: {
+                applicantAddress,
+                status: 'PENDING',
+            },
+        });
+
+        if (existingPending) {
+            return res.status(400).json({
+                error: 'You already have a pending application',
+                application: existingPending,
+            });
+        }
+
+        // Check if already verified
+        const existingApproved = await prisma.orgApplication.findFirst({
+            where: {
+                applicantAddress,
+                status: 'APPROVED',
+            },
+        });
+
+        if (existingApproved) {
+            return res.status(400).json({
+                error: 'You are already a verified organization',
+            });
+        }
+
+        // Create application
+        const application = await prisma.orgApplication.create({
+            data: {
+                applicantAddress,
+                orgName: data.orgName,
+                description: data.description,
+                contactEmail: data.contactEmail,
+                licenseNumber: data.licenseNumber,
+                orgType: data.orgType,
+            },
+        });
+
+        res.status(201).json({
+            success: true,
+            message: 'Application submitted. Please register as Organization on-chain, then wait for Ministry verification.',
+            application,
+        });
+    } catch (error) {
+        next(error);
+    }
+});
+
+// GET /api/org/my-application - Get current user's application status
+router.get('/my-application', authenticate, async (req, res, next) => {
+    try {
+        const applicantAddress = req.user.walletAddress.toLowerCase();
+
+        const application = await prisma.orgApplication.findFirst({
+            where: { applicantAddress },
+            orderBy: { createdAt: 'desc' },
+        });
+
+        if (!application) {
+            return res.json({ hasApplication: false });
+        }
+
+        res.json({
+            hasApplication: true,
+            application,
+        });
+    } catch (error) {
+        next(error);
+    }
+});
+
+// ============ EXISTING ORG ROUTES ============
 
 // POST /api/org/register - Register a new organization
 router.post('/register', authenticate, async (req, res, next) => {

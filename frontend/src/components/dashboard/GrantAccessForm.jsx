@@ -61,10 +61,18 @@ const GrantAccessForm = ({ onGrant }) => {
         switch (duration) {
             case '1_day':
                 return now + 24 * 60 * 60;
+            case '2_days':
+                return now + 2 * 24 * 60 * 60;
+            case '3_days':
+                return now + 3 * 24 * 60 * 60;
             case '1_week':
                 return now + 7 * 24 * 60 * 60;
+            case '2_weeks':
+                return now + 14 * 24 * 60 * 60;
             case '1_month':
                 return now + 30 * 24 * 60 * 60;
+            case '3_months':
+                return now + 90 * 24 * 60 * 60;
             case 'forever':
                 return 0; // 0 = forever in contract
             default:
@@ -78,10 +86,18 @@ const GrantAccessForm = ({ onGrant }) => {
         switch (duration) {
             case '1_day':
                 return new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString();
+            case '2_days':
+                return new Date(now.getTime() + 2 * 24 * 60 * 60 * 1000).toISOString();
+            case '3_days':
+                return new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000).toISOString();
             case '1_week':
                 return new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString();
+            case '2_weeks':
+                return new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000).toISOString();
             case '1_month':
                 return new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString();
+            case '3_months':
+                return new Date(now.getTime() + 90 * 24 * 60 * 60 * 1000).toISOString();
             case 'forever':
                 return null;
             default:
@@ -342,8 +358,12 @@ const GrantAccessForm = ({ onGrant }) => {
                             </SelectTrigger>
                             <SelectContent>
                                 <SelectItem value="1_day">1 Ngày</SelectItem>
+                                <SelectItem value="2_days">2 Ngày</SelectItem>
+                                <SelectItem value="3_days">3 Ngày</SelectItem>
                                 <SelectItem value="1_week">1 Tuần</SelectItem>
+                                <SelectItem value="2_weeks">2 Tuần</SelectItem>
                                 <SelectItem value="1_month">1 Tháng</SelectItem>
+                                <SelectItem value="3_months">3 Tháng</SelectItem>
                                 <SelectItem value="forever">Vĩnh viễn</SelectItem>
                             </SelectContent>
                         </Select>

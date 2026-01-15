@@ -9,7 +9,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Share2, Loader2, CheckCircle, AlertCircle, User } from 'lucide-react';
 import { toast } from '@/components/ui/use-toast';
 
-import { keyShareService, authService, createKeySharePayload, encryptForRecipient } from '@/services';
+import { keyShareService, authService, createKeySharePayload } from '@/services';
+import { encryptForRecipient, getOrCreateEncryptionKeypair } from '@/services/nacl-crypto';
+import { useWeb3Auth } from '@/context/Web3AuthContext';
 
 const EXPIRY_OPTIONS = [
     { value: '1d', label: '1 Day' },
@@ -20,6 +22,7 @@ const EXPIRY_OPTIONS = [
 ];
 
 const ShareKeyModal = ({ open, onOpenChange, record, onSuccess }) => {
+    const { provider, walletAddress } = useWeb3Auth();
     const [step, setStep] = useState(1); // 1: Form, 2: Sharing, 3: Success
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState(null);
@@ -31,7 +34,7 @@ const ShareKeyModal = ({ open, onOpenChange, record, onSuccess }) => {
 
     const [recipientInfo, setRecipientInfo] = useState(null);
 
-    // Verify recipient address and get their public key
+    // Verify recipient address and get their encryption public key
     const handleVerifyRecipient = async () => {
         if (!formData.recipientAddress || !/^0x[a-fA-F0-9]{40}$/.test(formData.recipientAddress)) {
             setError('Invalid wallet address format');
@@ -42,10 +45,14 @@ const ShareKeyModal = ({ open, onOpenChange, record, onSuccess }) => {
         setError(null);
 
         try {
-            const info = await authService.getPublicKey(formData.recipientAddress);
+            // Get recipient's NaCl encryption public key
+            const info = await authService.getEncryptionKey(formData.recipientAddress);
+            if (!info?.encryptionPublicKey) {
+                throw new Error('Recipient has not registered encryption key');
+            }
             setRecipientInfo(info);
         } catch (err) {
-            setError('Recipient not found or has no public key registered');
+            setError(err.message || 'Recipient not found or has no encryption key registered');
             setRecipientInfo(null);
         } finally {
             setIsLoading(false);
@@ -53,6 +60,17 @@ const ShareKeyModal = ({ open, onOpenChange, record, onSuccess }) => {
     };
 
     const handleShare = async () => {
+        if (!provider || !walletAddress) {
+            setError('Wallet not connected. Please login again.');
+            return;
+        }
+
+        // Guard: ensure recipientInfo is still valid
+        if (!recipientInfo?.encryptionPublicKey) {
+            setError('Recipient encryption key not verified. Please verify recipient first.');
+            return;
+        }
+
         setIsLoading(true);
         setError(null);
         setStep(2);
@@ -66,15 +84,20 @@ const ShareKeyModal = ({ open, onOpenChange, record, onSuccess }) => {
                 throw new Error('Record key not found locally. Cannot share.');
             }
 
-            // Create payload
-            const payload = await createKeySharePayload(localRecord.cid, {
-                exportKey: async () => localRecord.aesKey
-            });
+            // Get sender's keypair for NaCl encryption
+            const myKeypair = await getOrCreateEncryptionKeypair(provider, walletAddress);
 
-            // Encrypt for recipient
-            const encryptedPayload = await encryptForRecipient(
+            // Create payload - aesKey is already base64 string, pass directly
+            const payload = await createKeySharePayload(
+                localRecord.cid,
+                localRecord.aesKey
+            );
+
+            // Encrypt for recipient using NaCl box (requires sender secret key)
+            const encryptedPayload = encryptForRecipient(
                 payload,
-                recipientInfo.publicKey
+                recipientInfo.encryptionPublicKey,
+                myKeypair.secretKey
             );
 
             // Calculate expiry
@@ -84,13 +107,14 @@ const ShareKeyModal = ({ open, onOpenChange, record, onSuccess }) => {
                 expiresAt = new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString();
             }
 
-            // Share via backend
-            await keyShareService.shareKey(
-                record.cidHash,
-                formData.recipientAddress,
+            // Share via backend (with sender public key for decryption)
+            await keyShareService.shareKey({
+                cidHash: record.cidHash,
+                recipientAddress: formData.recipientAddress.toLowerCase(), // Normalize
                 encryptedPayload,
-                expiresAt
-            );
+                senderPublicKey: myKeypair.publicKey,
+                expiresAt,
+            });
 
             setStep(3);
 

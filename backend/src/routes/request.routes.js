@@ -175,11 +175,14 @@ router.get('/:requestId', authenticate, async (req, res, next) => {
                     requestId,
                     requesterAddress: onChainRequest.requester,
                     patientAddress: onChainRequest.patient,
-                    cidHash: onChainRequest.cidHash,
-                    requestType: onChainRequest.requestType,
+                    cidHash: onChainRequest.rootCidHash, // ABI field: rootCidHash
+                    requestType: onChainRequest.reqType, // ABI field: reqType
                     status: ['pending', 'approved', 'rejected', 'expired'][onChainRequest.status],
-                    createdAt: new Date(Number(onChainRequest.createdAt) * 1000),
-                    deadline: new Date(Number(onChainRequest.deadline) * 1000),
+                    // firstApprovalTime is when first party approved (0 if not approved yet)
+                    createdAt: onChainRequest.firstApprovalTime > 0
+                        ? new Date(Number(onChainRequest.firstApprovalTime) * 1000)
+                        : null,
+                    deadline: new Date(Number(onChainRequest.expiry) * 1000), // ABI field: expiry
                 });
             } catch (e) {
                 console.error('Error reading from blockchain:', e);

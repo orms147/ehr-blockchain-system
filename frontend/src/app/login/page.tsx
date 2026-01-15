@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { Shield, Loader2, CheckCircle, User } from 'lucide-react';
@@ -25,6 +25,9 @@ export default function LoginPage() {
     const { connect } = useWeb3AuthConnect();
     const { disconnect } = useWeb3AuthDisconnect();
     const { userInfo } = useWeb3AuthUser();
+
+    // Guard against React StrictMode double-execution
+    const hasAuthenticated = useRef(false);
 
     // Check if already logged in - redirect to last active role
     useEffect(() => {
@@ -72,6 +75,12 @@ export default function LoginPage() {
             if (!isConnected || !provider || step !== 2) {
                 return;
             }
+
+            // Guard: prevent React StrictMode double-execution
+            if (hasAuthenticated.current) {
+                return;
+            }
+            hasAuthenticated.current = true;
 
             try {
                 setLoading(true);
@@ -176,6 +185,7 @@ export default function LoginPage() {
                     // Retry failed, fallback to disconnect
                     setLoading(false);
                     localStorage.removeItem('jwt');
+                    hasAuthenticated.current = false; // Allow retry
                     await disconnect();
                     setStep(1);
                     toast({
@@ -185,6 +195,7 @@ export default function LoginPage() {
                     });
                 } else {
                     setStep(1);
+                    hasAuthenticated.current = false; // Allow retry
                     await disconnect();
                     toast({
                         title: "Xác thực thất bại",

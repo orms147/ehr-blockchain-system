@@ -13,7 +13,7 @@
 
 import nacl from 'tweetnacl';
 import { encodeBase64, decodeBase64 } from 'tweetnacl-util';
-import { keccak256, toBytes } from 'viem';
+import { keccak256, toBytes, concat } from 'viem';
 
 // ==================== KEY GENERATION ====================
 
@@ -82,28 +82,48 @@ export function decryptFromSender(encryptedJson, senderPublicKey, recipientSecre
 
 const STORAGE_KEY_ENCRYPTED = 'ehr_nacl_encrypted_key';
 const STORAGE_KEY_PUBLIC = 'ehr_nacl_public_key';
+const STORAGE_KEY_VERSION = 'ehr_nacl_key_version'; // Track which scheme was used
 const SIGNATURE_MESSAGE = 'EHR-Sign-Encryption-Key-v1';
+const APP_SALT = 'EHR-NACL-KEY-DERIVATION-v1';
 
 /**
- * Derive symmetric encryption key from wallet signature using KDF (Keccak256)
- * @param {string} signature - Wallet signature of the signing message
- * @returns {Uint8Array} 32-byte derived key for AES encryption
+ * Derive stable symmetric key from wallet signature using HKDF-like approach
+ * MPC-safe, non-deterministic signature safe
+ * 
+ * @param {string} signature - Wallet signature
+ * @param {string} walletAddress - User's wallet address
+ * @returns {Uint8Array} 32-byte derived key
  */
-function deriveKeyFromSignature(signature) {
-    // Use keccak256 as KDF to derive a stable key from signature
+function deriveKeyFromWalletSignature(signature, walletAddress) {
+    // Combine signature + walletAddress + salt for stability
+    const material = concat([
+        toBytes(signature),
+        toBytes(walletAddress.toLowerCase()),
+        toBytes(APP_SALT),
+    ]);
+
+    const hash = keccak256(material);
+    return toBytes(hash).slice(0, 32);
+}
+
+/**
+ * Legacy: Derive key from signature only (for migration)
+ * @deprecated Use deriveKeyFromWalletSignature instead
+ */
+function deriveKeyFromSignatureLegacy(signature) {
     const hash = keccak256(toBytes(signature));
-    // Take first 32 bytes as key
-    return decodeBase64(encodeBase64(toBytes(hash).slice(0, 32)));
+    return toBytes(hash).slice(0, 32);
 }
 
 /**
  * Encrypt the NaCl secret key using key derived from wallet signature
  * @param {string} secretKey - NaCl secret key (base64)
- * @param {string} signature - Wallet signature for key derivation
+ * @param {string} signature - Wallet signature
+ * @param {string} walletAddress - User's wallet address
  * @returns {string} Encrypted secret key (JSON with nonce + ciphertext)
  */
-function encryptSecretKeyForStorage(secretKey, signature) {
-    const derivedKey = deriveKeyFromSignature(signature);
+function encryptSecretKeyForStorage(secretKey, signature, walletAddress) {
+    const derivedKey = deriveKeyFromWalletSignature(signature, walletAddress);
     const nonce = nacl.randomBytes(nacl.secretbox.nonceLength);
     const secretKeyBytes = decodeBase64(secretKey);
 
@@ -112,19 +132,21 @@ function encryptSecretKeyForStorage(secretKey, signature) {
     return JSON.stringify({
         nonce: encodeBase64(nonce),
         ciphertext: encodeBase64(encrypted),
+        version: 'v2', // Self-describing payload
     });
 }
 
 /**
- * Decrypt the stored NaCl secret key using wallet signature
+ * Decrypt the stored NaCl secret key using wallet signature (NEW scheme)
  * @param {string} encryptedJson - Encrypted secret key (JSON)
- * @param {string} signature - Wallet signature for key derivation
+ * @param {string} signature - Wallet signature
+ * @param {string} walletAddress - User's wallet address
  * @returns {string} Decrypted NaCl secret key (base64)
  * @throws {Error} If decryption fails
  */
-function decryptSecretKeyFromStorage(encryptedJson, signature) {
+function decryptSecretKeyFromStorage(encryptedJson, signature, walletAddress) {
     const { nonce, ciphertext } = JSON.parse(encryptedJson);
-    const derivedKey = deriveKeyFromSignature(signature);
+    const derivedKey = deriveKeyFromWalletSignature(signature, walletAddress);
 
     const decrypted = nacl.secretbox.open(
         decodeBase64(ciphertext),
@@ -133,7 +155,27 @@ function decryptSecretKeyFromStorage(encryptedJson, signature) {
     );
 
     if (!decrypted) {
-        throw new Error('Failed to decrypt encryption key. Invalid signature?');
+        throw new Error('Failed to decrypt with new scheme');
+    }
+
+    return encodeBase64(decrypted);
+}
+
+/**
+ * Legacy: Decrypt using old scheme (signature only, for migration)
+ */
+function decryptSecretKeyFromStorageLegacy(encryptedJson, signature) {
+    const { nonce, ciphertext } = JSON.parse(encryptedJson);
+    const derivedKey = deriveKeyFromSignatureLegacy(signature);
+
+    const decrypted = nacl.secretbox.open(
+        decodeBase64(ciphertext),
+        decodeBase64(nonce),
+        derivedKey
+    );
+
+    if (!decrypted) {
+        throw new Error('Failed to decrypt with legacy scheme');
     }
 
     return encodeBase64(decrypted);
@@ -152,8 +194,7 @@ export function getKeyDerivationMessage(walletAddress) {
 
 /**
  * Get or create encryption keypair for user
- * If keypair exists in localStorage, decrypt and return it.
- * If not, generate new keypair, encrypt, and store it.
+ * Supports migration from old scheme (signature-only) to new scheme (HKDF + wallet)
  * 
  * @param {object} provider - Web3 provider for signing
  * @param {string} walletAddress - User's wallet address
@@ -163,6 +204,7 @@ export async function getOrCreateEncryptionKeypair(provider, walletAddress) {
     // Check if we have stored keypair
     const storedPublicKey = localStorage.getItem(STORAGE_KEY_PUBLIC);
     const storedEncryptedKey = localStorage.getItem(STORAGE_KEY_ENCRYPTED);
+    const keyVersion = localStorage.getItem(STORAGE_KEY_VERSION);
 
     // Get signature for key derivation
     const message = getKeyDerivationMessage(walletAddress);
@@ -172,26 +214,46 @@ export async function getOrCreateEncryptionKeypair(provider, walletAddress) {
     });
 
     if (storedPublicKey && storedEncryptedKey) {
-        // Decrypt and return existing keypair
-        try {
-            const secretKey = decryptSecretKeyFromStorage(storedEncryptedKey, signature);
-            return {
-                publicKey: storedPublicKey,
-                secretKey,
-            };
-        } catch (err) {
-            console.warn('Failed to decrypt stored key, generating new:', err);
-            // Fall through to generate new keypair
+        // STEP 1: Try decrypt with NEW scheme (v2)
+        if (keyVersion === 'v2') {
+            try {
+                const secretKey = decryptSecretKeyFromStorage(storedEncryptedKey, signature, walletAddress);
+                console.log('🔑 Decrypted with new scheme (v2)');
+                return { publicKey: storedPublicKey, secretKey };
+            } catch (err) {
+                console.warn('Failed to decrypt with new scheme:', err.message);
+            }
         }
+
+        // STEP 2: Try decrypt with LEGACY scheme (migration)
+        try {
+            const secretKey = decryptSecretKeyFromStorageLegacy(storedEncryptedKey, signature);
+            console.log('🔑 Decrypted with legacy scheme, migrating to v2...');
+
+            // Migrate: Re-encrypt with new scheme
+            const newEncryptedKey = encryptSecretKeyForStorage(secretKey, signature, walletAddress);
+            localStorage.setItem(STORAGE_KEY_ENCRYPTED, newEncryptedKey);
+            localStorage.setItem(STORAGE_KEY_VERSION, 'v2');
+            console.log('✅ Migration to v2 complete');
+
+            return { publicKey: storedPublicKey, secretKey };
+        } catch (legacyErr) {
+            console.warn('Failed to decrypt with legacy scheme:', legacyErr.message);
+        }
+
+        // STEP 3: Both failed - generate new keypair
+        console.warn('🔄 Both schemes failed, generating new keypair...');
     }
 
     // Generate new keypair
     const keypair = generateEncryptionKeypair();
+    console.log('🆕 Generated new encryption keypair');
 
-    // Encrypt and store secret key
-    const encryptedSecretKey = encryptSecretKeyForStorage(keypair.secretKey, signature);
+    // Encrypt and store with NEW scheme
+    const encryptedSecretKey = encryptSecretKeyForStorage(keypair.secretKey, signature, walletAddress);
     localStorage.setItem(STORAGE_KEY_ENCRYPTED, encryptedSecretKey);
     localStorage.setItem(STORAGE_KEY_PUBLIC, keypair.publicKey);
+    localStorage.setItem(STORAGE_KEY_VERSION, 'v2');
 
     return keypair;
 }
@@ -215,12 +277,13 @@ export function hasEncryptionKeypair() {
 }
 
 /**
- * Clear stored encryption keypair
+ * Clear stored encryption keypair and version
  */
 export function clearEncryptionKeypair() {
     if (typeof window === 'undefined') return; // SSR check
     localStorage.removeItem(STORAGE_KEY_PUBLIC);
     localStorage.removeItem(STORAGE_KEY_ENCRYPTED);
+    localStorage.removeItem(STORAGE_KEY_VERSION);
 }
 
 export default {

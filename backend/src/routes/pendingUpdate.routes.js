@@ -103,8 +103,8 @@ router.post('/', authenticate, async (req, res, next) => {
             }
         });
 
-        // Notify patient via WebSocket
-        emitToUser(patientAddress.toLowerCase(), 'pending_update:new', {
+        // Notify patient via WebSocket (use actual patient from parent record)
+        emitToUser(actualPatientAddress, 'pending_update:new', {
             id: pendingUpdate.id,
             doctorAddress,
             parentCidHash: parentCidHash.toLowerCase(),

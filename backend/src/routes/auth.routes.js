@@ -2,6 +2,7 @@ import { Router } from 'express';
 import jwt from 'jsonwebtoken';
 import { verifyMessage } from 'viem';
 import { z } from 'zod';
+import crypto from 'crypto';
 import prisma from '../config/database.js';
 import { authenticate } from '../middleware/auth.js';
 import { getUserRole } from '../config/blockchain.js';
@@ -19,7 +20,7 @@ const registerPubKeySchema = z.object({
     publicKey: z.string().min(1),
 });
 
-// GET /api/auth/nonce/:address - Get nonce for signing
+// GET /api/auth/nonce/:address - Get nonce for signing (IDEMPOTENT - SIWE standard)
 router.get('/nonce/:address', async (req, res, next) => {
     try {
         const address = req.params.address.toLowerCase();
@@ -34,26 +35,29 @@ router.get('/nonce/:address', async (req, res, next) => {
         });
 
         if (!user) {
+            // New user: create with fresh nonce
             user = await prisma.user.create({
-                data: { walletAddress: address }
+                data: {
+                    walletAddress: address,
+                    nonce: crypto.randomUUID()
+                }
+            });
+        } else if (!user.nonce) {
+            // Existing user without nonce: generate one
+            const freshNonce = crypto.randomUUID();
+            user = await prisma.user.update({
+                where: { walletAddress: address },
+                data: { nonce: freshNonce }
             });
         }
+        // If user already has nonce, reuse it (IDEMPOTENT - key fix!)
 
-        // Always generate fresh nonce on each request (SIWE standard)
-        const crypto = await import('crypto');
-        const freshNonce = crypto.randomUUID();
-
-        await prisma.user.update({
-            where: { walletAddress: address },
-            data: { nonce: freshNonce }
-        });
-
-        // Return message with fresh nonce for signing
-        const message = `Sign this message to login to EHR System.\n\nNonce: ${freshNonce}\nTimestamp: ${Date.now()}`;
+        // Return message with current nonce for signing
+        const message = `Sign this message to login to EHR System.\n\nNonce: ${user.nonce}\nTimestamp: ${Date.now()}`;
 
         res.json({
             message,
-            nonce: freshNonce
+            nonce: user.nonce
         });
     } catch (error) {
         next(error);

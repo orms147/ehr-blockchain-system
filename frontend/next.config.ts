@@ -4,6 +4,9 @@ const nextConfig: NextConfig = {
   // Note: Removed Cross-Origin-Opener-Policy header as it was blocking Web3Auth popup
   // Web3Auth popups need full cross-origin access
 
+  // Hide dev indicators (error overlay, build activity)
+  devIndicators: false,
+
   // Silence Turbopack warning (Next.js 16+)
 
   // Silence Turbopack warning (Next.js 16+)

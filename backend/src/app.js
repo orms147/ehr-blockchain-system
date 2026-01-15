@@ -16,6 +16,7 @@ import verificationRoutes from './routes/verification.routes.js';
 import emergencyRoutes from './routes/emergency.routes.js';
 import delegationRoutes from './routes/delegation.routes.js';
 import orgRoutes from './routes/org.routes.js';
+import adminRoutes from './routes/admin.routes.js';
 import pendingUpdateRoutes from './routes/pendingUpdate.routes.js';
 import testRoutes from './routes/test.routes.js';
 import { errorHandler } from './middleware/errorHandler.js';
@@ -65,6 +66,7 @@ app.use('/api/verification', verificationRoutes);  // Doctor verification
 app.use('/api/emergency', emergencyRoutes);    // Emergency access
 app.use('/api/delegation', delegationRoutes);  // Family delegation
 app.use('/api/org', orgRoutes);                // Organization management
+app.use('/api/admin', adminRoutes);            // Ministry-only endpoints
 app.use('/api/pending-updates', pendingUpdateRoutes); // Doctor update approval
 app.use('/api/test', testRoutes);              // Development only
 

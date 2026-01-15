@@ -20,6 +20,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ipfsService, importAESKey, decryptData, keyShareService, recordService } from '@/services';
 import { getOrCreateEncryptionKeypair, decryptFromSender } from '@/services/nacl-crypto';
 import AccessManagementTab from './AccessManagementTab';
+import RecordAccessLog from './RecordAccessLog';
 import { useWalletAddress } from '@/hooks/useWalletAddress';
 
 const RecordModal = ({ record, open, onOpenChange, onUpdate, onViewRecord }) => {
@@ -249,7 +250,14 @@ const RecordModal = ({ record, open, onOpenChange, onUpdate, onViewRecord }) => 
                     cid = keyData.cid;
                     aesKeyString = keyData.aesKey;
                 } else {
-                    throw new Error('Key data format không hợp lệ');
+                    // Log the key data format for debugging
+                    console.error('Invalid keyData format:', {
+                        hasEncryptedData: !!keyData.encryptedData,
+                        hasAesKey: !!keyData.aesKey,
+                        hasCid: !!keyData.cid,
+                        keys: Object.keys(keyData || {}),
+                    });
+                    throw new Error('Key đã được mã hóa bằng khóa cũ. Vui lòng yêu cầu người chia sẻ gửi lại key.');
                 }
             }
 
@@ -772,11 +780,14 @@ const RecordModal = ({ record, open, onOpenChange, onUpdate, onViewRecord }) => 
                         </div>
                     </TabsContent>
 
-                    <TabsContent value="access" className="mt-0">
+                    <TabsContent value="access" className="mt-0 space-y-4">
                         <AccessManagementTab
                             record={record}
                             currentUserAddress={walletAddress}
                         />
+
+                        {/* Access Audit Log */}
+                        <RecordAccessLog cidHash={record?.cidHash} />
                     </TabsContent>
                 </Tabs>
             </DialogContent>

@@ -10,6 +10,43 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// ===== ENUMS =====
+
+enum OrgApplicationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  FAILED
+}
+
+// ===== ORG APPLICATION (Hybrid Registration Flow) =====
+
+// Application for ORG registration - Ministry reviews before on-chain verification
+model OrgApplication {
+  id               String               @id @default(uuid())
+  applicantAddress String               @db.VarChar(42)
+  orgName          String
+  description      String?
+  contactEmail     String
+  licenseNumber    String?                        // Business license
+  orgType          String               @default("hospital") // hospital, clinic
+  status           OrgApplicationStatus @default(PENDING)
+  
+  // Review
+  reviewedBy       String?              @db.VarChar(42)
+  reviewNote       String?
+  reviewedAt       DateTime?
+  
+  // On-chain tx hashes (set after approval)
+  registerTxHash   String?              @db.VarChar(66)
+  verifyTxHash     String?              @db.VarChar(66)
+  
+  createdAt        DateTime             @default(now())
+  
+  @@index([applicantAddress])
+  @@index([status])
+}
+
 model User {
   id            String   @id @default(uuid())
   walletAddress String   @unique @db.VarChar(42)
@@ -241,6 +278,8 @@ model Organization {
   contactEmail    String?
   
   // Status
+  // ⚠️ CACHE ONLY - DO NOT use for permission decisions
+  // Use on-chain isVerifiedOrganization() for actual authorization
   isVerified      Boolean  @default(false)
   verifiedAt      DateTime?
   verifiedBy      String?  @db.VarChar(42)

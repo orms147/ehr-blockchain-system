@@ -106,17 +106,6 @@ export function parseKeySharePayload(payload) {
     return JSON.parse(payload);
 }
 
-// Simple encryption for key sharing (using recipient's derived key)
-// In production, use proper asymmetric encryption with recipient's public key
-export async function encryptForRecipient(payload, recipientPublicKey) {
-    // For demo: just base64 encode
-    // TODO: Implement proper ECIES or similar using recipientPublicKey
-    return btoa(payload);
-}
+// NOTE: encryptForRecipient and decryptFromSender have been moved to nacl-crypto.js
+// which provides real NaCl box encryption instead of fake btoa/atob
 
-// Decrypt received key share
-export async function decryptFromSender(encryptedPayload, privateKey) {
-    // For demo: just base64 decode
-    // TODO: Implement proper ECIES decryption
-    return atob(encryptedPayload);
-}

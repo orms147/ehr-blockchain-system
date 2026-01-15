@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui/use-toast';
-import { Plus, Loader2, RefreshCw, FileX, Shield, Bell, FileText } from 'lucide-react';
+import { Plus, Loader2, RefreshCw, FileX, Shield, Bell, FileText, History } from 'lucide-react';
 import { useWalletAddress } from '@/hooks/useWalletAddress';
 import { useEncryptionKey } from '@/hooks/useEncryptionKey';
 
@@ -16,6 +16,7 @@ import AccessRequestList from '@/components/dashboard/AccessRequestList';
 import ConsentList from '@/components/dashboard/ConsentList';
 import QuotaDisplay from '@/components/dashboard/QuotaDisplay';
 import PendingUpdatesSection from '@/components/dashboard/PendingUpdatesSection';
+import AccessLogTab from '@/components/dashboard/AccessLogTab';
 import { recordService } from '@/services';
 import { useSocket } from '@/hooks/useSocket';
 
@@ -201,7 +202,7 @@ const PatientDashboard = () => {
             </div>
 
             <Tabs defaultValue="records" className="space-y-6">
-                <TabsList className="bg-white border border-slate-200 p-1 rounded-xl w-full sm:w-auto grid grid-cols-4 sm:flex h-auto">
+                <TabsList className="bg-white border border-slate-200 p-1 rounded-xl w-full sm:w-auto grid grid-cols-5 sm:flex h-auto">
                     <TabsTrigger value="records" className="rounded-lg px-4 py-2.5 data-[state=active]:bg-blue-50 data-[state=active]:text-blue-700">
                         <FileText className="w-4 h-4 mr-2" />
                         Hồ sơ
@@ -213,6 +214,10 @@ const PatientDashboard = () => {
                     <TabsTrigger value="consents" className="rounded-lg px-4 py-2.5 data-[state=active]:bg-blue-50 data-[state=active]:text-blue-700">
                         <Shield className="w-4 h-4 mr-2" />
                         Đã cấp quyền
+                    </TabsTrigger>
+                    <TabsTrigger value="logs" className="rounded-lg px-4 py-2.5 data-[state=active]:bg-purple-50 data-[state=active]:text-purple-700">
+                        <History className="w-4 h-4 mr-2" />
+                        Lịch sử
                     </TabsTrigger>
                     <TabsTrigger value="grant" className="rounded-lg px-4 py-2.5 data-[state=active]:bg-blue-50 data-[state=active]:text-blue-700">
                         <Plus className="w-4 h-4 mr-2" />
@@ -300,7 +305,12 @@ const PatientDashboard = () => {
                     <ConsentList walletAddress={address} />
                 </TabsContent>
 
-                {/* Tab 4: Grant New Access */}
+                {/* Tab 4: Access Logs */}
+                <TabsContent value="logs" className="outline-none">
+                    <AccessLogTab records={records} />
+                </TabsContent>
+
+                {/* Tab 5: Grant New Access */}
                 <TabsContent value="grant" className="outline-none">
                     <div className="max-w-lg">
                         <GrantAccessForm onGrant={handleGrantAccess} />

@@ -1,7 +1,23 @@
 // Organization Service - Frontend client for hospital/clinic management
 import { api } from './api';
 
-// Register organization
+// ============ ORG APPLICATION (Hybrid Flow) ============
+
+// Apply to become organization
+export async function applyOrg(data) {
+    const response = await api.post('/api/org/apply', data);
+    return response;
+}
+
+// Get my application status
+export async function getMyApplication() {
+    const response = await api.get('/api/org/my-application');
+    return response;
+}
+
+// ============ ORG MANAGEMENT ============
+
+// Register organization (legacy - direct on-chain)
 export async function registerOrg(data) {
     const response = await api.post('/api/org/register', data);
     return response;
@@ -41,23 +57,52 @@ export async function getAllOrgs(status = null, type = null) {
     if (status) params.push(`status=${status}`);
     if (type) params.push(`type=${type}`);
     if (params.length > 0) url += '?' + params.join('&');
-
     const response = await api.get(url);
     return response;
 }
 
-// Verify organization (Ministry only)
+// ============ ADMIN (Ministry Only) ============
+
+// Get org applications (Ministry)
+export async function getOrgApplications(status) {
+    let url = '/api/admin/org-applications';
+    if (status) url += `?status=${status}`;
+    const response = await api.get(url);
+    return response;
+}
+
+// Approve org application (Ministry)
+export async function approveOrgApplication(applicationId) {
+    const response = await api.post(`/api/admin/org-applications/${applicationId}/approve`);
+    return response;
+}
+
+// Reject org application (Ministry)
+export async function rejectOrgApplication(applicationId, reason) {
+    const response = await api.post(`/api/admin/org-applications/${applicationId}/reject`, {
+        reason,
+    });
+    return response;
+}
+
+// Verify organization (Ministry - legacy)
 export async function verifyOrg(orgId) {
     const response = await api.post(`/api/org/${orgId}/verify`);
     return response;
 }
 
 export const orgService = {
+    applyOrg,
+    getMyApplication,
     registerOrg,
     getMyOrg,
     getOrgMembers,
     addOrgMember,
     removeOrgMember,
     getAllOrgs,
+    getOrgApplications,
+    approveOrgApplication,
+    rejectOrgApplication,
     verifyOrg,
 };
+

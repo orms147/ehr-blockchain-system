@@ -166,8 +166,9 @@ export default function DoctorDashboardPage() {
         try {
             let payload = keyShare.encryptedPayload;
             let senderPubKey = keyShare.senderPublicKey;
+            const isFirstView = keyShare.status === 'pending';
 
-            if (keyShare.status === 'pending') {
+            if (isFirstView) {
                 const claimResult = await keyShareService.claimKey(keyShare.id);
                 payload = claimResult.encryptedPayload;
                 senderPubKey = claimResult.senderPublicKey || senderPubKey;
@@ -241,11 +242,14 @@ export default function DoctorDashboardPage() {
 
             setDecryptedContent(content);
 
-            toast({
-                title: "Giải mã thành công!",
-                description: "Bạn có thể xem nội dung hồ sơ",
-                className: "bg-green-50 border-green-200 text-green-800",
-            });
+            // Only show success toast on first view (claim)
+            if (isFirstView) {
+                toast({
+                    title: "Giải mã thành công!",
+                    description: "Bạn có thể xem nội dung hồ sơ",
+                    className: "bg-green-50 border-green-200 text-green-800",
+                });
+            }
 
         } catch (err) {
             console.error('Decrypt error:', err);
@@ -463,16 +467,28 @@ export default function DoctorDashboardPage() {
                                                                     const now = new Date();
                                                                     const expiry = new Date(record.expiresAt);
                                                                     const diffMs = expiry.getTime() - now.getTime();
-                                                                    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-                                                                    const diffHours = Math.floor((diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
                                                                     const isExpired = diffMs <= 0;
+
+                                                                    // Calculate days, hours, minutes properly
+                                                                    const totalMinutes = Math.floor(diffMs / (1000 * 60));
+                                                                    const diffDays = Math.floor(totalMinutes / (60 * 24));
+                                                                    const diffHours = Math.floor((totalMinutes % (60 * 24)) / 60);
+                                                                    const diffMinutes = totalMinutes % 60;
+
+                                                                    let timeText = '';
+                                                                    if (diffDays > 0) {
+                                                                        timeText = `Còn ${diffDays} ngày ${diffHours} giờ ${diffMinutes} phút`;
+                                                                    } else if (diffHours > 0) {
+                                                                        timeText = `Còn ${diffHours} giờ ${diffMinutes} phút`;
+                                                                    } else if (diffMinutes > 0) {
+                                                                        timeText = `Còn ${diffMinutes} phút`;
+                                                                    } else {
+                                                                        timeText = 'Sắp hết hạn';
+                                                                    }
+
                                                                     return (
                                                                         <p className={`text-xs font-medium ${isExpired ? 'text-red-500' : diffDays < 1 ? 'text-orange-500' : 'text-green-600'}`}>
-                                                                            ⏱️ {isExpired
-                                                                                ? 'Đã hết hạn'
-                                                                                : diffDays > 0
-                                                                                    ? `Còn ${diffDays} ngày ${diffHours} giờ`
-                                                                                    : `Còn ${diffHours} giờ`}
+                                                                            ⏱️ {isExpired ? 'Đã hết hạn' : timeText}
                                                                         </p>
                                                                     );
                                                                 })()}

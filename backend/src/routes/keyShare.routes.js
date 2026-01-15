@@ -44,7 +44,8 @@ router.post('/', authenticate, async (req, res, next) => {
         // CASE 1: Creator shares (Doctor→Anyone flow)
         // Creator who made the record can always share
         if (isCreator) {
-            // Proceed without consent check
+            // Creator bypass - no consent check needed
+            console.log(`🔑 [KEY_SHARE] Creator ${senderAddress.slice(0, 10)} sharing to ${recipientLower.slice(0, 10)}`);
         }
         // CASE 2: Owner shares (Patient→Doctor flow)
         // Requires on-chain consent from patient to doctor
@@ -141,8 +142,8 @@ router.get('/my', authenticate, async (req, res, next) => {
         const keyShares = await prisma.keyShare.findMany({
             where: {
                 recipientAddress,
-                // IMPORTANT: Exclude 'revoked' and 'awaiting_claim' from DB
-                status: { notIn: ['revoked', 'awaiting_claim'] },
+                // IMPORTANT: Exclude 'revoked', 'awaiting_claim' AND 'rejected' from DB
+                status: { notIn: ['revoked', 'awaiting_claim', 'rejected'] },
                 OR: [
                     { expiresAt: null },
                     { expiresAt: { gt: new Date() } }
@@ -240,7 +241,7 @@ router.get('/record/:cidHash', authenticate, async (req, res, next) => {
             where: {
                 cidHash: cidHashLower,
                 recipientAddress: requesterAddress,
-                status: { notIn: ['revoked', 'awaiting_claim'] },
+                status: { notIn: ['revoked', 'awaiting_claim', 'rejected'] },
                 OR: [
                     { expiresAt: null },
                     { expiresAt: { gt: new Date() } }
