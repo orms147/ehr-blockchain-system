@@ -180,55 +180,57 @@ const DoctorSharedRecordsTab: React.FC<DoctorSharedRecordsTabProps> = ({
                                                     )}
                                                 </Button>
 
-                                                {/* Only show Update button if doctor has already viewed the record */}
-                                                {record.status === 'claimed' && (
-                                                    <Button
-                                                        size="sm"
-                                                        variant="outline"
-                                                        className="text-blue-600 border-blue-200 hover:bg-blue-50"
-                                                        onClick={() => onUpdateRecord(record)}
-                                                    >
-                                                        <Edit className="w-4 h-4 mr-1" />
-                                                        Cập nhật
-                                                    </Button>
-                                                )}
-                                                {/* Hide reject button if claimed OR if doctor is the creator.
-                                                    (We REMOVED !record.parentCidHash because activeRecords ALREADY filters to only show Leaders/Latest)
-                                                 */}
+                                                {/* Calculate Reject Logic First to use in Update condition */}
                                                 {(() => {
-                                                    // Check history for any CLAIMED record with same ROOT or IS the ROOT
-                                                    // This ensures that if doctor accepted v1 (Root), v2 (Child) won't show reject.
-                                                    const hasPriorAccess = allRecords?.some(hist =>
+                                                    // FIX: Check if Root Record is Pending (Re-share Scenario)
+                                                    const rootRecord = allRecords?.find(r => r.cidHash === record.rootCidHash);
+                                                    const isRootPending = rootRecord && rootRecord.status !== 'claimed' && rootRecord.status !== 'revoked' && rootRecord.status !== 'rejected';
+                                                    const isSelfPending = record.status !== 'claimed';
+                                                    const hasPriorAccess = !isRootPending && allRecords?.some(hist =>
                                                         hist.status === 'claimed' && (
-                                                            (hist.rootCidHash && hist.rootCidHash === record.rootCidHash) || // Sibling check
-                                                            (record.rootCidHash && hist.cidHash === record.rootCidHash)      // Root check
+                                                            (hist.rootCidHash && hist.rootCidHash === record.rootCidHash) ||
+                                                            (record.rootCidHash && hist.cidHash === record.rootCidHash)
                                                         )
                                                     );
-
-                                                    const shouldShowReject =
-                                                        record.status !== 'claimed' &&
+                                                    const shouldShowReject = (isSelfPending || isRootPending) &&
                                                         record.senderAddress?.toLowerCase() !== walletAddress?.toLowerCase() &&
                                                         !hasPriorAccess;
 
-                                                    if (!shouldShowReject) return null;
-
                                                     return (
-                                                        <Button
-                                                            size="sm"
-                                                            variant="outline"
-                                                            onClick={() => onRejectRecord(record.id)}
-                                                            disabled={rejectingId === record.id}
-                                                            className="border-red-300 text-red-600 hover:bg-red-50"
-                                                        >
-                                                            {rejectingId === record.id ? (
-                                                                <Loader2 className="w-4 h-4 animate-spin" />
-                                                            ) : (
-                                                                <>
-                                                                    <XCircle className="w-4 h-4 mr-1" />
-                                                                    Từ chối
-                                                                </>
+                                                        <>
+                                                            {/* Update Button: HIDE if Reject is showing */}
+                                                            {record.status === 'claimed' && !shouldShowReject && (
+                                                                <Button
+                                                                    size="sm"
+                                                                    variant="outline"
+                                                                    className="text-blue-600 border-blue-200 hover:bg-blue-50"
+                                                                    onClick={() => onUpdateRecord(record)}
+                                                                >
+                                                                    <Edit className="w-4 h-4 mr-1" />
+                                                                    Cập nhật
+                                                                </Button>
                                                             )}
-                                                        </Button>
+
+                                                            {/* Reject Button */}
+                                                            {shouldShowReject && (
+                                                                <Button
+                                                                    size="sm"
+                                                                    variant="outline"
+                                                                    onClick={() => onRejectRecord(isRootPending ? rootRecord.id : record.id)}
+                                                                    disabled={rejectingId === (isRootPending ? rootRecord.id : record.id)}
+                                                                    className="border-red-300 text-red-600 hover:bg-red-50"
+                                                                >
+                                                                    {rejectingId === (isRootPending ? rootRecord.id : record.id) ? (
+                                                                        <Loader2 className="w-4 h-4 animate-spin" />
+                                                                    ) : (
+                                                                        <>
+                                                                            <XCircle className="w-4 h-4 mr-1" />
+                                                                            Từ chối
+                                                                        </>
+                                                                    )}
+                                                                </Button>
+                                                            )}
+                                                        </>
                                                     );
                                                 })()}
                                             </div>

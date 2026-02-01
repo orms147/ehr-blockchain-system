@@ -91,22 +91,21 @@ export default function DoctorDashboardPage() {
             // Deduplicate: Map by cidHash
             const uniqueRecordMap = new Map();
             records.forEach((r: any) => uniqueRecordMap.set(r.cidHash, r));
-            const activeRecords = Array.from(uniqueRecordMap.values());
+            const distinctRecords = Array.from(uniqueRecordMap.values());
 
-            // ... (rest of logic)
+            // FIX: Split Active vs Expired first
+            // Backend sends 'active: boolean'
+            const activeList = distinctRecords.filter((r: any) => r.active !== false);
+            // We only care about hiding parents IF the child is also Active
+            const activeParentCids = new Set(activeList.map((r: any) => r.parentCidHash?.toLowerCase()).filter(Boolean));
 
-            // Identify latest records
-            const parentCidHashes = new Set(activeRecords.map((r: any) => r.parentCidHash?.toLowerCase()).filter(Boolean));
-            console.log('DEBUG: Parent CIDs to hide:', Array.from(parentCidHashes));
-
-            const latestRecords = activeRecords.filter((r: any) => {
-                const isHidden = parentCidHashes.has(r.cidHash?.toLowerCase());
-                if (isHidden) console.log(`DEBUG: Hiding record ${r.cidHash} because it is a parent.`);
+            const latestActiveRecords = activeList.filter((r: any) => {
+                const isHidden = activeParentCids.has(r.cidHash?.toLowerCase());
                 return !isHidden;
             });
 
             // Calculate version count & SMART SORT
-            const processedRecords = latestRecords.map((record: any) => {
+            const processedRecords = latestActiveRecords.map((record: any) => {
                 let count = 1;
                 let current = record;
                 const visited = new Set([record.cidHash]);
@@ -201,11 +200,30 @@ export default function DoctorDashboardPage() {
             let senderPubKey = keyShare.senderPublicKey;
             const isFirstView = keyShare.status === 'pending';
 
+            // Claim Pending Root if necessary (Re-share scenario)
+            if (keyShare.rootCidHash) {
+                const rootRecord = allSharedRecords.find(r => r.cidHash === keyShare.rootCidHash);
+                if (rootRecord && rootRecord.status === 'pending') {
+                    console.log("Auto-claiming pending Root Record:", rootRecord.id);
+                    try {
+                        await keyShareService.claimKey(rootRecord.id);
+                        // Update state for ALL records to reflect root claim
+                        setAllSharedRecords(prev => prev.map(r => r.id === rootRecord.id ? { ...r, status: 'claimed' } : r));
+                        setSharedRecords(prev => prev.map(r => r.id === rootRecord.id ? { ...r, status: 'claimed' } : r));
+                    } catch (err) {
+                        console.error("Failed to auto-claim root:", err);
+                    }
+                }
+            }
+
             if (isFirstView) {
                 const claimResult = await keyShareService.claimKey(keyShare.id);
                 payload = claimResult.encryptedPayload;
                 senderPubKey = claimResult.senderPublicKey || senderPubKey;
-                setSharedRecords(prev => prev.map(r => r.id === keyShare.id ? { ...r, status: 'claimed' } : r));
+                // Update specific record status
+                const updateStatus = (prev: any[]) => prev.map(r => r.id === keyShare.id ? { ...r, status: 'claimed' } : r);
+                setSharedRecords(updateStatus);
+                setAllSharedRecords(updateStatus);
             }
 
             const myKeypair = await getOrCreateEncryptionKeypair(provider, walletAddress);

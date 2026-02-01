@@ -105,7 +105,12 @@ export default function DelegatableRecords() {
             const result = await keyShareService.getDelegatableRecords();
             // Only show records that I have explicitly accepted ("claimed")
             const acceptedRecords = (result || []).filter(r => r.status === 'claimed');
-            setRecords(acceptedRecords);
+
+            // GROUPING: Filter out parents to show only Latest
+            const parentCids = new Set(acceptedRecords.map(r => r.parentCidHash).filter(Boolean));
+            const distinctRecords = acceptedRecords.filter(r => !parentCids.has(r.cidHash));
+
+            setRecords(distinctRecords);
         } catch (err) {
             console.error('Fetch delegatable records error:', err);
             setError('Không thể tải danh sách hồ sơ có thể chia sẻ');

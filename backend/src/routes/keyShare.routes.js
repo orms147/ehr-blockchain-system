@@ -261,7 +261,10 @@ router.get('/my', authenticate, async (req, res, next) => {
         // Create a map to look up parent status efficiently
         const recordsMap = new Map();
         keyShares.forEach(ks => {
-            recordsMap.set(ks.cidHash?.toLowerCase(), ks);
+            const key = ks.cidHash?.toLowerCase();
+            if (key && !recordsMap.has(key)) {
+                recordsMap.set(key, ks); // Keep the NEWEST one (first in sorted list)
+            }
         });
 
         // Resolve status based on DB and Parent Inheritance (No RPC Loop)
