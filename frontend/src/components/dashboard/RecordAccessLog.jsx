@@ -60,7 +60,7 @@ const RecordAccessLog = ({ cidHash }) => {
 
         try {
             const data = await accessLogService.getRecordLogs(cidHash);
-            setLogs(data);
+            setLogs(data || []);
         } catch (err) {
             // User might not be owner - that's OK
             if (err.response?.status === 403) {
@@ -89,7 +89,7 @@ const RecordAccessLog = ({ cidHash }) => {
                 <div className="flex items-center gap-2">
                     <History className="w-4 h-4 text-purple-500" />
                     <span className="font-medium text-slate-700 text-sm">Lịch sử truy cập</span>
-                    {logs.length > 0 && (
+                    {logs?.length > 0 && (
                         <Badge variant="secondary" className="bg-purple-100 text-purple-700 text-xs">
                             {logs.length}
                         </Badge>
@@ -112,7 +112,7 @@ const RecordAccessLog = ({ cidHash }) => {
                         </div>
                     ) : error ? (
                         <p className="text-sm text-slate-500 text-center py-2">{error}</p>
-                    ) : logs.length === 0 ? (
+                    ) : logs?.length === 0 ? (
                         <p className="text-sm text-slate-500 text-center py-2">Chưa có lịch sử truy cập</p>
                     ) : (
                         logs.slice(0, 10).map((log, index) => {

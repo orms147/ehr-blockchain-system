@@ -3,8 +3,13 @@ import { api } from './api';
 
 // ============ ORG APPLICATION (Hybrid Flow) ============
 
-// Apply to become organization
+// Apply/update org profile (with file upload support)
 export async function applyOrg(data) {
+    // If data is FormData, use postFormData, else use regular post
+    if (data instanceof FormData) {
+        const response = await api.postFormData('/api/org/apply', data);
+        return response;
+    }
     const response = await api.post('/api/org/apply', data);
     return response;
 }

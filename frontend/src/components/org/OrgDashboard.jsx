@@ -1,12 +1,16 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import { Building2, Users, Shield, Clock, Loader2, AlertTriangle, ChevronRight } from 'lucide-react';
+import { Building2, Users, Shield, Clock, Loader2, AlertTriangle, ChevronRight, FileText, PowerOff } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { useToast } from '@/hooks/use-toast';
+import { useToast } from '@/components/ui/use-toast';
 import { useUserRoles } from '@/hooks/useUserRoles';
+import { useWeb3AuthDisconnect } from '@web3auth/modal/react';
+import authService from '@/services/auth.service';
+import { clearAuthRoles } from '@/hooks/useAuthRoles';
 import { orgService } from '@/services';
 import OrgApplicationForm from './OrgApplicationForm';
 import AdminOrgApplications from './AdminOrgApplications';
@@ -20,28 +24,45 @@ import AdminOrgApplications from './AdminOrgApplications';
  */
 export default function OrgDashboard() {
     const { toast } = useToast();
+    const { disconnect } = useWeb3AuthDisconnect();
     const { isOrg, isVerifiedOrg, isMinistry, loading: rolesLoading } = useUserRoles();
     const [application, setApplication] = useState(null);
     const [org, setOrg] = useState(null);
     const [loading, setLoading] = useState(true);
 
+    const [showApplyForm, setShowApplyForm] = useState(false);
+
+    const handleLogout = async () => {
+        clearAuthRoles();
+        authService.logout();
+        try {
+            await disconnect();
+        } catch (e) { }
+        window.location.href = '/';
+    };
+
     useEffect(() => {
         const fetchData = async () => {
             try {
                 setLoading(true);
+                console.log('[OrgDashboard] isVerifiedOrg =', isVerifiedOrg, 'isOrg =', isOrg);
 
                 // Check if user has a pending/approved application
                 const appResponse = await orgService.getMyApplication();
-                if (appResponse.data?.hasApplication) {
-                    setApplication(appResponse.data.application);
+                console.log('[OrgDashboard] appResponse:', appResponse);
+                if (appResponse?.hasApplication) {
+                    setApplication(appResponse.application);
                 }
 
                 // If verified org, get org details
                 if (isVerifiedOrg) {
                     const orgResponse = await orgService.getMyOrg();
-                    if (orgResponse.data?.hasOrg) {
-                        setOrg(orgResponse.data.organization);
+                    console.log('[OrgDashboard] orgResponse:', orgResponse);
+                    if (orgResponse?.hasOrg) {
+                        setOrg(orgResponse.organization);
                     }
+                } else {
+                    console.log('[OrgDashboard] isVerifiedOrg is false, skipping /my-org API call');
                 }
             } catch (error) {
                 console.error('Load org data error:', error);
@@ -53,7 +74,7 @@ export default function OrgDashboard() {
         if (!rolesLoading) {
             fetchData();
         }
-    }, [rolesLoading, isVerifiedOrg]);
+    }, [rolesLoading, isVerifiedOrg, isOrg]);
 
     if (rolesLoading || loading) {
         return (
@@ -88,22 +109,33 @@ export default function OrgDashboard() {
                 {/* Header */}
                 <Card className="bg-gradient-to-r from-purple-50 to-blue-50 border-purple-200">
                     <CardContent className="pt-6">
-                        <div className="flex items-center gap-4">
-                            <div className="w-16 h-16 rounded-full bg-purple-100 flex items-center justify-center">
-                                <Building2 className="w-8 h-8 text-purple-600" />
-                            </div>
-                            <div>
-                                <h2 className="text-2xl font-bold text-purple-800">{org.name}</h2>
-                                <div className="flex items-center gap-2 mt-1">
-                                    <Badge className="bg-green-100 text-green-700">
-                                        <Shield className="w-3 h-3 mr-1" />
-                                        Đã xác thực
-                                    </Badge>
-                                    <Badge variant="outline">
-                                        {org.orgType === 'hospital' ? 'Bệnh viện' : 'Phòng khám'}
-                                    </Badge>
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-4">
+                                <div className="w-16 h-16 rounded-full bg-purple-100 flex items-center justify-center">
+                                    <Building2 className="w-8 h-8 text-purple-600" />
+                                </div>
+                                <div>
+                                    <h2 className="text-2xl font-bold text-purple-800">{org.name}</h2>
+                                    <div className="flex items-center gap-2 mt-1">
+                                        <Badge className="bg-green-100 text-green-700">
+                                            <Shield className="w-3 h-3 mr-1" />
+                                            Đã xác thực
+                                        </Badge>
+                                        <Badge variant="outline">
+                                            {org.orgType === 'hospital' ? 'Bệnh viện' : 'Phòng khám'}
+                                        </Badge>
+                                    </div>
                                 </div>
                             </div>
+                            {/* Logout Button */}
+                            <Button
+                                variant="outline"
+                                onClick={handleLogout}
+                                className="border-red-300 text-red-600 hover:bg-red-50 hover:text-red-700"
+                            >
+                                <PowerOff className="w-4 h-4 mr-2" />
+                                Đăng xuất
+                            </Button>
                         </div>
                     </CardContent>
                 </Card>
@@ -247,6 +279,71 @@ export default function OrgDashboard() {
         return <AdminOrgApplications />;
     }
 
-    // Case 5: No application - show form
-    return <OrgApplicationForm />;
+    // Case 5: Unauthorized access (Not an Org, Not Ministry, No Application)
+
+    if (showApplyForm) {
+        return (
+            <div className="space-y-4">
+                <Button
+                    variant="ghost"
+                    onClick={() => setShowApplyForm(false)}
+                    className="flex items-center gap-2 text-slate-600 mb-4"
+                >
+                    <ChevronRight className="w-4 h-4 rotate-180" />
+                    Quay lại
+                </Button>
+                <OrgApplicationForm />
+            </div>
+        );
+    }
+
+    return (
+        <Card className="border-red-200 bg-red-50 mx-auto max-w-lg mt-12">
+            <CardContent className="pt-6">
+                <div className="flex flex-col items-center gap-4 text-center">
+                    <Shield className="w-16 h-16 text-red-500" />
+                    <div>
+                        <h3 className="text-xl font-semibold text-red-800">
+                            Truy cập bị từ chối
+                        </h3>
+                        <p className="text-red-700 mt-2">
+                            Tài khoản này không phải là Tổ chức Y tế hợp lệ.
+                        </p>
+                    </div>
+
+                    <div className="flex flex-col gap-3 w-full max-w-xs mt-2">
+                        <Button
+                            className="bg-blue-600 hover:bg-blue-700 w-full"
+                            onClick={() => setShowApplyForm(true)}
+                        >
+                            <FileText className="w-4 h-4 mr-2" />
+                            Nộp đơn đăng ký mở Tổ chức
+                        </Button>
+
+                        <Button
+                            variant="outline"
+                            onClick={() => window.location.href = '/'}
+                            className="w-full"
+                        >
+                            Về trang chủ
+                        </Button>
+
+                        <Button
+                            variant="ghost"
+                            onClick={handleLogout}
+                            className="w-full text-red-600 hover:text-red-700 hover:bg-red-50"
+                        >
+                            <PowerOff className="w-4 h-4 mr-2" />
+                            Đăng xuất / Đổi ví
+                        </Button>
+
+                    </div>
+
+                    <p className="text-xs text-slate-500 mt-2">
+                        Nếu bạn là phòng khám/trung tâm y tế mới, vui lòng nộp đơn để Bộ Y tế xét duyệt.
+                    </p>
+                </div>
+            </CardContent>
+        </Card >
+    );
 }

@@ -9,16 +9,8 @@ import { useWalletAddress } from './useWalletAddress';
 const ACCESS_CONTROL_ADDRESS = process.env.NEXT_PUBLIC_ACCESS_CONTROL_ADDRESS;
 
 // Minimal ABI for role checks
-const ACCESS_CONTROL_ABI = parseAbi([
-    'function getUserStatus(address user) view returns (bool isPatient_, bool isDoctor_, bool isDoctorVerified, bool isOrg, bool isOrgVerified, bool isMinistry_)',
-    'function isPatient(address user) view returns (bool)',
-    'function isDoctor(address user) view returns (bool)',
-    'function isVerifiedDoctor(address user) view returns (bool)',
-    'function isOrganization(address user) view returns (bool)',
-    'function isVerifiedOrganization(address user) view returns (bool)',
-    'function isMinistry(address user) view returns (bool)',
-    'function MINISTRY_OF_HEALTH() view returns (address)',
-]);
+import { ACCESS_CONTROL_ABI } from '@/config/contractABI';
+
 
 // Public client for read operations
 const publicClient = createPublicClient({

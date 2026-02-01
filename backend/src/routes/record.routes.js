@@ -43,6 +43,19 @@ router.post('/', authenticate, async (req, res, next) => {
                 return res.status(404).json({ error: 'Hồ sơ gốc không tồn tại' });
             }
 
+            // CHECK LIMIT: Contract RecordRegistry.sol enforces MAX_CHILDREN = 100
+            const childCount = await prisma.recordMetadata.count({
+                where: { parentCidHash: parentCidHash.toLowerCase() }
+            });
+            const MAX_CHILDREN = 100; // Must sync with Contract
+
+            if (childCount >= MAX_CHILDREN) {
+                return res.status(400).json({
+                    error: `Đã đạt giới hạn số lượng phiên bản con (${MAX_CHILDREN}). Vui lòng tạo hồ sơ mới.`,
+                    code: 'MAX_CHILDREN_REACHED'
+                });
+            }
+
             // Check if user is the owner
             const isOwner = parentRecord.ownerAddress?.toLowerCase() === walletAddress.toLowerCase();
 
@@ -87,8 +100,19 @@ router.post('/', authenticate, async (req, res, next) => {
             );
         } catch (txError) {
             console.error('📤 [UPLOAD] ❌ On-chain tx FAILED:', txError.message);
-            console.error('📤 [UPLOAD] Full error:', txError);
-            // Still save metadata even if on-chain fails (for MVP)
+
+            // FIX: Prevent "Ghost Record" creation. Abort if on-chain fails.
+            if (txError.message?.includes('QUOTA_EXHAUSTED')) {
+                return res.status(429).json({
+                    error: 'Quota exhausted. Please use your own wallet.',
+                    code: 'QUOTA_EXHAUSTED'
+                });
+            }
+
+            return res.status(500).json({
+                error: 'On-chain transaction failed. Record not saved.',
+                details: txError.message
+            });
         }
 
 
@@ -143,35 +167,52 @@ const saveOnlySchema = z.object({
     title: z.string().max(255).optional().nullable(),
     description: z.string().optional().nullable(),
     recordType: z.string().max(50).optional().nullable(),
+    parentCidHash: z.string().regex(/^0x[a-fA-F0-9]{64}$/).optional().nullable(),
 });
 
 
 router.post('/save-only', authenticate, async (req, res, next) => {
     try {
-        const { cidHash, recordTypeHash, ownerAddress, encryptedPayload, senderPublicKey, title, description, recordType } = saveOnlySchema.parse(req.body);
+        const { cidHash, recordTypeHash, ownerAddress, encryptedPayload, senderPublicKey, title, description, recordType, parentCidHash } = saveOnlySchema.parse(req.body);
         const creatorAddress = req.user.walletAddress.toLowerCase();
         const patientAddress = ownerAddress.toLowerCase();
+        let record;
         // Check if record already exists
         const existing = await prisma.recordMetadata.findUnique({
             where: { cidHash: cidHash.toLowerCase() }
         });
 
         if (existing) {
-            return res.status(409).json({ error: 'Record already exists' });
-        }
+            console.log(`[SAVE-ONLY] Record ${cidHash} exists. Checking metadata consistency...`);
+            // Fix: If existing record is missing parentCidHash OR has Zero Hash, but we have a valid one, update it.
+            const ZERO_HASH = '0x0000000000000000000000000000000000000000000000000000000000000000';
+            const isMissingParent = !existing.parentCidHash || existing.parentCidHash === ZERO_HASH;
+            const hasNewParent = parentCidHash && parentCidHash !== ZERO_HASH;
 
-        // Save record metadata (owned by patient, created by doctor)
-        const record = await prisma.recordMetadata.create({
-            data: {
-                cidHash: cidHash.toLowerCase(),
-                ownerAddress: patientAddress, // Patient owns it
-                createdBy: creatorAddress, // Doctor created it
-                recordTypeHash: recordTypeHash?.toLowerCase(),
-                title: title || null,
-                description: description || null,
-                recordType: recordType || null,
+            if (isMissingParent && hasNewParent) {
+                console.log(`[SAVE-ONLY] Patching missing/zero parentCidHash for ${cidHash}`);
+                record = await prisma.recordMetadata.update({
+                    where: { id: existing.id },
+                    data: { parentCidHash: parentCidHash.toLowerCase() }
+                });
+            } else {
+                record = existing;
             }
-        });
+        } else {
+            // Save record metadata (owned by patient, created by doctor)
+            record = await prisma.recordMetadata.create({
+                data: {
+                    cidHash: cidHash.toLowerCase(),
+                    ownerAddress: patientAddress, // Patient owns it
+                    createdBy: creatorAddress, // Doctor created it
+                    recordTypeHash: recordTypeHash?.toLowerCase(),
+                    title: title || null,
+                    description: description || null,
+                    recordType: recordType || null,
+                    parentCidHash: parentCidHash?.toLowerCase() || null,
+                }
+            });
+        }
 
         // Create KeyShare for Doctor so they can view the record
         // This emulates the 7-day auto-share from contract
@@ -179,8 +220,20 @@ router.post('/save-only', authenticate, async (req, res, next) => {
             const expiresAt = new Date();
             expiresAt.setDate(expiresAt.getDate() + 7); // 7-day access
 
-            await prisma.keyShare.create({
-                data: {
+            // Use upsert to prevent duplicates if listener already created it
+            await prisma.keyShare.upsert({
+                where: {
+                    cidHash_senderAddress_recipientAddress: {
+                        cidHash: cidHash.toLowerCase(),
+                        senderAddress: patientAddress,
+                        recipientAddress: creatorAddress
+                    }
+                },
+                update: {
+                    encryptedPayload, // Update payload just in case
+                    status: 'claimed',
+                },
+                create: {
                     cidHash: cidHash.toLowerCase(),
                     senderAddress: patientAddress, // "From" patient (record owner)
                     recipientAddress: creatorAddress, // "To" doctor (creator)
@@ -201,11 +254,14 @@ router.post('/save-only', authenticate, async (req, res, next) => {
                 consentVerified: true,
             }
         });
-        res.status(201).json({
+
+        // Return success even if existing (idempotent)
+        res.status(existing ? 200 : 201).json({
             id: record.id,
             cidHash: record.cidHash,
             createdAt: record.createdAt,
             onChain: true, // Doctor already did on-chain
+            patched: !!(existing && !existing.parentCidHash && parentCidHash)
         });
     } catch (error) {
         next(error);
@@ -407,22 +463,60 @@ router.delete('/:cidHash/access/:address', authenticate, async (req, res, next) 
             return res.status(403).json({ error: 'Only record owner can revoke access' });
         }
 
-        // 2. Find KeyShare
-        const keyShare = await prisma.keyShare.findFirst({
+        // 2. Find KeyShares (Recursive Cleanup)
+        // We must delete keys for the entire chain (Root + all updates) to prevents "fallback to V1" issue.
+
+        // Helper to find root
+        let currentCid = cidHash;
+        let rootCid = cidHash;
+
+        // Traverse up to find root (max 20 depth)
+        for (let i = 0; i < 20; i++) {
+            const r = await prisma.recordMetadata.findUnique({
+                where: { cidHash: currentCid },
+                select: { parentCidHash: true }
+            });
+            if (!r?.parentCidHash) {
+                rootCid = currentCid;
+                break;
+            }
+            currentCid = r.parentCidHash;
+        }
+
+        // Helper to find all descendants
+        const allCids = [rootCid];
+        const queue = [rootCid];
+
+        while (queue.length > 0) {
+            const parent = queue.shift();
+            const children = await prisma.recordMetadata.findMany({
+                where: { parentCidHash: parent },
+                select: { cidHash: true }
+            });
+            for (const child of children) {
+                allCids.push(child.cidHash);
+                queue.push(child.cidHash);
+            }
+        }
+
+        console.log(`🔐 [REVOKE] Cleaning up keys for chain: ${allCids.length} records (Root: ${rootCid})`);
+
+        const keyShares = await prisma.keyShare.findMany({
             where: {
-                cidHash: cidHash,
+                cidHash: { in: allCids },
                 recipientAddress: targetAddress,
             }
         });
 
-        if (!keyShare) {
+        if (keyShares.length === 0) {
             return res.status(404).json({ error: 'Access grant not found for this address' });
         }
 
-        // 3. Try on-chain revoke (may not exist for doctor-created records)
+        // 3. Try on-chain revoke (Use Root CID)
         let txResult = null;
         try {
-            txResult = await relayerService.sponsorRevoke(callerAddress, targetAddress, cidHash);
+            // Use ROOT CID for on-chain revoke because ConsentLedger uses Root grouping
+            txResult = await relayerService.sponsorRevoke(callerAddress, targetAddress, rootCid);
         } catch (txError) {
             // Check if quota exhausted
             if (txError.message === 'QUOTA_EXHAUSTED_USE_OWN_WALLET') {
@@ -433,14 +527,11 @@ router.delete('/:cidHash/access/:address', authenticate, async (req, res, next) 
                 });
             }
 
-            // Check if no consent exists on-chain (doctor-created records)
-            // These error codes/messages indicate no consent to revoke
-            const noConsentErrors = ['0x82b42900', 'Unauthorized', 'ConsentNotFound', 'execution reverted'];
+            const noConsentErrors = ['0x82b42900', 'Unauthorized', 'ConsentNotFound', 'execution reverted', 'NoActiveDelegation'];
             const isNoConsentError = noConsentErrors.some(e => txError.message?.includes(e));
 
             if (isNoConsentError) {
-                // No on-chain consent exists - OK for doctor-created records, continue to delete KeyShare
-                console.log(`🔐 [REVOKE] Skipping on-chain (no consent exists for doctor-created record)`);
+                console.log(`🔐 [REVOKE] Skipping on-chain (already revoked or no consent)`);
             } else {
                 console.error(`🔐 [REVOKE] ❌ On-chain revoke FAILED:`, txError.message);
                 return res.status(500).json({
@@ -451,9 +542,11 @@ router.delete('/:cidHash/access/:address', authenticate, async (req, res, next) 
         }
 
 
-        // 4. Delete KeyShare in DB (after on-chain success)
-        await prisma.keyShare.delete({
-            where: { id: keyShare.id }
+        // 4. Delete ALL KeyShares in DB
+        await prisma.keyShare.deleteMany({
+            where: {
+                id: { in: keyShares.map(k => k.id) }
+            }
         });
 
         // 5. Log the revoke action
@@ -523,6 +616,7 @@ router.get('/:cidHash/access', authenticate, async (req, res, next) => {
                 grantedBy: ks.senderAddress,
                 status: ks.status,
                 grantedAt: ks.createdAt,
+                expiresAt: ks.expiresAt, // Added for frontend expiry check
             }))
         });
     } catch (error) {

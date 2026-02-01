@@ -19,10 +19,16 @@ import { keccak256, toBytes, concat } from 'viem';
 
 /**
  * Generate new NaCl x25519 keypair for encryption
+ * @param {Uint8Array} [seed] - Optional 32-byte seed for deterministic generation
  * @returns {{ publicKey: string, secretKey: string }} Base64 encoded keypair
  */
-export function generateEncryptionKeypair() {
-    const keypair = nacl.box.keyPair();
+export function generateEncryptionKeypair(seed) {
+    let keypair;
+    if (seed) {
+        keypair = nacl.box.keyPair.fromSecretKey(seed);
+    } else {
+        keypair = nacl.box.keyPair();
+    }
     return {
         publicKey: encodeBase64(keypair.publicKey),
         secretKey: encodeBase64(keypair.secretKey),
@@ -201,59 +207,35 @@ export function getKeyDerivationMessage(walletAddress) {
  * @returns {Promise<{ publicKey: string, secretKey: string }>} User's encryption keypair
  */
 export async function getOrCreateEncryptionKeypair(provider, walletAddress) {
-    // Check if we have stored keypair
-    const storedPublicKey = localStorage.getItem(STORAGE_KEY_PUBLIC);
-    const storedEncryptedKey = localStorage.getItem(STORAGE_KEY_ENCRYPTED);
-    const keyVersion = localStorage.getItem(STORAGE_KEY_VERSION);
-
-    // Get signature for key derivation
+    // 1. Get signature (User identity proof)
     const message = getKeyDerivationMessage(walletAddress);
-    const signature = await provider.request({
-        method: 'personal_sign',
-        params: [message, walletAddress],
-    });
-
-    if (storedPublicKey && storedEncryptedKey) {
-        // STEP 1: Try decrypt with NEW scheme (v2)
-        if (keyVersion === 'v2') {
-            try {
-                const secretKey = decryptSecretKeyFromStorage(storedEncryptedKey, signature, walletAddress);
-                console.log('🔑 Decrypted with new scheme (v2)');
-                return { publicKey: storedPublicKey, secretKey };
-            } catch (err) {
-                console.warn('Failed to decrypt with new scheme:', err.message);
-            }
-        }
-
-        // STEP 2: Try decrypt with LEGACY scheme (migration)
-        try {
-            const secretKey = decryptSecretKeyFromStorageLegacy(storedEncryptedKey, signature);
-            console.log('🔑 Decrypted with legacy scheme, migrating to v2...');
-
-            // Migrate: Re-encrypt with new scheme
-            const newEncryptedKey = encryptSecretKeyForStorage(secretKey, signature, walletAddress);
-            localStorage.setItem(STORAGE_KEY_ENCRYPTED, newEncryptedKey);
-            localStorage.setItem(STORAGE_KEY_VERSION, 'v2');
-            console.log('✅ Migration to v2 complete');
-
-            return { publicKey: storedPublicKey, secretKey };
-        } catch (legacyErr) {
-            console.warn('Failed to decrypt with legacy scheme:', legacyErr.message);
-        }
-
-        // STEP 3: Both failed - generate new keypair
-        console.warn('🔄 Both schemes failed, generating new keypair...');
+    let signature;
+    try {
+        signature = await provider.request({
+            method: 'personal_sign',
+            params: [message, walletAddress],
+        });
+    } catch (error) {
+        console.error('Signature rejected OR wallet busy:', error);
+        throw error;
     }
 
-    // Generate new keypair
-    const keypair = generateEncryptionKeypair();
-    console.log('🆕 Generated new encryption keypair');
+    // 2. Derive Deterministic Key from Signature
+    // This 32-byte hash acts as the seed for the NaCl keypair.
+    // Same Wallet = Same Signature = Same Seed = Same Keypair.
+    const seed = deriveKeyFromWalletSignature(signature, walletAddress);
 
-    // Encrypt and store with NEW scheme
+    // Generate Deterministic Keypair (v3)
+    const keypair = generateEncryptionKeypair(seed);
+
+    console.log('🔑 Generated Deterministic Keypair (v3-AccessAnywhere)');
+
+    // 3. Cache in LocalStorage (for performance/offline use)
+    // We still encrypt the SK for storage compliance
     const encryptedSecretKey = encryptSecretKeyForStorage(keypair.secretKey, signature, walletAddress);
     localStorage.setItem(STORAGE_KEY_ENCRYPTED, encryptedSecretKey);
     localStorage.setItem(STORAGE_KEY_PUBLIC, keypair.publicKey);
-    localStorage.setItem(STORAGE_KEY_VERSION, 'v2');
+    localStorage.setItem(STORAGE_KEY_VERSION, 'v3'); // Mark as Version 3 (Deterministic)
 
     return keypair;
 }

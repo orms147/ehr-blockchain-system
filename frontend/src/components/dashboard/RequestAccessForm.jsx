@@ -22,8 +22,8 @@ const EHR_SYSTEM_ADDRESS = process.env.NEXT_PUBLIC_EHR_SYSTEM_ADDRESS;
 // Request types matching contract enum
 const REQUEST_TYPES = [
     { value: 0, label: 'Truy cập trực tiếp', description: 'Xem hồ sơ được chỉ định', enabled: true },
-    { value: 1, label: 'Ủy quyền đầy đủ', description: 'Được ủy quyền toàn bộ hồ sơ', enabled: false, comingSoon: true },
-    { value: 2, label: 'Ủy quyền theo hồ sơ', description: 'Được chia sẻ lại quyền truy cập', enabled: false, comingSoon: true },
+    // Value 1 (Full Access) removed as per requirement
+    { value: 2, label: 'Ủy quyền theo hồ sơ', description: 'Được chia sẻ lại quyền truy cập (Hội chẩn)', enabled: true },
 ];
 
 export default function RequestAccessForm({ onSuccess }) {

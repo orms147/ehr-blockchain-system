@@ -10,16 +10,9 @@ const ACCESS_CONTROL_ADDRESS = process.env.NEXT_PUBLIC_ACCESS_CONTROL_ADDRESS;
 const RECORD_REGISTRY_ADDRESS = process.env.NEXT_PUBLIC_RECORD_REGISTRY_ADDRESS;
 
 // Minimal ABIs for read/write operations
-const CONSENT_LEDGER_ABI = parseAbi([
-    // Read functions
-    'function nonces(address patient) view returns (uint256)',
-    'function canAccess(address patient, address grantee, bytes32 cidHash) view returns (bool)',
-    'function getConsent(address patient, address grantee, bytes32 rootCidHash) view returns ((address patient, address grantee, bytes32 rootCidHash, bytes32 encKeyHash, uint40 issuedAt, uint40 expireAt, bool active, bool includeUpdates, bool allowDelegate))',
-    'function DOMAIN_SEPARATOR() view returns (bytes32)',
-    // Write functions (for self-pay)
-    'function grantBySig(address patient, address grantee, bytes32 rootCidHash, bytes32 encKeyHash, uint40 expireAt, bool includeUpdates, bool allowDelegate, uint256 deadline, bytes signature) external',
-    'function revoke(address grantee, bytes32 rootCidHash) external',
-]);
+// Minimal ABIs for read/write operations
+import { CONSENT_LEDGER_ABI } from '@/config/contractABI';
+
 
 // Public client for read operations (no wallet needed)
 const publicClient = createPublicClient({

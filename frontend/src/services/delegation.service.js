@@ -1,14 +1,7 @@
 // Delegation Service - Frontend client for family delegation
 import { api } from './api';
 
-// Create delegation to family member
-export async function createDelegation(delegateAddress, delegationType = 'full') {
-    const response = await api.post('/api/delegation/create', {
-        delegateAddress,
-        delegationType,
-    });
-    return response;
-}
+// Create delegation logic moved to component (client-side signing)
 
 // Get my delegates (as patient)
 export async function getMyDelegates() {
@@ -35,7 +28,6 @@ export async function checkDelegation(patientAddress) {
 }
 
 export const delegationService = {
-    createDelegation,
     getMyDelegates,
     getDelegatedToMe,
     revokeDelegation,

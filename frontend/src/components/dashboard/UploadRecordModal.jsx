@@ -14,8 +14,16 @@ import {
 } from 'lucide-react';
 import { toast } from '@/components/ui/use-toast';
 
-import { recordService, ipfsService, computeCidHash, generateAESKey, exportAESKey, encryptData, pendingUpdateService } from '@/services';
-import { encryptForRecipient } from '@/services/nacl-crypto';
+import { recordService, ipfsService, computeCidHash, keyShareService, authService, generateAESKey, exportAESKey, encryptData, pendingUpdateService } from '@/services';
+import { encryptForRecipient, getOrCreateEncryptionKeypair } from '@/services/nacl-crypto';
+import { useWalletAddress } from '@/hooks/useWalletAddress';
+import { createWalletClient, createPublicClient, http, custom, parseGwei, keccak256, toBytes } from 'viem';
+import { arbitrumSepolia } from 'viem/chains';
+import { ensureArbitrumSepolia } from '@/utils/chainSwitch';
+import { DOCTOR_UPDATE_ABI, CONSENT_LEDGER_ABI } from '@/config/contractABI';
+
+const DOCTOR_UPDATE_ADDRESS = process.env.NEXT_PUBLIC_DOCTOR_UPDATE_ADDRESS;
+const CONSENT_LEDGER_ADDRESS = process.env.NEXT_PUBLIC_CONSENT_LEDGER_ADDRESS;
 
 // Record types 
 const RECORD_TYPES = [
@@ -43,6 +51,7 @@ const COMMON_ICD10_CODES = [
 const UploadRecordModal = ({ open, onOpenChange, onSuccess, parentRecord, existingRecords = [], isDoctorUpdate = false, patientAddress = null }) => {
     // If parentRecord is provided, this is an update to an existing record
     const isUpdateMode = !!parentRecord;
+    const { provider, address: walletAddress } = useWalletAddress();
 
     const [mode, setMode] = useState(null);
     const [step, setStep] = useState(1);
@@ -142,10 +151,10 @@ const UploadRecordModal = ({ open, onOpenChange, onSuccess, parentRecord, existi
     const handleFileChange = (e) => {
         const file = e.target.files[0];
         if (file) {
-            if (file.size > 10 * 1024 * 1024) {
+            if (file.size > 100 * 1024 * 1024) {
                 toast({
                     title: "File quá lớn",
-                    description: "Vui lòng chọn file nhỏ hơn 10MB",
+                    description: "Vui lòng chọn file nhỏ hơn 100MB",
                     variant: "destructive",
                 });
                 return;
@@ -280,43 +289,360 @@ const UploadRecordModal = ({ open, onOpenChange, onSuccess, parentRecord, existi
 
             // Check if this is a doctor update (needs approval flow)
             if (isDoctorUpdate && patientAddress) {
-                // Doctor update flow: Create pending update instead of direct upload
-                // Encrypt content for storage (will be uploaded to IPFS after approval)
-                const contentToStore = JSON.stringify({
-                    encryptedData,
-                    aesKey: aesKeyString,
-                    metadata: { title, type, notes, parentCidHash }
-                });
-                const base64Content = btoa(contentToStore);
+                // Modified: Now using Direct Update via DoctorUpdate contract (Doctor has delegation/access)
+                // This removes the "Pending Update" flow which confused users, replacing it with direct on-chain add.
 
-                await pendingUpdateService.createPendingUpdate({
-                    parentCidHash,
-                    patientAddress,
-                    encryptedContent: base64Content,
-                    recordType: type,
-                    title,
-                });
+                try {
+                    // 1. Ensure correct chain
+                    await ensureArbitrumSepolia(provider);
 
-                setUploadResult({
-                    id: 'pending',
-                    cidHash: 'pending',
-                    title,
-                    isPending: true,
-                });
-                setStep(3);
+                    // 2. Get Doctor's keypair (needed for encryption sharing)
+                    const doctorKeypair = await getOrCreateEncryptionKeypair(provider, walletAddress);
 
-                toast({
-                    title: "Yêu cầu đã gửi!",
-                    description: "Đang chờ bệnh nhân phê duyệt cập nhật.",
-                    className: "bg-amber-50 border-amber-200 text-amber-800",
-                });
+                    // 3. Prepare parameters
+                    const doctorEncKeyHash = keccak256(toBytes(doctorKeypair.publicKey));
+                    const effectiveParentCidHash = parentCidHash || '0x0000000000000000000000000000000000000000000000000000000000000000'; // Handle 'null' parent
 
-                if (onSuccess) onSuccess();
-                return;
+                    // 4. Submit on-chain via DoctorUpdate contract
+                    const walletClient = createWalletClient({
+                        chain: arbitrumSepolia,
+                        transport: custom(provider),
+                    });
+
+                    // Calculate correct access duration to respect original delegation
+                    let accessDurationHours = 168; // Default 7 days
+
+                    if (parentRecord && parentRecord.expiresAt) {
+                        const expiry = new Date(parentRecord.expiresAt);
+                        const now = new Date();
+                        const diffMs = expiry.getTime() - now.getTime();
+
+                        // If still valid (giving 5 minute buffer), use remaining hours
+                        if (diffMs > 5 * 60 * 1000) {
+                            const remainingHours = Math.ceil(diffMs / (1000 * 60 * 60));
+                            // Contract requires min 1 hour.
+                            accessDurationHours = Math.max(1, remainingHours);
+                            console.log(`[DoctorUpdate] Inheriting remaining access: ${remainingHours} hours`);
+                        } else {
+                            console.warn('[DoctorUpdate] Parent record expired or invalid. Using default 7 days.');
+                        }
+                    } else if (parentRecord) {
+                        console.warn('[DoctorUpdate] Parent record has no expiresAt. Using default 7 days.');
+                    }
+
+                    toast({
+                        title: "Đang ký giao dịch...",
+                        description: "Vui lòng xác nhận trên ví để cập nhật hồ sơ.",
+                        className: "bg-blue-50 border-blue-200 text-blue-800",
+                    });
+
+                    const txHash = await walletClient.writeContract({
+                        address: DOCTOR_UPDATE_ADDRESS,
+                        abi: DOCTOR_UPDATE_ABI,
+                        functionName: 'addRecordByDoctor',
+                        args: [
+                            cidHash,
+                            effectiveParentCidHash,
+                            recordTypeHash,
+                            patientAddress,
+                            doctorEncKeyHash,
+                            accessDurationHours, // Dynamic duration
+                        ],
+                        account: walletAddress,
+                        gas: BigInt(500000),
+                        maxFeePerGas: parseGwei('1.0'),
+                        maxPriorityFeePerGas: parseGwei('0.1'),
+                    });
+
+                    // 5. Save metadata to backend (skips pending flow)
+                    // Note: We use saveRecordMetadata since on-chain record is already created above
+                    console.log('DEBUG: submitting Doctor Update Metadata:', {
+                        cidHash,
+                        effectiveParentCidHash,
+                        parentRecord,
+                        title
+                    });
+
+                    await recordService.saveRecordMetadata(cidHash, recordTypeHash, patientAddress, {
+                        parentCidHash: effectiveParentCidHash !== '0x0000000000000000000000000000000000000000000000000000000000000000' ? effectiveParentCidHash : null,
+                        title: title
+                    });
+
+                    // 6. Share Keys (Critical Step)
+                    const keyPayload = JSON.stringify({ cid, aesKey: aesKeyString });
+
+
+                    // 6a. Encrypt & Share with Doctor (Self)
+                    const doctorEncryptedKey = encryptForRecipient(
+                        keyPayload,
+                        doctorKeypair.publicKey,
+                        doctorKeypair.secretKey
+                    );
+                    let expiresAt = new Date();
+
+                    // Logic: If updating access, inherit the expiration from the parent record's grant
+                    // The Doctor should not be able to extend their own access beyond what was granted.
+                    let inheritedExpiry = null;
+                    if (parentRecord && parentRecord.expiresAt) {
+                        const parentExpiryDate = new Date(parentRecord.expiresAt);
+                        const now = new Date();
+
+                        console.log("DEBUG: Inheriting Expiry", {
+                            parentExpiresAt: parentRecord.expiresAt,
+                            parsed: parentExpiryDate.toISOString(),
+                            now: now.toISOString()
+                        });
+
+                        // If parent record is not expired yet, we inherit its expiration.
+                        if (parentExpiryDate > now) {
+                            expiresAt = parentExpiryDate;
+                        } else {
+                            // If parent ALREADY expired (but somehow we are here?), default to 7 days
+                            expiresAt.setDate(expiresAt.getDate() + 7);
+                        }
+                    } else if (parentRecord) {
+                        // If parent has NO expiry date, it implies FOREVER (or at least long-term).
+                        // Do NOT default to 7 days. Use reasonable max or keep undefined (if backend supports it), 
+                        // but for safety let's set a long duration (e.g. 52 weeks or match contract MAX).
+                        // DoctorUpdate MAX is 90 days? ConsentLedger MAX is 5 years.
+                        // Let's set 5 years (approx infinity for this context) to avoid expiration.
+                        expiresAt.setDate(expiresAt.getDate() + 1825);
+                        console.log("DEBUG: Parent has no expiry (Forever), setting Update expiry to 5 years.");
+                    } else {
+                        expiresAt.setDate(expiresAt.getDate() + 7); // Default 7 days for new root records
+                    }
+
+                    await keyShareService.shareKey({
+                        recipientAddress: walletAddress,
+                        cidHash: cidHash,
+                        encryptedPayload: doctorEncryptedKey,
+                        senderPublicKey: doctorKeypair.publicKey,
+                        expiresAt: expiresAt.toISOString()
+                    });
+
+                    // 6b. Share with Patient (Try fetch key)
+                    // Robustness: Use prop OR parentRecord owner
+                    const effectivePatientAddress = patientAddress || parentRecord?.ownerAddress;
+
+                    if (effectivePatientAddress) {
+                        console.log('Sharing with patient:', effectivePatientAddress);
+                        try {
+                            const patientKeyResponse = await authService.getEncryptionKey(effectivePatientAddress);
+                            if (patientKeyResponse?.encryptionPublicKey) {
+                                const encryptedKeyPayload = encryptForRecipient(
+                                    keyPayload,
+                                    patientKeyResponse.encryptionPublicKey,
+                                    doctorKeypair.secretKey
+                                );
+                                await keyShareService.shareKey({
+                                    recipientAddress: effectivePatientAddress,
+                                    cidHash: cidHash,
+                                    encryptedPayload: encryptedKeyPayload,
+                                    senderPublicKey: doctorKeypair.publicKey,
+                                });
+                                console.log('Successfully shared key with patient');
+                            } else {
+                                console.warn('Patient has no encryption key registered');
+                            }
+                        } catch (pkError) {
+                            console.error('Failed to share key with patient:', pkError);
+                        }
+                    } else {
+                        console.warn('No effectivePatientAddress found for Doctor Update');
+                    }
+
+                    // 6c. Share with ALL Previous Authors in the Chain (Root Creator, Intermediate Doctors, etc.)
+                    // This ensures everyone involved in the case history sees the new update.
+                    try {
+                        const chainData = await recordService.getChainCids(effectiveParentCidHash);
+                        const allRecords = chainData.records || [];
+
+                        // Extract unique creators (excluding self and patient)
+                        const uniqueCreators = new Set();
+                        allRecords.forEach(r => {
+                            if (r.createdBy &&
+                                r.createdBy.toLowerCase() !== walletAddress.toLowerCase() &&
+                                r.createdBy.toLowerCase() !== patientAddress.toLowerCase()) {
+                                uniqueCreators.add(r.createdBy);
+                            }
+                        });
+
+                        // Share with each unique creator
+                        for (const creatorAddr of uniqueCreators) {
+                            try {
+                                const creatorKeyResponse = await authService.getEncryptionKey(creatorAddr);
+                                if (creatorKeyResponse?.encryptionPublicKey) {
+                                    const encryptedForCreator = encryptForRecipient(
+                                        keyPayload,
+                                        creatorKeyResponse.encryptionPublicKey,
+                                        doctorKeypair.secretKey
+                                    );
+                                    await keyShareService.shareKey({
+                                        recipientAddress: creatorAddr,
+                                        cidHash: cidHash,
+                                        encryptedPayload: encryptedForCreator,
+                                        senderPublicKey: doctorKeypair.publicKey,
+                                    });
+                                    console.log(`Shared key with chain participant: ${creatorAddr}`);
+                                }
+                            } catch (shareErr) {
+                                console.warn(`Failed to share with chain participant ${creatorAddr}:`, shareErr);
+                            }
+                        }
+                    } catch (chainErr) {
+                        console.warn('Could not fetch chain for key sharing:', chainErr);
+                    }
+
+                    setUploadResult({
+                        id: 'chain_success',
+                        cidHash,
+                        cid,
+                        title,
+                        ipfsUrl: `https://gateway.pinata.cloud/ipfs/${cid}`,
+                        txHash
+                    });
+                    setStep(3);
+
+                    toast({
+                        title: "Cập nhật thành công!",
+                        description: "Hồ sơ đã được lưu và chia sẻ.",
+                        className: "bg-green-50 border-green-200 text-green-800",
+                    });
+
+                    if (onSuccess) onSuccess();
+                    return;
+
+                } catch (updateErr) {
+                    console.error("Doctor direct update failed:", updateErr);
+                    // Fallback to Pending Update? No, let's expose error so Doctor knows.
+                    throw new Error("Không thể cập nhật hồ sơ: " + (updateErr.shortMessage || updateErr.message));
+                }
             }
 
             // Normal flow: Direct upload (Patient or non-approval flow)
             const result = await recordService.createRecord(cidHash, recordTypeHash, parentCidHash, title, notes, type);
+
+            // AUTO-SHARE: If Patient is updating a record (has parent), share key with previous doctors
+            if (parentCidHash) {
+                try {
+                    const chainData = await recordService.getChainCids(parentCidHash);
+                    const allRecords = chainData.records || [];
+
+                    // Extract unique creators (Doctors)
+                    const uniqueCreators = new Set();
+                    allRecords.forEach(r => {
+                        if (r.createdBy &&
+                            r.createdBy.toLowerCase() !== walletAddress.toLowerCase()) {
+                            uniqueCreators.add(r.createdBy);
+                        }
+                    });
+
+                    // ALSO: Fetch explicit grantees of the ROOT record (e.g. Doctors who were shared the record but didn't create it)
+                    try {
+                        if (chainData.rootCidHash) {
+                            const accessData = await recordService.getRecordAccess(chainData.rootCidHash);
+                            if (accessData && accessData.accessList) {
+                                accessData.accessList.forEach(grant => {
+                                    // Only add those with 'claimed' or 'pending' status
+                                    if (grant.address && grant.address.toLowerCase() !== walletAddress.toLowerCase()) {
+                                        uniqueCreators.add(grant.address);
+                                        console.log(`[Patient Update] Added grantee to broadcast list: ${grant.address}`);
+                                    }
+                                });
+                            }
+                        }
+                    } catch (accessErr) {
+                        console.warn('[Patient Update] Could not fetch grantee list:', accessErr);
+                    }
+
+                    if (uniqueCreators.size > 0) {
+                        // We need Patient's keys to encrypt for others
+                        // Since Patient just uploaded, they likely have keys.
+                        const userKeypair = await getOrCreateEncryptionKeypair(provider, walletAddress);
+
+                        // Setup public client for reading contract
+                        const publicClient = createPublicClient({
+                            chain: arbitrumSepolia,
+                            transport: http()
+                        });
+
+                        // Identify Root Record Creator
+                        const rootRecord = allRecords.find(r => r.cidHash === chainData.rootCidHash);
+                        const rootCreator = rootRecord?.createdBy?.toLowerCase();
+
+                        // Share with each unique creator
+                        for (const creatorAddr of uniqueCreators) {
+                            try {
+                                let shouldShare = false;
+
+                                // 1. If this doctor is the ROOT CREATOR, they have implicit right to follow the thread
+                                // (Unless we implement explicit block/deny later)
+                                if (rootCreator && creatorAddr.toLowerCase() === rootCreator) {
+                                    console.log(`[Patient Update] allowing Root Creator: ${creatorAddr}`);
+                                    shouldShare = true;
+                                }
+                                // 2. Otherwise, check explicit on-chain consent
+                                else {
+                                    // Fetch detailed consent info to get Expiry Date
+                                    const consentData = await publicClient.readContract({
+                                        address: CONSENT_LEDGER_ADDRESS,
+                                        abi: CONSENT_LEDGER_ABI,
+                                        functionName: 'getConsent',
+                                        args: [
+                                            walletAddress, // patient (me)
+                                            creatorAddr,   // doctor (grantee)
+                                            chainData.rootCidHash
+                                        ]
+                                    });
+
+                                    // Consent Struct:
+                                    // 0: patient, 1: grantee, 2: rootCidHash, 3: encKeyHash, 4: issuedAt, 
+                                    // 5: expireAt, 6: active, 7: includeUpdates, 8: allowDelegate
+                                    // Viem returns object with named keys if ABI has names, or array.
+                                    // We handle both for robustness.
+
+                                    const isActive = consentData.active !== undefined ? consentData.active : consentData[6];
+                                    const expireAt = consentData.expireAt !== undefined ? consentData.expireAt : consentData[5];
+
+                                    const nowSeconds = Math.floor(Date.now() / 1000);
+
+                                    // Only share if explicit consent exists AND is not expired
+                                    if (isActive && Number(expireAt) > nowSeconds) {
+                                        console.log(`[Patient Update] On-chain access verified for: ${creatorAddr} with expiry ${new Date(Number(expireAt) * 1000).toISOString()}`);
+                                        shouldShare = true;
+                                    } else {
+                                        console.warn(`[Patient Update] Access DENIED/REVOKED or EXPIRED for: ${creatorAddr}`);
+                                    }
+                                }
+
+                                if (shouldShare) {
+                                    const creatorKeyResponse = await authService.getEncryptionKey(creatorAddr);
+                                    if (creatorKeyResponse?.encryptionPublicKey) {
+                                        const keyPayload = JSON.stringify({ cid, aesKey: aesKeyString });
+                                        const encryptedForCreator = encryptForRecipient(
+                                            keyPayload,
+                                            creatorKeyResponse.encryptionPublicKey,
+                                            userKeypair.secretKey
+                                        );
+
+                                        await keyShareService.shareKey({
+                                            recipientAddress: creatorAddr,
+                                            cidHash: cidHash,
+                                            encryptedPayload: encryptedForCreator,
+                                            senderPublicKey: userKeypair.publicKey,
+                                        });
+                                        console.log(`[Patient Update] Shared key SUCCESS with: ${creatorAddr}`);
+                                    }
+                                }
+                            } catch (shareErr) {
+                                console.warn(`[Patient Update] Failed to share with ${creatorAddr}:`, shareErr);
+                            }
+                        }
+                    }
+                } catch (err) {
+                    console.warn('[Patient Update] Failed to propagate keys:', err);
+                }
+            }
 
 
             // Store locally with all needed info for viewing later

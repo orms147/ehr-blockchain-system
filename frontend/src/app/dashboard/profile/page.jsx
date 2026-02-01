@@ -16,6 +16,7 @@ import useWalletAddress from '@/hooks/useWalletAddress';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { createPublicClient, http, formatEther } from 'viem';
 import { arbitrumSepolia } from 'viem/chains';
+import { getActiveRole } from '@/hooks/useAuthRoles';
 
 // Public client for balance check
 const publicClient = createPublicClient({
@@ -176,14 +177,13 @@ export default function ProfilePage() {
         setPrivateKey(null);
     };
 
-    // Get user role from URL or localStorage
+    // Get user role from URL or unified auth roles
     const getUserRole = () => {
         if (typeof window !== 'undefined') {
             const path = window.location.pathname;
             if (path.includes('/doctor')) return 'doctor';
             if (path.includes('/admin')) return 'admin';
-            const stored = localStorage.getItem('userRole');
-            if (stored) return stored;
+            return getActiveRole() || 'patient';
         }
         return 'patient';
     };

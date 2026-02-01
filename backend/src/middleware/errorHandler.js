@@ -22,6 +22,14 @@ export function errorHandler(err, req, res, next) {
         });
     }
 
+    // Multer errors (File upload)
+    if (err.name === 'MulterError') {
+        if (err.code === 'LIMIT_FILE_SIZE') {
+            return res.status(400).json({ error: 'File quá lớn. Vui lòng chọn file dưới 50MB.' });
+        }
+        return res.status(400).json({ error: `Upload error: ${err.message}` });
+    }
+
     // Default error
     const statusCode = err.statusCode || 500;
     const message = err.message || 'Internal server error';

@@ -115,13 +115,17 @@ contract DoctorUpdate is ReentrancyGuard {
         // Grant doctor temporary access (if key provided)
         uint40 expireAt;
         if (doctorEncKeyHash != bytes32(0)) {
-            expireAt = _grantDoctorAccess(
-                patient,
-                msg.sender,
-                cidHash,
-                doctorEncKeyHash,
-                doctorAccessHours
-            );
+            // FIX: Only grant independent access if this is a ROOT record.
+            // Updates (children) rely on the Root's access permission.
+            if (parentCidHash == bytes32(0)) {
+                expireAt = _grantDoctorAccess(
+                    patient,
+                    msg.sender,
+                    cidHash,
+                    doctorEncKeyHash,
+                    doctorAccessHours
+                );
+            }
         }
 
         emit RecordAddedByDoctor(

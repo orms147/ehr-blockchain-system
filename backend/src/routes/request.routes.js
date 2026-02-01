@@ -147,6 +147,44 @@ router.get('/signed', authenticate, async (req, res, next) => {
     }
 });
 
+// GET /api/requests/as-delegate - Get requests pending for my delegators
+router.get('/as-delegate', authenticate, async (req, res, next) => {
+    try {
+        const delegateAddress = req.user.walletAddress.toLowerCase();
+
+        // 1. Find who delegated to me
+        const delegations = await prisma.delegation.findMany({
+            where: {
+                delegateAddress: delegateAddress,
+                status: 'active',
+            },
+            select: { patientAddress: true },
+        });
+
+        if (delegations.length === 0) {
+            return res.json({ count: 0, requests: [] });
+        }
+
+        const patientAddresses = delegations.map(d => d.patientAddress);
+
+        // 2. Find pending requests for these patients
+        const requests = await prisma.accessRequest.findMany({
+            where: {
+                patientAddress: { in: patientAddresses },
+                status: 'pending',
+            },
+            orderBy: { createdAt: 'desc' },
+        });
+
+        res.json({
+            count: requests.length,
+            requests: requests.map(serializeRequest),
+        });
+    } catch (error) {
+        next(error);
+    }
+});
+
 // GET /api/requests/:requestId - Get request details
 router.get('/:requestId', authenticate, async (req, res, next) => {
     try {
@@ -341,6 +379,7 @@ router.post('/approve-with-sig', authenticate, async (req, res, next) => {
                     senderPublicKey: senderPublicKey || null,
                     status: 'awaiting_claim',
                     expiresAt: new Date(Number(deadline) * 1000),
+                    allowDelegate: request.requestType === 2,
                 },
                 create: {
                     senderAddress: patientAddress,
@@ -350,6 +389,7 @@ router.post('/approve-with-sig', authenticate, async (req, res, next) => {
                     senderPublicKey: senderPublicKey || null,
                     status: 'awaiting_claim',
                     expiresAt: new Date(Number(deadline) * 1000),
+                    allowDelegate: request.requestType === 2,
                 },
             });
         }
@@ -406,6 +446,88 @@ router.post('/mark-claimed', authenticate, async (req, res, next) => {
             keyShareActivated: updatedKeyShare.count > 0,
         });
     } catch (error) {
+        next(error);
+    }
+});
+
+// GET /api/requests/as-delegate - Get requests pending for my delegators
+// Moved /as-delegate to top (before /:requestId) to prevent route collision
+
+// POST /api/requests/grant-as-delegate - Delegate approves request on-chain & backend
+router.post('/grant-as-delegate', authenticate, async (req, res, next) => {
+    try {
+        const { requestId, txHash, encryptedKeyPayload, cidHash, senderPublicKey } = req.body;
+        const delegateAddress = req.user.walletAddress.toLowerCase();
+
+        // 1. Get request
+        const request = await prisma.accessRequest.findUnique({
+            where: { requestId: requestId },
+        });
+
+        if (!request) {
+            return res.status(404).json({ error: 'Request not found' });
+        }
+
+        // 2. Verify delegation
+        const delegation = await prisma.delegation.findFirst({
+            where: {
+                patientAddress: request.patientAddress,
+                delegateAddress: delegateAddress,
+                status: 'active',
+            },
+        });
+
+        if (!delegation) {
+            return res.status(403).json({ error: 'You are not a delegate for this patient' });
+        }
+
+        // 3. Update Request Status directly to 'claimed' (since grant is direct)
+        // OR 'approved' if we want to differentiate? 
+        // Logic: grantUsingDelegation (on-chain) = ACCESS GRANTED.
+        // So status should be 'claimed' (meaning access is active).
+
+        await prisma.accessRequest.update({
+            where: { requestId: requestId },
+            data: {
+                status: 'claimed', // Access active
+                txHash: txHash,
+            },
+        });
+
+        // 4. Update KeyShare if payload provided
+        if (encryptedKeyPayload && cidHash) {
+            await prisma.keyShare.upsert({
+                where: {
+                    cidHash_senderAddress_recipientAddress: {
+                        cidHash: cidHash,
+                        senderAddress: request.patientAddress, // Sender implies owner/patient
+                        recipientAddress: request.requesterAddress,
+                    }
+                },
+                update: {
+                    encryptedPayload: encryptedKeyPayload,
+                    senderPublicKey: senderPublicKey || null,
+                    status: 'pending', // Directly pending (active), no claim needed
+                    expiresAt: request.deadline,
+                },
+                create: {
+                    senderAddress: request.patientAddress, // "On behalf of" patient
+                    recipientAddress: request.requesterAddress,
+                    cidHash: cidHash,
+                    encryptedPayload: encryptedKeyPayload,
+                    senderPublicKey: senderPublicKey || null,
+                    status: 'pending',
+                    expiresAt: request.deadline,
+                },
+            });
+        }
+
+        res.json({
+            success: true,
+            message: 'Access granted successfully as delegate.',
+        });
+    } catch (error) {
+        console.error('Grant as delegate error:', error);
         next(error);
     }
 });

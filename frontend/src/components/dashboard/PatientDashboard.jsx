@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui/use-toast';
-import { Plus, Loader2, RefreshCw, FileX, Shield, Bell, FileText, History } from 'lucide-react';
+import { Plus, Loader2, RefreshCw, FileX, Shield, Bell, FileText, History, Users } from 'lucide-react';
 import { useWalletAddress } from '@/hooks/useWalletAddress';
 import { useEncryptionKey } from '@/hooks/useEncryptionKey';
 
@@ -17,6 +17,7 @@ import ConsentList from '@/components/dashboard/ConsentList';
 import QuotaDisplay from '@/components/dashboard/QuotaDisplay';
 import PendingUpdatesSection from '@/components/dashboard/PendingUpdatesSection';
 import AccessLogTab from '@/components/dashboard/AccessLogTab';
+import DelegationManager from '@/components/dashboard/DelegationManager';
 import { recordService } from '@/services';
 import { useSocket } from '@/hooks/useSocket';
 
@@ -179,6 +180,23 @@ const PatientDashboard = () => {
         }
     };
 
+    // explicitly clear parentRecord when adding new
+    const handleAddNewRecord = () => {
+        setParentRecord(null);
+        setIsUploadModalOpen(true);
+    };
+
+    // BLOCKING LOADING STATE: Wait for wallet connection
+    if (walletLoading || !address) {
+        return (
+            <div className="flex flex-col items-center justify-center min-h-[60vh]">
+                <Loader2 className="w-12 h-12 text-blue-600 animate-spin mb-4" />
+                <h2 className="text-xl font-semibold text-slate-700">Đang kết nối ví...</h2>
+                <p className="text-slate-500">Vui lòng hoàn tất xác thực ví để tiếp tục.</p>
+            </div>
+        );
+    }
+
     return (
         <div className="max-w-6xl mx-auto">
             {/* Header with Quota */}
@@ -219,6 +237,10 @@ const PatientDashboard = () => {
                         <History className="w-4 h-4 mr-2" />
                         Lịch sử
                     </TabsTrigger>
+                    <TabsTrigger value="delegation" className="rounded-lg px-4 py-2.5 data-[state=active]:bg-green-50 data-[state=active]:text-green-700">
+                        <Users className="w-4 h-4 mr-2" />
+                        Ủy quyền
+                    </TabsTrigger>
                     <TabsTrigger value="grant" className="rounded-lg px-4 py-2.5 data-[state=active]:bg-blue-50 data-[state=active]:text-blue-700">
                         <Plus className="w-4 h-4 mr-2" />
                         Cấp mới
@@ -241,7 +263,7 @@ const PatientDashboard = () => {
                             </Button>
                         </div>
                         <Button
-                            onClick={() => setIsUploadModalOpen(true)}
+                            onClick={handleAddNewRecord}
                             className="bg-blue-600 hover:bg-blue-700 text-white gap-2"
                         >
                             <Plus className="w-4 h-4" /> Thêm hồ sơ
@@ -271,7 +293,7 @@ const PatientDashboard = () => {
                         <div className="text-center py-20 bg-slate-50 rounded-xl border border-dashed border-slate-300">
                             <FileX className="w-12 h-12 text-slate-400 mx-auto mb-4" />
                             <p className="text-slate-500 mb-4">Chưa có hồ sơ y tế nào.</p>
-                            <Button onClick={() => setIsUploadModalOpen(true)} className="bg-blue-600 hover:bg-blue-700 text-white">
+                            <Button onClick={handleAddNewRecord} className="bg-blue-600 hover:bg-blue-700 text-white">
                                 <Plus className="w-4 h-4 mr-2" /> Thêm hồ sơ đầu tiên
                             </Button>
                         </div>
@@ -310,7 +332,12 @@ const PatientDashboard = () => {
                     <AccessLogTab records={records} />
                 </TabsContent>
 
-                {/* Tab 5: Grant New Access */}
+                {/* Tab 5: Delegation Management */}
+                <TabsContent value="delegation" className="outline-none">
+                    <DelegationManager />
+                </TabsContent>
+
+                {/* Tab 6: Grant New Access */}
                 <TabsContent value="grant" className="outline-none">
                     <div className="max-w-lg">
                         <GrantAccessForm onGrant={handleGrantAccess} />
@@ -332,7 +359,7 @@ const PatientDashboard = () => {
                 parentRecord={parentRecord}
                 existingRecords={records}
             />
-        </div>
+        </div >
     );
 };
 

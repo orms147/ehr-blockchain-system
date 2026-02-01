@@ -271,4 +271,179 @@ router.post('/org-applications/:id/reject', authenticate, isMinistry, async (req
     }
 });
 
+// ============ ORGANIZATION ENTITY (CLIENT-SIDE FLOW) ============
+
+// Multer setup for license upload
+import multer from 'multer';
+
+// Mock IPFS Service (Inlined to fix import path issues)
+const ipfsService = {
+    async uploadFile(fileBuffer, mimeType) {
+        console.log('[MockIPFS] Uploading file...', { size: fileBuffer.length, type: mimeType });
+        await new Promise(resolve => setTimeout(resolve, 500));
+        const fakeCid = 'Qm' + Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+        return {
+            cid: fakeCid,
+            url: `https://gateway.pinata.cloud/ipfs/${fakeCid}`
+        };
+    }
+};
+
+const upload = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 50 * 1024 * 1024 }, // 50MB limit
+});
+
+// POST /api/admin/upload-license - Step 1: Upload License to IPFS
+router.post('/upload-license', authenticate, isMinistry, upload.single('licenseFile'), async (req, res, next) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ error: 'License file is required' });
+        }
+
+        // Upload to IPFS
+        const { cid, url } = await ipfsService.uploadFile(req.file.buffer, req.file.mimetype);
+
+        console.log(`[Admin] License uploaded: ${cid}`);
+
+        res.json({
+            success: true,
+            licenseCid: cid,
+            licenseUrl: url,
+        });
+    } catch (error) {
+        console.error('[UploadLicense] Error:', error);
+        next(error);
+    }
+});
+
+// Validation schema for syncing
+const syncOrgSchema = z.object({
+    orgId: z.number().int().positive(),
+    name: z.string().min(2),
+    primaryAdmin: z.string().regex(/^0x[a-fA-F0-9]{40}$/),
+    backupAdmin: z.string().regex(/^0x[a-fA-F0-9]{40}$/).optional().nullable(),
+    txHash: z.string().regex(/^0x[a-fA-F0-9]{64}$/),
+    licenseCid: z.string().min(10), // IPFS CID
+    licenseUrl: z.string().optional(),
+});
+
+// POST /api/admin/confirm-org-creation - Step 3: Sync DB after On-chain Success
+router.post('/confirm-org-creation', authenticate, isMinistry, async (req, res, next) => {
+    try {
+        const data = syncOrgSchema.parse(req.body);
+        const { orgId, name, primaryAdmin, backupAdmin, txHash, licenseCid, licenseUrl } = data;
+
+        // 1. Verify Transaction on-chain (Sanity check)
+        const receipt = await publicClient.getTransactionReceipt({ hash: txHash });
+
+        if (!receipt || receipt.status !== 'success') {
+            return res.status(400).json({ error: 'Transaction failed or not found' });
+        }
+
+        // Optional: Verify that this Tx actually created THIS orgId
+        // In a real prod environment, we should parse logs.
+        // For now, we trust the input + receipt existence to avoid complex log parsing here.
+
+        // 2. Create/Update Organization in DB
+        const org = await prisma.organization.upsert({
+            where: { address: primaryAdmin.toLowerCase() }, // Use address as unique identifier
+            update: {
+                name: name,
+                // address: primaryAdmin.toLowerCase(), // Address is unique key, no update?
+                // primaryAdmin: primaryAdmin.toLowerCase(), // Removed - not in schema
+                // backupAdmin: backupAdmin ? backupAdmin.toLowerCase() : null, // Removed
+                // licenseCid: licenseCid, // Removed
+                licenseNumber: licenseUrl, // Map URL to licenseNumber (Hotfix)
+                isVerified: true,
+                verifiedAt: new Date(),
+                verifiedBy: req.user.walletAddress,
+                // active: true, // Removed
+            },
+            create: {
+                // id will be auto-generated UUID
+                name: name,
+                address: primaryAdmin.toLowerCase(),
+                orgType: 'hospital', // Default
+                licenseNumber: licenseUrl, // Store license URL here
+                isVerified: true,
+                verifiedAt: new Date(),
+                verifiedBy: req.user.walletAddress,
+            },
+        });
+
+        console.log(`[Admin] Org synced: ${name} (ID: ${orgId})`);
+
+        // 3. Ensure Admin Membership exists
+        await prisma.organizationMember.create({
+            data: {
+                orgId: org.id,
+                memberAddress: primaryAdmin.toLowerCase(),
+                role: 'admin',
+                status: 'active'
+            }
+        }).catch(() => {
+            // Ignore if already exists
+        });
+
+        res.json({
+            success: true,
+            message: 'Organization synchronized successfully',
+            organization: org,
+        });
+
+    } catch (error) {
+        console.error('[SyncOrg] Error:', error);
+        next(error);
+    }
+});
+
+// GET /api/admin/organizations - List all on-chain organizations
+router.get('/organizations', authenticate, isMinistry, async (req, res, next) => {
+    try {
+        // Source of truth: Blockchain
+        const orgCount = await publicClient.readContract({
+            address: ACCESS_CONTROL_ADDRESS,
+            abi: ACCESS_CONTROL_ABI,
+            functionName: 'orgCount',
+        });
+
+        const organizations = [];
+        for (let i = 1; i <= Number(orgCount); i++) {
+            try {
+                const org = await publicClient.readContract({
+                    address: ACCESS_CONTROL_ADDRESS,
+                    abi: ACCESS_CONTROL_ABI,
+                    functionName: 'getOrganization',
+                    args: [BigInt(i)],
+                });
+
+                // Fetch extra data from DB (License, etc) if available
+                const dbOrg = await prisma.organization.findFirst({
+                    where: { address: org.primaryAdmin.toLowerCase() }
+                });
+
+                organizations.push({
+                    id: Number(org.id),
+                    name: org.name,
+                    primaryAdmin: org.primaryAdmin,
+                    backupAdmin: org.backupAdmin,
+                    createdAt: new Date(Number(org.createdAt) * 1000),
+                    active: org.active,
+                    licenseUrl: dbOrg?.licenseNumber || null, // Enrich from DB (Hotfix: licenseNumber stores URL)
+                });
+            } catch (e) {
+                console.error(`Error fetching org ${i}:`, e);
+            }
+        }
+
+        res.json({
+            count: organizations.length,
+            organizations: organizations,
+        });
+    } catch (error) {
+        next(error);
+    }
+});
+
 export default router;

@@ -7,50 +7,8 @@ import prisma from '../config/database.js';
 const router = Router();
 
 // Validation schemas
-const createDelegationSchema = z.object({
-    delegateAddress: z.string().regex(/^0x[a-fA-F0-9]{40}$/),
-    delegationType: z.enum(['full', 'limited', 'emergency_only']).default('full'),
-});
-
-// POST /api/delegation/create - Patient adds a delegate (family member)
-router.post('/create', authenticate, async (req, res, next) => {
-    try {
-        const data = createDelegationSchema.parse(req.body);
-        const patientAddress = req.user.walletAddress.toLowerCase();
-
-        // Check if delegation already exists
-        const existing = await prisma.delegation.findFirst({
-            where: {
-                patientAddress: patientAddress,
-                delegateAddress: data.delegateAddress.toLowerCase(),
-                status: 'active',
-            },
-        });
-
-        if (existing) {
-            return res.status(400).json({
-                error: 'Ủy quyền đã tồn tại cho địa chỉ này',
-                delegation: existing,
-            });
-        }
-
-        const delegation = await prisma.delegation.create({
-            data: {
-                patientAddress: patientAddress,
-                delegateAddress: data.delegateAddress.toLowerCase(),
-                delegationType: data.delegationType,
-            },
-        });
-
-        res.json({
-            success: true,
-            message: 'Đã thêm ủy quyền thành công',
-            delegation: delegation,
-        });
-    } catch (error) {
-        next(error);
-    }
-});
+// Routes for delegation management
+// Note: Creation is handled client-side via wallet interaction, then synced via /confirm-onchain
 
 // GET /api/delegation/my-delegates - Get delegates I've added (as patient)
 router.get('/my-delegates', authenticate, async (req, res, next) => {
@@ -149,6 +107,45 @@ router.get('/check/:patientAddress', authenticate, async (req, res, next) => {
         res.json({
             hasDelegation: !!delegation,
             delegation: delegation,
+        });
+    } catch (error) {
+        next(error);
+    }
+});
+
+// POST /api/delegation/confirm-onchain - Sync on-chain delegation status
+router.post('/confirm-onchain', authenticate, async (req, res, next) => {
+    try {
+        const { delegateAddress, txHash, onChainStatus } = req.body;
+        const patientAddress = req.user.walletAddress.toLowerCase();
+
+        // 1. Check if delegation exists in DB
+        const delegation = await prisma.delegation.findFirst({
+            where: {
+                patientAddress: patientAddress,
+                delegateAddress: delegateAddress.toLowerCase(),
+                status: 'active',
+            },
+        });
+
+        if (!delegation) {
+            // Create if not exists (case where user did on-chain first)
+            await prisma.delegation.create({
+                data: {
+                    patientAddress: patientAddress,
+                    delegateAddress: delegateAddress.toLowerCase(),
+                    delegationType: 'full',
+                    // Note: We don't have txHash column yet, so we just rely on existence
+                },
+            });
+        }
+
+        // If we had a txHash column, we would update it here.
+        // For now, just acknowledged.
+
+        res.json({
+            success: true,
+            message: 'Delegation on-chain status confirmed',
         });
     } catch (error) {
         next(error);

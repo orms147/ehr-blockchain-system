@@ -115,14 +115,7 @@ export async function sponsorRegisterPatient(walletAddress) {
         return { alreadyRegistered: true };
     }
 
-    // Check quota
-    const user = await prisma.user.findUnique({
-        where: { walletAddress: address },
-    });
-
-    if (user?.registrationSponsored) {
-        throw new Error('Đã sử dụng quyền đăng ký miễn phí');
-    }
+    // Note: No quota check - users can register both patient AND doctor roles
 
     // Submit transaction - use registerPatientFor to register the USER (not admin)
     const hash = await walletClient.writeContract({
@@ -170,14 +163,7 @@ export async function sponsorRegisterDoctor(walletAddress) {
         return { alreadyRegistered: true };
     }
 
-    // Check quota
-    const user = await prisma.user.findUnique({
-        where: { walletAddress: address },
-    });
-
-    if (user?.registrationSponsored) {
-        throw new Error('Đã sử dụng quyền đăng ký miễn phí');
-    }
+    // Note: No quota check - users can register both patient AND doctor roles
 
     // Submit transaction
     const hash = await walletClient.writeContract({

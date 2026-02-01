@@ -50,15 +50,16 @@ contract AccessControlTest is TestHelpers {
     // ========== CONSTRUCTOR TESTS ==========
     
     function test_Constructor_Success() public view {
-        // Ministry should have MINISTRY and VERIFIED_ORG roles
+        // Ministry should ONLY have MINISTRY role - NOT ORGANIZATION
+        // Ministry is regulator, not a hospital
         (bool isPatient, bool isDoctor, bool isVerifiedDoctor, bool isOrg, bool isVerifiedOrg, bool isMinistry) 
             = accessControl.getUserStatus(ministry);
         
         assertFalse(isPatient, "Ministry should not be patient");
         assertFalse(isDoctor, "Ministry should not be doctor");
         assertFalse(isVerifiedDoctor, "Ministry should not be verified doctor");
-        assertTrue(isOrg, "Ministry should be org");  // ✅ Ministry IS org now!
-        assertTrue(isVerifiedOrg, "Ministry should be verified org");
+        assertFalse(isOrg, "Ministry should NOT be org (regulator only)");
+        assertFalse(isVerifiedOrg, "Ministry should NOT be verified org");
         assertTrue(isMinistry, "Ministry should have ministry role");
     }
     
@@ -90,15 +91,11 @@ contract AccessControlTest is TestHelpers {
         assertFalse(accessControl.isVerifiedDoctor(doctor1), "Should not be verified yet");
     }
     
-    function test_RegisterAsOrganization_Success() public {
-        vm.expectEmit(true, false, false, true);
-        emit UserRegistered(org1, "ORGANIZATION_UNVERIFIED");
-        
+    function test_RegisterAsOrganization_RevertWhen_Deprecated() public {
+        // registerAsOrganization is DEPRECATED - should revert
+        vm.expectRevert(IAccessControl.NotAuthorized.selector);
         vm.prank(org1);
         accessControl.registerAsOrganization();
-        
-        assertTrue(accessControl.isOrganization(org1), "Should be organization");
-        assertFalse(accessControl.isVerifiedOrganization(org1), "Should not be verified yet");
     }
     
     // ========== MULTI-ROLE TESTS ==========
@@ -115,16 +112,18 @@ contract AccessControlTest is TestHelpers {
     }
     
     function test_MultipleRoles_AllThree() public {
+        // NOTE: registerAsOrganization is now deprecated (reverts with NotAuthorized)
+        // This test now only tests Patient + Doctor roles
+        // Organization role can only be assigned by Ministry via createOrganization
         vm.startPrank(doctor1);
         accessControl.registerAsPatient();
         accessControl.registerAsDoctor();
-        accessControl.registerAsOrganization();
         vm.stopPrank();
         
         (bool isP, bool isD,, bool isO,,) = accessControl.getUserStatus(doctor1);
         assertTrue(isP, "Should be patient");
         assertTrue(isD, "Should be doctor");
-        assertTrue(isO, "Should be organization");
+        assertFalse(isO, "Should NOT be organization (self-registration deprecated)");
     }
     
     function test_MultipleRoles_BitwiseOperations() public {
@@ -146,60 +145,33 @@ contract AccessControlTest is TestHelpers {
     
     // ========== VERIFICATION TESTS ==========
     
-    function test_VerifyOrganization_ByMinistry_Success() public {
-        // Org registers first
-        vm.prank(org1);
-        accessControl.registerAsOrganization();
-        
-        // Ministry verifies
-        vm.expectEmit(true, false, false, true);
-        emit OrganizationVerified(org1, "Hospital ABC");
-        
-        vm.prank(ministry);
-        accessControl.verifyOrganization(org1, "Hospital ABC");
-        
-        assertTrue(accessControl.isVerifiedOrganization(org1), "Should be verified");
-        
-        // Check verification details
-        (address verifier, string memory orgName, uint40 verifiedAt, bool isVerified) 
-            = accessControl.getOrgVerification(org1);
-        
-        assertEq(verifier, ministry, "Verifier should be ministry");
-        assertEq(orgName, "Hospital ABC", "Org name should match");
-        assertGt(verifiedAt, 0, "Verified timestamp should be set");
-        assertTrue(isVerified, "Should be verified");
-    }
+    // NOTE: verifyOrganization is now DEPRECATED - registerAsOrganization reverts
+    // These tests verify the deprecated flow cannot be used
     
-    function test_VerifyOrganization_RevertWhen_NotMinistry() public {
+    function test_VerifyOrganization_RevertWhen_DeprecatedFlow() public {
+        // registerAsOrganization is deprecated and reverts
+        vm.expectRevert(IAccessControl.NotAuthorized.selector);
         vm.prank(org1);
         accessControl.registerAsOrganization();
-        
-        vm.expectRevert(IAccessControl.NotAuthorized.selector);
-        vm.prank(attacker);
-        accessControl.verifyOrganization(org1, "Hospital ABC");
     }
     
     function test_VerifyOrganization_RevertWhen_NotRegistered() public {
+        // Trying to verify an org that wasn't registered should revert
         vm.expectRevert(IAccessControl.NotAuthorized.selector);
         vm.prank(ministry);
         accessControl.verifyOrganization(org1, "Hospital ABC");
     }
     
     function test_VerifyDoctor_ByOrganization_Success() public {
-        // Setup: Verify org first
-        vm.prank(org1);
-        accessControl.registerAsOrganization();
+        // Setup: Create org via Ministry (new flow)
         vm.prank(ministry);
-        accessControl.verifyOrganization(org1, "Hospital ABC");
+        accessControl.createOrganization("Hospital ABC", org1, address(0));
         
         // Doctor registers
         vm.prank(doctor1);
         accessControl.registerAsDoctor();
         
         // Org verifies doctor
-        vm.expectEmit(true, true, false, true);
-        emit DoctorVerified(doctor1, org1, "Cardiologist - Hospital ABC");
-        
         vm.prank(org1);
         accessControl.verifyDoctor(doctor1, "Cardiologist - Hospital ABC");
         
@@ -216,24 +188,19 @@ contract AccessControlTest is TestHelpers {
     }
     
     function test_VerifyDoctor_RevertWhen_NotVerifiedOrg() public {
-        // Org not verified
-        vm.prank(org1);
-        accessControl.registerAsOrganization();
-        
+        // Org NOT created via Ministry - should not be able to verify doctors
         vm.prank(doctor1);
         accessControl.registerAsDoctor();
         
         vm.expectRevert(IAccessControl.NotAuthorized.selector);
-        vm.prank(org1);
+        vm.prank(org1);  // org1 is not a verified org
         accessControl.verifyDoctor(doctor1, "Cardiologist");
     }
     
     function test_VerifyDoctor_RevertWhen_DoctorNotRegistered() public {
-        // Setup verified org
-        vm.prank(org1);
-        accessControl.registerAsOrganization();
+        // Setup verified org via Ministry
         vm.prank(ministry);
-        accessControl.verifyOrganization(org1, "Hospital ABC");
+        accessControl.createOrganization("Hospital ABC", org1, address(0));
         
         // Try to verify unregistered doctor
         vm.expectRevert(IAccessControl.NotAuthorized.selector);
@@ -278,11 +245,9 @@ contract AccessControlTest is TestHelpers {
     }
     
     function test_RevokeOrgVerification_ByMinistry_Success() public {
-        // Setup: Verify org
-        vm.prank(org1);
-        accessControl.registerAsOrganization();
+        // Setup: Create org via Ministry
         vm.prank(ministry);
-        accessControl.verifyOrganization(org1, "Hospital ABC");
+        accessControl.createOrganization("Hospital ABC", org1, address(0));
         
         // Revoke
         vm.expectEmit(true, true, false, false);
@@ -292,14 +257,13 @@ contract AccessControlTest is TestHelpers {
         accessControl.revokeOrgVerification(org1);
         
         assertFalse(accessControl.isVerifiedOrganization(org1), "Should not be verified");
-        assertTrue(accessControl.isOrganization(org1), "Should still be org (unverified)");
+        // Note: With Ministry flow, org still has some ORGANIZATION flag but VERIFIED_ORG is cleared
     }
     
     function test_RevokeOrgVerification_RevertWhen_NotMinistry() public {
-        vm.prank(org1);
-        accessControl.registerAsOrganization();
+        // Create org via Ministry
         vm.prank(ministry);
-        accessControl.verifyOrganization(org1, "Hospital ABC");
+        accessControl.createOrganization("Hospital ABC", org1, address(0));
         
         vm.expectRevert(IAccessControl.NotAuthorized.selector);
         vm.prank(attacker);
@@ -309,11 +273,10 @@ contract AccessControlTest is TestHelpers {
     // ========== QUERY FUNCTION TESTS ==========
     
     function test_GetUserStatus_AllRoles() public {
-        // Register all roles
+        // Register patient and doctor roles (org is deprecated via self-registration)
         vm.startPrank(doctor1);
         accessControl.registerAsPatient();
         accessControl.registerAsDoctor();
-        accessControl.registerAsOrganization();
         vm.stopPrank();
         
         (bool isP, bool isD, bool isVD, bool isO, bool isVO, bool isM) 
@@ -322,7 +285,7 @@ contract AccessControlTest is TestHelpers {
         assertTrue(isP, "Should be patient");
         assertTrue(isD, "Should be doctor");
         assertFalse(isVD, "Should not be verified doctor");
-        assertTrue(isO, "Should be organization");
+        assertFalse(isO, "Should not be organization (self-registration deprecated)");
         assertFalse(isVO, "Should not be verified org");
         assertFalse(isM, "Should not be ministry");
     }
@@ -372,143 +335,12 @@ contract AccessControlTest is TestHelpers {
         accessControl.revokeDoctorVerification(doctor1);
     }
     
-    // ========== MEMBERSHIP TESTS ==========
-    
-    function test_AddMember_Success() public {
-        // Setup: Verified org and registered doctor
-        _setupVerifiedDoctor(doctor1, org1);
-        
-        // Verify doctor is NOT auto-added to members
-        address[] memory membersBefore = accessControl.getOrgMembers(org1);
-        assertEq(membersBefore.length, 0, "Should have no members initially");
-        
-        // Add member
-        vm.expectEmit(true, true, false, false);
-        emit MemberAdded(org1, doctor1);
-        
-        vm.prank(org1);
-        accessControl.addMember(org1, doctor1);
-        
-        // Verify member added
-        address[] memory membersAfter = accessControl.getOrgMembers(org1);
-        assertEq(membersAfter.length, 1, "Should have 1 member");
-        assertEq(membersAfter[0], doctor1, "Member should be doctor1");
-        assertTrue(accessControl.isMemberOfOrg(org1, doctor1), "Should be member");
-    }
-    
-    function test_AddMember_Idempotent() public {
-        _setupVerifiedDoctor(doctor1, org1);
-        
-        // Add member twice
-        vm.startPrank(org1);
-        accessControl.addMember(org1, doctor1);
-        accessControl.addMember(org1, doctor1);  // Should not revert, just no-op
-        vm.stopPrank();
-        
-        // Should still have only 1 member
-        address[] memory members = accessControl.getOrgMembers(org1);
-        assertEq(members.length, 1, "Should have 1 member (not duplicated)");
-    }
-    
-    function test_AddMember_RevertWhen_NotVerifiedOrg() public {
-        // Org not verified
-        vm.prank(org1);
-        accessControl.registerAsOrganization();
-        
-        vm.prank(doctor1);
-        accessControl.registerAsDoctor();
-        
-        vm.expectRevert(IAccessControl.NotAuthorized.selector);
-        vm.prank(org1);
-        accessControl.addMember(org1, doctor1);
-    }
-    
-    function test_AddMember_RevertWhen_DoctorNotRegistered() public {
-        // Setup verified org
-        vm.prank(org1);
-        accessControl.registerAsOrganization();
-        vm.prank(ministry);
-        accessControl.verifyOrganization(org1, "Hospital ABC");
-        
-        // Try to add unregistered doctor
-        vm.expectRevert(IAccessControl.NotAuthorized.selector);
-        vm.prank(org1);
-        accessControl.addMember(org1, doctor1);
-    }
-    
-    function test_AddMember_RevertWhen_WrongOrg() public {
-        _setupVerifiedDoctor(doctor1, org1);
-        
-        // Try to add member to different org
-        vm.expectRevert(IAccessControl.NotAuthorized.selector);
-        vm.prank(org1);
-        accessControl.addMember(org2, doctor1);  // org1 trying to add to org2
-    }
-    
-    function test_RemoveMember_Success() public {
-        _setupVerifiedDoctor(doctor1, org1);
-        
-        // Add member first
-        vm.prank(org1);
-        accessControl.addMember(org1, doctor1);
-        
-        // Remove member
-        vm.expectEmit(true, true, false, false);
-        emit MemberRemoved(org1, doctor1);
-        
-        vm.prank(org1);
-        accessControl.removeMember(org1, doctor1);
-        
-        // Verify removed
-        address[] memory members = accessControl.getOrgMembers(org1);
-        assertEq(members.length, 0, "Should have no members");
-        assertFalse(accessControl.isMemberOfOrg(org1, doctor1), "Should not be member");
-    }
-    
-    function test_RemoveMember_Idempotent() public {
-        _setupVerifiedDoctor(doctor1, org1);
-        
-        vm.prank(org1);
-        accessControl.addMember(org1, doctor1);
-        
-        // Remove twice
-        vm.startPrank(org1);
-        accessControl.removeMember(org1, doctor1);
-        accessControl.removeMember(org1, doctor1);  // Should not revert, just no-op
-        vm.stopPrank();
-        
-        address[] memory members = accessControl.getOrgMembers(org1);
-        assertEq(members.length, 0, "Should have no members");
-    }
-    
-    function test_RemoveMember_WithMultipleMembers() public {
-        _setupVerifiedDoctor(doctor1, org1);
-        _setupVerifiedDoctor(doctor2, org1);
-        
-        // Add both doctors
-        vm.startPrank(org1);
-        accessControl.addMember(org1, doctor1);
-        accessControl.addMember(org1, doctor2);
-        vm.stopPrank();
-        
-        // Remove doctor1
-        vm.prank(org1);
-        accessControl.removeMember(org1, doctor1);
-        
-        // Verify only doctor2 remains
-        address[] memory members = accessControl.getOrgMembers(org1);
-        assertEq(members.length, 1, "Should have 1 member");
-        assertEq(members[0], doctor2, "Remaining member should be doctor2");
-        assertFalse(accessControl.isMemberOfOrg(org1, doctor1), "Doctor1 should not be member");
-        assertTrue(accessControl.isMemberOfOrg(org1, doctor2), "Doctor2 should still be member");
-    }
+    // ========== MEMBERSHIP TESTS (ADDRESS-BASED - DEPRECATED) ==========\r\n    // NOTE: These address-based functions are deprecated in favor of orgId-based functions\r\n    // See test_AddOrgMember_* and test_RemoveOrgMember_* in Ministry-based tests section\r\n    \r\n    // The deprecated addMember and removeMember functions now revert with NotAuthorized\r\n    // See test_AddMember_RevertWhen_Deprecated and test_RemoveMember_RevertWhen_Deprecated\r\n    // in the \"DEPRECATED FUNCTION TESTS\" section at end of file
     
     function test_VerifyDoctor_DoesNotAddMember() public {
-        // Setup verified org
-        vm.prank(org1);
-        accessControl.registerAsOrganization();
+        // Setup verified org via Ministry
         vm.prank(ministry);
-        accessControl.verifyOrganization(org1, "Hospital ABC");
+        uint256 orgId = accessControl.createOrganization("Hospital ABC", org1, address(0));
         
         // Register and verify doctor
         vm.prank(doctor1);
@@ -517,28 +349,36 @@ contract AccessControlTest is TestHelpers {
         accessControl.verifyDoctor(doctor1, "Cardiologist");
         
         // ✅ CRITICAL: Verify doctor is NOT auto-added to members
-        address[] memory members = accessControl.getOrgMembers(org1);
+        address[] memory members = accessControl.getOrgMembersByOrgId(orgId);
         assertEq(members.length, 0, "Verify should NOT auto-add member");
-        assertFalse(accessControl.isMemberOfOrg(org1, doctor1), "Should not be member after verify");
+        assertFalse(accessControl.isDoctorMemberOfOrg(orgId, doctor1), "Should not be member after verify");
         
         // But doctor should be verified
         assertTrue(accessControl.isVerifiedDoctor(doctor1), "Should be verified");
     }
     
     function test_MembershipIndependentFromVerification() public {
-        _setupVerifiedDoctor(doctor1, org1);
+        // Setup verified org via Ministry
+        vm.prank(ministry);
+        uint256 orgId = accessControl.createOrganization("Hospital ABC", org1, address(0));
         
-        // Add as member
+        // Register and verify doctor
+        vm.prank(doctor1);
+        accessControl.registerAsDoctor();
         vm.prank(org1);
-        accessControl.addMember(org1, doctor1);
+        accessControl.verifyDoctor(doctor1, "Cardiologist");
+        
+        // Add as member (using new orgId-based function)
+        vm.prank(org1);
+        accessControl.addOrgMember(orgId, doctor1);
         
         // Revoke verification
         vm.prank(org1);
         accessControl.revokeDoctorVerification(doctor1);
         
         // ✅ Should still be member (membership independent)
-        assertTrue(accessControl.isMemberOfOrg(org1, doctor1), "Should still be member");
-        address[] memory members = accessControl.getOrgMembers(org1);
+        assertTrue(accessControl.isDoctorMemberOfOrg(orgId, doctor1), "Should still be member");
+        address[] memory members = accessControl.getOrgMembersByOrgId(orgId);
         assertEq(members.length, 1, "Should still have 1 member");
         
         // But not verified
@@ -548,16 +388,244 @@ contract AccessControlTest is TestHelpers {
     // ========== HELPER FUNCTIONS ==========
     
     function _setupVerifiedDoctor(address doctor, address org) internal {
-        // Register and verify org
-        vm.prank(org);
-        accessControl.registerAsOrganization();
+        // Create org via Ministry (new flow)
         vm.prank(ministry);
-        accessControl.verifyOrganization(org, "Hospital ABC");
+        accessControl.createOrganization("Hospital ABC", org, address(0));
         
         // Register and verify doctor
         vm.prank(doctor);
         accessControl.registerAsDoctor();
         vm.prank(org);
         accessControl.verifyDoctor(doctor, "Cardiologist");
+    }
+    
+    // ========== NEW: MINISTRY-BASED ORGANIZATION TESTS ==========
+    
+    // Helper: Create org via Ministry and return orgId
+    function _createOrgViaMinistry(string memory name, address primaryAdmin, address backupAdmin) internal returns (uint256) {
+        vm.prank(ministry);
+        return accessControl.createOrganization(name, primaryAdmin, backupAdmin);
+    }
+    
+    function test_CreateOrganization_Success() public {
+        uint256 orgId = _createOrgViaMinistry("Hospital XYZ", org1, address(0));
+        
+        // Verify orgId returned
+        assertEq(orgId, 1, "First org should have ID 1");
+        assertEq(accessControl.orgCount(), 1, "Org count should be 1");
+        
+        // Verify org data
+        IAccessControl.Organization memory org = accessControl.getOrganization(orgId);
+        assertEq(org.id, 1, "Org ID should match");
+        assertEq(org.name, "Hospital XYZ", "Org name should match");
+        assertEq(org.primaryAdmin, org1, "Primary admin should match");
+        assertEq(org.backupAdmin, address(0), "Backup admin should be zero");
+        assertTrue(org.active, "Org should be active");
+        
+        // Verify admin mapping
+        assertEq(accessControl.getAdminOrgId(org1), orgId, "Admin should map to org");
+    }
+    
+    function test_CreateOrganization_SetsOrgVerifications() public {
+        _createOrgViaMinistry("Hospital ABC", org1, org2);
+        
+        // ✅ CRITICAL: isVerifiedOrganization should return TRUE
+        assertTrue(accessControl.isVerifiedOrganization(org1), "Primary admin should be verified org");
+        assertTrue(accessControl.isVerifiedOrganization(org2), "Backup admin should be verified org");
+        
+        // Verify orgVerifications data is set correctly
+        (address verifier1, string memory credential1, uint40 verifiedAt1, bool active1) 
+            = accessControl.getOrgVerification(org1);
+        assertEq(verifier1, ministry, "Verifier should be ministry");
+        assertEq(credential1, "Hospital ABC", "Credential should be org name");
+        assertGt(verifiedAt1, 0, "VerifiedAt should be set");
+        assertTrue(active1, "Active should be true");
+        
+        (address verifier2, string memory credential2, uint40 verifiedAt2, bool active2) 
+            = accessControl.getOrgVerification(org2);
+        assertEq(verifier2, ministry, "Backup verifier should be ministry");
+        assertEq(credential2, "Hospital ABC", "Backup credential should be org name");
+        assertGt(verifiedAt2, 0, "Backup verifiedAt should be set");
+        assertTrue(active2, "Backup active should be true");
+    }
+    
+    function test_CreateOrganization_IsActiveOrgAdmin() public {
+        _createOrgViaMinistry("Hospital ABC", org1, org2);
+        
+        assertTrue(accessControl.isActiveOrgAdmin(org1), "Primary should be active admin");
+        assertTrue(accessControl.isActiveOrgAdmin(org2), "Backup should be active admin");
+        assertFalse(accessControl.isActiveOrgAdmin(attacker), "Attacker should not be admin");
+    }
+    
+    function test_CreateOrganization_RevertWhen_NotMinistry() public {
+        vm.expectRevert(IAccessControl.NotAuthorized.selector);
+        vm.prank(attacker);
+        accessControl.createOrganization("Fake Hospital", org1, address(0));
+    }
+    
+    function test_CreateOrganization_RevertWhen_InvalidPrimaryAdmin() public {
+        vm.expectRevert(IAccessControl.InvalidAddress.selector);
+        vm.prank(ministry);
+        accessControl.createOrganization("Hospital", address(0), address(0));
+    }
+    
+    function test_CreateOrganization_RevertWhen_PrimaryEqualsBackup() public {
+        vm.expectRevert(IAccessControl.InvalidAddress.selector);
+        vm.prank(ministry);
+        accessControl.createOrganization("Hospital", org1, org1);
+    }
+    
+    function test_CreateOrganization_RevertWhen_AdminAlreadyRegistered() public {
+        _createOrgViaMinistry("Hospital 1", org1, address(0));
+        
+        // Try to create another org with same admin
+        vm.expectRevert(IAccessControl.AlreadyRegistered.selector);
+        vm.prank(ministry);
+        accessControl.createOrganization("Hospital 2", org1, address(0));
+    }
+    
+    function test_SetOrgAdmins_Success() public {
+        uint256 orgId = _createOrgViaMinistry("Hospital ABC", org1, address(0));
+        
+        // Change admins
+        vm.prank(ministry);
+        accessControl.setOrgAdmins(orgId, org2, patient1);
+        
+        // Verify old admin cleared
+        assertFalse(accessControl.isVerifiedOrganization(org1), "Old admin should not be verified");
+        assertFalse(accessControl.isActiveOrgAdmin(org1), "Old admin should not be active");
+        assertEq(accessControl.getAdminOrgId(org1), 0, "Old admin mapping should be cleared");
+        
+        // Verify new admins set
+        assertTrue(accessControl.isVerifiedOrganization(org2), "New primary should be verified");
+        assertTrue(accessControl.isVerifiedOrganization(patient1), "New backup should be verified");
+        assertTrue(accessControl.isActiveOrgAdmin(org2), "New primary should be active admin");
+        assertTrue(accessControl.isActiveOrgAdmin(patient1), "New backup should be active admin");
+    }
+    
+    function test_SetOrgAdmins_SetsOrgVerifications() public {
+        uint256 orgId = _createOrgViaMinistry("Hospital ABC", org1, address(0));
+        
+        vm.prank(ministry);
+        accessControl.setOrgAdmins(orgId, org2, patient1);
+        
+        // Old admin should have orgVerifications.active = false
+        (,,, bool oldActive) = accessControl.getOrgVerification(org1);
+        assertFalse(oldActive, "Old admin orgVerifications.active should be false");
+        
+        // New admins should have orgVerifications set
+        (address v1, string memory c1, uint40 t1, bool a1) = accessControl.getOrgVerification(org2);
+        assertEq(v1, ministry, "New primary verifier");
+        assertEq(c1, "Hospital ABC", "New primary credential");
+        assertGt(t1, 0, "New primary timestamp");
+        assertTrue(a1, "New primary active");
+        
+        (address v2, string memory c2, uint40 t2, bool a2) = accessControl.getOrgVerification(patient1);
+        assertEq(v2, ministry, "New backup verifier");
+        assertEq(c2, "Hospital ABC", "New backup credential");
+        assertGt(t2, 0, "New backup timestamp");
+        assertTrue(a2, "New backup active");
+    }
+    
+    function test_SetOrgActive_DeactivatesOrg() public {
+        uint256 orgId = _createOrgViaMinistry("Hospital ABC", org1, org2);
+        
+        // Deactivate
+        vm.prank(ministry);
+        accessControl.setOrgActive(orgId, false);
+        
+        // Check roles cleared
+        assertFalse(accessControl.isVerifiedOrganization(org1), "Primary should not be verified");
+        assertFalse(accessControl.isVerifiedOrganization(org2), "Backup should not be verified");
+        
+        // Check orgVerifications.active = false
+        (,,, bool active1) = accessControl.getOrgVerification(org1);
+        (,,, bool active2) = accessControl.getOrgVerification(org2);
+        assertFalse(active1, "Primary orgVerifications.active should be false");
+        assertFalse(active2, "Backup orgVerifications.active should be false");
+        
+        // isActiveOrgAdmin should also return false
+        assertFalse(accessControl.isActiveOrgAdmin(org1), "Primary should not be active admin");
+        assertFalse(accessControl.isActiveOrgAdmin(org2), "Backup should not be active admin");
+    }
+    
+    function test_SetOrgActive_ReactivatesOrg() public {
+        uint256 orgId = _createOrgViaMinistry("Hospital ABC", org1, org2);
+        
+        // Deactivate then reactivate
+        vm.startPrank(ministry);
+        accessControl.setOrgActive(orgId, false);
+        accessControl.setOrgActive(orgId, true);
+        vm.stopPrank();
+        
+        // Check roles restored
+        assertTrue(accessControl.isVerifiedOrganization(org1), "Primary should be verified again");
+        assertTrue(accessControl.isVerifiedOrganization(org2), "Backup should be verified again");
+        
+        // Check orgVerifications.active = true
+        (,,, bool active1) = accessControl.getOrgVerification(org1);
+        (,,, bool active2) = accessControl.getOrgVerification(org2);
+        assertTrue(active1, "Primary orgVerifications.active should be true");
+        assertTrue(active2, "Backup orgVerifications.active should be true");
+    }
+    
+    // ========== ORG MEMBER MANAGEMENT (orgId-based) TESTS ==========
+    
+    function test_AddOrgMember_Success() public {
+        uint256 orgId = _createOrgViaMinistry("Hospital ABC", org1, address(0));
+        
+        // Register doctor
+        vm.prank(doctor1);
+        accessControl.registerAsDoctor();
+        
+        // Add member (called by org admin)
+        vm.prank(org1);
+        accessControl.addOrgMember(orgId, doctor1);
+        
+        // Verify
+        assertTrue(accessControl.isDoctorMemberOfOrg(orgId, doctor1), "Doctor should be member");
+        address[] memory members = accessControl.getOrgMembersByOrgId(orgId);
+        assertEq(members.length, 1, "Should have 1 member");
+        assertEq(members[0], doctor1, "Member should be doctor1");
+    }
+    
+    function test_AddOrgMember_RevertWhen_NotOrgAdmin() public {
+        uint256 orgId = _createOrgViaMinistry("Hospital ABC", org1, address(0));
+        
+        vm.prank(doctor1);
+        accessControl.registerAsDoctor();
+        
+        // Attacker tries to add member
+        vm.expectRevert(IAccessControl.NotAuthorized.selector);
+        vm.prank(attacker);
+        accessControl.addOrgMember(orgId, doctor1);
+    }
+    
+    function test_RemoveOrgMember_Success() public {
+        uint256 orgId = _createOrgViaMinistry("Hospital ABC", org1, address(0));
+        
+        vm.prank(doctor1);
+        accessControl.registerAsDoctor();
+        
+        vm.startPrank(org1);
+        accessControl.addOrgMember(orgId, doctor1);
+        accessControl.removeOrgMember(orgId, doctor1);
+        vm.stopPrank();
+        
+        assertFalse(accessControl.isDoctorMemberOfOrg(orgId, doctor1), "Doctor should not be member");
+    }
+    
+    // ========== DEPRECATED FUNCTION TESTS ==========
+    
+    function test_AddMember_RevertWhen_Deprecated() public {
+        vm.expectRevert(IAccessControl.NotAuthorized.selector);
+        vm.prank(org1);
+        accessControl.addMember(org1, doctor1);
+    }
+    
+    function test_RemoveMember_RevertWhen_Deprecated() public {
+        vm.expectRevert(IAccessControl.NotAuthorized.selector);
+        vm.prank(org1);
+        accessControl.removeMember(org1, doctor1);
     }
 }

@@ -1,10 +1,50 @@
 // Organization Routes - API for hospital/clinic management
 import { Router } from 'express';
 import { z } from 'zod';
+import multer from 'multer';
+import path from 'path';
+import fs from 'fs';
+import { fileURLToPath } from 'url';
 import { authenticate } from '../middleware/auth.js';
 import prisma from '../config/database.js';
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 const router = Router();
+
+// ============ MULTER CONFIG ============
+const uploadDir = path.join(__dirname, '../../uploads/licenses');
+
+// Create uploads directory if not exists
+if (!fs.existsSync(uploadDir)) {
+    fs.mkdirSync(uploadDir, { recursive: true });
+}
+
+const storage = multer.diskStorage({
+    destination: (req, file, cb) => {
+        cb(null, uploadDir);
+    },
+    filename: (req, file, cb) => {
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+        cb(null, 'license-' + uniqueSuffix + path.extname(file.originalname));
+    }
+});
+
+const fileFilter = (req, file, cb) => {
+    const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png'];
+    if (allowedTypes.includes(file.mimetype)) {
+        cb(null, true);
+    } else {
+        cb(new Error('Chỉ chấp nhận PDF, JPEG, PNG'), false);
+    }
+};
+
+const upload = multer({
+    storage: storage,
+    limits: { fileSize: 50 * 1024 * 1024 }, // 50MB
+    fileFilter: fileFilter
+});
 
 // Validation schemas
 const createOrgSchema = z.object({
@@ -15,13 +55,15 @@ const createOrgSchema = z.object({
     contactEmail: z.string().email().optional(),
 });
 
-// Schema for ORG application (hybrid flow)
+// Schema for ORG profile update (compliance/audit) - flexible validation
 const applyOrgSchema = z.object({
-    orgName: z.string().min(2).max(200),
-    description: z.string().max(1000).optional(),
+    orgName: z.string().min(3).max(100),
+    description: z.string().max(1000).optional().default(''),
     contactEmail: z.string().email(),
-    licenseNumber: z.string().optional(),
-    orgType: z.enum(['hospital', 'clinic']).default('hospital'),
+    licenseNumber: z.string().optional().default(''),
+    orgType: z.enum(['hospital', 'private_hospital', 'clinic', 'medical_center']).default('hospital'),
+    phone: z.string().optional().default(''),
+    address: z.string().max(500).optional().default(''),
 });
 
 const addMemberSchema = z.object({
@@ -31,11 +73,12 @@ const addMemberSchema = z.object({
 
 // ============ ORG APPLICATION ROUTES (Hybrid Flow) ============
 
-// POST /api/org/apply - Submit application to become ORG
-router.post('/apply', authenticate, async (req, res, next) => {
+// POST /api/org/apply - Submit/update org profile (compliance) with file upload
+router.post('/apply', authenticate, upload.single('licenseFile'), async (req, res, next) => {
     try {
         const data = applyOrgSchema.parse(req.body);
         const applicantAddress = req.user.walletAddress.toLowerCase();
+        const licensePath = req.file ? `/uploads/licenses/${req.file.filename}` : null;
 
         // Check if already has pending application
         const existingPending = await prisma.orgApplication.findFirst({
@@ -46,27 +89,28 @@ router.post('/apply', authenticate, async (req, res, next) => {
         });
 
         if (existingPending) {
-            return res.status(400).json({
-                error: 'You already have a pending application',
-                application: existingPending,
+            // Update existing application
+            const updated = await prisma.orgApplication.update({
+                where: { id: existingPending.id },
+                data: {
+                    orgName: data.orgName,
+                    description: data.description,
+                    contactEmail: data.contactEmail,
+                    licenseNumber: data.licenseNumber,
+                    orgType: data.orgType,
+                    phone: data.phone,
+                    address: data.address,
+                    ...(licensePath && { licenseFilePath: licensePath }),
+                },
+            });
+            return res.json({
+                success: true,
+                message: 'Đã cập nhật hồ sơ tổ chức',
+                application: updated,
             });
         }
 
-        // Check if already verified
-        const existingApproved = await prisma.orgApplication.findFirst({
-            where: {
-                applicantAddress,
-                status: 'APPROVED',
-            },
-        });
-
-        if (existingApproved) {
-            return res.status(400).json({
-                error: 'You are already a verified organization',
-            });
-        }
-
-        // Create application
+        // Create new application
         const application = await prisma.orgApplication.create({
             data: {
                 applicantAddress,
@@ -75,12 +119,15 @@ router.post('/apply', authenticate, async (req, res, next) => {
                 contactEmail: data.contactEmail,
                 licenseNumber: data.licenseNumber,
                 orgType: data.orgType,
+                phone: data.phone,
+                address: data.address,
+                licenseFilePath: licensePath,
             },
         });
 
         res.status(201).json({
             success: true,
-            message: 'Application submitted. Please register as Organization on-chain, then wait for Ministry verification.',
+            message: 'Đã lưu hồ sơ tổ chức. Bộ Y tế có thể xem xét bất kỳ lúc nào.',
             application,
         });
     } catch (error) {
@@ -166,25 +213,53 @@ router.get('/my-org', authenticate, async (req, res, next) => {
     try {
         const memberAddress = req.user.walletAddress.toLowerCase();
 
-        const membership = await prisma.organizationMember.findFirst({
+        let membership = await prisma.organizationMember.findFirst({
             where: {
                 memberAddress: memberAddress,
                 status: 'active',
             },
         });
 
-        if (!membership) {
-            return res.json({ hasOrg: false });
+        let org;
+        let role;
+
+        if (membership) {
+            org = await prisma.organization.findUnique({
+                where: { id: membership.orgId },
+            });
+            role = membership.role;
+        } else {
+            // Fallback: Check if user is primaryAdmin of an org (created by Ministry)
+            org = await prisma.organization.findFirst({
+                where: { address: memberAddress }, // In our model, Org Address = Primary Admin Address
+            });
+
+            if (org) {
+                role = 'admin';
+                // Auto-fix: Create membership record if missing
+                try {
+                    await prisma.organizationMember.create({
+                        data: {
+                            orgId: org.id,
+                            memberAddress: memberAddress,
+                            role: 'admin',
+                            status: 'active'
+                        }
+                    });
+                } catch (e) {
+                    // Ignore unique constraint violation if race condition
+                }
+            }
         }
 
-        const org = await prisma.organization.findUnique({
-            where: { id: membership.orgId },
-        });
+        if (!org) {
+            return res.json({ hasOrg: false });
+        }
 
         res.json({
             hasOrg: true,
             organization: org,
-            role: membership.role,
+            role: role,
         });
     } catch (error) {
         next(error);

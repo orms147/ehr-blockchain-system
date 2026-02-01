@@ -29,7 +29,10 @@ model OrgApplication {
   description      String?
   contactEmail     String
   licenseNumber    String?                        // Business license
-  orgType          String               @default("hospital") // hospital, clinic
+  orgType          String               @default("hospital") // hospital, clinic, private_hospital, medical_center
+  phone            String?                        // Contact phone
+  address          String?                        // Physical address
+  licenseFilePath  String?                        // Path to uploaded license file
   status           OrgApplicationStatus @default(PENDING)
   
   // Review
@@ -42,6 +45,7 @@ model OrgApplication {
   verifyTxHash     String?              @db.VarChar(66)
   
   createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
   
   @@index([applicantAddress])
   @@index([status])
@@ -126,6 +130,9 @@ model KeyShare {
   
   // Sender's NaCl public key (needed for nacl.box.open decryption)
   senderPublicKey  String? @db.Text
+  
+  // RecordDelegation: If true, recipient can re-share this record to others
+  allowDelegate    Boolean  @default(false)
 
   status    String    @default("pending") // pending, claimed, revoked
   createdAt DateTime  @default(now())

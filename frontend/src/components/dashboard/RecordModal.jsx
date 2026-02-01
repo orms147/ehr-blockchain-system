@@ -76,8 +76,17 @@ const RecordModal = ({ record, open, onOpenChange, onUpdate, onViewRecord }) => 
                 setLoadingChain(true);
                 try {
                     const chainData = await recordService.getChainCids(record.cidHash);
+
+                    // Deduplicate records by cidHash
+                    const uniqueRecords = new Map();
+                    (chainData.records || []).forEach(r => {
+                        if (!uniqueRecords.has(r.cidHash)) {
+                            uniqueRecords.set(r.cidHash, r);
+                        }
+                    });
+
                     // Sort by creation time (oldest first for timeline)
-                    const sorted = (chainData.records || []).sort(
+                    const sorted = Array.from(uniqueRecords.values()).sort(
                         (a, b) => new Date(a.createdAt) - new Date(b.createdAt)
                     );
                     setChainRecords(sorted);
@@ -108,7 +117,9 @@ const RecordModal = ({ record, open, onOpenChange, onUpdate, onViewRecord }) => 
                 aesKeyString = localData.aesKey;
             } else {
                 // Try to fetch from keyShare (for shared records)
+                console.log(`Fetching key for chain record: ${oldRecord.cidHash}`);
                 const sharedKey = await keyShareService.getKeyForRecord(oldRecord.cidHash);
+                console.log('Got shared key:', sharedKey);
 
                 if (!sharedKey) {
                     throw new Error('Không tìm thấy key giải mã cho hồ sơ này.');
@@ -124,9 +135,11 @@ const RecordModal = ({ record, open, onOpenChange, onUpdate, onViewRecord }) => 
                         myKeypair.secretKey
                     );
                     const keyData = JSON.parse(decrypted);
+                    console.log('Decrypted key data:', keyData);
                     cid = keyData.cid;
                     aesKeyString = keyData.aesKey;
-                } catch {
+                } catch (e) {
+                    console.warn('Standard decryption failed, trying fallback:', e);
                     // Try base64/JSON parse fallback
                     try {
                         const decoded = atob(sharedKey.encryptedPayload);
@@ -173,7 +186,13 @@ const RecordModal = ({ record, open, onOpenChange, onUpdate, onViewRecord }) => 
     const getLocalRecordData = () => {
         try {
             const localRecords = JSON.parse(localStorage.getItem('ehr_local_records') || '{}');
-            return localRecords[record.cidHash] || null;
+            // Direct lookup
+            if (localRecords[record.cidHash]) return localRecords[record.cidHash];
+
+            // Case-insensitive lookup (Robust fix)
+            const targetHash = record.cidHash?.toLowerCase();
+            const foundKey = Object.keys(localRecords).find(k => k.toLowerCase() === targetHash);
+            return foundKey ? localRecords[foundKey] : null;
         } catch {
             return null;
         }
@@ -204,6 +223,16 @@ const RecordModal = ({ record, open, onOpenChange, onUpdate, onViewRecord }) => 
 
                 if (!sharedKey) {
                     throw new Error('Không tìm thấy key giải mã. Bạn có thể chưa được chia sẻ key cho hồ sơ này.');
+                }
+
+                // Auto-claim if pending (UX improvement: View = Claim)
+                if (sharedKey.status === 'pending' && sharedKey.id) {
+                    try {
+                        keyShareService.claimKey(sharedKey.id);
+                        // Don't await, let it happen in background
+                    } catch (e) {
+                        console.warn('Auto-claim failed:', e);
+                    }
                 }
 
                 // Decrypt the shared key using NaCl
@@ -629,53 +658,81 @@ const RecordModal = ({ record, open, onOpenChange, onUpdate, onViewRecord }) => 
                                         const isCurrent = r.cidHash === record.cidHash;
                                         const isFirst = idx === 0;
                                         const isLast = idx === chainRecords.length - 1;
+                                        const isViewing = selectedChainRecord?.cidHash === r.cidHash;
 
                                         return (
                                             <div
                                                 key={r.cidHash}
-                                                className={`relative pl-6 ${!isLast ? 'pb-4' : ''} border-l-2 ${isCurrent ? 'border-blue-500' : 'border-slate-300'}`}
+                                                className={`relative pl-8 pb-8 last:pb-0 ${!isCurrent ? 'cursor-pointer group' : ''}`}
+                                                onClick={() => {
+                                                    if (!isCurrent && !chainDecrypting && !isViewing) {
+                                                        handleViewChainRecord(r);
+                                                    }
+                                                }}
                                             >
-                                                <div className={`absolute -left-2 top-0 w-4 h-4 rounded-full ${isCurrent ? 'bg-blue-500' : 'bg-slate-400'}`}></div>
-                                                <div className={`p-3 rounded-lg border ${isCurrent ? 'bg-blue-50 border-blue-200' : 'bg-slate-50 border-slate-200'}`}>
+                                                {/* Timeline Connector */}
+                                                <div className="absolute left-[11px] top-8 bottom-0 w-px bg-slate-200 last:hidden" />
+
+                                                {/* Timeline Dot */}
+                                                <div className={`absolute left-0 top-1 w-[22px] h-[22px] rounded-full border-2 flex items-center justify-center bg-white z-10 transition-colors ${isCurrent
+                                                        ? 'border-blue-500 text-blue-500'
+                                                        : isViewing
+                                                            ? 'border-amber-500 text-amber-500'
+                                                            : 'border-slate-300 text-slate-400 group-hover:border-teal-500 group-hover:text-teal-500'
+                                                    }`}>
+                                                    <div className={`w-2 h-2 rounded-full ${isCurrent ? 'bg-blue-500' : isViewing ? 'bg-amber-500' : 'bg-slate-300 group-hover:bg-teal-500'
+                                                        }`} />
+                                                </div>
+
+                                                {/* Content Card */}
+                                                <div className={`p-3 rounded-lg border transition-all ${isCurrent
+                                                        ? 'bg-blue-50 border-blue-200 shadow-sm'
+                                                        : isViewing
+                                                            ? 'bg-amber-50 border-amber-200 shadow-md ring-1 ring-amber-100'
+                                                            : 'bg-white border-slate-100 hover:border-teal-200 hover:shadow-md'
+                                                    }`}>
                                                     <div className="flex items-center justify-between mb-1">
                                                         <span className={`font-medium ${isCurrent ? 'text-blue-900' : 'text-slate-700'}`}>
                                                             {isCurrent ? '📌 Phiên bản hiện tại' : isFirst ? '📝 Hồ sơ gốc' : `📄 Phiên bản ${idx + 1}`}
+                                                            {isViewing && <span className="ml-2 text-xs text-amber-600 font-normal">(Đang xem)</span>}
                                                         </span>
+
                                                         <div className="flex items-center gap-1">
+                                                            {/* Copy CID Button */}
                                                             <Button
                                                                 variant="ghost"
                                                                 size="sm"
-                                                                onClick={() => copyToClipboard(r.cidHash)}
-                                                                className="h-6 w-6 p-0"
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    copyToClipboard(r.cidHash);
+                                                                }}
+                                                                className="h-6 w-6 p-0 hover:bg-slate-200"
                                                             >
-                                                                <Copy className="w-3 h-3" />
+                                                                <Copy className="w-3 h-3 text-slate-400" />
                                                             </Button>
-                                                            {!isCurrent && (
-                                                                <Button
-                                                                    variant="ghost"
-                                                                    size="sm"
-                                                                    onClick={() => handleViewChainRecord(r)}
-                                                                    disabled={chainDecrypting}
-                                                                    className={`h-6 w-6 p-0 ${selectedChainRecord?.cidHash === r.cidHash ? 'bg-blue-100' : ''}`}
-                                                                >
-                                                                    {chainDecrypting && selectedChainRecord?.cidHash === r.cidHash ? (
-                                                                        <Loader2 className="w-3 h-3 animate-spin" />
-                                                                    ) : (
-                                                                        <Eye className="w-3 h-3" />
-                                                                    )}
-                                                                </Button>
-                                                            )}
                                                         </div>
                                                     </div>
-                                                    <p className={`text-sm ${isCurrent ? 'text-blue-700' : 'text-slate-600'}`}>
-                                                        {r.title || 'Không có tiêu đề'}
-                                                    </p>
-                                                    <p className={`text-xs mt-1 ${isCurrent ? 'text-blue-500' : 'text-slate-500'}`}>
-                                                        {new Date(r.createdAt).toLocaleDateString('vi-VN')}
-                                                    </p>
-                                                    <p className="text-xs text-slate-400 font-mono mt-1">
-                                                        {r.cidHash?.slice(0, 18)}...
-                                                    </p>
+
+                                                    <div className="flex justify-between items-end">
+                                                        <div>
+                                                            <p className={`text-sm ${isCurrent ? 'text-blue-700' : 'text-slate-600'}`}>
+                                                                {r.title || 'Không có tiêu đề'}
+                                                            </p>
+                                                            <div className="flex items-center gap-2 mt-1">
+                                                                <p className={`text-xs ${isCurrent ? 'text-blue-500' : 'text-slate-500'}`}>
+                                                                    {new Date(r.createdAt).toLocaleDateString('vi-VN')}
+                                                                </p>
+                                                                {!isCurrent && !isViewing && (
+                                                                    <span className="text-[10px] text-teal-600 font-medium opacity-0 group-hover:opacity-100 transition-opacity">
+                                                                        Nhấn để xem
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                        {chainDecrypting && selectedChainRecord?.cidHash === r.cidHash && (
+                                                            <Loader2 className="w-4 h-4 animate-spin text-amber-600" />
+                                                        )}
+                                                    </div>
                                                 </div>
                                             </div>
                                         );

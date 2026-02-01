@@ -14,6 +14,7 @@ import { useWeb3Auth, useWeb3AuthConnect, useWeb3AuthDisconnect, useWeb3AuthUser
 import { createWalletClient, custom } from 'viem';
 import { arbitrumSepolia } from 'viem/chains';
 import { authService } from '@/services';
+import { syncSessionOnce } from '@/hooks/useSessionSync';
 
 export default function LoginPage() {
     const router = useRouter();
@@ -29,15 +30,15 @@ export default function LoginPage() {
     // Guard against React StrictMode double-execution
     const hasAuthenticated = useRef(false);
 
-    // Check if already logged in - redirect to last active role
+    // Check if already logged in - use session sync for role resolution
     useEffect(() => {
-        if (authService.isLoggedIn()) {
-            const activeRole = localStorage.getItem('activeRole') || localStorage.getItem('userRole') || 'patient';
-            const dashboardPath = activeRole === 'doctor' ? '/dashboard/doctor' :
-                activeRole === 'admin' ? '/dashboard/admin' :
-                    '/dashboard/patient';
-            router.push(dashboardPath);
-        }
+        const checkSession = async () => {
+            if (authService.isLoggedIn()) {
+                // Session sync will fetch roles from backend and redirect appropriately
+                await syncSessionOnce(router);
+            }
+        };
+        checkSession();
     }, [router]);
 
     // Handle login with Web3Auth modal
@@ -109,30 +110,9 @@ export default function LoginPage() {
                         className: "bg-green-50 border-green-200 text-green-800",
                     });
 
-                    // Check roles and redirect appropriately
-                    const { isPatient, isDoctor, isVerifiedDoctor } = loginResult.user || loginResult.roles || {};
-
-                    setTimeout(() => {
-                        if (!isPatient && !isDoctor) {
-                            // No role registered yet - go to registration
-                            router.push('/register');
-                        } else if (isVerifiedDoctor || isDoctor) {
-                            // Save Doctor role to localStorage
-                            const roles = JSON.parse(localStorage.getItem('userRoles') || '[]');
-                            if (!roles.includes('doctor')) roles.push('doctor');
-                            localStorage.setItem('userRoles', JSON.stringify(roles));
-                            localStorage.setItem('activeRole', 'doctor');
-                            localStorage.setItem('userRole', 'doctor');
-                            router.push('/dashboard/doctor');
-                        } else {
-                            // Save Patient role to localStorage
-                            const roles = JSON.parse(localStorage.getItem('userRoles') || '[]');
-                            if (!roles.includes('patient')) roles.push('patient');
-                            localStorage.setItem('userRoles', JSON.stringify(roles));
-                            localStorage.setItem('activeRole', 'patient');
-                            localStorage.setItem('userRole', 'patient');
-                            router.push('/dashboard/patient');
-                        }
+                    // Use session sync for role resolution and redirect
+                    setTimeout(async () => {
+                        await syncSessionOnce(router);
                     }, 1500);
                 }
 
@@ -162,19 +142,9 @@ export default function LoginPage() {
                                 className: "bg-green-50 border-green-200 text-green-800",
                             });
 
-                            const { isPatient, isDoctor, isVerifiedDoctor } = retryResult.user || retryResult.roles || {};
-                            setTimeout(() => {
-                                if (!isPatient && !isDoctor) {
-                                    router.push('/register');
-                                } else if (isVerifiedDoctor || isDoctor) {
-                                    localStorage.setItem('activeRole', 'doctor');
-                                    localStorage.setItem('userRole', 'doctor');
-                                    router.push('/dashboard/doctor');
-                                } else {
-                                    localStorage.setItem('activeRole', 'patient');
-                                    localStorage.setItem('userRole', 'patient');
-                                    router.push('/dashboard/patient');
-                                }
+                            // Use session sync for role resolution and redirect
+                            setTimeout(async () => {
+                                await syncSessionOnce(router);
                             }, 1500);
                             return; // Success on retry!
                         }
@@ -194,6 +164,7 @@ export default function LoginPage() {
                         variant: "destructive",
                     });
                 } else {
+                    setLoading(false);
                     setStep(1);
                     hasAuthenticated.current = false; // Allow retry
                     await disconnect();

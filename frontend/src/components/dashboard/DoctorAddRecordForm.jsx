@@ -26,9 +26,9 @@ const RECORD_REGISTRY_ADDRESS = process.env.NEXT_PUBLIC_RECORD_REGISTRY_ADDRESS;
 
 
 // ABI for DoctorUpdate.addRecordByDoctor (6 params with auto consent)
-const DOCTOR_UPDATE_ABI = parseAbi([
-    'function addRecordByDoctor(bytes32 cidHash, bytes32 parentCidHash, bytes32 recordTypeHash, address patient, bytes32 doctorEncKeyHash, uint40 doctorAccessHours) external',
-]);
+// ABI for DoctorUpdate.addRecordByDoctor (6 params with auto consent)
+import { DOCTOR_UPDATE_ABI } from '@/config/contractABI';
+
 
 const RECORD_TYPES = [
     { value: 'diagnosis', label: 'Chẩn đoán' },
@@ -59,8 +59,8 @@ export default function DoctorAddRecordForm({ onSuccess }) {
     const handleFileChange = (e) => {
         const selectedFile = e.target.files[0];
         if (selectedFile) {
-            if (selectedFile.size > 10 * 1024 * 1024) { // 10MB limit
-                toast({ title: "Lỗi", description: "File quá lớn (tối đa 10MB)", variant: "destructive" });
+            if (selectedFile.size > 100 * 1024 * 1024) { // 100MB limit
+                toast({ title: "Lỗi", description: "File quá lớn (tối đa 100MB)", variant: "destructive" });
                 return;
             }
             setFile(selectedFile);
@@ -128,11 +128,43 @@ export default function DoctorAddRecordForm({ onSuccess }) {
             // 5. Ensure correct chain
             await ensureArbitrumSepolia(provider);
 
-            // 6. Get Doctor's keypair first (need encKeyHash for on-chain call)
+            // 6. Get Doctor's keypair first (need encKeyHash for on-chain consent)
             const doctorKeypair = await getOrCreateEncryptionKeypair(provider, walletAddress);
 
             // Hash the doctor's public key for on-chain consent
             const doctorEncKeyHash = keccak256(toBytes(doctorKeypair.publicKey));
+
+            // Default Access Duration for Doctor: 7 Days (168 Hours)
+            const accessDurationHours = 168;
+            const expiresAt = new Date(Date.now() + accessDurationHours * 60 * 60 * 1000).toISOString();
+
+            // INHERITANCE LOGIC: Calculate expiry and duration based on Parent
+            let finalAccessDurationHours = accessDurationHours; // Default from props/state (usually 168h/7days)
+            let finalExpiresAt = null;
+
+            if (parentRecord) {
+                // If checking off-chain parent record (KeyShare metadata likely has expiresAt)
+                // We use the parent's expiry to keep the session consistent.
+                const parentExpiryStr = parentRecord.expiresAt;
+                if (parentExpiryStr) {
+                    const now = new Date();
+                    const parentExpiry = new Date(parentExpiryStr);
+                    const diffMs = parentExpiry.getTime() - now.getTime();
+                    // Ceiling to ensure we cover the remaining session
+                    // If < 0, it means expired. But usually we are updating an active record.
+                    const diffHours = Math.max(1, Math.ceil(diffMs / (1000 * 60 * 60)));
+
+                    finalAccessDurationHours = diffHours;
+                    finalExpiresAt = parentExpiry.toISOString();
+                }
+            }
+
+            // If still null (new record or no parent expiry found), calculate default
+            if (!finalExpiresAt) {
+                const d = new Date();
+                d.setTime(d.getTime() + (finalAccessDurationHours * 60 * 60 * 1000));
+                finalExpiresAt = d.toISOString();
+            }
 
             // 7. Submit on-chain via DoctorUpdate contract (includes auto-consent for Doctor)
             const walletClient = createWalletClient({
@@ -146,11 +178,11 @@ export default function DoctorAddRecordForm({ onSuccess }) {
                 // DoctorUpdate signature: (cidHash, parentCidHash, recordTypeHash, patient, doctorEncKeyHash, doctorAccessHours)
                 args: [
                     cidHash,
-                    '0x0000000000000000000000000000000000000000000000000000000000000000', // no parent
+                    parentRecord?.cidHash || '0x0000000000000000000000000000000000000000000000000000000000000000', // Fix: Use parent hash if exists
                     recordTypeHash,
                     patientAddress,
                     doctorEncKeyHash,  // For on-chain consent
-                    168,               // 7 days = 168 hours
+                    finalAccessDurationHours, // Fix: Use inherited duration
                 ],
                 account: walletAddress,
                 gas: BigInt(500000), // Higher gas for DoctorUpdate (calls 2 contracts)
@@ -158,13 +190,20 @@ export default function DoctorAddRecordForm({ onSuccess }) {
                 maxPriorityFeePerGas: parseGwei('0.1'),
             });
             // 8. Save to backend (metadata only - on-chain tx already done above)
-            await recordService.saveRecordMetadata(cidHash, recordTypeHash, patientAddress);
+            // 8. Save to backend (metadata only - on-chain tx already done above)
+            await recordService.saveRecordMetadata(cidHash, recordTypeHash, patientAddress, {
+                title: title,
+                description: notes,
+                recordType: recordType,
+                parentCidHash: parentRecord?.cidHash || null
+            });
 
             // 9. Prepare key sharing for decryption
             const exportedKey = await exportAESKey(aesKey);
             const keyPayload = JSON.stringify({ cid, aesKey: exportedKey });
 
             // 10a. ALWAYS save key for Doctor (creator) - so Doctor can decrypt and share later
+            // IMPORTANT: This key MUST have an expiry matching on-chain duration!
             const doctorEncryptedKey = encryptForRecipient(
                 keyPayload,
                 doctorKeypair.publicKey, // Encrypt with Doctor's own public key
@@ -176,6 +215,7 @@ export default function DoctorAddRecordForm({ onSuccess }) {
                 cidHash: cidHash,
                 encryptedPayload: doctorEncryptedKey,
                 senderPublicKey: doctorKeypair.publicKey,
+                expiresAt: finalExpiresAt // Fix: Sync with On-Chain Expiry
             });
 
             // 10b. Try to share key with patient (may fail if patient hasn't registered encryption key)
@@ -209,6 +249,111 @@ export default function DoctorAddRecordForm({ onSuccess }) {
                     description: "Bệnh nhân chưa đăng ký khóa mã hóa. Bác sĩ có thể chia sẻ key sau khi bệnh nhân đăng nhập.",
                     variant: "warning",
                 });
+            }
+
+            // 10c. [COLLABORATION] Share key with referring Doctor (Creator of Parent Record)
+            // This ensures "Shared Vision": The doctor who created the original record gets access to the update.
+            if (parentRecord && parentRecord.createdBy &&
+                parentRecord.createdBy.toLowerCase() !== walletAddress.toLowerCase() &&
+                parentRecord.createdBy.toLowerCase() !== patientAddress.toLowerCase()) {
+                try {
+                    const refereeAddress = parentRecord.createdBy;
+                    const refereeKeyResponse = await authService.getEncryptionKey(refereeAddress);
+
+                    if (refereeKeyResponse?.encryptionPublicKey) {
+                        const encryptedForKeyRef = encryptForRecipient(
+                            keyPayload,
+                            refereeKeyResponse.encryptionPublicKey,
+                            doctorKeypair.secretKey
+                        );
+
+                        await keyShareService.shareKey({
+                            recipientAddress: refereeAddress,
+                            cidHash: cidHash,
+                            encryptedPayload: encryptedForKeyRef,
+                            senderPublicKey: doctorKeypair.publicKey,
+                        });
+                        console.log("Auto-shared key with referring doctor:", refereeAddress);
+                        toast({
+                            title: "Đồng bộ liên kết",
+                            description: "Đã chia sẻ bản cập nhật này cho bác sĩ tạo hồ sơ gốc.",
+                            className: "bg-blue-50 text-blue-800 border-blue-200",
+                        });
+                    }
+                } catch (refError) {
+                    console.warn("Failed to auto-share with referrer:", refError);
+                    // Non-critical, do not block flow
+                }
+            }
+
+            // 10d. [BROADCAST] Share with other Care Team members
+            // SECURITY CRITICAL: We must verify that these members ACTUALLY have access to the Parent Record.
+            // If Backend is compromised, it could inject "Attacker X" into this list.
+            // We TRUST blockchain, not Backend.
+            if (parentRecord && parentRecord.cidHash && parentRecord.ownerAddress) {
+                try {
+                    const teamMembers = await keyShareService.getRecordRecipients(parentRecord.cidHash);
+
+                    // Filter: Don't share with myself, patient, or the creator (already handled above)
+                    const uniqueMembers = teamMembers.filter(m =>
+                        m.walletAddress.toLowerCase() !== walletAddress.toLowerCase() &&
+                        m.walletAddress.toLowerCase() !== patientAddress.toLowerCase() &&
+                        m.walletAddress.toLowerCase() !== (parentRecord.createdBy || '').toLowerCase()
+                    );
+
+                    if (uniqueMembers.length > 0) {
+                        console.log(`Verifying and broadcasting update to ${uniqueMembers.length} team members...`);
+
+                        let sharedCount = 0;
+                        await Promise.all(uniqueMembers.map(async (member) => {
+                            if (!member.encryptionPublicKey) return;
+
+                            // 1. [SECURITY CHECK] Verify On-Chain Consent for Parent Record
+                            // Is "member" allowed to see "parentRecord"?
+                            try {
+                                const hasAccess = await publicClient.readContract({
+                                    address: CONSENT_LEDGER_ADDRESS,
+                                    abi: CONSENT_LEDGER_ABI,
+                                    functionName: 'canAccess',
+                                    args: [parentRecord.ownerAddress, member.walletAddress, parentRecord.cidHash]
+                                });
+
+                                if (!hasAccess) {
+                                    console.warn(`Blocking auto-share to ${member.walletAddress}: No on-chain consent for parent record.`);
+                                    return; // SKIP (Attacker X filtered out here)
+                                }
+
+                                // 2. Encrypt & Share
+                                const encryptedForMember = encryptForRecipient(
+                                    keyPayload,
+                                    member.encryptionPublicKey,
+                                    doctorKeypair.secretKey
+                                );
+
+                                await keyShareService.shareKey({
+                                    recipientAddress: member.walletAddress,
+                                    cidHash: cidHash,
+                                    encryptedPayload: encryptedForMember,
+                                    senderPublicKey: doctorKeypair.publicKey,
+                                });
+                                sharedCount++;
+
+                            } catch (verifyError) {
+                                console.error(`Verification failed for ${member.walletAddress}`, verifyError);
+                            }
+                        }));
+
+                        if (sharedCount > 0) {
+                            toast({
+                                title: "Đồng bộ nhóm an toàn",
+                                description: `Đã chia sẻ cập nhật cho ${sharedCount} bác sĩ (đã xác thực trên chain).`,
+                                className: "bg-purple-50 text-purple-800 border-purple-200",
+                            });
+                        }
+                    }
+                } catch (broadcastError) {
+                    console.warn("Broadcast failed:", broadcastError);
+                }
             }
 
             setCreatedRecord({
@@ -360,7 +505,7 @@ export default function DoctorAddRecordForm({ onSuccess }) {
 
                     {/* Title */}
                     <div className="space-y-2">
-                        <Label htmlFor="title">Tiêu đề *</Label>
+                        <Label htmlFor="title" className="text-slate-800 font-medium">Tiêu đề *</Label>
                         <Input
                             id="title"
                             placeholder="VD: Kết quả khám tổng quát ngày 21/12"
@@ -372,7 +517,7 @@ export default function DoctorAddRecordForm({ onSuccess }) {
 
                     {/* Notes */}
                     <div className="space-y-2">
-                        <Label htmlFor="notes">Ghi chú / Nội dung</Label>
+                        <Label htmlFor="notes" className="text-slate-800 font-medium">Ghi chú / Nội dung</Label>
                         <Textarea
                             id="notes"
                             placeholder="Nhập ghi chú hoặc nội dung chi tiết..."

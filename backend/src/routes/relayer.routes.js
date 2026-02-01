@@ -37,15 +37,7 @@ router.post('/register', authenticate, async (req, res, next) => {
     try {
         const { role } = registerSchema.parse(req.body);
 
-        // Check quota first
-        const quota = await relayerService.getQuotaStatus(req.user.walletAddress);
-
-        if (!quota.registrationAvailable) {
-            return res.status(400).json({
-                error: 'Đã sử dụng quyền đăng ký miễn phí',
-                suggestion: 'Vui lòng kết nối ví có ETH để đăng ký thêm role'
-            });
-        }
+        // Note: No quota check for registration - user can register both patient AND doctor roles
 
         if (role === 'patient') {
             const result = await relayerService.sponsorRegisterPatient(req.user.walletAddress);

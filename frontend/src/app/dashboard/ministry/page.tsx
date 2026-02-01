@@ -15,6 +15,8 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { toast } from '@/components/ui/use-toast';
 import { useWalletAddress } from '@/hooks/useWalletAddress';
+import AdminOrgApplications from '@/components/org/AdminOrgApplications';
+import MinistryOrgManagement from '@/components/ministry/MinistryOrgManagement';
 
 // Mock data
 const mockOrganizations = [
@@ -149,124 +151,14 @@ export default function MinistryDashboardPage() {
                         </TabsTrigger>
                     </TabsList>
 
-                    {/* Tab 1: Organizations */}
+                    {/* Tab 1: Organizations - Real blockchain data */}
                     <TabsContent value="organizations" className="outline-none">
-                        <Card className="bg-white">
-                            <CardHeader className="flex flex-row items-center justify-between">
-                                <CardTitle className="text-slate-900">Danh sách Tổ chức Y tế</CardTitle>
-                                <div className="flex items-center gap-4">
-                                    <div className="relative">
-                                        <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                                        <Input
-                                            placeholder="Tìm kiếm..."
-                                            value={searchTerm}
-                                            onChange={(e) => setSearchTerm(e.target.value)}
-                                            className="pl-9 w-64"
-                                        />
-                                    </div>
-                                    <Button variant="ghost" size="sm">
-                                        <RefreshCw className="w-4 h-4" />
-                                    </Button>
-                                </div>
-                            </CardHeader>
-                            <CardContent>
-                                <div className="space-y-4">
-                                    {filteredOrgs.map((org) => (
-                                        <div
-                                            key={org.id}
-                                            className="p-4 border border-slate-200 rounded-xl hover:border-red-300 transition-colors bg-white"
-                                        >
-                                            <div className="flex items-center justify-between">
-                                                <div className="flex items-center gap-4">
-                                                    <div className="w-12 h-12 bg-red-100 rounded-xl flex items-center justify-center">
-                                                        <Building2 className="w-6 h-6 text-red-600" />
-                                                    </div>
-                                                    <div>
-                                                        <p className="font-medium text-slate-900">{org.name}</p>
-                                                        <p className="text-sm text-slate-500">{org.type}</p>
-                                                        <p className="text-xs text-slate-400">{org.doctorCount} bác sĩ</p>
-                                                    </div>
-                                                </div>
-                                                <div className="flex items-center gap-3">
-                                                    <Badge className={org.verified ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}>
-                                                        {org.verified ? (
-                                                            <><CheckCircle className="w-3 h-3 mr-1" /> Đã xác thực</>
-                                                        ) : (
-                                                            <><Clock className="w-3 h-3 mr-1" /> Chưa xác thực</>
-                                                        )}
-                                                    </Badge>
-                                                    <Button variant="outline" size="sm">
-                                                        Quản lý
-                                                    </Button>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            </CardContent>
-                        </Card>
+                        <MinistryOrgManagement />
                     </TabsContent>
 
-                    {/* Tab 2: Pending */}
+                    {/* Tab 2: Pending - Real data from backend/on-chain */}
                     <TabsContent value="pending" className="outline-none">
-                        <Card className="bg-white">
-                            <CardHeader>
-                                <CardTitle className="text-slate-900">Tổ chức đang chờ xác thực</CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                                {pendingOrgs.length === 0 ? (
-                                    <div className="text-center py-12 bg-slate-50 rounded-xl">
-                                        <CheckCircle className="w-12 h-12 text-green-400 mx-auto mb-4" />
-                                        <p className="text-slate-500">Không có yêu cầu nào đang chờ.</p>
-                                    </div>
-                                ) : (
-                                    <div className="space-y-4">
-                                        {pendingOrgs.map((org) => (
-                                            <div
-                                                key={org.id}
-                                                className="p-4 border border-orange-200 rounded-xl bg-orange-50"
-                                            >
-                                                <div className="flex items-center justify-between">
-                                                    <div className="flex items-center gap-4">
-                                                        <div className="w-12 h-12 bg-orange-100 rounded-xl flex items-center justify-center">
-                                                            <Clock className="w-6 h-6 text-orange-600" />
-                                                        </div>
-                                                        <div>
-                                                            <p className="font-medium text-slate-900">{org.name}</p>
-                                                            <p className="text-sm text-slate-500">{org.type}</p>
-                                                            <p className="text-xs text-slate-400">
-                                                                Yêu cầu: {new Date(org.requestedAt).toLocaleDateString('vi-VN')}
-                                                            </p>
-                                                        </div>
-                                                    </div>
-                                                    <div className="flex items-center gap-2">
-                                                        <Button
-                                                            size="sm"
-                                                            onClick={() => handleVerifyOrg(org.id, true)}
-                                                            disabled={loading}
-                                                            className="bg-green-600 hover:bg-green-700"
-                                                        >
-                                                            <CheckCircle className="w-4 h-4 mr-1" />
-                                                            Phê duyệt
-                                                        </Button>
-                                                        <Button
-                                                            size="sm"
-                                                            variant="outline"
-                                                            onClick={() => handleVerifyOrg(org.id, false)}
-                                                            disabled={loading}
-                                                            className="border-red-300 text-red-600 hover:bg-red-50"
-                                                        >
-                                                            <XCircle className="w-4 h-4 mr-1" />
-                                                            Từ chối
-                                                        </Button>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                )}
-                            </CardContent>
-                        </Card>
+                        <AdminOrgApplications />
                     </TabsContent>
 
                     {/* Tab 3: Relayers */}

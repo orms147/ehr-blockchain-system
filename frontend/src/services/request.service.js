@@ -120,6 +120,18 @@ export async function markClaimed(requestId, claimTxHash) {
     return response;
 }
 
+// Get requests pending for my delegators (as Delegatee)
+export async function getAsDelegate() {
+    const response = await api.get('/api/requests/as-delegate');
+    return response;
+}
+
+// Delegate approves request on-chain & backend
+export async function grantAsDelegate(data) {
+    const response = await api.post('/api/requests/grant-as-delegate', data);
+    return response;
+}
+
 export const requestService = {
     getMyRequests,
     getPendingRequestsForMe,
@@ -132,6 +144,8 @@ export const requestService = {
     restoreRequest,
     getSignedRequests,
     markClaimed,
+    getAsDelegate,
+    grantAsDelegate,
     REQUEST_TYPES,
     REQUEST_STATUS,
 };

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useWeb3Auth } from '@web3auth/modal/react';
 
 /**
@@ -12,41 +12,54 @@ export function useWalletAddress() {
     const [address, setAddress] = useState(null);
     const [loading, setLoading] = useState(true);
 
-    useEffect(() => {
-        const getAddress = async () => {
-            // Debug: check full web3Auth state including init status
-            // If Web3Auth is still initializing, keep waiting
-            if (web3Auth?.status === 'not_ready' || web3Auth?.status === 'connecting') {
-                return; // Don't set loading=false, wait for status change
-            }
+    const getAddress = useCallback(async () => {
+        // Wait for Web3Auth to be ready
+        if (!web3Auth || web3Auth?.status === 'not_ready') {
+            return; // Keep loading=true, wait for init
+        }
 
-            if (!web3Auth?.isConnected || !web3Auth?.provider) {
+        // If connecting, also wait
+        if (web3Auth?.status === 'connecting') {
+            return; // Keep loading=true
+        }
+
+        // If not connected or no provider, set address to null
+        if (!web3Auth?.isConnected || !web3Auth?.provider) {
+            setAddress(null);
+            setLoading(false);
+            return;
+        }
+
+        // Connected - try to get address
+        try {
+            const accounts = await web3Auth.provider.request({
+                method: 'eth_accounts',
+            });
+
+            if (accounts && accounts.length > 0) {
+                setAddress(accounts[0]);
+            } else {
                 setAddress(null);
-                setLoading(false);
-                return;
             }
-
-            try {
-                // Use eth_accounts directly - works regardless of chain
-                const accounts = await web3Auth.provider.request({
-                    method: 'eth_accounts',
-                });
-
-                if (accounts && accounts.length > 0) {
-                    setAddress(accounts[0]);
-                } else {
-                    setAddress(null);
-                }
-            } catch (err) {
-                console.error('Error getting wallet address:', err);
-                setAddress(null);
-            } finally {
-                setLoading(false);
-            }
-        };
-
-        getAddress();
+        } catch (err) {
+            console.error('[useWalletAddress] Error getting address:', err);
+            setAddress(null);
+        } finally {
+            setLoading(false);
+        }
     }, [web3Auth?.isConnected, web3Auth?.provider, web3Auth?.status]);
+
+    useEffect(() => {
+        getAddress();
+    }, [getAddress]);
+
+    // Also listen for status changes via interval for session restore edge cases
+    useEffect(() => {
+        if (web3Auth?.status === 'connected' && !address && !loading) {
+            // Session just restored but we haven't got address yet
+            getAddress();
+        }
+    }, [web3Auth?.status, address, loading, getAddress]);
 
     return {
         address,
@@ -57,3 +70,4 @@ export function useWalletAddress() {
 }
 
 export default useWalletAddress;
+

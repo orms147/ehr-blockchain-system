@@ -3,13 +3,14 @@ import api from './api';
 
 export const keyShareService = {
     // Share encrypted key with recipient
-    async shareKey({ cidHash, recipientAddress, encryptedPayload, senderPublicKey, expiresAt = null }) {
+    async shareKey({ cidHash, recipientAddress, encryptedPayload, senderPublicKey, expiresAt = null, allowDelegate = false }) {
         return api.post('/api/key-share', {
             cidHash,
             recipientAddress,
             encryptedPayload,
             senderPublicKey,
             expiresAt,
+            allowDelegate, // NEW: For RecordDelegation
         });
     },
 
@@ -21,6 +22,11 @@ export const keyShareService = {
     // Get keys I've shared
     async getSentKeys() {
         return api.get('/api/key-share/sent');
+    },
+
+    // NEW: Get records I can re-share (RecordDelegation)
+    async getDelegatableRecords() {
+        return api.get('/api/key-share/delegatable');
     },
 
     // Claim a key share
@@ -40,7 +46,12 @@ export const keyShareService = {
 
     // Get key shared for a specific record (by cidHash)
     async getKeyForRecord(cidHash) {
-        return api.get(`/api/key-share/record/${cidHash}`);
+        return api.get(`/api/key-share/record/${cidHash}?t=${Date.now()}`);
+    },
+
+    // NEW: Get all recipients of a record (Care Team)
+    async getRecordRecipients(cidHash) {
+        return api.get(`/api/key-share/recipients/${cidHash}`);
     },
 };
 

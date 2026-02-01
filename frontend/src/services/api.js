@@ -72,12 +72,38 @@ class ApiService {
         return this.request(endpoint, { method: 'GET' });
     }
 
-    // POST request
+    // POST request (JSON)
     async post(endpoint, body) {
         return this.request(endpoint, {
             method: 'POST',
             body: JSON.stringify(body),
         });
+    }
+
+    // POST FormData (for file uploads)
+    async postFormData(endpoint, formData) {
+        const url = `${this.baseUrl}${endpoint}`;
+
+        const headers = {};
+        // Don't set Content-Type - browser sets it automatically with boundary for FormData
+
+        if (this.getToken()) {
+            headers['Authorization'] = `Bearer ${this.getToken()}`;
+        }
+
+        const response = await fetch(url, {
+            method: 'POST',
+            headers,
+            body: formData,
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(data.error || 'API request failed');
+        }
+
+        return data;
     }
 
     // DELETE request

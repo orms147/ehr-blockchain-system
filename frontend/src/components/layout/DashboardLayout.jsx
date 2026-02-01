@@ -16,6 +16,7 @@ import { toast } from '@/components/ui/use-toast';
 import RoleSwitcher from '@/components/role/RoleSwitcher';
 import { useWeb3AuthDisconnect } from '@web3auth/modal/react';
 import authService from '@/services/auth.service';
+import { getActiveRole, clearAuthRoles } from '@/hooks/useAuthRoles';
 
 const DashboardLayout = ({ children }) => {
     const [isSidebarOpen, setSidebarOpen] = useState(false);
@@ -41,7 +42,7 @@ const DashboardLayout = ({ children }) => {
     // Get role from localStorage on mount
     useEffect(() => {
         if (typeof window !== 'undefined') {
-            const activeRole = localStorage.getItem('activeRole') || localStorage.getItem('userRole') || 'patient';
+            const activeRole = getActiveRole() || 'patient';
             setRole(activeRole);
         }
     }, [pathname]);
@@ -60,9 +61,7 @@ const DashboardLayout = ({ children }) => {
 
     const handleLogout = async () => {
         // Clear all auth data
-        localStorage.removeItem('userRole');
-        localStorage.removeItem('activeRole');
-        localStorage.removeItem('userRoles');
+        clearAuthRoles();
         authService.logout();
 
         try {

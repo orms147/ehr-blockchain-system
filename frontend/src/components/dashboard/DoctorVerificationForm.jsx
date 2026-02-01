@@ -200,7 +200,7 @@ export default function DoctorVerificationForm({ onStatusChange = null }) {
 
                     {/* Specialty */}
                     <div className="space-y-2">
-                        <Label htmlFor="specialty">Chuyên khoa</Label>
+                        <Label htmlFor="specialty" className="text-slate-800 font-medium">Chuyên khoa</Label>
                         <select
                             id="specialty"
                             className="w-full p-2 border rounded-lg"

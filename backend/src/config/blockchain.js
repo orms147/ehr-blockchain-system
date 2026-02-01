@@ -37,6 +37,59 @@ export const ACCESS_CONTROL_ABI = [
         stateMutability: 'view',
         inputs: [{ name: 'account', type: 'address' }],
         outputs: [{ type: 'bool' }]
+    },
+    {
+        name: 'isMinistry',
+        type: 'function',
+        stateMutability: 'view',
+        inputs: [{ name: 'account', type: 'address' }],
+        outputs: [{ type: 'bool' }]
+    },
+    {
+        name: 'isOrganization',
+        type: 'function',
+        stateMutability: 'view',
+        inputs: [{ name: 'account', type: 'address' }],
+        outputs: [{ type: 'bool' }]
+    },
+    {
+        name: 'isVerifiedOrganization',
+        type: 'function',
+        stateMutability: 'view',
+        inputs: [{ name: 'account', type: 'address' }],
+        outputs: [{ type: 'bool' }]
+    },
+    // NEW: Organization Entity functions
+    {
+        name: 'isActiveOrgAdmin',
+        type: 'function',
+        stateMutability: 'view',
+        inputs: [{ name: 'user', type: 'address' }],
+        outputs: [{ type: 'bool' }]
+    },
+    {
+        name: 'getAdminOrgId',
+        type: 'function',
+        stateMutability: 'view',
+        inputs: [{ name: 'admin', type: 'address' }],
+        outputs: [{ type: 'uint256' }]
+    },
+    {
+        name: 'getOrganization',
+        type: 'function',
+        stateMutability: 'view',
+        inputs: [{ name: 'orgId', type: 'uint256' }],
+        outputs: [{
+            type: 'tuple',
+            components: [
+                { name: 'id', type: 'uint256' },
+                { name: 'name', type: 'string' },
+                { name: 'primaryAdmin', type: 'address' },
+                { name: 'backupAdmin', type: 'address' },
+                { name: 'createdAt', type: 'uint40' },
+                { name: 'active', type: 'bool' }
+            ]
+        }]
     }
 ];
 
@@ -57,24 +110,50 @@ export const CONTRACT_ADDRESSES = {
 
 // Helper: Check if user has consent to access a record
 export async function checkConsent(patientAddress, granteeAddress, cidHash) {
-    try {
-        const hasAccess = await publicClient.readContract({
-            address: CONTRACT_ADDRESSES.ConsentLedger,
-            abi: CONSENT_LEDGER_ABI,
-            functionName: 'canAccess',
-            args: [patientAddress, granteeAddress, cidHash],
-        });
-        return hasAccess;
-    } catch (error) {
-        console.error('Error checking consent:', error);
+    if (!cidHash) {
+        console.warn(`[BLOCKCHAIN] checkConsent called with empty cidHash! Denying.`);
         return false;
     }
+    // Debug log to trace invalid access
+    // console.log(`[BLOCKCHAIN] Checking consent: Patient=${patientAddress}, Grantee=${granteeAddress}, CID=${cidHash}`);
+
+    const MAX_RETRIES = 3;
+    let attempt = 0;
+
+    while (attempt < MAX_RETRIES) {
+        try {
+            const hasAccess = await publicClient.readContract({
+                address: CONTRACT_ADDRESSES.ConsentLedger,
+                abi: CONSENT_LEDGER_ABI,
+                functionName: 'canAccess',
+                args: [patientAddress, granteeAddress, cidHash],
+            });
+
+            // if (hasAccess) console.log(`[BLOCKCHAIN] ACCESS GRANTED for ${cidHash}`);
+
+            return hasAccess;
+        } catch (error) {
+            attempt++;
+            const isRateLimit = error.message?.includes('429') || error.message?.includes('Too Many Requests');
+
+            if (isRateLimit && attempt < MAX_RETRIES) {
+                const delay = 1000 * Math.pow(2, attempt); // 2s, 4s, 8s...
+                console.warn(`[RPC] 429 Rate Limit in checkConsent. Retrying in ${delay}ms (Attempt ${attempt}/${MAX_RETRIES})...`);
+                await new Promise(resolve => setTimeout(resolve, delay));
+            } else {
+                // If contract revert or other error, return false (deny access)
+                console.error(`[RPC] Error checking consent (Attempt ${attempt}/${MAX_RETRIES}):`, error.message);
+                if (attempt >= MAX_RETRIES) return false;
+            }
+        }
+    }
+    return false;
 }
 
-// Helper: Check user role
+// Helper: Check user role (includes Ministry, ORG, and Org Admin)
 export async function getUserRole(address) {
     try {
-        const [isPatient, isDoctor, isVerifiedDoctor] = await Promise.all([
+        const [isPatient, isDoctor, isVerifiedDoctor, isMinistry, isOrg, isVerifiedOrg, isActiveOrgAdmin, adminOrgId] = await Promise.all([
             publicClient.readContract({
                 address: CONTRACT_ADDRESSES.AccessControl,
                 abi: ACCESS_CONTROL_ABI,
@@ -93,15 +172,81 @@ export async function getUserRole(address) {
                 functionName: 'isVerifiedDoctor',
                 args: [address],
             }),
+            publicClient.readContract({
+                address: CONTRACT_ADDRESSES.AccessControl,
+                abi: ACCESS_CONTROL_ABI,
+                functionName: 'isMinistry',
+                args: [address],
+            }),
+            publicClient.readContract({
+                address: CONTRACT_ADDRESSES.AccessControl,
+                abi: ACCESS_CONTROL_ABI,
+                functionName: 'isOrganization',
+                args: [address],
+            }),
+            publicClient.readContract({
+                address: CONTRACT_ADDRESSES.AccessControl,
+                abi: ACCESS_CONTROL_ABI,
+                functionName: 'isVerifiedOrganization',
+                args: [address],
+            }),
+            publicClient.readContract({
+                address: CONTRACT_ADDRESSES.AccessControl,
+                abi: ACCESS_CONTROL_ABI,
+                functionName: 'isActiveOrgAdmin',
+                args: [address],
+            }),
+            publicClient.readContract({
+                address: CONTRACT_ADDRESSES.AccessControl,
+                abi: ACCESS_CONTROL_ABI,
+                functionName: 'getAdminOrgId',
+                args: [address],
+            }),
         ]);
+
+        // Convert BigInt to number for orgId
+        const orgId = adminOrgId > 0n ? Number(adminOrgId) : null;
+
+        // If user is org admin, fetch org details
+        let orgName = null;
+        if (orgId) {
+            try {
+                const org = await publicClient.readContract({
+                    address: CONTRACT_ADDRESSES.AccessControl,
+                    abi: ACCESS_CONTROL_ABI,
+                    functionName: 'getOrganization',
+                    args: [adminOrgId],
+                });
+                orgName = org.name;
+            } catch (e) {
+                console.error('Error fetching org details:', e);
+            }
+        }
 
         return {
             isPatient,
             isDoctor,
             isVerifiedDoctor,
+            isMinistry,
+            isOrg,
+            isVerifiedOrg,
+            isActiveOrgAdmin,
+            orgId,
+            orgName,
         };
     } catch (error) {
         console.error('Error getting user role:', error);
-        return { isPatient: false, isDoctor: false, isVerifiedDoctor: false };
+        return {
+            isPatient: false,
+            isDoctor: false,
+            isVerifiedDoctor: false,
+            isMinistry: false,
+            isOrg: false,
+            isVerifiedOrg: false,
+            isActiveOrgAdmin: false,
+            orgId: null,
+            orgName: null,
+        };
     }
 }
+

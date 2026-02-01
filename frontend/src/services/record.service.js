@@ -32,6 +32,7 @@ export const recordService = {
             title: options.title || null,
             description: options.description || null,
             recordType: options.recordType || null,
+            parentCidHash: options.parentCidHash || null,
         });
     },
 
@@ -66,6 +67,10 @@ export const recordService = {
     async revokeAccess(cidHash, targetAddress) {
         return api.delete(`/api/records/${cidHash}/access/${targetAddress}`);
     },
+    // Get access list for a record
+    async getRecordAccess(cidHash) {
+        return api.get(`/api/records/${cidHash}/access`);
+    }
 };
 
 export default recordService;

@@ -10,6 +10,7 @@ export default function QuotaDisplay({ walletAddress }) {
     const [loading, setLoading] = useState(true);
 
     const fetchQuota = async () => {
+        if (!walletAddress) return; // Don't fetch without address
         setLoading(true);
         try {
             const data = await relayerService.getQuotaStatus();
@@ -25,9 +26,10 @@ export default function QuotaDisplay({ walletAddress }) {
         if (walletAddress) {
             fetchQuota();
         } else {
+            setQuota(null); // Reset quota when address changes/disconnects
             setLoading(false);
         }
-    }, [walletAddress]);
+    }, [walletAddress]); // Re-run when address changes (including null → value)
 
     // No wallet connected
     if (!walletAddress) {
