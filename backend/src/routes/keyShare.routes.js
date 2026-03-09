@@ -370,48 +370,74 @@ router.get('/delegatable', authenticate, async (req, res, next) => {
             orderBy: { createdAt: 'desc' }
         });
 
-        // Enrich with on-chain consent check
+        // Enrich with on-chain consent check (IMPLEMENT TRAVERSAL)
         const results = await Promise.all(
             delegatableShares.map(async (ks) => {
                 let hasOnChainAccess = true;
+                let rootCidHash = ks.cidHash; // Default to self
 
                 if (ks.record?.ownerAddress) {
                     try {
+                        // 1. Check strict consent
                         hasOnChainAccess = await checkConsent(
                             ks.record.ownerAddress,
                             userAddress,
                             ks.cidHash
                         );
-                    } catch (err) {
-                        console.warn(`[DELEGATABLE] On-chain check failed:`, err.message);
-                    }
-                }
 
-                // RESOLVE ROOT CID HASH (For contract interactions)
-                let rootCidHash = ks.cidHash;
-                if (ks.record?.parentCidHash) {
-                    let currentCid = ks.record.parentCidHash;
-                    let depth = 0;
-                    while (currentCid && depth < 20) {
-                        rootCidHash = currentCid; // Update candidate to be the parent/ancestor
-                        const parent = await prisma.recordMetadata.findUnique({
-                            where: { cidHash: currentCid },
-                            select: { parentCidHash: true }
-                        });
-                        if (!parent) break;
-                        currentCid = parent.parentCidHash;
-                        depth++;
+                        // 2. Traversal & Root Resolution
+                        if (ks.record.parentCidHash) {
+                            let currentCid = ks.record.parentCidHash;
+                            let depth = 0;
+
+                            // Walk up the chain
+                            while (currentCid && depth < 20) {
+                                rootCidHash = currentCid; // Update root candidate
+
+                                // If strict consent failed, check ancestor
+                                if (!hasOnChainAccess) {
+                                    const ancestorConsent = await checkConsent(
+                                        ks.record.ownerAddress,
+                                        userAddress,
+                                        currentCid
+                                    );
+                                    if (ancestorConsent) {
+                                        hasOnChainAccess = true;
+                                        // We don't break immediately because we still want to find the TRUE Root
+                                        // (though usually Root is the one with consent)
+                                    }
+                                }
+
+                                // Get next parent
+                                const parent = await prisma.recordMetadata.findUnique({
+                                    where: { cidHash: currentCid },
+                                    select: { parentCidHash: true }
+                                });
+                                if (!parent) break;
+                                currentCid = parent.parentCidHash;
+                                depth++;
+                            }
+                        }
+                    } catch (err) {
+                        console.warn(`[DELEGATABLE] On-chain check failed for ${ks.cidHash}:`, err.message);
+                        // If check fails, we might want to default to false or keep true if logic implies?
+                        // Original logic defaulted 'hasOnChainAccess = true' then checked.
+                        // But if check throws, it stays true? RISK.
+                        // Better to set false on error? Or assume read-only ok?
+                        // Let's stick to "If checkConsent matches contract logic".
+                        // If contract call failed, we assume FALSE for safety.
+                        hasOnChainAccess = false;
                     }
                 }
 
                 return {
                     id: ks.id,
                     cidHash: ks.cidHash,
-                    rootCidHash: rootCidHash, // Return the Root CID
+                    rootCidHash: rootCidHash,
                     record: ks.record,
                     sharedBy: ks.sender?.walletAddress,
                     expiresAt: ks.expiresAt,
-                    status: ks.status, // Required for frontend filter
+                    status: ks.status,
                     hasOnChainAccess,
                 };
             })

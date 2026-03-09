@@ -17,6 +17,7 @@ import { ensureArbitrumSepolia } from '@/utils/chainSwitch';
 import { createWalletClient, custom, parseAbi, parseGwei } from 'viem';
 import { arbitrumSepolia } from 'viem/chains';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import UserName from '@/components/ui/UserName';
 import {
     AlertDialog,
     AlertDialogAction,
@@ -327,11 +328,11 @@ export default function AccessRequestList({ walletAddress, provider, onApproved 
                         <div>
                             <div className="flex flex-col md:flex-row md:items-center gap-1 md:gap-3">
                                 <p className="font-medium text-slate-900">
-                                    Bác sĩ: {request.requesterAddress?.slice(0, 8)}...{request.requesterAddress?.slice(-6)}
+                                    Bác sĩ: <UserName address={request.requesterAddress} prefix="" className="font-semibold" />
                                 </p>
                                 {isDelegate && (
                                     <span className="text-xs px-2 py-0.5 rounded bg-purple-50 text-purple-700 border border-purple-200">
-                                        Thay mặt: {request.patientAddress?.slice(0, 6)}...
+                                        Thay mặt: <UserName address={request.patientAddress} />
                                     </span>
                                 )}
                             </div>

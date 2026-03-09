@@ -19,6 +19,12 @@ enum OrgApplicationStatus {
   FAILED
 }
 
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+}
+
 // ===== ORG APPLICATION (Hybrid Registration Flow) =====
 
 // Application for ORG registration - Ministry reviews before on-chain verification
@@ -63,6 +69,16 @@ model User {
   // OAuth info from Web3Auth
   oauthProvider String?  // google, twitter, facebook, etc.
   email         String?  @unique
+
+  // === Profile Metadata (Off-chain) ===
+  fullName      String?  @db.VarChar(100)
+  dateOfBirth   DateTime?
+  gender        Gender?
+  phone         String?  @db.VarChar(20)
+  homeAddress   String?  @db.VarChar(255)  // Địa chỉ cư trú
+  avatarUrl     String?  @db.Text
+  bloodType     String?  @db.VarChar(5)    // A+, B-, AB+, O-
+  allergies     String?  @db.Text          // Free text
   
   // Quota tracking for gas sponsorship
   registrationSponsored Boolean  @default(false)  // 1 time only
@@ -79,6 +95,22 @@ model User {
   receivedKeys   KeyShare[]       @relation("recipient")
   accessLogs     AccessLog[]
   archivedRequests ArchivedRequest[]
+  doctorProfile  DoctorProfile?
+}
+
+// === Doctor Profile (extends User for doctor-specific info) ===
+model DoctorProfile {
+  id              String   @id @default(uuid())
+  walletAddress   String   @unique @db.VarChar(42)
+  specialty       String?  @db.VarChar(100)  // Chuyên khoa: Tim mạch, Nội khoa...
+  licenseNumber   String?  @db.VarChar(50)   // Số GPHH
+  hospitalName    String?  @db.VarChar(200)  // Bệnh viện / Phòng khám
+  yearsExperience Int?
+  bio             String?  @db.Text          // Giới thiệu ngắn
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  user User @relation(fields: [walletAddress], references: [walletAddress])
 }
 
 // Track requests that user has archived/hidden (instead of on-chain reject)
@@ -344,4 +376,28 @@ model PendingUpdate {
   
   @@index([patientAddress, status])
   @@index([doctorAddress, status])
+}
+
+// Event Sync State - Track blockchain sync progress (reorg-safe)
+model EventSyncState {
+  id              String   @id @default("default")
+  contractName    String   @unique  // "AccessControl"
+  lastSyncedBlock BigInt   @default(0)
+  lastBlockHash   String?  @db.VarChar(66) // For reorg detection
+  updatedAt       DateTime @updatedAt
+}
+
+// Doctor Credential - Off-chain encrypted storage (privacy)
+// On-chain only stores keccak256 hash. Plaintext encrypted here.
+model DoctorCredential {
+  id              String   @id @default(uuid())
+  doctorAddress   String   @unique @db.VarChar(42)
+  credentialHash  String   @db.VarChar(66)  // keccak256 hash (matches on-chain)
+  encryptedData   String   @db.Text         // AES-256-GCM encrypted plaintext
+  verifiedByOrgId String?                   // Which org verified
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  @@index([doctorAddress])
 }

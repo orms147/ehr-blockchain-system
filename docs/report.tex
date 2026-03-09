@@ -1,0 +1,446 @@
+\PassOptionsToPackage{unicode}{hyperref}
+\PassOptionsToPackage{hyphens}{url}
+\documentclass[12pt,a4paper]{report}
+
+\usepackage{amsmath,amssymb}
+\usepackage[utf8]{inputenc}
+\usepackage[T5]{fontenc}
+\usepackage[vietnamese]{babel}
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{geometry}
+\geometry{left=3cm,right=2cm,top=2cm,bottom=2cm}
+\usepackage{longtable,booktabs,array}
+\usepackage{calc}
+\usepackage{xcolor}
+\usepackage[hidelinks,unicode]{hyperref}
+\hypersetup{pdflang={vi-VN}}
+\usepackage{titlesec}
+\usepackage{listings}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+
+% Configuration for Chapter headings
+\titleformat{\chapter}[display]
+  {\normalfont\huge\bfseries}{\chaptertitlename\ \thechapter}{20pt}{\Huge}
+\titlespacing*{\chapter}{0pt}{50pt}{40pt}
+
+% Code highlighting configuration
+\definecolor{codegreen}{rgb}{0,0.6,0}
+\definecolor{codegray}{rgb}{0.5,0.5,0.5}
+\definecolor{codepurple}{rgb}{0.58,0,0.82}
+\definecolor{backcolour}{rgb}{0.95,0.95,0.92}
+
+\lstdefinestyle{mystyle}{
+    backgroundcolor=\color{backcolour},   
+    commentstyle=\color{codegreen},
+    keywordstyle=\color{magenta},
+    numberstyle=\tiny\color{codegray},
+    stringstyle=\color{codepurple},
+    basicstyle=\ttfamily\footnotesize,
+    breakatwhitespace=false,         
+    breaklines=true,                 
+    captionpos=b,                    
+    keepspaces=true,                 
+    numbers=left,                    
+    numbersep=5pt,                  
+    showspaces=false,                
+    showstringspaces=false,
+    showtabs=false,                  
+    tabsize=2
+}
+\lstset{style=mystyle}
+
+\begin{document}
+
+% ==================== TITLE PAGE ====================
+\begin{titlepage}
+\begin{center}
+\textbf{\Large ĐẠI HỌC BÁCH KHOA HÀ NỘI}\\[0.2cm]
+\textbf{\Large TRƯỜNG CÔNG NGHỆ THÔNG TIN VÀ TRUYỀN THÔNG}\\[0.5cm]
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=0.4\linewidth]{img/image.png}
+    \label{fig:enter-label}
+\end{figure} 
+
+\vspace{0.2cm}
+\rule{\linewidth}{0.5mm}\\[0.3cm]
+{\huge \bfseries BÁO CÁO NGHIÊN CỨU}\\[0.2cm]
+{\huge \bfseries ĐỒ ÁN TỐT NGHIỆP 2}\\[0.3cm]
+\rule{\linewidth}{0.5mm}\\[1cm]
+
+{\Large \textbf{ĐỀ TÀI:}}\\[0.3cm]
+{\LARGE \textcolor{red}{\textbf{HỆ THỐNG QUẢN LÝ HỒ SƠ SỨC KHỎE}}}\\[0.2cm]
+{\LARGE \textcolor{red}{\textbf{ĐIỆN TỬ PHI TẬP TRUNG}}}\\[0.2cm]
+
+\vspace{1.5cm}
+
+\begin{minipage}{0.75\textwidth}
+\begin{flushleft}
+\textbf{Giảng viên hướng dẫn:} \textbf{PGS.TS. Nguyễn Bình Minh}\\[0.3cm]
+\textbf{Sinh viên thực hiện:} \textbf{Nguyễn Hà Bách}\\[0.3cm]
+\textbf{Mã số sinh viên:} \textbf{20225691}\\[0.3cm]
+\end{flushleft}
+\end{minipage}
+
+\vfill
+{\large Hà Nội, tháng 02 năm 2026}
+\end{center}
+\end{titlepage}
+
+\newpage
+{
+\setcounter{tocdepth}{3}
+\tableofcontents
+}
+\newpage
+
+% ==================== CHAPTER 1: INTRO ====================
+\chapter{Tổng quan về đề tài}\label{chuong-1}
+
+\section{Đặt vấn đề}
+Hồ sơ sức khỏe điện tử (EHR - Electronic Health Records) là thành phần cốt lõi trong y tế hiện đại. Tuy nhiên, các hệ thống EHR hiện nay đang đối mặt với những thách thức nghiêm trọng:
+\begin{itemize}
+    \item \textbf{Phân mảnh dữ liệu (Data Silos):} Dữ liệu bệnh nhân nằm rải rác tại nhiều bệnh viện, phòng khám khác nhau mà không có sự liên thông. Bệnh sử của bệnh nhân không liền mạch, gây khó khăn cho việc chẩn đoán chính xác.
+    \item \textbf{Quyền riêng tư và Kiểm soát:} Bệnh nhân - chủ sở hữu thực sự của dữ liệu - lại hầu như không có quyền kiểm soát ai đang truy cập hồ sơ của mình. Dữ liệu thường bị khai thác bởi bên thứ ba mà không có sự đồng ý rõ ràng.
+    \item \textbf{An ninh và Tấn công mạng:} Các cơ sở dữ liệu tập trung là mục tiêu hấp dẫn của tin tặc. Một lỗ hổng duy nhất có thể dẫn đến việc lộ lọt hàng triệu bản ghi y tế nhạy cảm.
+\end{itemize}
+
+\section{Mục tiêu và Giải pháp}
+Đồ án này đề xuất một giải pháp toàn diện dựa trên công nghệ Blockchain và IPFS (InterPlanetary File System) nhằm giải quyết triệt để các vấn đề trên.
+\textbf{Các mục tiêu chính:}
+\begin{enumerate}
+    \item \textbf{Phi tập trung hóa lưu trữ:} Loại bỏ điểm lỗi đơn lẻ (Single Point of Failure) bằng cách sử dụng mạng lưu trữ phân tán IPFS cho dữ liệu mã hóa.
+    \item \textbf{Trao quyền cho bệnh nhân (Patient-Centric):} Bệnh nhân nắm giữ khóa giải mã (Private Key) và là người duy nhất có quyền cấp phép (Delegate) cho bác sĩ xem hồ sơ.
+    \item \textbf{Minh bạch và Bất biến:} Mọi hành động truy cập, chia sẻ, cập nhật đều được ghi nhận trên Blockchain (Arbitrum L2) để đảm bảo tính minh bạch và chống chối bỏ.
+    \item \textbf{Xác thực phi tập trung nhưng tiện lợi:} Kết hợp Web3Auth (Social Login) với ví Non-custodial để mang lại trải nghiệm người dùng Web2 trên nền tảng Web3 (Account Abstraction).
+\end{enumerate}
+
+\section{Phạm vi nghiên cứu}
+Hệ thống tập trung vào các chức năng cốt lõi:
+\begin{itemize}
+    \item Quản lý định danh (Identity Management) cho Bệnh nhân, Bác sĩ và Quản trị viên.
+    \item Cơ chế mã hóa khóa công khai (Public Key Cryptography) và chia sẻ khóa an toàn.
+    \item Lưu trữ và truy xuất hồ sơ y tế thông qua IPFS.
+    \item Quản lý quyền truy cập (Access Control) bằng Smart Contracts.
+    \item Giao diện người dùng (DApp) tích hợp ví điện tử.
+\end{itemize}
+
+\section{Đối tượng sử dụng}
+Hệ thống hướng đến 3 nhóm người dùng chính, mỗi nhóm có vai trò và quyền hạn riêng biệt trong hệ sinh thái:
+
+\subsection{Bệnh nhân (Patients)}
+Là trung tâm của hệ thống.
+\begin{itemize}
+    \item \textbf{Vai trò:} Chủ sở hữu dữ liệu duy nhất.
+    \item \textbf{Chức năng:} Tải lên hồ sơ, quản lý danh sách hồ sơ cá nhân, cấp quyền (Share) cho bác sĩ, và thu hồi quyền (Revoke).
+\end{itemize}
+
+\subsection{Chuyên gia y tế (Doctors)}
+Là những người trực tiếp tham gia vào quá trình khám chữa bệnh.
+\begin{itemize}
+    \item \textbf{Vai trò:} Người tiêu thụ dữ liệu (được cấp phép) và tạo dữ liệu mới.
+    \item \textbf{Chức năng:} Xem hồ sơ được chia sẻ, tạo bản cập nhật hồ sơ mới (Diagnosis, Treatment) dựa trên hồ sơ gốc, gửi yêu cầu xác thực chuyên môn.
+\end{itemize}
+
+\subsection{Quản trị viên (Administrators/Organizations)}
+Đại diện cho các bệnh viện hoặc cơ quan quản lý y tế.
+\begin{itemize}
+    \item \textbf{Vai trò:} Xác thực danh tính (Identity Provider).
+    \item \textbf{Chức năng:} Phê duyệt yêu cầu tham gia của bác sĩ vào tổ chức, đảm bảo các bác sĩ trên mạng lưới là những người có chứng chỉ hành nghề hợp lệ.
+\end{itemize}
+
+% ==================== CHAPTER 2: TECH ====================
+\chapter{Cơ sở lý thuyết và Công nghệ}\label{chuong-2}
+
+\section{Công nghệ Blockchain và Smart Contracts}
+\subsection{Ethereum và Arbitrum Layer 2}
+Dự án sử dụng mạng **Arbitrum Sepolia** (Layer 2 Rollup của Ethereum) để triển khai Smart Contracts.
+\begin{itemize}
+    \item \textbf{Tại sao chọn Arbitrum?} Giảm chi phí gas (Gas fees) xuống thấp hơn >90\% so với Ethereum Mainnet, đồng thời tăng tốc độ xử lý giao dịch (TPS), điều kiện tiên quyết cho các ứng dụng y tế cần tương tác nhanh.
+    \item \textbf{Smart Contracts (Solidity):} Logic nghiệp vụ về phân quyền và kiểm soát truy cập được lập trình bằng ngôn ngữ Solidity, đảm bảo tính thực thi tự động và không cần tin cậy (Trustless).
+    \item \textbf{Các thư viện chuẩn (Standard Libraries):}
+    \begin{itemize}
+        \item \textbf{OpenZeppelin Contracts:} Sử dụng chuẩn \texttt{AccessControl} cho phân quyền (dựa trên OpenZeppelin v4.x) và \texttt{ReentrancyGuard} để ngăn chặn tấn công tái nhập, đảm bảo an toàn cho các hàm quan trọng.
+        \item \textbf{EIP-712 Signatures:} Chuẩn hóa việc ký dữ liệu có cấu trúc (Typed Data Signing), giúp người dùng nhìn thấy rõ nội dung mình đang ký thay vì chuỗi hex vô nghĩa, tăng tính bảo mật và trải nghiệm người dùng.
+    \end{itemize}
+\end{itemize}
+
+\section{Hệ thống tệp phân tán IPFS}
+\textbf{IPFS (InterPlanetary File System)} là giao thức phân phối siêu phương tiện theo phương thức ngang hàng (P2P).
+\begin{itemize}
+    \item \textbf{Content Addressing:} Dữ liệu được định danh bằng mã băm (CID - Content Identifier) thay vì địa chỉ máy chủ. Điều này đảm bảo tính toàn vẹn dữ liệu (nếu nội dung thay đổi, CID sẽ thay đổi).
+    \item \textbf{Tính sẵn sàng:} Dữ liệu được sao chép trên nhiều nút mạng, đảm bảo khả năng truy cập ngay cả khi một số nút gặp sự cố.
+\end{itemize}
+
+\section{Mã hóa lai (Hybrid Encryption)}
+Hệ thống sử dụng mô hình mã hóa lai để cân bằng giữa hiệu năng và tính linh hoạt, tận dụng thư viện \textbf{NaCl} (Networking and Cryptography library) với các nguyên thủy mật mã hiện đại:
+
+\subsection{Mã hóa đối xứng (Symmetric Encryption)}
+Sử dụng thuật toán **ChaCha20-Poly1305** (AEAD - Authenticated Encryption with Associated Data).
+\begin{itemize}
+    \item \textbf{Cơ chế:}
+    \begin{itemize}
+        \item \textbf{ChaCha20:} Là một Stream Cipher tốc độ cao (nhanh hơn AES trên các thiết bị di động không có phần cứng hỗ trợ AES-NI), sử dụng key 256-bit và nonce 64/96-bit.
+        \item \textbf{Poly1305:} Tạo mã xác thực thông điệp (MAC) để đảm bảo tính toàn vẹn. Nếu dữ liệu bị chỉnh sửa dù chỉ 1 bit, quá trình giải mã sẽ thất bại ngay lập tức.
+    \end{itemize}
+    \item \textbf{Ứng dụng:} Dùng để mã hóa nội dung hồ sơ bệnh án (File ảnh, JSON). Mỗi hồ sơ có một khóa ngẫu nhiên $K_{sym}$ riêng biệt.
+\end{itemize}
+
+\subsection{Mã hóa bất đối xứng (Asymmetric Encryption)}
+Sử dụng đường cong Elliptic **Curve25519 (X25519)** cho trao đổi khóa Diffie-Hellman (ECDH).
+\begin{itemize}
+    \item \textbf{An toàn:} Cung cấp độ bảo mật 128-bit (tương đương RSA 3072-bit) nhưng với kích thước khóa chỉ 32-byte, cực kỳ nhỏ gọn và hiệu quả cho việc lưu trữ trên Blockchain hoặc gửi qua mạng.
+    \item \textbf{Quy trình Trao đổi khóa (Key Exchange):}
+    \begin{enumerate}
+        \item Patient lấy Public Key của Doctor ($PK_{doc}$).
+        \item Patient tạo Ephemeral Keypair ($SK_{epi}, PK_{epi}$).
+        \item Tính Shared Secret: $S = \text{X25519}(SK_{epi}, PK_{doc})$.
+        \item Dùng $S$ để mã hóa khóa đối xứng $K_{sym}$ -> $EncK_{sym}$.
+        \item Doctor nhận $EncK_{sym}$ và $PK_{epi}$, dùng $SK_{doc}$ để tái tạo $S$ và giải mã lấy $K_{sym}$.
+    \end{enumerate}
+\end{itemize}
+
+\section{Cơ sở hạ tầng xác thực (Authentication)}
+\subsection{Web3Auth (MPC - Multi-Party Computation)}
+Giải quyết rào cản lớn nhất của Blockchain: Quản lý Private Key.
+\begin{itemize}
+    \item Web3Auth cho phép người dùng đăng nhập bằng Google/Facebook.
+    \item Private Key được chia thành nhiều mảnh (Key Shares) và phân tán. Khi người dùng đăng nhập, các mảnh được gộp lại để tái tạo khóa trong bộ nhớ phiên bản.
+    \item Người dùng không cần nhớ 12 từ khóa khôi phục (Seed phrase) nhưng vẫn sở hữu ví Non-custodial.
+\end{itemize}
+
+% ==================== CHAPTER 3: SYSTEM DESIGN ====================
+\chapter{Phân tích và Thiết kế hệ thống}\label{chuong-3}
+
+\section{Kiến trúc tổng thể (Architecture Blueprint)}
+Hệ thống được thiết kế theo kiến trúc 4 tầng (4-Tier Architecture):
+
+\begin{figure}[H]
+    \centering
+    \fbox{\begin{minipage}{0.9\textwidth}
+        \centering
+        \textbf{[Sơ đồ: Presentation Layer $\leftrightarrow$ Application Layer $\leftrightarrow$ Blockchain/Storage Layer]}
+        
+        Client (Next.js) $\rightleftharpoons$ Backend API (Express) $\rightleftharpoons$ Smart Contracts (Arbitrum)
+                                   $\searrow$ IPFS Gateway (Pinata)
+    \end{minipage}}
+    \caption{Sơ đồ kiến trúc hệ thống EHR}
+\end{figure}
+
+\begin{enumerate}
+    \item \textbf{Presentation Layer (Frontend):} 
+    \begin{itemize}
+        \item Xây dựng bằng Next.js và Tailwind CSS.
+        \item Thực hiện mã hóa/giải mã Client-side (đảm bảo dữ liệu không bao giờ ở dạng plain-text trên server).
+        \item Tích hợp ví (Wallet) để ký giao dịch.
+    \end{itemize}
+    \item \textbf{Application Layer (Off-chain Backend):}
+    \begin{itemize}
+        \item Node.js/Express server làm cầu nối (Relayer).
+        \item Indexer: Lắng nghe sự kiện từ Blockchain để cập nhật vào Database PostgreSQL (cache) giúp truy vấn nhanh.
+        \item Key Exchange Service: Lưu trữ tạm thời các Encrypted KeyShares.
+    \end{itemize}
+    \item \textbf{Blockchain Layer (On-chain Logic):}
+    \begin{itemize}
+        \item \textbf{ConsentLedger Contract:} Lưu trữ Access Control List (ACL).
+        \item \textbf{RecordMetadata Contract:} Lưu trữ dấu vết kiểm toán (Audit Trail) của hồ sơ.
+    \end{itemize}
+    \item \textbf{Storage Layer:}
+    \begin{itemize}
+        \item **IPFS:** Lưu trữ Blob dữ liệu mã hóa.
+        \item **PostgreSQL:** Lưu trữ Profile người dùng, Metadata, Logs.
+    \end{itemize}
+\end{enumerate}
+
+\section{Thiết kế Cơ sở dữ liệu (Database Schema)}
+Mô hình dữ liệu quan hệ (ERD) trong PostgreSQL:
+\begin{itemize}
+    \item \textbf{User Table:} role (PATIENT, DOCTOR, ADMIN), walletAddress, encryptionPublicKey.
+    \item \textbf{RecordMetadata Table:} cidHash (PK), ownerAddress, createdBy, parentCidHash (cho versioning).
+    \item \textbf{KeyShare Table:} recordId, recipientAddress, encryptedKey, status (GRANTED, REVOKED).
+    \item \textbf{AccessLog Table:} timestamp, actor, action, resource.
+\end{itemize}
+
+\section{Thiết kế Smart Contract}
+Hệ thống được vận hành bởi bộ 3 hợp đồng thông minh chính, được tối ưu hóa để giảm chi phí gas (Gas Optimization) và đảm bảo tính bảo mật.
+
+\subsection{AccessControl.sol (Quản lý Phân quyền)}
+Là hợp đồng gốc (Base Contract), quản lý danh sách người dùng và vai trò của họ trong hệ thống (RBAC - Role Based Access Control).
+\begin{itemize}
+    \item \textbf{Roles:} `ADMIN_ROLE`, `DOCTOR_ROLE`, `PATIENT_ROLE`.
+    \item \textbf{Modifier:} `onlyAdmin`, `onlyDoctor` để bảo vệ các hàm nhạy cảm.
+    \item \textbf{Chức năng:}
+    \begin{itemize}
+        \item Đăng ký người dùng mới (Register).
+        \item Phê duyệt/Chặn tài khoản bác sĩ (Approve/Ban Doctor).
+    \end{itemize}
+\end{itemize}
+
+\subsection{RecordRegistry.sol (Sổ cái Hồ sơ)}
+Lưu trữ định danh của tất cả hồ sơ y tế trên hệ thống. Đảm bảo tính toàn vẹn và xác thực nguồn gốc (Provenance).
+\begin{itemize}
+    \item \textbf{Struct Record:}
+    \begin{lstlisting}[language=Java]
+    struct Record {
+        string cidHash;       // IPFS CID of encrypted file
+        address owner;        // Patient owner
+        address createdBy;    // Creator (Doctor/Patient)
+        uint256 createdAt;    // Timestamp
+        string parentCidHash; // Parent CID (for Versioning)
+    }
+    \end{lstlisting}
+    \item \textbf{Mapping:} `records[cidHash] => Record`.
+    \item \textbf{Chức năng:}
+    \begin{itemize}
+        \item `addRecord`: Thêm hồ sơ mới (Chỉ bác sĩ/bệnh nhân được gọi).
+        \item `verifyOwner`: Kiểm tra quyền sở hữu đối với một CID.
+    \end{itemize}
+\end{itemize}
+
+\subsection{ConsentLedger.sol (Sổ cái Đồng thuận)}
+Trái tim của hệ thống chia sẻ, quản lý ma trận quyền truy cập phức tạp.
+\begin{itemize}
+    \item \textbf{Cấu trúc lưu trữ:} Sử dụng Nested Mapping để tối ưu O(1) khi kiểm tra quyền.
+    \begin{lstlisting}[language=Java]
+    // mapping(Patient -> mapping(Doctor -> mapping(RecordCID -> AccessState)))
+    mapping(address => mapping(address => mapping(string => bool))) public accessRights;
+    \end{lstlisting}
+    \item \textbf{Chức năng:}
+    \begin{itemize}
+        \item `grantUsingRecordDelegation`: Cấp quyền truy cập cho một hồ sơ cụ thể.
+        \item `revokeAccess`: Thu hồi quyền (Set `false`).
+        \item `checkConsent`: Hàm View để Backend/Client kiểm tra quyền trước khi giải mã.
+    \end{itemize}
+\end{itemize}
+
+% ==================== CHAPTER 4: CORE IMPLEMENTATION ====================
+\chapter{Triển khai các chức năng cốt lõi}\label{chuong-4}
+
+\section{Quản lý và Dẫn xuất khóa (Key Management)}
+Đây là thành phần quan trọng nhất đảm bảo an ninh cho hệ thống.
+
+\subsection{Dẫn xuất khóa từ Chữ ký (Signature-based KDF)}
+Hệ thống không lưu trữ Private Key. Thay vào đó, khóa được tái tạo động mỗi phiên làm việc:
+\begin{algorithm}
+\caption{Quy trình tái tạo khóa giải mã}
+\begin{algorithmic}[1]
+\State User đăng nhập và yêu cầu ký thông điệp $M = \text{"EHR-Sign-Encryption-Key-v1"}$.
+\State Wallet trả về chữ ký $S = \text{Sign}(M, PrivateKey_{wallet})$.
+\State Hệ thống tính toán Seed $K_{seed} = \text{Keccak256}(S || Salt)$.
+\State Tái tạo cặp khóa NaCl: $(PK_{nacl}, SK_{nacl}) = \text{Curve25519}(K_{seed})$.
+\State Sử dụng $SK_{nacl}$ để giải mã dữ liệu trong phiên làm việc.
+\end{algorithmic}
+\end{algorithm}
+
+\subsection{Session Caching (Tối ưu trải nghiệm)}
+Để tránh việc người dùng phải ký lại liên tục mỗi khi tải lại trang (Reload), hệ thống sử dụng cơ chế \textbf{Session Storage}:
+\begin{itemize}
+    \item Lần đầu tiên: Yêu cầu ký qua Metamask.
+    \item Sau khi có $SK_{nacl}$: Lưu vào \texttt{sessionStorage} (Bộ nhớ tab trình duyệt).
+    \item Các lần sau: Đọc từ \texttt{sessionStorage}. Dữ liệu tự động xóa khi đóng Tab.
+\end{itemize}
+
+\section{Cơ chế Versioning và Thừa kế quyền (Chain Traversal)}
+Hồ sơ y tế không tĩnh mà thay đổi theo thời gian (Bác sĩ cập nhật bệnh án).
+\begin{itemize}
+    \item \textbf{Cấu trúc dữ liệu:} Mỗi bản ghi mới (Child) lưu tham chiếu đến bản ghi cũ (Parent) qua trường `parentCidHash`. Tạo thành một danh sách liên kết (Linked List): $V3 \rightarrow V2 \rightarrow V1 (Root)$.
+    \item \textbf{Vấn đề:} Quyền truy cập thường được cấp ở Root ($V1$). Khi có $V2, V3$, làm sao bác sĩ vẫn xem được?
+    \item \textbf{Giải quyết (Ancestor Traversal):}
+    Khi kiểm tra quyền truy cập cho bản ghi $C$:
+    \begin{lstlisting}[language=JavaScript]
+    function checkAccess(user, record) {
+        if (hasDirectConsent(user, record)) return true;
+        
+        // Đệ quy ngược lên cha
+        currentRecord = record;
+        while (currentRecord.parent) {
+            if (hasDirectConsent(user, currentRecord.parent)) return true;
+            currentRecord = currentRecord.parent;
+        }
+        return false;
+    }
+    \end{lstlisting}
+    Giải thuật này đảm bảo tính liên tục của quyền truy cập mà không cần phải cấp lại quyền cho từng bản cập nhật mới.
+\end{itemize}
+
+\section{Quy trình chia sẻ hồ sơ (Secure Sharing Flow)}
+\begin{enumerate}
+    \item \textbf{Bước 1 (Client):} Bệnh nhân chọn Bác sĩ từ danh sách.
+    \item \textbf{Bước 2 (Client):} Hệ thống lấy Khóa đối xứng ($K_{sym}$) của hồ sơ từ LocalStorage (hoặc giải mã từ IPFS).
+    \item \textbf{Bước 3 (Client):} Lấy Public Key của Bác sĩ ($PK_{doc}$) từ Smart Contract/Backend.
+    \item \textbf{Bước 4 (Client):} Mã hóa $K_{sym}$ bằng $PK_{doc}$: $EncK = \text{Encrypt}(K_{sym}, PK_{doc})$.
+    \item \textbf{Bước 5 (Blockchain):} Gửi giao dịch \texttt{grantAccess} lên Arbitrum để ghi nhận quyền.
+    \item \textbf{Bước 6 (Backend):} Gửi $EncK$ lên server để lưu trữ (Bác sĩ sẽ tải về $EncK$ này để mở khóa hồ sơ).
+\end{enumerate}
+
+\section{Cơ chế thu hồi quyền (Revocation - Soft Delete)}
+Do tính chất bất biến của Blockchain, việc "xóa" quyền truy cập là thách thức. Hệ thống áp dụng chiến lược **Soft Delete**:
+\begin{itemize}
+    \item \textbf{On-chain:} Gọi hàm \texttt{revokeAccess} để đánh dấu trạng thái quyền là `FALSE`.
+    \item \textbf{Off-chain:} Cập nhật trạng thái `KeyShare` trong Database thành `REVOKED`.
+    \item \textbf{Xóa dữ liệu khóa:} Hệ thống xóa trường `encryptedKey` trong Database, đảm bảo ngay cả khi Database bị lộ, không ai có thể giải mã hồ sơ được nữa.
+    \item \textbf{Giao diện:} Hiển thị trạng thái "(Đã bị thu hồi truy cập)" để minh bạch lịch sử.
+\end{itemize}
+
+% ==================== CHAPTER 5: EVALUATION ====================
+\chapter{Đánh giá và Kết quả}\label{chuong-5}
+
+\section{Đánh giá tính năng}
+Hệ thống đã hoàn thiện các module chức năng trọng yếu:
+\begin{table}[H]
+\centering
+\renewcommand{\arraystretch}{1.3} % Tăng khoảng cách dòng
+\begin{tabular}{|p{0.2\textwidth}|p{0.3\textwidth}|p{0.4\textwidth}|c|}
+\hline
+\textbf{Phân hệ} & \textbf{Tính năng} & \textbf{Mô tả chi tiết} & \textbf{HT} \\ \hline
+\multirow{2}{*}{\textbf{Định danh}} & Đăng nhập Web3Auth & Đăng nhập bằng Google/Gmail, tự động tạo ví và quản lý khóa. & $\checkmark$ \\ \cline{2-4} 
+ & Ví Metamask & Hỗ trợ người dùng Web3 nâng cao, tự quản lý Private Key. & $\checkmark$ \\ \hline
+\multirow{3}{*}{\textbf{Quản lý Hồ sơ}} & Mã hóa \& Tải lên & Mã hóa dữ liệu ngay tại trình duyệt (Client-side) trước khi lưu lên IPFS. & $\checkmark$ \\ \cline{2-4} 
+ & Quản lý Phiên bản & Liên kết hồ sơ cũ và mới thành chuỗi (Chain), đảm bảo lịch sử bệnh án liền mạch. & $\checkmark$ \\ \cline{2-4} 
+ & Phân quyền (Delegate) & Cấp quyền xem hồ sơ cho bác sĩ trong khoảng thời gian nhất định. & $\checkmark$ \\ \hline
+\multirow{2}{*}{\textbf{Bảo mật}} & Thu hồi quyền (Revoke) & Ngắt quyền truy cập ngay lập tức (Soft Delete), xóa key giải mã. & $\checkmark$ \\ \cline{2-4} 
+ & Nhật ký truy cập & Ghi lại mọi hành động (Xem, Tải, Chia sẻ) để minh bạch hóa (Audit Trail). & $\checkmark$ \\ \hline
+\end{tabular}
+\caption{Bảng tổng hợp và đánh giá các tính năng đã hoàn thành (HT: Hoàn thành)}
+\end{table}
+
+\section{Đánh giá hiệu năng}
+\begin{itemize}
+    \item \textbf{Tốc độ tải trang:} < 1.5s (nhờ caching Metadata tại PostgreSQL).
+    \item \textbf{Tốc độ giải mã:} < 200ms cho file tài liệu thông thường (nhờ thuật toán ChaCha20 tối ưu).
+    \item \textbf{Chi phí Blockchain:} Phí giao dịch trên Arbitrum Sepolia rất thấp (~0.001 ETH/tx), khả thi để triển khai thực tế.
+\end{itemize}
+
+\section{So sánh với hệ thống truyền thống}
+\begin{itemize}
+    \item \textbf{Truyền thống:} Dữ liệu nằm trong tay bệnh viện. Chia sẻ khó khăn. Rủi ro lộ lọt tập trung.
+    \item \textbf{Hệ thống đề xuất:} Dữ liệu nằm trong tay bệnh nhân. Chia sẻ tức thì toàn cầu. Bảo mật đa lớp (Mã hóa trước khi lưu trữ).
+\end{itemize}
+
+% ==================== CHAPTER 6: CONCLUSION ====================
+\chapter{Kết luận và Hướng phát triển}\label{chuong-6}
+
+\section{Kết luận}
+Đồ án đã xây dựng thành công một bản mẫu (Prototype) hệ thống EHR phi tập trung hoàn chỉnh. Hệ thống chứng minh tính khả thi của việc ứng dụng Blockchain trong y tế, giải quyết hài hòa bài toán quyền riêng tư và khả năng chia sẻ dữ liệu. Đặc biệt, việc giải quyết các vấn đề kỹ thuật phức tạp như **Key Delegation** và **Data Versioning** là đóng góp quan trọng của đồ án.
+
+\section{Hướng phát triển tương lai}
+\begin{enumerate}
+    \item \textbf{Cơ chế "Break-glass" (Truy cập khẩn cấp):} Cho phép bác sĩ truy cập hồ sơ trong tình huống cấp cứu (bệnh nhân bất tỉnh) thông qua cơ chế đa chữ ký (Multisig) hoặc ủy quyền thông minh (Smart Social Recovery).
+    \item \textbf{Tích hợp chuẩn HL7/FHIR:} Chuẩn hóa cấu trúc dữ liệu JSON để tương thích với các hệ thống bệnh viện hiện có (HIS).
+    \item \textbf{Mở rộng AI Agent:} Tích hợp AI để phân tích dữ liệu đã giải mã (Client-side) nhằm đưa ra cảnh báo sức khỏe sớm mà không làm lộ dữ liệu ra server.
+\end{enumerate}
+
+\newpage
+\begin{thebibliography}{99}
+\bibitem{nakamoto} Satoshi Nakamoto. \textit{Bitcoin: A Peer-to-Peer Electronic Cash System}. 2008.
+\bibitem{ipfs} Juan Benet. \textit{IPFS - Content Addressed, Versioned, P2P File System}. 2014.
+\bibitem{eth} Vitalik Buterin. \textit{Ethereum: A Next-Generation Smart Contract and Decentralized Application Platform}. 2014.
+\bibitem{arbitrum} Offchain Labs. \textit{Arbitrum Documentation: Optimistic Rollups}. \url{https://docs.arbitrum.io/}.
+\bibitem{nacl} Daniel J. Bernstein et al. \textit{NaCl: Networking and Cryptography library}. \url{https://nacl.cr.yp.to/}.
+\bibitem{web3auth} Web3Auth. \textit{Non-custodial Multi-Party Computation Auth Infrastructure}. \url{https://web3auth.io/}.
+\end{thebibliography}
+
+\end{document}

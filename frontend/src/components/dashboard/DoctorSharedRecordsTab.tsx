@@ -1,12 +1,20 @@
-import React from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import UserName from '@/components/ui/UserName';
 import { motion } from 'framer-motion';
 import {
     FileText, Clock, Loader2, RefreshCw, Eye, EyeOff,
-    Unlock, Lock, Edit, CheckCircle, XCircle, History as HistoryIcon
+    Unlock, Lock, Edit, CheckCircle, XCircle, History as HistoryIcon, MoreVertical, Users
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+    DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
 
 interface DoctorSharedRecordsTabProps {
     records: any[];
@@ -44,7 +52,6 @@ const DoctorSharedRecordsTab: React.FC<DoctorSharedRecordsTabProps> = ({
     onHideRecord
 }) => {
     // Filter active records (not expired)
-    // We trust that 'records' prop is already grouped/deduplicated by the parent (page.tsx)
     const activeRecords = React.useMemo(() => {
         return records.filter(r => r.active !== false);
     }, [records]);
@@ -85,351 +92,328 @@ const DoctorSharedRecordsTab: React.FC<DoctorSharedRecordsTabProps> = ({
                         </div>
                     ) : (
                         <div className="space-y-4">
-                            {activeRecords.map((record: any) => {
-                                const isExpired = record.expiresAt && new Date(record.expiresAt).getTime() <= new Date().getTime();
-
-                                // Expiry logic display
-                                let timeText = '';
-                                if (record.expiresAt) {
-                                    const now = new Date();
-                                    const expiry = new Date(record.expiresAt);
-                                    const diffMs = expiry.getTime() - now.getTime();
-
-                                    const totalMinutes = Math.floor(diffMs / (1000 * 60));
-                                    const diffDays = Math.floor((totalMinutes / (60 * 24)));
-                                    const diffHours = Math.floor((totalMinutes % (60 * 24)) / 60);
-                                    const diffMinutes = totalMinutes % 60;
-
-                                    if (diffMs < 0) {
-                                        timeText = 'Đã hết hạn';
-                                    } else if (diffDays > 0) {
-                                        timeText = `Còn ${diffDays} ngày ${diffHours} giờ`;
-                                    } else if (diffHours > 0) {
-                                        timeText = `Còn ${diffHours} giờ ${diffMinutes} phút`;
-                                    } else if (diffMinutes > 0) {
-                                        timeText = `Còn ${diffMinutes} phút`;
-                                    } else {
-                                        timeText = 'Sắp hết hạn';
-                                    }
-                                }
-
-                                return (
-                                    <div
-                                        key={record.id}
-                                        className={`p-4 border border-slate-200 rounded-xl transition-all bg-white relative group ${isExpired ? 'opacity-60 bg-slate-100' : 'hover:border-teal-300'}`}
-                                    >
-                                        <div className="flex items-center justify-between">
-                                            <div className="flex items-center gap-4">
-                                                <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${isExpired ? 'bg-slate-200' : 'bg-teal-100'}`}>
-                                                    {isExpired ? (
-                                                        <Clock className="w-6 h-6 text-slate-500" />
-                                                    ) : record.status === 'claimed' ? (
-                                                        <Unlock className="w-6 h-6 text-teal-600" />
-                                                    ) : (
-                                                        <Lock className="w-6 h-6 text-slate-500" />
-                                                    )}
-                                                </div>
-                                                <div>
-                                                    {record.senderAddress?.toLowerCase() === walletAddress?.toLowerCase() ? (
-                                                        <>
-                                                            <p className="font-medium text-slate-900">
-                                                                Hồ sơ bạn tạo cho bệnh nhân
-                                                            </p>
-                                                            <p className="text-xs text-teal-600 font-medium bg-teal-50 px-2 py-0.5 rounded-full w-fit mt-1">
-                                                                🩺 Do bạn tạo
-                                                            </p>
-                                                        </>
-                                                    ) : (
-                                                        <>
-                                                            <p className="font-medium text-slate-900">
-                                                                Hồ sơ từ: {record.senderAddress?.slice(0, 8)}...{record.senderAddress?.slice(-6)}
-                                                            </p>
-                                                            <p className="text-xs text-blue-600 font-medium mt-1">
-                                                                👤 Bệnh nhân chia sẻ
-                                                            </p>
-                                                        </>
-                                                    )}
-
-                                                    <p className="text-sm text-slate-500 mt-1">
-                                                        CID: {record.cidHash?.slice(0, 16)}...
-                                                    </p>
-                                                    {/* Expiry Text */}
-                                                    {record.expiresAt && (
-                                                        <div className="flex items-center gap-1 mt-1">
-                                                            <p className={`text-xs font-medium ${timeText.includes('Còn 0') || timeText.includes('Sắp') ? 'text-orange-500' : 'text-green-600'}`}>
-                                                                ⏱️ {timeText}
-                                                            </p>
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            </div>
-
-                                            <div className="flex gap-2">
-                                                <Button
-                                                    className="bg-teal-600 hover:bg-teal-700"
-                                                    size="sm"
-                                                    onClick={() => onViewRecord(record)}
-                                                    disabled={decrypting && selectedRecordId === record.id}
-                                                >
-                                                    {decrypting && selectedRecordId === record.id ? (
-                                                        <Loader2 className="w-4 h-4 animate-spin" />
-                                                    ) : (
-                                                        <>
-                                                            <Eye className="w-4 h-4 mr-2" /> Xem
-                                                        </>
-                                                    )}
-                                                </Button>
-
-                                                {/* Calculate Reject Logic First to use in Update condition */}
-                                                {(() => {
-                                                    // FIX: Check if Root Record is Pending (Re-share Scenario)
-                                                    const rootRecord = allRecords?.find(r => r.cidHash === record.rootCidHash);
-                                                    const isRootPending = rootRecord && rootRecord.status !== 'claimed' && rootRecord.status !== 'revoked' && rootRecord.status !== 'rejected';
-                                                    const isSelfPending = record.status !== 'claimed';
-                                                    const hasPriorAccess = !isRootPending && allRecords?.some(hist =>
-                                                        hist.status === 'claimed' && (
-                                                            (hist.rootCidHash && hist.rootCidHash === record.rootCidHash) ||
-                                                            (record.rootCidHash && hist.cidHash === record.rootCidHash)
-                                                        )
-                                                    );
-                                                    const shouldShowReject = (isSelfPending || isRootPending) &&
-                                                        record.senderAddress?.toLowerCase() !== walletAddress?.toLowerCase() &&
-                                                        !hasPriorAccess;
-
-                                                    return (
-                                                        <>
-                                                            {/* Update Button: HIDE if Reject is showing */}
-                                                            {record.status === 'claimed' && !shouldShowReject && (
-                                                                <Button
-                                                                    size="sm"
-                                                                    variant="outline"
-                                                                    className="text-blue-600 border-blue-200 hover:bg-blue-50"
-                                                                    onClick={() => onUpdateRecord(record)}
-                                                                >
-                                                                    <Edit className="w-4 h-4 mr-1" />
-                                                                    Cập nhật
-                                                                </Button>
-                                                            )}
-
-                                                            {/* Reject Button */}
-                                                            {shouldShowReject && (
-                                                                <Button
-                                                                    size="sm"
-                                                                    variant="outline"
-                                                                    onClick={() => onRejectRecord(isRootPending ? rootRecord.id : record.id)}
-                                                                    disabled={rejectingId === (isRootPending ? rootRecord.id : record.id)}
-                                                                    className="border-red-300 text-red-600 hover:bg-red-50"
-                                                                >
-                                                                    {rejectingId === (isRootPending ? rootRecord.id : record.id) ? (
-                                                                        <Loader2 className="w-4 h-4 animate-spin" />
-                                                                    ) : (
-                                                                        <>
-                                                                            <XCircle className="w-4 h-4 mr-1" />
-                                                                            Từ chối
-                                                                        </>
-                                                                    )}
-                                                                </Button>
-                                                            )}
-                                                        </>
-                                                    );
-                                                })()}
-                                            </div>
-                                        </div>
-
-                                        <div className="flex flex-wrap items-center gap-2 mt-3">
-                                            {record.versionCount > 1 && (
-                                                <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
-                                                    <HistoryIcon className="w-3 h-3 mr-1" />
-                                                    {record.versionCount} phiên bản
-                                                </Badge>
-                                            )}
-                                            <Badge
-                                                variant={record.status === 'claimed' ? 'default' : 'secondary'}
-                                                className={record.status === 'claimed' ? 'bg-emerald-100 text-emerald-700 border-emerald-300' : ''}
-                                            >
-                                                {record.status === 'claimed' ? 'Đã xem' : 'Chưa xem'}
-                                            </Badge>
-                                        </div>
-
-                                        {/* Show decrypted content */}
-                                        {selectedRecordId === record.id && decryptedContent && (
-                                            <motion.div
-                                                initial={{ opacity: 0, height: 0 }}
-                                                animate={{ opacity: 1, height: 'auto' }}
-                                                className="mt-4 p-4 bg-green-50 rounded-xl border border-green-200"
-                                            >
-                                                <div className="flex items-center justify-between mb-3">
-                                                    <h4 className="font-semibold text-green-800 flex items-center gap-2">
-                                                        <Unlock className="w-4 h-4" />
-                                                        Nội dung hồ sơ
-                                                    </h4>
-                                                    <Button
-                                                        size="sm"
-                                                        variant="ghost"
-                                                        onClick={onHideRecord}
-                                                        className="text-slate-500 hover:text-slate-700 hover:bg-slate-100"
-                                                    >
-                                                        {/* We need EyeOff icon here, check imports */}
-                                                        <Eye className="w-4 h-4 mr-1" />
-                                                        Ẩn
-                                                    </Button>
-                                                </div>
-
-                                                {/* Image */}
-                                                {decryptedContent.attachment?.data &&
-                                                    decryptedContent.attachment?.contentType?.startsWith('image/') && (
-                                                        <div className="mb-4">
-                                                            <img
-                                                                src={`data:${decryptedContent.attachment.contentType};base64,${decryptedContent.attachment.data}`}
-                                                                alt="Medical Record"
-                                                                className="max-w-md rounded-lg border"
-                                                            />
-                                                        </div>
-                                                    )}
-
-                                                {/* Metadata */}
-                                                <div className="text-sm text-slate-700 space-y-1">
-                                                    {decryptedContent.meta?.title && (
-                                                        <p><strong>Tiêu đề:</strong> {decryptedContent.meta.title}</p>
-                                                    )}
-                                                    {decryptedContent.meta?.type && (
-                                                        <p><strong>Loại:</strong> {decryptedContent.meta.type}</p>
-                                                    )}
-                                                    {decryptedContent.notes && (
-                                                        <p><strong>Ghi chú:</strong> {decryptedContent.notes}</p>
-                                                    )}
-                                                </div>
-
-                                                {/* FHIR data */}
-                                                {decryptedContent.entry && (
-                                                    <details className="mt-3">
-                                                        <summary className="cursor-pointer text-sm text-teal-700">
-                                                            Xem dữ liệu FHIR
-                                                        </summary>
-                                                        <pre className="mt-2 text-xs bg-white p-3 rounded overflow-x-auto">
-                                                            {JSON.stringify(decryptedContent.entry, null, 2)}
-                                                        </pre>
-                                                    </details>
-                                                )}
-
-                                                {/* History Section */}
-                                                {(record.versionCount > 1 || recordHistory.length > 0) && (
-                                                    <div className="mt-4 pt-4 border-t border-slate-100">
-                                                        <h4 className="text-sm font-semibold text-slate-900 mb-3 flex items-center gap-2">
-                                                            <HistoryIcon className="w-4 h-4 text-slate-500" />
-                                                            Lịch sử phiên bản ({recordHistory.length || record.versionCount})
-                                                        </h4>
-                                                        {historyLoading ? (
-                                                            <div className="flex justify-center p-4">
-                                                                <Loader2 className="w-4 h-4 animate-spin text-teal-600" />
-                                                            </div>
-                                                        ) : (
-                                                            <div className="space-y-2 pr-2">
-                                                                {Array.isArray(recordHistory) && recordHistory.map((histRecord: any, idx: number) => {
-                                                                    // Safety check
-                                                                    if (!histRecord || !histRecord.cidHash) return null;
-
-                                                                    // Find KeyShare for this specific version from the FULL list
-                                                                    const sourceList = Array.isArray(allRecords) ? allRecords : (Array.isArray(records) ? records : []);
-
-                                                                    const matchingShare = sourceList.find(r =>
-                                                                        r && r.cidHash && r.cidHash.toLowerCase() === histRecord.cidHash.toLowerCase()
-                                                                    );
-
-                                                                    const isCurrentView = selectedRecordId === matchingShare?.id;
-                                                                    const isClickable = !!matchingShare;
-                                                                    const reason = !matchingShare ? "Bạn chưa được chia sẻ phiên bản này" : "";
-
-                                                                    return (
-                                                                        <div
-                                                                            key={histRecord.cidHash || idx}
-                                                                            title={reason}
-                                                                            className={`relative pl-8 pb-8 last:pb-0 ${isClickable ? 'cursor-pointer group' : 'opacity-60 cursor-not-allowed'
-                                                                                }`}
-                                                                            onClick={() => {
-                                                                                if (isClickable && !isCurrentView) {
-                                                                                    onViewRecord(matchingShare);
-                                                                                }
-                                                                            }}
-                                                                        >
-                                                                            {/* Timeline Connector */}
-                                                                            <div className="absolute left-[11px] top-8 bottom-0 w-px bg-slate-200 group-last:hidden" />
-
-                                                                            {/* Timeline Dot */}
-                                                                            <div className={`absolute left-0 top-1 w-[22px] h-[22px] rounded-full border-2 flex items-center justify-center bg-white z-10 transition-colors ${isCurrentView
-                                                                                ? 'border-blue-500 text-blue-500'
-                                                                                : isClickable
-                                                                                    ? 'border-slate-300 text-slate-400 group-hover:border-teal-500 group-hover:text-teal-500'
-                                                                                    : 'border-slate-200 text-slate-300'
-                                                                                }`}>
-                                                                                <div className={`w-2 h-2 rounded-full ${isCurrentView ? 'bg-blue-500' : isClickable ? 'bg-slate-300 group-hover:bg-teal-500' : 'bg-slate-200'}`} />
-                                                                            </div>
-
-                                                                            {/* Content Card */}
-                                                                            <div className={`p-3 rounded-lg border transition-all ${isCurrentView
-                                                                                ? 'bg-blue-50 border-blue-200 shadow-sm'
-                                                                                : isClickable
-                                                                                    ? 'bg-white border-slate-100 hover:border-teal-200 hover:shadow-md'
-                                                                                    : 'bg-slate-50 border-slate-100'
-                                                                                }`}>
-                                                                                <div className="flex justify-between items-start mb-1">
-                                                                                    <div className="font-medium text-slate-900 text-sm truncate flex-1">
-                                                                                        {histRecord.title || 'Không có tiêu đề'}
-                                                                                    </div>
-
-                                                                                    {/* Action Buttons */}
-                                                                                    <div className="flex items-center gap-1">
-                                                                                        {isClickable && !isCurrentView && (
-                                                                                            <Button
-                                                                                                size="sm"
-                                                                                                variant="ghost"
-                                                                                                className="h-6 px-2 text-teal-600 hover:text-teal-700 hover:bg-teal-50"
-                                                                                                onClick={(e) => {
-                                                                                                    e.stopPropagation();
-                                                                                                    onViewRecord(matchingShare);
-                                                                                                }}
-                                                                                            >
-                                                                                                <Eye className="w-3 h-3 mr-1" /> Xem
-                                                                                            </Button>
-                                                                                        )}
-
-                                                                                        {!isClickable && (
-                                                                                            <Badge variant="outline" className="text-[10px] h-5 bg-slate-100 text-slate-500 border-slate-200">
-                                                                                                <Lock className="w-3 h-3 mr-1" /> Không có quyền
-                                                                                            </Badge>
-                                                                                        )}
-
-                                                                                        {isCurrentView && (
-                                                                                            <Badge variant="outline" className="text-[10px] h-5 bg-blue-50 text-blue-700 border-blue-200">
-                                                                                                Hiện tại
-                                                                                            </Badge>
-                                                                                        )}
-                                                                                    </div>
-                                                                                </div>
-
-                                                                                <div className="text-xs text-slate-500 flex items-center gap-2">
-                                                                                    <span>{new Date(histRecord.createdAt).toLocaleDateString('vi-VN')}</span>
-                                                                                    <Badge variant="secondary" className="text-[10px] h-4 px-1">
-                                                                                        Ver {idx + 1}
-                                                                                    </Badge>
-                                                                                </div>
-                                                                            </div>
-                                                                        </div>
-                                                                    );
-                                                                })}
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                )}
-                                            </motion.div>
-                                        )}
-                                    </div>
-                                );
-                            })}
+                            {activeRecords.map((record: any) => (
+                                <RecordCard
+                                    key={record.id}
+                                    record={record}
+                                    onViewRecord={onViewRecord}
+                                    decrypting={decrypting}
+                                    selectedRecordId={selectedRecordId}
+                                    onUpdateRecord={onUpdateRecord}
+                                    onRejectRecord={onRejectRecord}
+                                    rejectingId={rejectingId}
+                                    decryptedContent={decryptedContent}
+                                    recordHistory={recordHistory}
+                                    historyLoading={historyLoading}
+                                    onHideRecord={onHideRecord}
+                                    allRecords={allRecords}
+                                    walletAddress={walletAddress}
+                                />
+                            ))}
                         </div>
                     )}
                 </CardContent>
             </Card>
+        </motion.div>
+    );
+};
+
+// Extracted RecordCard Component
+const RecordCard = ({
+    record, onViewRecord, decrypting, selectedRecordId,
+    onUpdateRecord, onRejectRecord, rejectingId, decryptedContent,
+    recordHistory, historyLoading, onHideRecord, allRecords, walletAddress
+}: any) => {
+    const isSelected = selectedRecordId === record.id;
+    const isDecryptingThis = decrypting && isSelected;
+    const isRejectingThis = rejectingId === record.id;
+    const isExpired = record.expiresAt && new Date(record.expiresAt).getTime() <= new Date().getTime();
+
+    // Timer Logic
+    const [timeText, setTimeText] = React.useState('');
+
+    React.useEffect(() => {
+        const updateTimer = () => {
+            if (!record.expiresAt) return;
+            const now = new Date();
+            const expiry = new Date(record.expiresAt);
+            const diffMs = expiry.getTime() - now.getTime();
+
+            if (diffMs <= 0) {
+                setTimeText('0 phút');
+                return;
+            }
+
+            const totalMinutes = Math.floor(diffMs / (1000 * 60));
+            const days = Math.floor(totalMinutes / (60 * 24));
+            const hours = Math.floor((totalMinutes % (60 * 24)) / 60);
+            const minutes = totalMinutes % 60;
+
+            if (days > 0) setTimeText(`${days} ngày ${hours} giờ`);
+            else if (hours > 0) setTimeText(`${hours} giờ ${minutes} phút`);
+            else setTimeText(`${minutes} phút`);
+        };
+
+        updateTimer();
+        const interval = setInterval(updateTimer, 60000);
+        return () => clearInterval(interval);
+    }, [record.expiresAt]);
+
+    // Calculate Reject Logic First to use in Update condition
+    const rootRecord = allRecords?.find((r: any) => r.cidHash === record.rootCidHash);
+    const isRootPending = rootRecord && rootRecord.status !== 'claimed' && rootRecord.status !== 'revoked' && rootRecord.status !== 'rejected';
+    const isSelfPending = record.status !== 'claimed';
+    const hasPriorAccess = !isRootPending && allRecords?.some((hist: any) =>
+        hist.status === 'claimed' && (
+            (hist.rootCidHash && hist.rootCidHash === record.rootCidHash) ||
+            (record.rootCidHash && hist.cidHash === record.rootCidHash)
+        )
+    );
+    const shouldShowReject = (isSelfPending || isRootPending) &&
+        record.senderAddress?.toLowerCase() !== walletAddress?.toLowerCase() &&
+        !hasPriorAccess;
+
+    return (
+        <motion.div
+            layout
+            initial={{ opacity: 0, scale: 0.98 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className={`group relative bg-white rounded-xl border transition-all duration-200 ${isSelected ? 'border-teal-500 ring-1 ring-teal-500 shadow-md' : 'border-slate-200 hover:border-teal-300 hover:shadow-sm'}`}
+        >
+            <div className="p-4 sm:p-5">
+                <div className="flex items-start justify-between gap-4">
+                    {/* Icon & Title */}
+                    <div className="flex items-start gap-3 flex-1 min-w-0">
+                        <div className={`mt-1 w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${isSelected ? 'bg-teal-100 text-teal-600' : 'bg-slate-100 text-slate-500 group-hover:bg-teal-50 group-hover:text-teal-500'}`}>
+                            <FileText className="w-5 h-5" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-1">
+                                <h3 className="font-semibold text-slate-900 truncate">
+                                    {record.record?.title || 'Hồ sơ y tế'}
+                                </h3>
+                                {record.versionCount > 1 && (
+                                    <Badge variant="secondary" className="bg-slate-100 text-slate-600 text-[10px] h-5 px-1.5 gap-1">
+                                        v{record.versionCount}
+                                    </Badge>
+                                )}
+                                {record.status === 'pending' && (
+                                    <Badge className="bg-orange-100 text-orange-700 hover:bg-orange-100 border-orange-200">Mới</Badge>
+                                )}
+                            </div>
+
+                            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-slate-500">
+                                <span className="flex items-center gap-1.5" title="Bệnh nhân">
+                                    <Users className="w-3.5 h-3.5" />
+                                    <UserName address={record.senderAddress} />
+                                </span>
+                                {record.expiresAt && (
+                                    <span className={`flex items-center gap-1.5 ${isExpired ? 'text-red-500' : 'text-orange-600'}`}>
+                                        <Clock className="w-3.5 h-3.5" />
+                                        {isExpired ? 'Đã hết hạn' : `Còn lại: ${timeText}`}
+                                    </span>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Actions */}
+                    <div className="flex items-center gap-2 self-start">
+                        {/* Primary Action: View */}
+                        {!isSelected ? (
+                            <Button
+                                size="sm"
+                                onClick={() => onViewRecord(record)}
+                                disabled={decrypting || isExpired}
+                                className={`h-8 px-3 gap-1.5 transition-all ${record.status === 'pending'
+                                    ? 'bg-orange-500 hover:bg-orange-600 text-white shadow-sm shadow-orange-200'
+                                    : 'bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 hover:border-slate-300'}`}
+                            >
+                                {record.status === 'pending' ? <Unlock className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                                <span className="hidden sm:inline">{record.status === 'pending' ? 'Mở khóa' : 'Xem'}</span>
+                            </Button>
+                        ) : (
+                            <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-slate-400 hover:bg-slate-100 rounded-full" onClick={onHideRecord}>
+                                <XCircle className="w-5 h-5" />
+                            </Button>
+                        )}
+
+                        {/* More Actions Menu */}
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-slate-400 hover:text-slate-600">
+                                    <MoreVertical className="w-4 h-4" />
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-48">
+                                <DropdownMenuItem onClick={() => onViewRecord(record)} disabled={isSelected}>
+                                    <Eye className="w-4 h-4 mr-2" /> Xem chi tiết
+                                </DropdownMenuItem>
+                                {record.status === 'claimed' && !shouldShowReject && (
+                                    <DropdownMenuItem onClick={() => onUpdateRecord(record)}>
+                                        <Edit className="w-4 h-4 mr-2" /> Cập nhật hồ sơ
+                                    </DropdownMenuItem>
+                                )}
+                                {shouldShowReject && (
+                                    <>
+                                        <DropdownMenuSeparator />
+                                        <DropdownMenuItem
+                                            className="text-red-600 focus:text-red-700 focus:bg-red-50"
+                                            onClick={() => onRejectRecord(isRootPending ? rootRecord.id : record.id)}
+                                            disabled={isRejectingThis}
+                                        >
+                                            <XCircle className="w-4 h-4 mr-2" />
+                                            {isRejectingThis ? 'Đang từ chối...' : 'Từ chối quyền'}
+                                        </DropdownMenuItem>
+                                    </>
+                                )}
+                                {isSelected && (
+                                    <>
+                                        <DropdownMenuSeparator />
+                                        <DropdownMenuItem onClick={onHideRecord}>
+                                            <EyeOff className="w-4 h-4 mr-2" /> Ẩn chi tiết
+                                        </DropdownMenuItem>
+                                    </>
+                                )}
+                            </DropdownMenuContent>
+                        </DropdownMenu>
+                    </div>
+                </div>
+
+                {/* Expanded Content */}
+                {isSelected && (
+                    <motion.div
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: 'auto' }}
+                        exit={{ opacity: 0, height: 0 }}
+                        className="mt-4 pt-4 border-t border-slate-100"
+                    >
+                        {isDecryptingThis ? (
+                            <div className="flex flex-col items-center justify-center py-8 text-slate-500">
+                                <Loader2 className="w-8 h-8 animate-spin text-teal-500 mb-2" />
+                                <p>Đang giải mã dữ liệu an toàn...</p>
+                            </div>
+                        ) : decryptedContent ? (
+                            <div className="space-y-4">
+                                {/* Metadata grid */}
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm bg-slate-50 p-4 rounded-lg">
+                                    <div>
+                                        <span className="text-slate-500 block text-xs uppercase font-medium mb-1">Loại hồ sơ</span>
+                                        <span className="font-medium text-slate-900">{decryptedContent.meta?.type || 'Chưa xác định'}</span>
+                                    </div>
+                                    <div>
+                                        <span className="text-slate-500 block text-xs uppercase font-medium mb-1">Ngày tạo</span>
+                                        <span className="font-medium text-slate-900">{new Date(record.createdAt).toLocaleDateString('vi-VN')}</span>
+                                    </div>
+                                    <div className="sm:col-span-2">
+                                        <span className="text-slate-500 block text-xs uppercase font-medium mb-1">Ghi chú bác sĩ</span>
+                                        <p className="text-slate-900 whitespace-pre-wrap">{decryptedContent.notes || 'Không có ghi chú'}</p>
+                                    </div>
+                                </div>
+
+                                {/* Attachment Preview */}
+                                {decryptedContent.attachment && (
+                                    <div className="border rounded-lg overflow-hidden bg-slate-900">
+                                        <div className="bg-slate-800 px-3 py-2 text-xs text-slate-400 flex justify-between items-center">
+                                            <span>Đính kèm hình ảnh</span>
+                                            <Button variant="ghost" size="sm" className="h-6 text-xs hover:text-white" onClick={() => window.open(decryptedContent.attachment.data, '_blank')}>
+                                                Mở thẻ mới
+                                            </Button>
+                                        </div>
+                                        <div className="relative min-h-[200px] flex items-center justify-center bg-black/20 backdrop-blur-sm p-4">
+                                            {decryptedContent.attachment.contentType?.startsWith('image/') ? (
+                                                // eslint-disable-next-line @next/next/no-img-element
+                                                <img
+                                                    src={`data:${decryptedContent.attachment.contentType};base64,${decryptedContent.attachment.data}`}
+                                                    alt="Medical Record"
+                                                    className="max-w-full max-h-[500px] object-contain mx-auto rounded shadow-lg"
+                                                />
+                                            ) : (
+                                                <div className="p-8 text-center text-slate-400">
+                                                    <FileText className="w-12 h-12 mx-auto mb-2 opacity-50" />
+                                                    <p>Định dạng tệp tin: {decryptedContent.attachment.contentType}</p>
+                                                    <Button variant="secondary" className="mt-2" onClick={() => {
+                                                        const link = document.createElement('a');
+                                                        link.href = `data:${decryptedContent.attachment.contentType};base64,${decryptedContent.attachment.data}`;
+                                                        link.download = `medical-record-${record.id}`;
+                                                        link.click();
+                                                    }}>
+                                                        Tải xuống
+                                                    </Button>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* FHIR JSON Toggle */}
+                                {decryptedContent.entry && (
+                                    <details className="mt-3 group">
+                                        <summary className="cursor-pointer text-sm font-medium text-teal-700 hover:text-teal-800 flex items-center gap-2 select-none">
+                                            <div className="w-4 h-4 border border-teal-600 rounded flex items-center justify-center text-[10px] group-open:bg-teal-600 group-open:text-white transition-colors">
+                                                JSON
+                                            </div>
+                                            Xem dữ liệu chuẩn FHIR
+                                        </summary>
+                                        <pre className="mt-3 text-xs bg-slate-900 text-slate-50 p-4 rounded-lg overflow-x-auto font-mono custom-scrollbar border border-slate-700">
+                                            {JSON.stringify(decryptedContent.entry, null, 2)}
+                                        </pre>
+                                    </details>
+                                )}
+
+                                {/* Version History */}
+                                {(record.versionCount > 1 || recordHistory.length > 0) && (
+                                    <div className="mt-6 pt-6 border-t border-slate-200">
+                                        <h4 className="text-sm font-bold text-slate-900 mb-4 flex items-center gap-2">
+                                            <HistoryIcon className="w-4 h-4 text-slate-500" />
+                                            Lịch sử phiên bản
+                                        </h4>
+                                        {historyLoading ? (
+                                            <div className="flex justify-center p-4">
+                                                <Loader2 className="w-5 h-5 animate-spin text-teal-600" />
+                                            </div>
+                                        ) : (
+                                            <div className="space-y-1 relative pl-2">
+                                                <div className="absolute left-[21px] top-2 bottom-4 w-px bg-slate-200" />
+                                                {Array.isArray(recordHistory) && recordHistory.map((histRecord: any, idx: number) => {
+                                                    const sourceList = Array.isArray(allRecords) ? allRecords : [];
+                                                    const matchingShare = sourceList.find(r =>
+                                                        r && r.cidHash && r.cidHash.toLowerCase() === histRecord.cidHash.toLowerCase()
+                                                    );
+                                                    const isCurrentView = selectedRecordId === matchingShare?.id;
+                                                    const isClickable = !!matchingShare;
+
+                                                    return (
+                                                        <div key={histRecord.cidHash || idx} className="relative pl-8 py-2 group">
+                                                            {/* Dot */}
+                                                            <div className={`absolute left-[14px] top-4 w-3.5 h-3.5 rounded-full border-2 z-10 transition-colors ${isCurrentView ? 'bg-blue-500 border-white ring-2 ring-blue-100' : isClickable ? 'bg-white border-slate-300 group-hover:border-teal-400' : 'bg-slate-100 border-slate-200'}`} />
+
+                                                            <div
+                                                                className={`p-3 rounded-lg border transition-all text-sm ${isCurrentView ? 'bg-blue-50 border-blue-200' : isClickable ? 'bg-white border-slate-200 hover:border-teal-300 hover:shadow-sm cursor-pointer' : 'bg-slate-50 border-slate-100 opacity-60'}`}
+                                                                onClick={() => isClickable && !isCurrentView && onViewRecord(matchingShare)}
+                                                            >
+                                                                <div className="flex justify-between items-center mb-1">
+                                                                    <span className="font-medium text-slate-900">{histRecord.title || 'Bản cập nhật'}</span>
+                                                                    <span className="text-xs text-slate-500">{new Date(histRecord.createdAt).toLocaleDateString('vi-VN')}</span>
+                                                                </div>
+                                                                {isCurrentView && <Badge variant="outline" className="text-[10px] bg-blue-100 text-blue-700 border-blue-200">Đang xem</Badge>}
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                        ) : (
+                            <div className="text-center py-8 text-slate-500">
+                                <p>Không thể hiển thị nội dung.</p>
+                            </div>
+                        )}
+                    </motion.div>
+                )}
+            </div>
         </motion.div>
     );
 };

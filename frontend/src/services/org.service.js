@@ -96,6 +96,16 @@ export async function verifyOrg(orgId) {
     return response;
 }
 
+// Save encrypted doctor credential off-chain
+export async function saveDoctorCredential(doctorAddress, credential, credentialHash) {
+    const response = await api.post('/api/org/doctor-credential', {
+        doctorAddress,
+        credential,
+        credentialHash
+    });
+    return response;
+}
+
 export const orgService = {
     applyOrg,
     getMyApplication,
@@ -109,5 +119,6 @@ export const orgService = {
     approveOrgApplication,
     rejectOrgApplication,
     verifyOrg,
+    saveDoctorCredential,
 };
 

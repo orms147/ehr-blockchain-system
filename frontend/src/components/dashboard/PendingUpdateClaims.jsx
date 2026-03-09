@@ -12,6 +12,7 @@ import { ensureArbitrumSepolia } from '@/utils/chainSwitch';
 import { createWalletClient, custom, parseGwei, parseAbi } from 'viem';
 import { arbitrumSepolia } from 'viem/chains';
 import { keccak256, toBytes } from 'viem';
+import UserName from '@/components/ui/UserName';
 
 // Contract details
 const DOCTOR_UPDATE_ADDRESS = process.env.NEXT_PUBLIC_DOCTOR_UPDATE_ADDRESS;
@@ -212,7 +213,7 @@ export default function PendingUpdateClaims({ walletAddress, provider, onClaimed
                                 <div className="flex items-center gap-2 mb-1">
                                     <User className="w-4 h-4 text-slate-500" />
                                     <span className="text-sm font-medium text-slate-800">
-                                        Bệnh nhân: {update.patientAddress?.slice(0, 8)}...{update.patientAddress?.slice(-6)}
+                                        Bệnh nhân: <UserName address={update.patientAddress} />
                                     </span>
                                 </div>
                                 {update.title && (

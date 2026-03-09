@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { keyShareService } from '@/services';
 import { toast } from '@/components/ui/use-toast';
+import UserName from '@/components/ui/UserName';
 import { useWeb3Auth } from '@web3auth/modal/react';
 
 // Contract Config (for role checking)
@@ -91,7 +92,7 @@ const CareTeamList = ({ cidHash }) => {
                                 }
                                 <div>
                                     <p className="text-sm font-medium text-slate-900">
-                                        {member.walletAddress.slice(0, 6)}...{member.walletAddress.slice(-4)}
+                                        <UserName address={member.walletAddress} />
                                     </p>
                                     <Badge variant="outline" className="text-[10px] px-1.5 h-5 font-normal bg-slate-50">
                                         {member.roleLabel}

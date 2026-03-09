@@ -13,6 +13,7 @@ export { delegationService } from './delegation.service';
 export { orgService } from './org.service';
 export { pendingUpdateService } from './pendingUpdate.service';
 export { accessLogService } from './accessLog.service';
+export { default as profileService } from './profile.service';
 export * from './crypto';
 export * from './nacl-crypto';
 

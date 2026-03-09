@@ -215,16 +215,21 @@ const AccessManagementTab = ({ record, currentUserAddress, onAccessRevoked }) =>
                         const isCurrentUser = access.address?.toLowerCase() === currentUserAddress?.toLowerCase();
                         // Check expiry
                         const isExpired = access.expiresAt && new Date(access.expiresAt).getTime() < Date.now();
+                        const isRevoked = access.status === 'revoked' || access.status === 'rejected';
 
                         return (
                             <div
                                 key={idx}
-                                className={`flex items-center justify-between p-3 rounded-lg border ${isExpired ? 'bg-slate-100 opacity-75' : 'bg-white border-slate-200'
+                                className={`flex items-center justify-between p-3 rounded-lg border ${isRevoked ? 'bg-red-50 border-red-100 opacity-60' :
+                                        isExpired ? 'bg-slate-100 opacity-75' :
+                                            'bg-white border-slate-200'
                                     }`}
                             >
                                 <div className="flex-1">
                                     <div className="flex items-center gap-2">
-                                        <span className={`font-mono text-sm font-medium ${isExpired ? 'text-slate-500' : 'text-slate-900'}`}>
+                                        <span className={`font-mono text-sm font-medium ${isRevoked ? 'text-red-700 decoration-line-through' :
+                                                isExpired ? 'text-slate-500' : 'text-slate-900'
+                                            }`}>
                                             {access.address?.slice(0, 10)}...{access.address?.slice(-8)}
                                         </span>
                                         {isCurrentUser && (
@@ -232,23 +237,33 @@ const AccessManagementTab = ({ record, currentUserAddress, onAccessRevoked }) =>
                                                 BẠN
                                             </span>
                                         )}
-                                        {isExpired && (
+                                        {isRevoked && (
+                                            <span className="text-[10px] bg-red-100 text-red-600 px-2 py-0.5 rounded-full font-bold flex items-center gap-1">
+                                                <ShieldX className="w-3 h-3" /> (Đã bị thu hồi truy cập)
+                                            </span>
+                                        )}
+                                        {!isRevoked && isExpired && (
                                             <span className="text-[10px] bg-slate-200 text-slate-600 px-2 py-0.5 rounded-full font-bold flex items-center gap-1">
-                                                <AlertCircle className="w-3 h-3" /> HẾT HẠN
+                                                <AlertCircle className="w-3 h-3" /> (Hết thời gian truy cập)
                                             </span>
                                         )}
                                     </div>
                                     <div className="text-xs text-slate-500 mt-1">
                                         Cấp: {new Date(access.grantedAt).toLocaleDateString('vi-VN')}
-                                        {access.expiresAt && (
+                                        {access.expiresAt && !isRevoked && (
                                             <span className={isExpired ? 'text-red-500 font-medium ml-2' : 'text-orange-600 ml-2'}>
                                                 • Hết hạn: {new Date(access.expiresAt).toLocaleString('vi-VN')}
+                                            </span>
+                                        )}
+                                        {isRevoked && (
+                                            <span className="text-red-500 font-medium ml-2">
+                                                • Đã thu hồi
                                             </span>
                                         )}
                                     </div>
                                 </div>
 
-                                {!isCurrentUser && (
+                                {!isCurrentUser && !isRevoked && (
                                     <Button
                                         variant={isExpired ? "secondary" : "destructive"} // Change style if expired
                                         size="sm"

@@ -358,10 +358,10 @@ export default function DoctorDashboardPage() {
         fetchSharedRecords();
     };
 
-    // Calculate stats
+    // Calculate stats — use ownerAddress (actual patient) instead of senderAddress (could be doctor)
     const uniquePatients = new Set(
         sharedRecords
-            .map(r => r.senderAddress?.toLowerCase())
+            .map(r => (r.record?.ownerAddress || r.senderAddress)?.toLowerCase())
             .filter((addr): addr is string => !!addr && addr !== walletAddress?.toLowerCase())
     ).size;
 

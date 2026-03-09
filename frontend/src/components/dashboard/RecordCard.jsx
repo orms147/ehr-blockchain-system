@@ -49,7 +49,7 @@ const getTypeLabel = (type) => {
 
 const RecordCard = ({ record, onViewDetails }) => {
     return (
-        <Card className="hover:shadow-md transition-shadow duration-200 overflow-hidden border-slate-200">
+        <Card className="hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300 overflow-hidden border-slate-200 bg-white group">
             <CardContent className="p-5">
                 <div className="flex justify-between items-start mb-4">
                     <div className={`p-3 rounded-xl ${getColor(record.type)}`}>
@@ -79,15 +79,15 @@ const RecordCard = ({ record, onViewDetails }) => {
 
 
                 <div className="flex items-center justify-between mt-4 pt-4 border-t border-slate-100">
-                    <div className="flex items-center gap-2">
-                        <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium ${record.isCreatedByDoctor ? 'bg-teal-100 text-teal-700' : 'bg-blue-100 text-blue-600'}`}>
+                    <div className="flex items-center gap-2 min-w-0">
+                        <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium shrink-0 ${record.isCreatedByDoctor ? 'bg-teal-100 text-teal-700' : 'bg-blue-100 text-blue-600'}`}>
                             {record.isCreatedByDoctor ? '🩺' : '👤'}
                         </div>
-                        <span className="text-sm text-slate-600 truncate max-w-[100px]" title={record.createdByDisplay || record.createdBy}>
+                        <span className="text-sm text-slate-600 truncate" title={record.createdByDisplay || record.createdBy}>
                             {record.createdByDisplay || 'Bạn'}
                         </span>
                     </div>
-                    <Button variant="outline" size="sm" onClick={() => onViewDetails(record)} className="text-blue-600 hover:text-blue-700 hover:bg-blue-50 border-blue-200">
+                    <Button variant="outline" size="sm" onClick={() => onViewDetails(record)} className="text-blue-600 hover:text-white hover:bg-blue-600 border-blue-200 transition-colors shrink-0">
                         Xem chi tiết
                     </Button>
                 </div>

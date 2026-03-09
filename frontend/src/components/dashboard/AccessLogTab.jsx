@@ -18,6 +18,7 @@ import {
     AlertCircle
 } from 'lucide-react';
 import { accessLogService } from '@/services';
+import UserName from '@/components/ui/UserName';
 
 // Map action to Vietnamese and icon
 const getActionInfo = (action) => {
@@ -35,7 +36,7 @@ const getActionInfo = (action) => {
 
 const formatAddress = (address) => {
     if (!address) return 'Unknown';
-    return `${address.slice(0, 8)}...${address.slice(-6)}`;
+    return `${address.slice(0, 6)}...${address.slice(-4)}`;
 };
 
 const formatTime = (timestamp) => {
@@ -184,7 +185,7 @@ const AccessLogTab = ({ records = [] }) => {
                                             <div className="flex items-center gap-4 mt-2 text-xs text-slate-500">
                                                 <span className="flex items-center gap-1">
                                                     <User className="w-3 h-3" />
-                                                    {formatAddress(log.accessorAddress)}
+                                                    <UserName address={log.accessorAddress} fallback="Unknown" className="inline" />
                                                 </span>
                                                 <span className="flex items-center gap-1">
                                                     <Clock className="w-3 h-3" />

@@ -542,10 +542,18 @@ router.delete('/:cidHash/access/:address', authenticate, async (req, res, next) 
         }
 
 
-        // 4. Delete ALL KeyShares in DB
-        await prisma.keyShare.deleteMany({
+        // 4. SOFT DELETE: Update status to 'revoked' instead of deleting
+        // This allows us to show "Revoked" status in the UI history.
+        // SECURITY: We also wipe the encryptedPayload so the key is truly gone from DB.
+        await prisma.keyShare.updateMany({
             where: {
                 id: { in: keyShares.map(k => k.id) }
+            },
+            data: {
+                status: 'revoked',
+                encryptedPayload: '', // Destroy the key material
+                revokedAt: new Date(),
+                expiresAt: new Date(), // Mark expired immediately
             }
         });
 

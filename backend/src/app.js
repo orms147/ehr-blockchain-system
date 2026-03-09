@@ -18,7 +18,9 @@ import delegationRoutes from './routes/delegation.routes.js';
 import orgRoutes from './routes/org.routes.js';
 import adminRoutes from './routes/admin.routes.js';
 import pendingUpdateRoutes from './routes/pendingUpdate.routes.js';
+import profileRoutes from './routes/profile.routes.js';
 import testRoutes from './routes/test.routes.js';
+import { startEventSync } from './services/eventSync.service.js';
 import { errorHandler } from './middleware/errorHandler.js';
 
 dotenv.config();
@@ -68,6 +70,7 @@ app.use('/api/delegation', delegationRoutes);  // Family delegation
 app.use('/api/org', orgRoutes);                // Organization management
 app.use('/api/admin', adminRoutes);            // Ministry-only endpoints
 app.use('/api/pending-updates', pendingUpdateRoutes); // Doctor update approval
+app.use('/api/profile', profileRoutes);               // User profile & metadata
 app.use('/api/test', testRoutes);              // Development only
 
 // Error handling
@@ -75,6 +78,9 @@ app.use(errorHandler);
 
 // Start server with Socket.io
 server.listen(PORT, () => {
+    console.log(`🚀 Server running on port ${PORT}`);
+    // Start blockchain event sync worker
+    startEventSync();
 });
 
 export default app;

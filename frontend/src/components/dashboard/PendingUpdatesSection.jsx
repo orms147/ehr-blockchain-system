@@ -11,6 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { toast } from '@/components/ui/use-toast';
 import { pendingUpdateService } from '@/services';
+import UserName from '@/components/ui/UserName';
 
 export default function PendingUpdatesSection({ walletAddress, onUpdated }) {
     const [updates, setUpdates] = useState([]);
@@ -124,7 +125,7 @@ export default function PendingUpdatesSection({ walletAddress, onUpdated }) {
                                     <div className="flex items-center gap-2 mb-2">
                                         <User className="w-4 h-4 text-slate-500" />
                                         <span className="text-sm font-medium text-slate-800">
-                                            Bác sĩ: {update.doctorAddress?.slice(0, 8)}...{update.doctorAddress?.slice(-6)}
+                                            Bác sĩ: <UserName address={update.doctorAddress} className="font-semibold" />
                                         </span>
                                     </div>
 

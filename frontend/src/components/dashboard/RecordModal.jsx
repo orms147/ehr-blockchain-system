@@ -21,6 +21,7 @@ import { ipfsService, importAESKey, decryptData, keyShareService, recordService 
 import { getOrCreateEncryptionKeypair, decryptFromSender } from '@/services/nacl-crypto';
 import AccessManagementTab from './AccessManagementTab';
 import RecordAccessLog from './RecordAccessLog';
+import MedicalDataViewer from '@/components/medical/MedicalDataViewer';
 import { useWalletAddress } from '@/hooks/useWalletAddress';
 
 const RecordModal = ({ record, open, onOpenChange, onUpdate, onViewRecord }) => {
@@ -617,23 +618,11 @@ const RecordModal = ({ record, open, onOpenChange, onUpdate, onViewRecord }) => 
                                             {decryptedData.meta?.createdAt && (
                                                 <p><strong>Ngày tạo:</strong> {new Date(decryptedData.meta.createdAt).toLocaleString('vi-VN')}</p>
                                             )}
-                                            {decryptedData.notes && (
-                                                <p><strong>Ghi chú:</strong> {decryptedData.notes}</p>
-                                            )}
                                         </div>
                                     </div>
 
-                                    {/* FHIR Data (if text mode) */}
-                                    {decryptedData.entry && decryptedData.entry.length > 0 && (
-                                        <div className="p-4 rounded-lg border border-slate-200">
-                                            <h4 className="text-sm font-semibold text-slate-900 mb-3">
-                                                Dữ liệu Y tế (FHIR)
-                                            </h4>
-                                            <pre className="text-xs bg-slate-50 p-3 rounded-lg overflow-x-auto">
-                                                {JSON.stringify(decryptedData.entry, null, 2)}
-                                            </pre>
-                                        </div>
-                                    )}
+                                    {/* Structured Medical Data Viewer */}
+                                    <MedicalDataViewer data={decryptedData} />
                                 </div>
                             )}
                         </div>
@@ -675,10 +664,10 @@ const RecordModal = ({ record, open, onOpenChange, onUpdate, onViewRecord }) => 
 
                                                 {/* Timeline Dot */}
                                                 <div className={`absolute left-0 top-1 w-[22px] h-[22px] rounded-full border-2 flex items-center justify-center bg-white z-10 transition-colors ${isCurrent
-                                                        ? 'border-blue-500 text-blue-500'
-                                                        : isViewing
-                                                            ? 'border-amber-500 text-amber-500'
-                                                            : 'border-slate-300 text-slate-400 group-hover:border-teal-500 group-hover:text-teal-500'
+                                                    ? 'border-blue-500 text-blue-500'
+                                                    : isViewing
+                                                        ? 'border-amber-500 text-amber-500'
+                                                        : 'border-slate-300 text-slate-400 group-hover:border-teal-500 group-hover:text-teal-500'
                                                     }`}>
                                                     <div className={`w-2 h-2 rounded-full ${isCurrent ? 'bg-blue-500' : isViewing ? 'bg-amber-500' : 'bg-slate-300 group-hover:bg-teal-500'
                                                         }`} />
@@ -686,10 +675,10 @@ const RecordModal = ({ record, open, onOpenChange, onUpdate, onViewRecord }) => 
 
                                                 {/* Content Card */}
                                                 <div className={`p-3 rounded-lg border transition-all ${isCurrent
-                                                        ? 'bg-blue-50 border-blue-200 shadow-sm'
-                                                        : isViewing
-                                                            ? 'bg-amber-50 border-amber-200 shadow-md ring-1 ring-amber-100'
-                                                            : 'bg-white border-slate-100 hover:border-teal-200 hover:shadow-md'
+                                                    ? 'bg-blue-50 border-blue-200 shadow-sm'
+                                                    : isViewing
+                                                        ? 'bg-amber-50 border-amber-200 shadow-md ring-1 ring-amber-100'
+                                                        : 'bg-white border-slate-100 hover:border-teal-200 hover:shadow-md'
                                                     }`}>
                                                     <div className="flex items-center justify-between mb-1">
                                                         <span className={`font-medium ${isCurrent ? 'text-blue-900' : 'text-slate-700'}`}>
@@ -758,35 +747,8 @@ const RecordModal = ({ record, open, onOpenChange, onUpdate, onViewRecord }) => 
                                                 </Button>
                                             </div>
                                             <div className="text-sm text-amber-800">
-                                                {chainDecryptedData.notes && (
-                                                    <p className="mb-2"><strong>Ghi chú:</strong> {chainDecryptedData.notes}</p>
-                                                )}
-                                                {chainDecryptedData.title && (
-                                                    <p className="mb-2"><strong>Tiêu đề:</strong> {chainDecryptedData.title}</p>
-                                                )}
-                                                {chainDecryptedData.type && (
-                                                    <p className="mb-2"><strong>Loại:</strong> {chainDecryptedData.type}</p>
-                                                )}
-                                                {chainDecryptedData.entry && (
-                                                    <div className="mt-3">
-                                                        <p className="font-medium mb-1">Dữ liệu FHIR:</p>
-                                                        <pre className="text-xs bg-white p-2 rounded border overflow-x-auto max-h-60">
-                                                            {JSON.stringify(chainDecryptedData.entry, null, 2)}
-                                                        </pre>
-                                                    </div>
-                                                )}
-                                                {/* Support both imageBase64 and attachment.data formats */}
-                                                {(chainDecryptedData.imageBase64 || chainDecryptedData.attachment?.data) && (
-                                                    <div className="mt-3">
-                                                        <p className="font-medium mb-1">Hình ảnh:</p>
-                                                        <img
-                                                            src={chainDecryptedData.imageBase64 ||
-                                                                `data:${chainDecryptedData.attachment?.contentType || 'image/jpeg'};base64,${chainDecryptedData.attachment?.data}`}
-                                                            alt={chainDecryptedData.attachment?.fileName || "Record image"}
-                                                            className="max-w-full h-auto rounded border"
-                                                        />
-                                                    </div>
-                                                )}
+                                                {/* Use MedicalDataViewer for old versions too */}
+                                                <MedicalDataViewer data={chainDecryptedData} />
                                             </div>
                                         </div>
                                     )}

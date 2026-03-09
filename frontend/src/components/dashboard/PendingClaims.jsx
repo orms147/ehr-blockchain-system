@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { toast } from '@/components/ui/use-toast';
 import { requestService } from '@/services';
+import UserName from '@/components/ui/UserName';
 import { ensureArbitrumSepolia } from '@/utils/chainSwitch';
 import { createWalletClient, custom, parseGwei } from 'viem';
 import { arbitrumSepolia } from 'viem/chains';
@@ -217,7 +218,7 @@ export default function PendingClaims({ walletAddress, provider, onClaimed }) {
                             >
                                 <div>
                                     <p className="text-sm font-medium text-slate-800">
-                                        Bệnh nhân: {claim.patientAddress?.slice(0, 8)}...{claim.patientAddress?.slice(-6)}
+                                        Bệnh nhân: <UserName address={claim.patientAddress} />
                                     </p>
                                     <div className="flex items-center gap-2 mt-1">
                                         <Clock className="w-3 h-3 text-slate-400" />

@@ -20,6 +20,7 @@ import AccessLogTab from '@/components/dashboard/AccessLogTab';
 import DelegationManager from '@/components/dashboard/DelegationManager';
 import { recordService } from '@/services';
 import { useSocket } from '@/hooks/useSocket';
+import { getDisplayName } from '@/components/ui/UserName';
 
 const PatientDashboard = () => {
     const { address, provider, loading: walletLoading } = useWalletAddress();
@@ -66,7 +67,7 @@ const PatientDashboard = () => {
                     createdByDisplay: isCreatedBySelf
                         ? 'Bạn'
                         : record.createdBy
-                            ? `Bác sĩ ${record.createdBy.substring(0, 6)}...${record.createdBy.substring(38)}`
+                            ? `BS. ${getDisplayName(record.createdBy)}`
                             : 'Không rõ',
                     isCreatedByDoctor: !isCreatedBySelf,
                     verified: true,
@@ -110,16 +111,19 @@ const PatientDashboard = () => {
         fetchRecords();
     }, []);
 
-    // WebSocket: Auto-refresh when doctor claims pending update
-    // WebSocket: Auto-refresh when events occur
+    // ---- WebSocket: "Banner" pattern instead of auto-refresh ----
+    const [hasNewData, setHasNewData] = useState(false);
+    const [newDataMessage, setNewDataMessage] = useState('');
+
     useSocket({
         'pending_update:claimed': (data) => {
             toast({
                 title: "📋 Hồ sơ mới!",
-                description: "Bác sĩ vừa thêm hồ sơ mới cho bạn. Đang cập nhật...",
+                description: "Bác sĩ vừa thêm hồ sơ mới cho bạn.",
                 className: "bg-blue-50 border-blue-200 text-blue-800",
             });
-            fetchRecords();
+            setNewDataMessage('Bác sĩ vừa thêm hồ sơ mới cho bạn.');
+            setHasNewData(true);
         },
         'pending_update:new': (data) => {
             toast({
@@ -127,15 +131,34 @@ const PatientDashboard = () => {
                 description: `Bác sĩ muốn cập nhật hồ sơ "${data.title || 'mới'}". Vui lòng xem xét.`,
                 className: "bg-amber-50 border-amber-200 text-amber-800",
             });
+            setNewDataMessage('Có yêu cầu cập nhật hồ sơ mới từ bác sĩ.');
+            setHasNewData(true);
         },
-        'consent:updated': (data) => {
+        'consent:updated': () => {
+            setNewDataMessage('Quyền truy cập hồ sơ vừa thay đổi.');
+            setHasNewData(true);
+        },
+        'record:created': () => {
             toast({
-                title: "🔒 Quyền truy cập đã thay đổi",
-                description: "Có thay đổi về quyền truy cập hồ sơ.",
-                className: "bg-slate-50 border-slate-200 text-slate-800",
+                title: "📂 Hồ sơ mới!",
+                description: "Có hồ sơ y tế mới. Bấm cập nhật để xem.",
+                className: "bg-green-50 border-green-200 text-green-800",
             });
+            setNewDataMessage('Có hồ sơ y tế mới được thêm cho bạn.');
+            setHasNewData(true);
+        },
+        'record:shared': () => {
+            setNewDataMessage('Có thay đổi về hồ sơ được chia sẻ.');
+            setHasNewData(true);
         },
     });
+
+    // Handler: user clicks "Cập nhật" on the banner
+    const handleBannerRefresh = () => {
+        setHasNewData(false);
+        setNewDataMessage('');
+        fetchRecords();
+    };
 
     // Handlers
     const handleViewDetails = (record) => {
@@ -213,6 +236,38 @@ const PatientDashboard = () => {
                     </div>
                 </div>
             </div>
+
+            {/* === New Data Banner === */}
+            {hasNewData && (
+                <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-xl flex items-center justify-between gap-4 animate-in slide-in-from-top">
+                    <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center shrink-0">
+                            <Bell className="w-4 h-4 text-blue-600" />
+                        </div>
+                        <p className="text-sm text-blue-800 font-medium">
+                            {newDataMessage || 'Có dữ liệu mới. Bấm cập nhật để xem.'}
+                        </p>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                        <Button
+                            size="sm"
+                            onClick={handleBannerRefresh}
+                            className="bg-blue-600 hover:bg-blue-700 text-white gap-1"
+                        >
+                            <RefreshCw className="w-3.5 h-3.5" />
+                            Cập nhật
+                        </Button>
+                        <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => setHasNewData(false)}
+                            className="text-blue-600 hover:bg-blue-100"
+                        >
+                            Bỏ qua
+                        </Button>
+                    </div>
+                </div>
+            )}
 
             {/* Pending Doctor Updates */}
             <div className="mb-6">

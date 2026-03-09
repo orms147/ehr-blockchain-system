@@ -7,6 +7,7 @@ import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { authenticate } from '../middleware/auth.js';
 import prisma from '../config/database.js';
+import { encryptAES } from '../utils/crypto.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -420,6 +421,63 @@ router.post('/:orgId/verify', authenticate, async (req, res, next) => {
         res.json({
             success: true,
             message: 'Đã xác thực tổ chức',
+        });
+    } catch (error) {
+        next(error);
+    }
+});
+
+// Validation schema for credential
+const saveCredentialSchema = z.object({
+    doctorAddress: z.string().regex(/^0x[a-fA-F0-9]{40}$/i, 'Địa chỉ ví không hợp lệ'),
+    credential: z.string().min(1, 'GPHH không được để trống'),
+    credentialHash: z.string().min(1, 'Hash không được để trống')
+});
+
+// POST /api/org/doctor-credential - Save encrypted doctor credential off-chain
+router.post('/doctor-credential', authenticate, async (req, res, next) => {
+    try {
+        const { doctorAddress, credential, credentialHash } = saveCredentialSchema.parse(req.body);
+        const adminAddress = req.user.walletAddress.toLowerCase();
+
+        // Verify caller is an admin
+        const adminOrg = await prisma.organizationMember.findFirst({
+            where: {
+                memberAddress: adminAddress,
+                role: 'admin',
+                status: 'active'
+            }
+        });
+
+        // Ministry can also save credentials
+        const isMinistry = req.user.role === 'ministry';
+
+        if (!adminOrg && !isMinistry) {
+            return res.status(403).json({ error: 'Chỉ Admin tổ chức hoặc Bộ Y tế mới có thể lưu chứng chỉ' });
+        }
+
+        // Encrypt the plaintext credential
+        const encryptedData = encryptAES(credential);
+
+        // Save to DB
+        await prisma.doctorCredential.upsert({
+            where: { doctorAddress: doctorAddress.toLowerCase() },
+            update: {
+                credentialHash,
+                encryptedData,
+                verifiedByOrgId: adminOrg ? adminOrg.orgId : 'ministry'
+            },
+            create: {
+                doctorAddress: doctorAddress.toLowerCase(),
+                credentialHash,
+                encryptedData,
+                verifiedByOrgId: adminOrg ? adminOrg.orgId : 'ministry'
+            }
+        });
+
+        res.json({
+            success: true,
+            message: 'Đã lưu thông tin chứng chỉ an toàn (mã hóa off-chain)'
         });
     } catch (error) {
         next(error);

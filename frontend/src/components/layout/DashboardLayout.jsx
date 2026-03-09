@@ -17,6 +17,8 @@ import RoleSwitcher from '@/components/role/RoleSwitcher';
 import { useWeb3AuthDisconnect } from '@web3auth/modal/react';
 import authService from '@/services/auth.service';
 import { getActiveRole, clearAuthRoles } from '@/hooks/useAuthRoles';
+import { NotificationProvider, useNotifications } from '@/contexts/NotificationContext'; // Import Context
+import { Bell } from 'lucide-react'; // Import Bell
 
 const DashboardLayout = ({ children }) => {
     const [isSidebarOpen, setSidebarOpen] = useState(false);
@@ -155,25 +157,41 @@ const DashboardLayout = ({ children }) => {
                     </button>
                 </nav>
 
-                {/* Role Switcher */}
-                <div className="absolute bottom-4 left-4 right-4">
+                {/* Role Switcher - Mobile Only */}
+                <div className="lg:hidden absolute bottom-4 left-4 right-4">
                     <RoleSwitcher />
                 </div>
             </aside>
 
-            {/* Main Content */}
-            <div className="flex-1 flex flex-col min-w-0">
-                {/* Mobile Header */}
-                <header className="lg:hidden h-16 bg-white border-b border-slate-200 flex items-center px-4 justify-between sticky top-0 z-30">
-                    <div className="flex items-center gap-2">
-                        <div className="w-8 h-8 bg-gradient-to-br from-blue-600 to-teal-500 rounded-md flex items-center justify-center">
-                            <Shield className="w-5 h-5 text-white" />
+            {/* Main Content Area */}
+            <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
+                {/* Unified Header (Desktop & Mobile) */}
+                <header className="bg-white border-b border-slate-200 h-16 flex items-center justify-between px-4 sm:px-6 z-30 shrink-0">
+                    <div className="flex items-center gap-4">
+                        {/* Mobile Toggle */}
+                        <button onClick={toggleSidebar} className="p-2 rounded-md hover:bg-slate-100 lg:hidden">
+                            {isSidebarOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+                        </button>
+
+                        {/* Mobile Logo */}
+                        <div className="flex items-center gap-2 lg:hidden">
+                            <div className="w-8 h-8 bg-gradient-to-br from-blue-600 to-teal-500 rounded-md flex items-center justify-center">
+                                <Shield className="w-5 h-5 text-white" />
+                            </div>
+                            <span className="font-bold text-slate-900">EHR Chain</span>
                         </div>
-                        <span className="font-bold text-slate-900">EHR Chain</span>
                     </div>
-                    <button onClick={toggleSidebar} className="p-2 rounded-md hover:bg-slate-100">
-                        {isSidebarOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
-                    </button>
+
+                    {/* Right Side Actions */}
+                    <div className="flex items-center gap-4">
+                        {/* Notification Bell */}
+                        <NotificationBell />
+
+                        {/* Role Switcher (Moved here for better visibility) */}
+                        <div className="hidden sm:block">
+                            <RoleSwitcher />
+                        </div>
+                    </div>
                 </header>
 
                 <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
@@ -184,4 +202,24 @@ const DashboardLayout = ({ children }) => {
     );
 };
 
-export default DashboardLayout;
+// Notification Bell Component
+const NotificationBell = () => {
+    const { unreadCount } = useNotifications();
+    return (
+        <button className="relative p-2 text-slate-500 hover:bg-slate-100 rounded-full transition-colors">
+            <Bell className="w-5 h-5" />
+            {unreadCount > 0 && (
+                <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white"></span>
+            )}
+        </button>
+    );
+};
+
+// Wrapper Component
+export default function DashboardLayoutWrapper(props) {
+    return (
+        <NotificationProvider>
+            <DashboardLayout {...props} />
+        </NotificationProvider>
+    );
+}

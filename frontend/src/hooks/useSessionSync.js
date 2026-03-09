@@ -62,37 +62,49 @@ export function useSessionSync() {
             // Store roles
             setRoles({ isPatient, isDoctor, isVerifiedDoctor, isMinistry, isOrg, isVerifiedOrg, isActiveOrgAdmin, orgId, orgName });
 
+            // Build available roles array
+            const available = [];
+            if (isPatient) available.push('patient');
+            if (isDoctor || isVerifiedDoctor) available.push('doctor');
+            if (isOrg || isVerifiedOrg || isActiveOrgAdmin) available.push('org');
+            if (isMinistry) available.push('ministry');
+
             // Determine role and update auth_roles
             let primaryRole = null;
             let redirectPath = null;
 
-            if (isMinistry) {
-                primaryRole = 'ministry';
-                redirectPath = '/dashboard/ministry';
-            } else if (isActiveOrgAdmin) {
-                // NEW: Org admin detection (entity-based)
-                primaryRole = 'org';
-                redirectPath = '/dashboard/org';
-            } else if (isVerifiedOrg || isOrg) {
-                // Legacy org detection (fallback)
-                primaryRole = 'org';
-                redirectPath = '/dashboard/org';
-            } else if (isVerifiedDoctor || isDoctor) {
-                primaryRole = 'doctor';
-                redirectPath = '/dashboard/doctor';
-            } else if (isPatient) {
-                primaryRole = 'patient';
-                redirectPath = '/dashboard/patient';
+            // Check if current active role is still valid
+            const currentActive = getAuthRoles().active;
+            if (currentActive && available.includes(currentActive)) {
+                primaryRole = currentActive;
+                // Set path based on active role
+                if (primaryRole === 'ministry') redirectPath = '/dashboard/ministry';
+                else if (primaryRole === 'org') redirectPath = '/dashboard/org';
+                else if (primaryRole === 'doctor') redirectPath = '/dashboard/doctor';
+                else if (primaryRole === 'patient') redirectPath = '/dashboard/patient';
+            } else {
+                // Fallback to priority logic
+                if (isMinistry) {
+                    primaryRole = 'ministry';
+                    redirectPath = '/dashboard/ministry';
+                } else if (isActiveOrgAdmin) {
+                    // NEW: Org admin detection (entity-based)
+                    primaryRole = 'org';
+                    redirectPath = '/dashboard/org';
+                } else if (isVerifiedOrg || isOrg) {
+                    // Legacy org detection (fallback)
+                    primaryRole = 'org';
+                    redirectPath = '/dashboard/org';
+                } else if (isVerifiedDoctor || isDoctor) {
+                    primaryRole = 'doctor';
+                    redirectPath = '/dashboard/doctor';
+                } else if (isPatient) {
+                    primaryRole = 'patient';
+                    redirectPath = '/dashboard/patient';
+                }
             }
 
             if (primaryRole) {
-                // Build available roles array
-                const available = [];
-                if (isPatient) available.push('patient');
-                if (isDoctor || isVerifiedDoctor) available.push('doctor');
-                if (isOrg || isVerifiedOrg || isActiveOrgAdmin) available.push('org');
-                if (isMinistry) available.push('ministry');
-
                 setAuthRoles(available, primaryRole);
             }
 
@@ -158,7 +170,14 @@ export async function syncSessionOnce(router) {
 
         let primaryRole = null;
         let redirectPath = null;
+        const available = [];
 
+        if (isPatient) available.push('patient');
+        if (isDoctor || isVerifiedDoctor) available.push('doctor');
+        if (isOrg || isVerifiedOrg || isActiveOrgAdmin) available.push('org');
+        if (isMinistry) available.push('ministry');
+
+        // Default priority
         if (isMinistry) {
             primaryRole = 'ministry';
             redirectPath = '/dashboard/ministry';
@@ -177,13 +196,18 @@ export async function syncSessionOnce(router) {
             redirectPath = '/dashboard/patient';
         }
 
-        if (primaryRole) {
-            const available = [];
-            if (isPatient) available.push('patient');
-            if (isDoctor || isVerifiedDoctor) available.push('doctor');
-            if (isOrg || isVerifiedOrg || isActiveOrgAdmin) available.push('org');
-            if (isMinistry) available.push('ministry');
+        // Check if current active role is valid
+        const currentActive = getAuthRoles().active;
+        if (currentActive && available.includes(currentActive)) {
+            primaryRole = currentActive;
+            // Set path based on active role
+            if (primaryRole === 'ministry') redirectPath = '/dashboard/ministry';
+            else if (primaryRole === 'org') redirectPath = '/dashboard/org';
+            else if (primaryRole === 'doctor') redirectPath = '/dashboard/doctor';
+            else if (primaryRole === 'patient') redirectPath = '/dashboard/patient';
+        }
 
+        if (primaryRole) {
             setAuthRoles(available, primaryRole);
         }
 

@@ -13,6 +13,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from '@/components/ui/use-toast';
 import { delegationService, api } from '@/services';
+import UserName from '@/components/ui/UserName';
 import { useWeb3Auth } from '@web3auth/modal/react';
 import { createWalletClient, createPublicClient, custom, http, parseAbi } from 'viem';
 import { arbitrumSepolia } from 'viem/chains';
@@ -258,8 +259,8 @@ export default function DelegationManager() {
                         item.roleLabel === 'Tổ chức' ? <Building2 className="w-4 h-4 text-purple-500" /> :
                             <UserCircle className="w-4 h-4 text-slate-500" />}
 
-                    <p className="font-semibold text-slate-900 font-mono text-sm">
-                        {item.displayAddress?.slice(0, 8)}...{item.displayAddress?.slice(-6)}
+                    <p className="font-semibold text-slate-900 text-sm">
+                        <UserName address={item.displayAddress} />
                     </p>
 
                     <span className={`text-xs px-2 py-0.5 rounded border ${item.roleLabel === 'Bác sĩ' ? 'bg-blue-50 text-blue-700 border-blue-200' :

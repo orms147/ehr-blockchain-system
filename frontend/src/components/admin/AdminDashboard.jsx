@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { useUserRoles } from '@/hooks/useUserRoles';
 import { useWalletAddress } from '@/hooks/useWalletAddress';
 import AdminOrgApplications from '@/components/org/AdminOrgApplications';
+import OrgVerifyDoctor from '@/components/org/OrgVerifyDoctor';
 
 /**
  * Ministry Admin Dashboard - Only accessible by Ministry wallet
@@ -113,19 +114,7 @@ export default function AdminDashboard() {
                     </TabsContent>
 
                     <TabsContent value="doctor-verification">
-                        <Card className="bg-slate-800 border-slate-700">
-                            <CardHeader>
-                                <CardTitle className="text-white">Xác thực Bác sĩ</CardTitle>
-                                <CardDescription>
-                                    Xem xét và xác thực giấy phép hành nghề của bác sĩ
-                                </CardDescription>
-                            </CardHeader>
-                            <CardContent>
-                                <p className="text-slate-400 text-center py-8">
-                                    Component sẽ được thêm sau
-                                </p>
-                            </CardContent>
-                        </Card>
+                        <OrgVerifyDoctor isMinistry />
                     </TabsContent>
 
                     <TabsContent value="settings">

@@ -457,11 +457,14 @@ const UploadRecordModal = ({ open, onOpenChange, onSuccess, parentRecord, existi
                         const chainData = await recordService.getChainCids(effectiveParentCidHash);
                         const allRecords = chainData.records || [];
 
-                        // Extract unique creators (excluding self and patient)
+                        // Extract unique creators (excluding patient only - Creator SHOULD share with Self)
                         const uniqueCreators = new Set();
+                        // Add SELF to usage rights immediately so I have a KeyShare for this new record
+                        uniqueCreators.add(walletAddress);
+
                         allRecords.forEach(r => {
                             if (r.createdBy &&
-                                r.createdBy.toLowerCase() !== walletAddress.toLowerCase() &&
+                                // r.createdBy.toLowerCase() !== walletAddress.toLowerCase() && // Allow Self
                                 r.createdBy.toLowerCase() !== patientAddress.toLowerCase()) {
                                 uniqueCreators.add(r.createdBy);
                             }
@@ -482,6 +485,8 @@ const UploadRecordModal = ({ open, onOpenChange, onSuccess, parentRecord, existi
                                         cidHash: cidHash,
                                         encryptedPayload: encryptedForCreator,
                                         senderPublicKey: doctorKeypair.publicKey,
+                                        // CRITICAL: If sharing with Self (Creator), allow delegation so I can re-share later
+                                        allowDelegate: (creatorAddr.toLowerCase() === walletAddress.toLowerCase()),
                                     });
                                     console.log(`Shared key with chain participant: ${creatorAddr}`);
                                 }

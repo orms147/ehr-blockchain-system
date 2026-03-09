@@ -11,6 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { toast } from '@/components/ui/use-toast';
 import { keyShareService, relayerService } from '@/services';
+import UserName from '@/components/ui/UserName';
 
 export default function ConsentList({ walletAddress }) {
     const [consents, setConsents] = useState([]);
@@ -165,7 +166,7 @@ export default function ConsentList({ walletAddress }) {
                                         </div>
                                         <div>
                                             <p className="font-medium text-slate-900">
-                                                Người được cấp: {consent.recipientAddress?.slice(0, 8)}...{consent.recipientAddress?.slice(-6)}
+                                                Người được cấp: <UserName address={consent.recipientAddress} />
                                             </p>
                                             <p className="text-xs text-teal-600 font-medium">
                                                 🩺 Bác sĩ

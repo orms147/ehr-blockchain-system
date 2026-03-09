@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { FileText, Clock, Loader2, RefreshCw, Lock, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import UserName from '@/components/ui/UserName';
 
 interface DoctorExpiredRecordsTabProps {
     records: any[];
@@ -74,7 +75,7 @@ const DoctorExpiredRecordsTab: React.FC<DoctorExpiredRecordsTabProps> = ({
                                                     </p>
                                                 ) : (
                                                     <p className="font-medium text-slate-900">
-                                                        Từ: {record.senderAddress?.slice(0, 8)}...{record.senderAddress?.slice(-6)}
+                                                        Từ: <UserName address={record.senderAddress} />
                                                     </p>
                                                 )}
 

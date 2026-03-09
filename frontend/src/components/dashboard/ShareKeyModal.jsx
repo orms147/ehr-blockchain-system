@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Share2, Loader2, CheckCircle, AlertCircle, User, Users } from 'lucide-react';
 import { toast } from '@/components/ui/use-toast';
 
-import { keyShareService, authService, createKeySharePayload } from '@/services';
+import { keyShareService, authService, recordService, createKeySharePayload } from '@/services';
 import { encryptForRecipient, getOrCreateEncryptionKeypair } from '@/services/nacl-crypto';
 import { useWeb3Auth } from '@web3auth/modal/react';
 import { useWalletAddress } from '@/hooks/useWalletAddress';
@@ -48,6 +48,7 @@ const ShareKeyModal = ({ open, onOpenChange, record, onSuccess }) => {
     });
 
     const [recipientInfo, setRecipientInfo] = useState(null);
+    const [existingAccess, setExistingAccess] = useState(null); // WARNING state for duplicate grant
 
     // Verify recipient address and get their encryption public key
     const handleVerifyRecipient = async () => {
@@ -66,9 +67,29 @@ const ShareKeyModal = ({ open, onOpenChange, record, onSuccess }) => {
                 throw new Error('Recipient has not registered encryption key');
             }
             setRecipientInfo(info);
+
+            // CHECK DUPLICATE GRANT: Check if recipient already has access
+            if (record?.cidHash) {
+                try {
+                    const accessData = await recordService.getAccessList(record.cidHash);
+                    const list = accessData.accessList || [];
+                    const found = list.find(a => a.grantee.toLowerCase() === formData.recipientAddress.toLowerCase());
+
+                    if (found) {
+                        setExistingAccess(found);
+                    } else {
+                        setExistingAccess(null);
+                    }
+                } catch (accessErr) {
+                    console.warn('Failed to check existing access:', accessErr);
+                    // Non-blocking error
+                }
+            }
+
         } catch (err) {
             setError(err.message || 'Recipient not found or has no encryption key registered');
             setRecipientInfo(null);
+            setExistingAccess(null);
         } finally {
             setIsLoading(false);
         }
@@ -264,6 +285,19 @@ const ShareKeyModal = ({ open, onOpenChange, record, onSuccess }) => {
                             </div>
                         )}
 
+                        {existingAccess && (
+                            <div className="flex items-start gap-2 text-amber-600 text-sm bg-amber-50 p-3 rounded-lg border border-amber-200">
+                                <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+                                <div>
+                                    <p className="font-medium">Người này đã có quyền truy cập!</p>
+                                    <p className="text-xs mt-1">
+                                        Hết hạn: {new Date(Number(existingAccess.expiresAt) * 1000).toLocaleString('vi-VN')}
+                                    </p>
+                                    <p className="text-xs mt-1">Bạn có thể tiếp tục để <strong>Gia hạn</strong> thêm thời gian.</p>
+                                </div>
+                            </div>
+                        )}
+
                         <div className="space-y-2">
                             <Label htmlFor="expiry" className="text-slate-800 font-medium">Access Duration</Label>
                             <Select
@@ -320,7 +354,7 @@ const ShareKeyModal = ({ open, onOpenChange, record, onSuccess }) => {
                                 disabled={!isFormValid || isLoading}
                                 className="bg-blue-600 hover:bg-blue-700"
                             >
-                                Share Access
+                                {existingAccess ? 'Extend Access' : 'Share Access'}
                             </Button>
                         </DialogFooter>
                     </div>

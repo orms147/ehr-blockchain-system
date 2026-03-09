@@ -80,6 +80,14 @@ class ApiService {
         });
     }
 
+    // PUT request (JSON)
+    async put(endpoint, body) {
+        return this.request(endpoint, {
+            method: 'PUT',
+            body: JSON.stringify(body),
+        });
+    }
+
     // POST FormData (for file uploads)
     async postFormData(endpoint, formData) {
         const url = `${this.baseUrl}${endpoint}`;

@@ -202,10 +202,29 @@ const GrantAccessForm = ({ onGrant }) => {
         setLoading(true);
 
         try {
-            // 0. Ensure wallet is on correct chain
+            // 0. Check for existing active access (Duplicate Grant Prevention)
+            try {
+                const accessList = await recordService.getAccessList(selectedRecord);
+                const existingAccess = (accessList || []).find(
+                    a => a.granteeAddress?.toLowerCase() === address.toLowerCase() && a.active
+                );
+                if (existingAccess) {
+                    const expiresAt = existingAccess.expiresAt ? new Date(existingAccess.expiresAt).toLocaleDateString('vi-VN') : 'Vĩnh viễn';
+                    toast({
+                        title: "⚠️ Đã có quyền truy cập!",
+                        description: `Bác sĩ ${address.slice(0, 8)}... đã có quyền truy cập hồ sơ này (hết hạn: ${expiresAt}). Tiếp tục sẽ gia hạn quyền.`,
+                        className: "bg-amber-50 border-amber-200 text-amber-800",
+                    });
+                    // Don't block, just warn and continue (user chose to proceed)
+                }
+            } catch (checkErr) {
+                console.warn('Could not check existing access:', checkErr);
+            }
+
+            // 0.5 Ensure wallet is on correct chain
             toast({
-                title: "Kiểm tra mạng",
-                description: `Đang chuyển sang mạng ${TARGET_CHAIN.chainName}...`,
+                title: "Đang xử lý",
+                description: `Đang chuyển sang mạng ${TARGET_CHAIN.chainName} và chuẩn bị giao dịch...`,
             });
             await ensureCorrectChain(provider);
 

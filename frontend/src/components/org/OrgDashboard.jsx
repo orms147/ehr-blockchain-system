@@ -14,6 +14,17 @@ import { clearAuthRoles } from '@/hooks/useAuthRoles';
 import { orgService } from '@/services';
 import OrgApplicationForm from './OrgApplicationForm';
 import AdminOrgApplications from './AdminOrgApplications';
+import OrgMemberList from './OrgMemberList';
+import OrgVerifyDoctor from './OrgVerifyDoctor';
+import { createPublicClient, http } from 'viem';
+import { arbitrumSepolia } from 'viem/chains';
+import { ACCESS_CONTROL_ABI } from '@/config/contractABI';
+
+const ACCESS_CONTROL_ADDRESS = process.env.NEXT_PUBLIC_EHR_SYSTEM_ADDRESS;
+const publicClient = createPublicClient({
+    chain: arbitrumSepolia,
+    transport: http(process.env.NEXT_PUBLIC_RPC_URL || 'https://sepolia-rollup.arbitrum.io/rpc'),
+});
 
 /**
  * Main ORG Dashboard - handles different states:
@@ -28,6 +39,7 @@ export default function OrgDashboard() {
     const { isOrg, isVerifiedOrg, isMinistry, loading: rolesLoading } = useUserRoles();
     const [application, setApplication] = useState(null);
     const [org, setOrg] = useState(null);
+    const [orgOnChainId, setOrgOnChainId] = useState(null);
     const [loading, setLoading] = useState(true);
 
     const [showApplyForm, setShowApplyForm] = useState(false);
@@ -60,6 +72,19 @@ export default function OrgDashboard() {
                     console.log('[OrgDashboard] orgResponse:', orgResponse);
                     if (orgResponse?.hasOrg) {
                         setOrg(orgResponse.organization);
+                        // Resolve on-chain orgId from admin address
+                        try {
+                            const chainOrgId = await publicClient.readContract({
+                                address: ACCESS_CONTROL_ADDRESS,
+                                abi: ACCESS_CONTROL_ABI,
+                                functionName: 'getAdminOrgId',
+                                args: [orgResponse.organization.address],
+                            });
+                            setOrgOnChainId(Number(chainOrgId));
+                            console.log('[OrgDashboard] On-chain orgId:', Number(chainOrgId));
+                        } catch (e) {
+                            console.error('Could not resolve on-chain orgId:', e);
+                        }
                     }
                 } else {
                     console.log('[OrgDashboard] isVerifiedOrg is false, skipping /my-org API call');
@@ -160,35 +185,11 @@ export default function OrgDashboard() {
                     </TabsList>
 
                     <TabsContent value="members" className="mt-4">
-                        <Card>
-                            <CardHeader>
-                                <CardTitle>Thành viên tổ chức</CardTitle>
-                                <CardDescription>
-                                    Quản lý bác sĩ và nhân viên trong tổ chức
-                                </CardDescription>
-                            </CardHeader>
-                            <CardContent>
-                                <p className="text-slate-500 text-center py-8">
-                                    Component OrgMemberList sẽ được thêm vào đây
-                                </p>
-                            </CardContent>
-                        </Card>
+                        <OrgMemberList orgId={org.id} orgOnChainId={orgOnChainId} />
                     </TabsContent>
 
                     <TabsContent value="verification" className="mt-4">
-                        <Card>
-                            <CardHeader>
-                                <CardTitle>Xác thực Bác sĩ</CardTitle>
-                                <CardDescription>
-                                    Xác thực thông tin và chứng chỉ của bác sĩ
-                                </CardDescription>
-                            </CardHeader>
-                            <CardContent>
-                                <p className="text-slate-500 text-center py-8">
-                                    Component OrgVerifyDoctor sẽ được thêm vào đây
-                                </p>
-                            </CardContent>
-                        </Card>
+                        <OrgVerifyDoctor orgId={org.id} orgOnChainId={orgOnChainId} />
                     </TabsContent>
 
                     {isMinistry && (

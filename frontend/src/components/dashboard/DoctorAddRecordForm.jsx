@@ -20,6 +20,8 @@ import { useWalletAddress } from '@/hooks/useWalletAddress';
 import { createWalletClient, createPublicClient, custom, http, parseAbi, keccak256, toBytes, parseGwei } from 'viem';
 import { arbitrumSepolia } from 'viem/chains';
 import { ensureArbitrumSepolia } from '@/utils/chainSwitch';
+import { ICD10Input, VitalSignsInput, MedicationsInput, LabResultsInput } from '@/components/medical/StructuredMedicalInput';
+import UserName from '@/components/ui/UserName';
 
 const DOCTOR_UPDATE_ADDRESS = process.env.NEXT_PUBLIC_DOCTOR_UPDATE_ADDRESS;
 const RECORD_REGISTRY_ADDRESS = process.env.NEXT_PUBLIC_RECORD_REGISTRY_ADDRESS;
@@ -50,6 +52,12 @@ export default function DoctorAddRecordForm({ onSuccess }) {
     const [notes, setNotes] = useState('');
     const [file, setFile] = useState(null);
     const [submitting, setSubmitting] = useState(false);
+
+    // Structured medical data
+    const [diagnoses, setDiagnoses] = useState([]);
+    const [vitalSigns, setVitalSigns] = useState({});
+    const [medications, setMedications] = useState([]);
+    const [labResults, setLabResults] = useState([]);
 
     // For key sharing
     const [createdRecord, setCreatedRecord] = useState(null);
@@ -101,7 +109,53 @@ export default function DoctorAddRecordForm({ onSuccess }) {
                 },
                 notes: notes,
                 attachment: null,
+                // Structured medical data (FHIR entry)
+                entry: [],
             };
+
+            // Add diagnoses (ICD-10)
+            if (diagnoses.length > 0) {
+                recordData.entry.push({
+                    resource: {
+                        resourceType: 'Condition',
+                        code: diagnoses.map(d => ({
+                            coding: [{ system: 'ICD-10', code: d.code, display: d.name }]
+                        }))
+                    }
+                });
+            }
+
+            // Add vital signs
+            const hasVitals = Object.values(vitalSigns).some(v => v);
+            if (hasVitals) {
+                recordData.entry.push({
+                    resource: {
+                        resourceType: 'Observation',
+                        category: 'vital-signs',
+                        ...vitalSigns
+                    }
+                });
+            }
+
+            // Add medications
+            if (medications.length > 0 && medications.some(m => m.name)) {
+                recordData.entry.push({
+                    resource: {
+                        resourceType: 'MedicationRequest',
+                        medications: medications.filter(m => m.name)
+                    }
+                });
+            }
+
+            // Add lab results
+            if (labResults.length > 0 && labResults.some(l => l.testName)) {
+                recordData.entry.push({
+                    resource: {
+                        resourceType: 'DiagnosticReport',
+                        results: labResults.filter(l => l.testName)
+                    }
+                });
+            }
 
             // 2. Handle file attachment
             if (file) {
@@ -396,6 +450,10 @@ export default function DoctorAddRecordForm({ onSuccess }) {
         setNotes('');
         setFile(null);
         setCreatedRecord(null);
+        setDiagnoses([]);
+        setVitalSigns({});
+        setMedications([]);
+        setLabResults([]);
         setStep(1);
     };
 
@@ -431,7 +489,7 @@ export default function DoctorAddRecordForm({ onSuccess }) {
                                 <strong>Tiêu đề:</strong> {createdRecord.title}
                             </p>
                             <p className="text-sm text-slate-600 mb-2">
-                                <strong>Bệnh nhân:</strong> {createdRecord.patientAddress?.slice(0, 10)}...
+                                <strong>Bệnh nhân:</strong> <UserName address={createdRecord.patientAddress} />
                             </p>
                             <p className="text-sm text-slate-600">
                                 <strong>CID Hash:</strong> {createdRecord.cidHash?.slice(0, 20)}...
@@ -523,8 +581,31 @@ export default function DoctorAddRecordForm({ onSuccess }) {
                             placeholder="Nhập ghi chú hoặc nội dung chi tiết..."
                             value={notes}
                             onChange={(e) => setNotes(e.target.value)}
-                            rows={4}
+                            rows={3}
                         />
+                    </div>
+
+                    {/* ─────── Structured Medical Data ─────── */}
+                    <div className="border-t border-slate-200 pt-4 space-y-4">
+                        <p className="text-sm font-medium text-slate-700">📋 Dữ liệu y tế chi tiết (tùy chọn)</p>
+
+                        {/* Always show ICD-10 for diagnosis/checkup types */}
+                        {['diagnosis', 'followup', 'procedure'].includes(recordType) && (
+                            <ICD10Input value={diagnoses} onChange={setDiagnoses} />
+                        )}
+
+                        {/* Always show VitalSigns */}
+                        <VitalSignsInput value={vitalSigns} onChange={setVitalSigns} />
+
+                        {/* Medications for prescription/diagnosis */}
+                        {['diagnosis', 'prescription', 'followup'].includes(recordType) && (
+                            <MedicationsInput value={medications} onChange={setMedications} />
+                        )}
+
+                        {/* Lab results for lab_result type */}
+                        {['lab_result', 'diagnosis'].includes(recordType) && (
+                            <LabResultsInput value={labResults} onChange={setLabResults} />
+                        )}
                     </div>
 
                     {/* File Upload */}

@@ -133,16 +133,18 @@ export function RoleSwitcher() {
                             })}
                         </div>
 
-                        {/* Add Role Button */}
-                        <div className="border-t border-slate-100 p-2">
-                            <button
-                                onClick={addNewRole}
-                                className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-teal-600 hover:bg-teal-50 transition-colors"
-                            >
-                                <span className="w-5 h-5 rounded-full border-2 border-dashed border-teal-400 flex items-center justify-center text-sm">+</span>
-                                <span className="text-sm font-medium">Thêm vai trò mới</span>
-                            </button>
-                        </div>
+                        {/* Add Role Button - Hide for system roles (org/ministry/admin) */}
+                        {!available.some(r => ['org', 'organization', 'ministry', 'admin'].includes(r)) && (
+                            <div className="border-t border-slate-100 p-2">
+                                <button
+                                    onClick={addNewRole}
+                                    className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-teal-600 hover:bg-teal-50 transition-colors"
+                                >
+                                    <span className="w-5 h-5 rounded-full border-2 border-dashed border-teal-400 flex items-center justify-center text-sm">+</span>
+                                    <span className="text-sm font-medium">Thêm vai trò mới</span>
+                                </button>
+                            </div>
+                        )}
                     </div>
                 </>
             )}
