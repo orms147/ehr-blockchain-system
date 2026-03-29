@@ -5,8 +5,8 @@ node_modules/
 .env
 .env.local
 
-# Prisma
-prisma/migrations/
+# Runtime uploads / generated files
+uploads/
 
 # Logs
 *.log
@@ -21,3 +21,7 @@ Thumbs.db
 .vscode/
 *.swp
 *.swo
+
+# Local Prisma database files (if ever used locally)
+prisma/*.db
+prisma/*.db-journal
