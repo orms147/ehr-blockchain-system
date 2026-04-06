@@ -3,6 +3,7 @@ import * as SecureStore from 'expo-secure-store';
 import api from '../services/api';
 import walletActionService from '../services/walletAction.service';
 import { deriveRolesFromUser, resolveActiveRole, sanitizeRoles } from '../utils/authRoles';
+import { setSentryUser } from '../lib/sentry';
 
 const ROLE_CONFIG = {
     patient: { label: 'Bệnh nhân', emoji: '👤' },
@@ -106,6 +107,8 @@ const useAuthStore = create((set, get) => ({
             needsRoleSelection,
             needsRoleRegistration,
         });
+
+        setSentryUser(userData ? { id: userData.id, walletAddress } : null);
     },
 
     logout: async () => {
@@ -117,6 +120,8 @@ const useAuthStore = create((set, get) => ({
         }
 
         await clearPersistedAuth();
+
+        setSentryUser(null);
 
         set({
             token: null,

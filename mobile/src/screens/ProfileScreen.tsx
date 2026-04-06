@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import {
     User, LogOut, Shield, Droplets, ChevronRight,
-    Edit3, Calendar, Settings, Info, Wallet, Copy,
+    Edit3, Calendar, Settings, Info, Wallet, Copy, UserCheck,
 } from 'lucide-react-native';
 import { YStack, XStack, Text, Button, View } from 'tamagui';
 import Animated, {
@@ -245,6 +245,7 @@ export default function ProfileScreen() {
                         <MenuItem icon={Settings} label="Cài đặt và ví" onPress={() => navigation.navigate('Settings')} />
                         <MenuItem icon={Edit3} label="Chỉnh sửa hồ sơ" onPress={() => navigation.navigate('EditProfile')} />
                         <MenuItem icon={Shield} label="Quản lý bảo mật" onPress={() => navigation.navigate('Settings')} />
+                        <MenuItem icon={UserCheck} label="Ủy quyền" onPress={() => navigation.navigate('Delegation')} />
                         <MenuItem icon={Info} label="Về ứng dụng" onPress={() => Alert.alert('EHR Chain', 'Hệ thống lưu trữ hồ sơ bệnh án phi tập trung.\nPhiên bản: 1.0.0-beta\nMạng: Arbitrum Sepolia')} />
                         <MenuItem label="Đăng xuất" onPress={handleLogout} destructive />
                     </View>

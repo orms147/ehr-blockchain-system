@@ -13,6 +13,7 @@ import ProfileScreen from '../screens/ProfileScreen';
 import RecordDetailScreen from '../screens/RecordDetailScreen';
 import CreateRecordScreen from '../screens/CreateRecordScreen';
 import AccessLogScreen from '../screens/AccessLogScreen';
+import DelegationScreen from '../screens/DelegationScreen';
 import LoadingSpinner from '../components/LoadingSpinner';
 
 import DoctorDashboardScreen from '../screens/doctor/DoctorDashboardScreen';
@@ -205,6 +206,11 @@ function MainStackNavigator() {
                 name="DoctorCreateUpdate"
                 component={DoctorCreateUpdateScreen}
                 options={{ title: 'C\u1EADp nh\u1EADt h\u1ED3 s\u01A1' }}
+            />
+            <Stack.Screen
+                name="Delegation"
+                component={DelegationScreen}
+                options={{ title: '\u1EE6y quy\u1EC1n' }}
             />
             <Stack.Screen
                 name="EditProfile"

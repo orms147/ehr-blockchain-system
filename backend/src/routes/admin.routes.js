@@ -8,6 +8,7 @@ import { privateKeyToAccount } from 'viem/accounts';
 import { arbitrumSepolia } from 'viem/chains';
 import { ACCESS_CONTROL_ABI } from '../config/contractABI.js';
 import { createLogger } from '../utils/logger.js';
+import { ipfsService } from '../services/ipfs.service.js';
 
 const log = createLogger('AdminRoutes');
 const router = Router();
@@ -151,19 +152,6 @@ router.post('/org-applications/:id/reject', authenticate, isMinistry, async (req
 
 // Multer setup for license upload
 import multer from 'multer';
-
-// Mock IPFS Service (Inlined to fix import path issues)
-const ipfsService = {
-    async uploadFile(fileBuffer, mimeType) {
-        log.info('IPFS upload', { size: fileBuffer.length, type: mimeType });
-        await new Promise(resolve => setTimeout(resolve, 500));
-        const fakeCid = 'Qm' + Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
-        return {
-            cid: fakeCid,
-            url: `https://gateway.pinata.cloud/ipfs/${fakeCid}`
-        };
-    }
-};
 
 const upload = multer({
     storage: multer.memoryStorage(),

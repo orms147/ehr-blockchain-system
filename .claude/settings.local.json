@@ -32,7 +32,12 @@
       "Bash(ls -1 /c/University/DATN/EHR/mobile/src/screens/*.tsx /c/University/DATN/EHR/mobile/src/screens/*/*.tsx)",
       "WebSearch",
       "WebFetch(domain:motion.dev)",
-      "WebFetch(domain:github.com)"
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:docs.metamask.io)",
+      "Bash(grep -l \"event \" c:/University/DATN/EHR/contracts/contracts/*.sol)",
+      "Bash(grep -l \"getOutgoing\\\\|getIncoming\\\\|getRecords\\\\|getShared\" c:/University/DATN/EHR/mobile/src/services/*.js)",
+      "Bash(node -e \"const p=require\\('./package.json'\\);console.log\\(Object.keys\\(p.dependencies\\).join\\('\\\\n'\\)\\)\")",
+      "Bash(ls /c/University/DATN/EHR/backend/.env*)"
     ]
   }
 }

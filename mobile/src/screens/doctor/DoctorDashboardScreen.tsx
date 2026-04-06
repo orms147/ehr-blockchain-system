@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { FlatList, RefreshControl, Alert, Pressable, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
@@ -83,10 +84,7 @@ type PendingClaim = {
 export default function DoctorDashboardScreen() {
     const navigation = useNavigation<any>();
     const { token } = useAuthStore();
-    const [sharedRecords, setSharedRecords] = useState<SharedRecord[]>([]);
-    const [pendingClaims, setPendingClaims] = useState<PendingClaim[]>([]);
-    const [isLoading, setIsLoading] = useState(true);
-    const [isRefreshing, setIsRefreshing] = useState(false);
+    const queryClient = useQueryClient();
     const [claimingId, setClaimingId] = useState<string | null>(null);
 
     const headerEnter = useSharedValue(0);
@@ -98,8 +96,11 @@ export default function DoctorDashboardScreen() {
         transform: [{ translateY: interpolate(headerEnter.value, [0, 1], [16, 0]) }],
     }));
 
-    const fetchSharedRecords = useCallback(async () => {
-        try {
+    // Shared records from key-share service. Heavy processing (dedupe, version walk)
+    // happens inside queryFn so the result is memoized in the cache.
+    const sharedRecordsQuery = useQuery({
+        queryKey: ['doctor', 'sharedRecords'],
+        queryFn: async (): Promise<SharedRecord[]> => {
             const records: SharedRecord[] = await keyShareService.getReceivedKeys();
             const uniqueMap = new Map<string, SharedRecord>();
             (records || []).forEach((r) => { if (r?.cidHash) uniqueMap.set(r.cidHash, r); });
@@ -122,36 +123,35 @@ export default function DoctorDashboardScreen() {
                 return { ...record, versionCount: count };
             });
             processed.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
-            setSharedRecords(processed);
-        } catch (err) {
-            console.error('Failed to fetch shared records:', err);
-        }
-    }, []);
+            return processed;
+        },
+        enabled: !!token,
+    });
 
-    const fetchPendingClaims = useCallback(async () => {
-        try {
+    const pendingClaimsQuery = useQuery({
+        queryKey: ['requests', 'signed'],
+        queryFn: async () => {
             const response = await requestService.getSignedRequests();
-            const claims = response?.requests || [];
-            setPendingClaims(claims);
-        } catch (err) {
-            console.error('Failed to fetch pending claims:', err);
-        }
-    }, []);
+            return (response?.requests || []) as PendingClaim[];
+        },
+        enabled: !!token,
+    });
 
-    const fetchAll = useCallback(async () => {
-        await Promise.all([fetchSharedRecords(), fetchPendingClaims()]);
-        setIsLoading(false);
-        setIsRefreshing(false);
-    }, [fetchSharedRecords, fetchPendingClaims]);
+    const sharedRecords = sharedRecordsQuery.data ?? [];
+    const pendingClaims = pendingClaimsQuery.data ?? [];
+    const isLoading = (sharedRecordsQuery.isLoading || pendingClaimsQuery.isLoading) && !sharedRecordsQuery.data && !pendingClaimsQuery.data;
+    const isRefreshing = sharedRecordsQuery.isFetching || pendingClaimsQuery.isFetching;
 
-    useEffect(() => {
-        if (token) fetchAll();
-    }, [token, fetchAll]);
+    const handleRefresh = () => {
+        sharedRecordsQuery.refetch();
+        pendingClaimsQuery.refetch();
+    };
 
-    const handleRefresh = useCallback(() => {
-        setIsRefreshing(true);
-        fetchAll();
-    }, [fetchAll]);
+    // Used after successful claim — invalidates so lists auto-refresh.
+    const invalidateAll = () => {
+        queryClient.invalidateQueries({ queryKey: ['doctor', 'sharedRecords'] });
+        queryClient.invalidateQueries({ queryKey: ['requests', 'signed'] });
+    };
 
     const isClaimExpired = (claim: PendingClaim) => {
         if (!claim.signatureDeadline) return false;
@@ -187,7 +187,7 @@ export default function DoctorDashboardScreen() {
             });
             await requestService.markClaimed(claim.requestId, txHash);
             Alert.alert('Đã nhận quyền truy cập!', 'Hồ sơ sẽ xuất hiện trong danh sách bên dưới.');
-            fetchAll();
+            invalidateAll();
         } catch (err: any) {
             const msg = String(err?.message || '');
             if (msg.includes('insufficient funds') || msg.includes('Insufficient')) {

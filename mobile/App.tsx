@@ -12,8 +12,12 @@ import AppNavigator from './src/navigation/AppNavigator';
 import useAuthStore from './src/store/authStore';
 import LoadingSpinner from './src/components/LoadingSpinner';
 import walletActionService from './src/services/walletAction.service';
+import QueryProvider from './src/providers/QueryProvider';
+import { initSentry, Sentry } from './src/lib/sentry';
 
-export default function App() {
+initSentry();
+
+function App() {
   const colorScheme = useColorScheme();
   const { loadToken, isLoading } = useAuthStore();
 
@@ -27,18 +31,22 @@ export default function App() {
   }, [loadToken]);
 
   return (
-    <TamaguiProvider config={tamaguiConfig} defaultTheme={colorScheme === 'dark' ? 'dark' : 'light'}>
-      <SafeAreaProvider>
-        {isLoading ? (
-          <LoadingSpinner message="Dang khoi tao ung dung..." />
-        ) : (
-          <>
-            <AppNavigator />
-            <StatusBar style="auto" />
-          </>
-        )}
-      </SafeAreaProvider>
-    </TamaguiProvider>
+    <QueryProvider>
+      <TamaguiProvider config={tamaguiConfig} defaultTheme={colorScheme === 'dark' ? 'dark' : 'light'}>
+        <SafeAreaProvider>
+          {isLoading ? (
+            <LoadingSpinner message="Dang khoi tao ung dung..." />
+          ) : (
+            <>
+              <AppNavigator />
+              <StatusBar style="auto" />
+            </>
+          )}
+        </SafeAreaProvider>
+      </TamaguiProvider>
+    </QueryProvider>
   );
 }
+
+export default Sentry.wrap(App);
 

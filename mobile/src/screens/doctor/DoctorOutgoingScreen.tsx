@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { FlatList, Pressable, RefreshControl, Alert, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
@@ -15,6 +15,7 @@ import Animated, {
     interpolate,
 } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useQuery } from '@tanstack/react-query';
 
 import EmptyState from '../../components/EmptyState';
 import LoadingSpinner from '../../components/LoadingSpinner';
@@ -23,6 +24,7 @@ import api from '../../services/api';
 import pendingUpdateService from '../../services/pendingUpdate.service';
 import ipfsService from '../../services/ipfs.service';
 import walletActionService from '../../services/walletAction.service';
+import { useOutgoingPendingUpdates, useClaimPendingUpdate } from '../../hooks/queries/usePendingUpdates';
 import {
     EHR_ERROR,
     EHR_ERROR_CONTAINER,
@@ -232,11 +234,26 @@ const PendingUpdateCard = React.memo(({
 /* ── Main screen ── */
 export default function DoctorOutgoingScreen() {
     const { token } = useAuthStore();
-    const [requests, setRequests] = useState<RequestItem[]>([]);
-    const [pendingUpdates, setPendingUpdates] = useState<PendingUpdateItem[]>([]);
-    const [isLoading, setIsLoading] = useState(true);
-    const [isRefreshing, setIsRefreshing] = useState(false);
     const [claimingId, setClaimingId] = useState<string | null>(null);
+
+    // Outgoing access requests — kept on direct API call (no dedicated service method).
+    const requestsQuery = useQuery({
+        queryKey: ['requests', 'outgoing'],
+        queryFn: async () => {
+            const reqData = await api.get('/api/requests/outgoing');
+            return (Array.isArray(reqData) ? reqData : reqData?.requests || []) as RequestItem[];
+        },
+        enabled: !!token,
+    });
+
+    // Outgoing pending updates via shared hook
+    const pendingUpdatesQuery = useOutgoingPendingUpdates(!!token);
+    const claimMutation = useClaimPendingUpdate();
+
+    const requests = requestsQuery.data ?? [];
+    const pendingUpdates = (pendingUpdatesQuery.data?.updates ?? []) as PendingUpdateItem[];
+    const isLoading = (requestsQuery.isLoading || pendingUpdatesQuery.isLoading) && !requestsQuery.data && !pendingUpdatesQuery.data;
+    const isRefreshing = requestsQuery.isFetching || pendingUpdatesQuery.isFetching;
 
     const headerEnter = useSharedValue(0);
     useEffect(() => {
@@ -250,30 +267,10 @@ export default function DoctorOutgoingScreen() {
         ],
     }));
 
-    const fetchAll = useCallback(async () => {
-        try {
-            const [reqData, updateData] = await Promise.all([
-                api.get('/api/requests/outgoing'),
-                pendingUpdateService.getOutgoing(),
-            ]);
-            setRequests(Array.isArray(reqData) ? reqData : reqData?.requests || []);
-            setPendingUpdates(updateData?.updates || []);
-        } catch (err) {
-            console.error('Failed to fetch outgoing:', err);
-        } finally {
-            setIsLoading(false);
-            setIsRefreshing(false);
-        }
-    }, []);
-
-    useEffect(() => {
-        if (token) fetchAll();
-    }, [token, fetchAll]);
-
-    const handleRefresh = useCallback(() => {
-        setIsRefreshing(true);
-        fetchAll();
-    }, [fetchAll]);
+    const handleRefresh = () => {
+        requestsQuery.refetch();
+        pendingUpdatesQuery.refetch();
+    };
 
     const handleClaimUpdate = async (update: PendingUpdateItem) => {
         if (update.status !== 'approved') {
@@ -307,10 +304,16 @@ export default function DoctorOutgoingScreen() {
                 maxPriorityFeePerGas: parseGwei('0.1'),
             });
 
-            await pendingUpdateService.claim(update.id, cidHash, txHash, cid, 'doctor-managed');
+            // Use mutation so React Query auto-invalidates outgoing/approved/records lists.
+            await claimMutation.mutateAsync({
+                id: update.id,
+                cidHash,
+                txHash,
+                cid,
+                aesKey: 'doctor-managed',
+            });
 
             Alert.alert('Đã xác nhận!', 'Hồ sơ đã được lưu lên blockchain.');
-            fetchAll();
         } catch (err: any) {
             const msg = String(err?.message || '');
             if (msg.includes('insufficient funds') || msg.includes('Insufficient')) {
