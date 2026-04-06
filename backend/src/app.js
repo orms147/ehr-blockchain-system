@@ -21,6 +21,7 @@ import pendingUpdateRoutes from './routes/pendingUpdate.routes.js';
 import profileRoutes from './routes/profile.routes.js';
 import testRoutes from './routes/test.routes.js';
 import { startEventSync } from './services/eventSync.service.js';
+import { startRecordRegistrySync } from './services/recordRegistrySync.service.js';
 import { errorHandler } from './middleware/errorHandler.js';
 
 dotenv.config();
@@ -79,9 +80,11 @@ app.use(errorHandler);
 // Start server with Socket.io
 server.listen(PORT, () => {
     console.log(`🚀 Server running on port ${PORT}`);
-    // Start blockchain event sync worker
+    // Start blockchain event sync workers
     startEventSync();
+    startRecordRegistrySync();
 });
 
 export default app;
+
 

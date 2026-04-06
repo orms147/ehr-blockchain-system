@@ -8,6 +8,14 @@ import EmptyState from '../components/EmptyState';
 import LoadingSpinner from '../components/LoadingSpinner';
 import consentService from '../services/consent.service';
 import useAuthStore from '../store/authStore';
+import {
+    EHR_ON_SURFACE_VARIANT,
+    EHR_OUTLINE_VARIANT,
+    EHR_PRIMARY,
+    EHR_PRIMARY_FIXED,
+    EHR_SURFACE,
+    EHR_SURFACE_LOW,
+} from '../constants/uiColors';
 
 type ConsentItem = {
     id?: string;
@@ -46,35 +54,40 @@ const ConsentRenderItem = React.memo(({
 
     return (
         <View
-            background="$background"
-            borderColor={isActive ? '$green6' : '$borderColor'}
-            style={{ borderWidth: 1, borderRadius: 10, padding: 14, marginBottom: 12 }}
+            style={{
+                backgroundColor: '#FFFFFF',
+                borderColor: isActive ? EHR_PRIMARY : EHR_OUTLINE_VARIANT,
+                borderWidth: 1,
+                borderRadius: 20,
+                padding: 14,
+                marginBottom: 12,
+            }}
         >
             <XStack style={{ alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 10 }}>
                 <YStack style={{ flex: 1, paddingRight: 12 }}>
                     <XStack style={{ alignItems: 'center', marginBottom: 4 }}>
-                        <User size={14} color="#64748B" style={{ marginRight: 6 }} />
+                        <User size={14} color={EHR_ON_SURFACE_VARIANT} style={{ marginRight: 6 }} />
                         <Text fontSize="$4" fontWeight="700" color="$color12">{truncateAddr(grantee)}</Text>
                     </XStack>
                     {item.cidHash ? (
                         <XStack style={{ alignItems: 'center' }}>
-                            <FileText size={12} color="#64748B" style={{ marginRight: 6 }} />
+                            <FileText size={12} color={EHR_ON_SURFACE_VARIANT} style={{ marginRight: 6 }} />
                             <Text fontSize="$2" color="$color10" numberOfLines={1}>{item.cidHash.substring(0, 20)}...</Text>
                         </XStack>
                     ) : null}
                 </YStack>
 
-                <View style={{ backgroundColor: isActive ? '#dcfce7' : '#e5e7eb', borderRadius: 6, paddingVertical: 4, paddingHorizontal: 8 }}>
-                    <Text fontSize="$2" fontWeight="700" style={{ color: isActive ? '#166534' : '#4b5563' }}>
-                        {isActive ? 'Dang hoat dong' : 'Da thu hoi'}
+                <View style={{ backgroundColor: isActive ? EHR_PRIMARY_FIXED : EHR_SURFACE_LOW, borderRadius: 10, paddingVertical: 4, paddingHorizontal: 8 }}>
+                    <Text fontSize="$2" fontWeight="700" style={{ color: isActive ? EHR_PRIMARY : EHR_ON_SURFACE_VARIANT }}>
+                        {isActive ? 'Đang hoạt động' : 'Đã thu hồi'}
                     </Text>
                 </View>
             </XStack>
 
             {item.createdAt ? (
                 <XStack style={{ alignItems: 'center', marginBottom: isActive ? 10 : 0 }}>
-                    <Clock size={12} color="#94A3B8" style={{ marginRight: 4 }} />
-                    <Text fontSize="$2" color="$color9">Cap ngay: {formatDate(item.createdAt)}</Text>
+                    <Clock size={12} color={EHR_ON_SURFACE_VARIANT} style={{ marginRight: 4 }} />
+                    <Text fontSize="$2" color="$color9">Cập nhật: {formatDate(item.createdAt)}</Text>
                 </XStack>
             ) : null}
 
@@ -89,7 +102,7 @@ const ConsentRenderItem = React.memo(({
                     disabled={isRevoking}
                     opacity={isRevoking ? 0.5 : 1}
                 >
-                    <Text color="$red10" fontWeight="500">{isRevoking ? 'Dang thu hoi...' : 'Thu hoi quyen'}</Text>
+                    <Text color="$red10" fontWeight="500">{isRevoking ? 'Đang thu hồi...' : 'Thu hồi quyền'}</Text>
                 </Button>
             ) : null}
         </View>
@@ -126,20 +139,20 @@ export default function AccessLogScreen() {
     }, [fetchConsents]);
 
     const handleRevoke = useCallback((consent: ConsentItem) => {
-        Alert.alert('Thu hoi quyen truy cap', 'Ban co chac muon thu hoi quyen xem ho so cua dia chi nay?', [
-            { text: 'Huy', style: 'cancel' },
+        Alert.alert('Thu hồi quyền truy cập', 'Bạn có chắc muốn thu hồi quyền xem hồ sơ của địa chỉ này?', [
+            { text: 'Huỷ', style: 'cancel' },
             {
-                text: 'Thu hoi',
+                text: 'Thu hồi',
                 style: 'destructive',
                 onPress: async () => {
                     const id = consent.id || consent.cidHash || '';
                     setRevokingId(id);
                     try {
                         await consentService.revokeConsent(consent, consent.cidHash);
-                        Alert.alert('Thanh cong', 'Da thu hoi quyen truy cap.');
+                        Alert.alert('Thành công', 'Đã thu hồi quyền truy cập.');
                         fetchConsents();
                     } catch (e: any) {
-                        Alert.alert('Loi', e?.message || 'Khong the thu hoi. Vui long thu lai.');
+                        Alert.alert('Lỗi', e?.message || 'Không thể thu hồi. Vui lòng thử lại.');
                     } finally {
                         setRevokingId(null);
                     }
@@ -148,21 +161,21 @@ export default function AccessLogScreen() {
         ]);
     }, [fetchConsents]);
 
-    if (isLoading && !isRefreshing) return <LoadingSpinner message="Dang tai nhat ky truy cap..." />;
+    if (isLoading && !isRefreshing) return <LoadingSpinner message="Đang tải nhật ký truy cập..." />;
 
     return (
-        <SafeAreaView style={{ flex: 1, backgroundColor: '#F8FAFC' }} edges={['right', 'left']}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: EHR_SURFACE }} edges={['right', 'left']}>
             <YStack style={{ paddingHorizontal: 16, paddingTop: 14, paddingBottom: 8 }}>
-                <Text fontSize="$7" fontWeight="800" color="$color12">Nhat ky truy cap</Text>
+                <Text fontSize="$7" fontWeight="800" color="$color12">Nhật ký truy cập</Text>
                 <Text fontSize="$3" color="$color10" style={{ marginTop: 2 }}>
-                    Quan ly cac quyen da chia se cho bac si
+                    Quản lý các quyền đã chia sẻ cho bác sĩ
                 </Text>
             </YStack>
             {consents.length === 0 ? (
                 <EmptyState
                     icon={Shield}
-                    title="Chua co quyen truy cap"
-                    description="Khi ban chia se ho so cho bac si, danh sach quyen se hien thi tai day."
+                    title="Chưa có quyền truy cập"
+                    description="Khi bạn chia sẻ hồ sơ cho bác sĩ, danh sách quyền sẽ hiển thị tại đây."
                 />
             ) : (
                 <FlatList
@@ -170,12 +183,12 @@ export default function AccessLogScreen() {
                     keyExtractor={(item, idx) => item.id || item.cidHash || `consent-${idx}`}
                     renderItem={({ item }) => <ConsentRenderItem item={item} revokingId={revokingId} onRevoke={handleRevoke} />}
                     contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 16 }}
-                    refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} colors={['#2563eb']} />}
+                    refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} colors={[EHR_PRIMARY]} />}
                     ListHeaderComponent={
                         <XStack style={{ alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-                            <Text fontSize="$3" color="$color10">{consents.length} quyen truy cap</Text>
-                            <Text fontSize="$3" fontWeight="700" color="$green10">
-                                {consents.filter((c) => c.active !== false && c.status !== 'revoked').length} dang hoat dong
+                            <Text fontSize="$3" color="$color10">{consents.length} quyền truy cập</Text>
+                            <Text fontSize="$3" fontWeight="700" style={{ color: EHR_PRIMARY }}>
+                                {consents.filter((c) => c.active !== false && c.status !== 'revoked').length} đang hoạt động
                             </Text>
                         </XStack>
                     }
@@ -184,5 +197,8 @@ export default function AccessLogScreen() {
         </SafeAreaView>
     );
 }
+
+
+
 
 

@@ -75,7 +75,7 @@ model User {
   dateOfBirth   DateTime?
   gender        Gender?
   phone         String?  @db.VarChar(20)
-  homeAddress   String?  @db.VarChar(255)  // Địa chỉ cư trú
+  homeAddress   String?  @db.VarChar(255)  // Äá»‹a chá»‰ cÆ° trÃº
   avatarUrl     String?  @db.Text
   bloodType     String?  @db.VarChar(5)    // A+, B-, AB+, O-
   allergies     String?  @db.Text          // Free text
@@ -102,11 +102,11 @@ model User {
 model DoctorProfile {
   id              String   @id @default(uuid())
   walletAddress   String   @unique @db.VarChar(42)
-  specialty       String?  @db.VarChar(100)  // Chuyên khoa: Tim mạch, Nội khoa...
-  licenseNumber   String?  @db.VarChar(50)   // Số GPHH
-  hospitalName    String?  @db.VarChar(200)  // Bệnh viện / Phòng khám
+  specialty       String?  @db.VarChar(100)  // ChuyÃªn khoa: Tim máº¡ch, Ná»™i khoa...
+  licenseNumber   String?  @db.VarChar(50)   // Sá»‘ GPHH
+  hospitalName    String?  @db.VarChar(200)  // Bá»‡nh viá»‡n / PhÃ²ng khÃ¡m
   yearsExperience Int?
-  bio             String?  @db.Text          // Giới thiệu ngắn
+  bio             String?  @db.Text          // Giá»›i thiá»‡u ngáº¯n
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
@@ -137,13 +137,20 @@ model RecordMetadata {
   description    String?  @db.Text // Notes/description
   recordType     String?  @db.VarChar(50) // e.g. "diagnosis", "prescription", "lab_result"
   createdBy      String   @db.VarChar(42)
+  syncStatus     String   @default("confirmed") @db.VarChar(20) // pending, confirmed, failed
+  txHash         String?  @db.VarChar(66)
+  submittedAt    DateTime?
+  confirmedAt    DateTime?
+  failedAt       DateTime?
+  syncError      String?  @db.Text
   createdAt      DateTime @default(now())
 
-  owner    User       @relation("owner", fields: [ownerAddress], references: [walletAddress])
-  creator  User       @relation("creator", fields: [createdBy], references: [walletAddress])
+  owner     User       @relation("owner", fields: [ownerAddress], references: [walletAddress])
+  creator   User       @relation("creator", fields: [createdBy], references: [walletAddress])
   keyShares KeyShare[]
-  
+
   @@index([parentCidHash])
+  @@index([syncStatus])
 }
 
 
@@ -177,6 +184,7 @@ model KeyShare {
 
   @@unique([cidHash, senderAddress, recipientAddress])
   @@index([recipientAddress, status])
+  @@index([cidHash, status])
 }
 
 model AccessLog {
@@ -212,6 +220,7 @@ model AccessRequest {
 
   @@index([patientAddress, status])
   @@index([requesterAddress, status])
+  @@index([requestId, status])
 }
 
 // Consent tracking (mirrors on-chain consents)
@@ -306,28 +315,32 @@ model Delegation {
 
 // Organization - Hospitals and clinics
 model Organization {
-  id              String   @id @default(uuid())
-  name            String
-  address         String   @db.VarChar(42)   // Organization wallet
+  id                 String   @id @default(uuid())
+  chainOrgId         BigInt?  @unique
+  name               String
+  address            String   @db.VarChar(42)   // Primary admin wallet
+  backupAdminAddress String?  @db.VarChar(42)
   
   // Info
-  orgType         String   @default("hospital")  // hospital, clinic, ministry
-  licenseNumber   String?
-  location        String?
-  contactEmail    String?
+  orgType            String   @default("hospital")  // hospital, clinic, ministry
+  licenseNumber      String?
+  location           String?
+  contactEmail       String?
   
   // Status
-  // ⚠️ CACHE ONLY - DO NOT use for permission decisions
+  // CACHE ONLY - DO NOT use for permission decisions
   // Use on-chain isVerifiedOrganization() for actual authorization
-  isVerified      Boolean  @default(false)
-  verifiedAt      DateTime?
-  verifiedBy      String?  @db.VarChar(42)
+  isVerified         Boolean  @default(false)
+  isActive           Boolean  @default(true)
+  verifiedAt         DateTime?
+  verifiedBy         String?  @db.VarChar(42)
   
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
   
   @@unique([address])
   @@index([orgType])
+  @@index([isActive])
 }
 
 // Organization Members - doctors/staff belonging to an org
@@ -379,9 +392,11 @@ model PendingUpdate {
 }
 
 // Event Sync State - Track blockchain sync progress (reorg-safe)
+// Each contract gets its own row, keyed by contractName (unique).
+// id uses cuid() to guarantee unique PK per row — avoids the old @default("default") race.
 model EventSyncState {
-  id              String   @id @default("default")
-  contractName    String   @unique  // "AccessControl"
+  id              String   @id @default(cuid())
+  contractName    String   @unique  // "AccessControl", "RecordRegistry"
   lastSyncedBlock BigInt   @default(0)
   lastBlockHash   String?  @db.VarChar(66) // For reorg detection
   updatedAt       DateTime @updatedAt

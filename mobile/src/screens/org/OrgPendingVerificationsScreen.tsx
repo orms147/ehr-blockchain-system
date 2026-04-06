@@ -43,13 +43,13 @@ const PendingVerificationItem = React.memo(({
                     <Clock size={22} color="#475569" />
                 </View>
                 <YStack style={{ flex: 1 }}>
-                    <Text fontSize="$4" fontWeight="700" color="$color12">{item.fullName || 'Bac si'}</Text>
+                    <Text fontSize="$4" fontWeight="700" color="$color12">{item.fullName || 'Bác sĩ'}</Text>
                     {item.specialty ? <Text fontSize="$3" color="$color10">{item.specialty}</Text> : null}
                     <Text fontSize="$2" color="$color9" style={{ marginTop: 4 }}>
                         {truncateAddr(item.doctorAddress || item.address || item.walletAddress)}
                     </Text>
                     <Text fontSize="$2" color="$color9" style={{ marginTop: 4 }}>
-                        Yeu cau: {new Date(item.requestedAt || item.createdAt || Date.now()).toLocaleDateString('vi-VN')}
+                        Yêu cầu: {new Date(item.requestedAt || item.createdAt || Date.now()).toLocaleDateString('vi-VN')}
                     </Text>
                 </YStack>
             </XStack>
@@ -64,7 +64,7 @@ const PendingVerificationItem = React.memo(({
                     disabled={isProcessing}
                     opacity={isProcessing ? 0.5 : 1}
                 >
-                    <Text color="white" fontWeight="700">Xac thuc</Text>
+                    <Text color="white" fontWeight="700">Xác thực</Text>
                 </Button>
                 <Button
                     flex={1}
@@ -76,7 +76,7 @@ const PendingVerificationItem = React.memo(({
                     disabled={isProcessing}
                     opacity={isProcessing ? 0.5 : 1}
                 >
-                    <Text color="$red10" fontWeight="700">Tu choi</Text>
+                    <Text color="$red10" fontWeight="700">Từ chối</Text>
                 </Button>
             </XStack>
         </View>
@@ -119,18 +119,18 @@ export default function OrgPendingVerificationsScreen() {
     }, [fetchData]);
 
     const handleApprove = useCallback((item: PendingItem) => {
-        Alert.alert('Xac thuc bac si', `Ban co muon xac thuc "${item.fullName || item.doctorAddress}"?`, [
-            { text: 'Huy', style: 'cancel' },
+        Alert.alert('Xác thực bác sĩ', `Bạn có muốn xác thực "${item.fullName || item.doctorAddress}"?`, [
+            { text: 'Huỷ', style: 'cancel' },
             {
-                text: 'Xac thuc',
+                text: 'Xác thực',
                 onPress: async () => {
                     setProcessingId(item.id);
                     try {
                         await verificationService.approveVerification(item.id);
-                        Alert.alert('Thanh cong', 'Bac si da duoc xac thuc.');
+                        Alert.alert('Thành công', 'Bác sĩ đã được xác thực.');
                         fetchData();
                     } catch {
-                        Alert.alert('Loi', 'Khong the xac thuc bac si.');
+                        Alert.alert('Lỗi', 'Không thể xác thực bác sĩ.');
                     } finally {
                         setProcessingId(null);
                     }
@@ -140,19 +140,19 @@ export default function OrgPendingVerificationsScreen() {
     }, [fetchData]);
 
     const handleReject = useCallback((item: PendingItem) => {
-        Alert.alert('Tu choi xac thuc', `Ban co muon tu choi "${item.fullName || item.doctorAddress}"?`, [
-            { text: 'Huy', style: 'cancel' },
+        Alert.alert('Từ chối xác thực', `Bạn có muốn từ chối "${item.fullName || item.doctorAddress}"?`, [
+            { text: 'Huỷ', style: 'cancel' },
             {
-                text: 'Tu choi',
+                text: 'Từ chối',
                 style: 'destructive',
                 onPress: async () => {
                     setProcessingId(item.id);
                     try {
-                        await verificationService.rejectVerification(item.id, 'Tu choi qua Mobile');
-                        Alert.alert('Da tu choi', 'Yeu cau xac thuc da bi tu choi.');
+                        await verificationService.rejectVerification(item.id, 'Từ chối qua Mobile');
+                        Alert.alert('Đã từ chối', 'Yêu cầu xác thực đã bị từ chối.');
                         fetchData();
                     } catch {
-                        Alert.alert('Loi', 'Khong the tu choi.');
+                        Alert.alert('Lỗi', 'Không thể từ chối.');
                     } finally {
                         setProcessingId(null);
                     }
@@ -161,21 +161,21 @@ export default function OrgPendingVerificationsScreen() {
         ]);
     }, [fetchData]);
 
-    if (isLoading && !isRefreshing) return <LoadingSpinner message="Dang tai yeu cau xac thuc..." />;
+    if (isLoading && !isRefreshing) return <LoadingSpinner message="Đang tải yêu cầu xác thực..." />;
 
     return (
-        <SafeAreaView style={{ flex: 1, backgroundColor: '#F8FAFC' }} edges={['right', 'left']}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: '#F8FAF3' }} edges={['right', 'left']}>
             <YStack style={{ paddingHorizontal: 16, paddingTop: 14, paddingBottom: 8 }}>
-                <Text fontSize="$7" fontWeight="800" color="$color12">Cho xac thuc</Text>
+                <Text fontSize="$7" fontWeight="800" color="$color12">Chờ xác thực</Text>
                 <Text fontSize="$3" color="$color10" style={{ marginTop: 2 }}>
-                    Duyet hoac tu choi yeu cau xac thuc bac si
+                    Duyệt hoặc từ chối yêu cầu xác thực bác sĩ
                 </Text>
             </YStack>
             {pending.length === 0 ? (
                 <EmptyState
                     icon={Award}
-                    title="Khong co yeu cau xac thuc"
-                    description="Khi bac si yeu cau xac thuc trong to chuc, ho se hien thi tai day."
+                    title="Không có yêu cầu xác thực"
+                    description="Khi bác sĩ yêu cầu xác thực trong tổ chức, họ sẽ hiển thị tại đây."
                 />
             ) : (
                 <FlatList
@@ -191,11 +191,17 @@ export default function OrgPendingVerificationsScreen() {
                     )}
                     contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 16 }}
                     refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} colors={['#7c3aed']} />}
-                    ListHeaderComponent={<Text fontSize="$3" color="$color10" style={{ marginBottom: 12 }}>{pending.length} yeu cau dang cho</Text>}
+                    ListHeaderComponent={<Text fontSize="$3" color="$color10" style={{ marginBottom: 12 }}>{pending.length} yêu cầu đang chờ</Text>}
                 />
             )}
         </SafeAreaView>
     );
 }
+
+
+
+
+
+
 
 

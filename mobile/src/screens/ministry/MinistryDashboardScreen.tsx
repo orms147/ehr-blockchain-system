@@ -67,17 +67,17 @@ export default function MinistryDashboardScreen() {
     }, [fetchData]);
 
     const handleApprove = (app: PendingApp) => {
-        Alert.alert('Duyet to chuc', `Ban co muon duyet "${app.orgName}"?`, [
-            { text: 'Huy', style: 'cancel' },
+        Alert.alert('Duyệt tổ chức', `Bạn có muốn duyệt "${app.orgName}"?`, [
+            { text: 'Huỷ', style: 'cancel' },
             {
-                text: 'Duyet',
+                text: 'Duyệt',
                 onPress: async () => {
                     try {
                         await orgService.approveApplication(app.id);
-                        Alert.alert('Thanh cong', 'Da duyet to chuc.');
+                        Alert.alert('Thành công', 'Đã duyệt tổ chức.');
                         fetchData();
                     } catch {
-                        Alert.alert('Loi', 'Khong the duyet.');
+                        Alert.alert('Lỗi', 'Không thể duyệt.');
                     }
                 },
             },
@@ -85,30 +85,30 @@ export default function MinistryDashboardScreen() {
     };
 
     const handleReject = (app: PendingApp) => {
-        Alert.alert('Tu choi to chuc', `Ban co muon tu choi "${app.orgName}"?`, [
-            { text: 'Huy', style: 'cancel' },
+        Alert.alert('Từ chối tổ chức', `Bạn có muốn từ chối "${app.orgName}"?`, [
+            { text: 'Huỷ', style: 'cancel' },
             {
-                text: 'Tu choi',
+                text: 'Từ chối',
                 style: 'destructive',
                 onPress: async () => {
                     try {
-                        await orgService.rejectApplication(app.id, 'Tu choi qua Mobile');
-                        Alert.alert('Da tu choi', 'Don dang ky da bi tu choi.');
+                        await orgService.rejectApplication(app.id, 'Từ chối qua Mobile');
+                        Alert.alert('Đã từ chối', 'Đơn đăng ký đã bị từ chối.');
                         fetchData();
                     } catch {
-                        Alert.alert('Loi', 'Khong the tu choi.');
+                        Alert.alert('Lỗi', 'Không thể từ chối.');
                     }
                 },
             },
         ]);
     };
 
-    if (isLoading) return <LoadingSpinner message="Dang tai du lieu Bo Y te..." />;
+    if (isLoading) return <LoadingSpinner message="Đang tải dữ liệu Bộ Y tế..." />;
 
     const verifiedCount = organizations.filter((o) => o.verified || o.isVerified).length;
 
     return (
-        <SafeAreaView style={{ flex: 1, backgroundColor: '#F8FAFC' }} edges={['top']}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: '#F8FAF3' }} edges={['top']}>
             <ScrollView
                 contentContainerStyle={{ padding: 20, paddingBottom: 80 }}
                 refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} colors={['#dc2626']} />}
@@ -117,9 +117,9 @@ export default function MinistryDashboardScreen() {
                     <XStack style={{ alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
                         <YStack style={{ flex: 1, marginRight: 12 }}>
                             <Text fontSize="$2" fontWeight="600" color="$red9" style={{ marginBottom: 2, textTransform: 'uppercase' }}>
-                                Bo Y te
+                                Bộ Y tế
                             </Text>
-                            <Text fontSize="$7" fontWeight="700" color="$color12">Quan ly He thong EHR</Text>
+                            <Text fontSize="$7" fontWeight="700" color="$color12">Quản lý Hệ thống EHR</Text>
                         </YStack>
                         <RoleSwitcher />
                     </XStack>
@@ -128,24 +128,24 @@ export default function MinistryDashboardScreen() {
                         <View background="$background" borderColor="$borderColor" style={{ flex: 1, borderWidth: 1, borderRadius: 12, padding: 10, alignItems: 'center' }}>
                             <Landmark size={18} color="#7C3AED" />
                             <Text fontSize="$6" fontWeight="700" color="$color12">{organizations.length}</Text>
-                            <Text fontSize="$2" color="$color10">To chuc</Text>
+                            <Text fontSize="$2" color="$color10">Tổ chức</Text>
                         </View>
                         <View background="$background" borderColor="$borderColor" style={{ flex: 1, borderWidth: 1, borderRadius: 12, padding: 10, alignItems: 'center' }}>
                             <ShieldCheck size={18} color="#16A34A" />
                             <Text fontSize="$6" fontWeight="700" color="$color12">{verifiedCount}</Text>
-                            <Text fontSize="$2" color="$color10">Da duyet</Text>
+                            <Text fontSize="$2" color="$color10">Đã duyệt</Text>
                         </View>
                         <View background="$background" borderColor="$borderColor" style={{ flex: 1, borderWidth: 1, borderRadius: 12, padding: 10, alignItems: 'center' }}>
                             <Hourglass size={18} color="#B45309" />
                             <Text fontSize="$6" fontWeight="700" color="$color12">{pendingApps.length}</Text>
-                            <Text fontSize="$2" color="$color10">Cho duyet</Text>
+                            <Text fontSize="$2" color="$color10">Chờ duyệt</Text>
                         </View>
                     </XStack>
 
                     <XStack background="$background" borderColor="$borderColor" style={{ borderWidth: 1, borderRadius: 10, padding: 4, marginBottom: 16 }}>
                         {(['orgs', 'pending', 'system'] as const).map((key) => {
                             const isActive = activeTab === key;
-                            const label = key === 'orgs' ? `To chuc (${organizations.length})` : key === 'pending' ? `Cho duyet (${pendingApps.length})` : 'He thong';
+                            const label = key === 'orgs' ? `Tổ chức (${organizations.length})` : key === 'pending' ? `Chờ duyệt (${pendingApps.length})` : 'Hệ thống';
                             return (
                                 <Button
                                     key={key}
@@ -164,7 +164,7 @@ export default function MinistryDashboardScreen() {
                 {activeTab === 'orgs' ? (
                     <YStack>
                         {organizations.length === 0 ? (
-                            <EmptyState icon={Building2} title="Chua co to chuc" description="Cac to chuc y te da dang ky se hien thi tai day." />
+                            <EmptyState icon={Building2} title="Chưa có tổ chức" description="Các tổ chức y tế đã đăng ký sẽ hiển thị tại đây." />
                         ) : (
                             organizations.map((org, idx) => (
                                 <AnimatedSection key={org.id || `org-${idx}`} delay={idx * 50}>
@@ -174,7 +174,7 @@ export default function MinistryDashboardScreen() {
                                                 <Building2 size={20} color="#7C3AED" />
                                             </View>
                                             <YStack style={{ flex: 1 }}>
-                                                <Text fontSize="$5" fontWeight="700" color="$color12">{org.name || org.orgName || 'To chuc'}</Text>
+                                                <Text fontSize="$5" fontWeight="700" color="$color12">{org.name || org.orgName || 'Tổ chức'}</Text>
                                                 <Text fontSize="$2" color="$color10">{truncateAddr(org.address)}</Text>
                                             </YStack>
                                             <View style={{ backgroundColor: '#dcfce7', borderRadius: 6, paddingVertical: 4, paddingHorizontal: 8 }}>
@@ -182,7 +182,7 @@ export default function MinistryDashboardScreen() {
                                             </View>
                                         </XStack>
                                         <Text fontSize="$2" color="$color9">
-                                            {org.orgType === 'hospital' ? 'Benh vien' : 'Phong kham'} - {org.doctorCount || 0} bac si
+                                            {org.orgType === 'hospital' ? 'Bệnh viện' : 'Phòng khám'} - {org.doctorCount || 0} bác sĩ
                                         </Text>
                                     </View>
                                 </AnimatedSection>
@@ -194,26 +194,26 @@ export default function MinistryDashboardScreen() {
                 {activeTab === 'pending' ? (
                     <YStack>
                         {pendingApps.length === 0 ? (
-                            <EmptyState icon={Clock} title="Khong co don cho" description="Tat ca don moi se hien thi tai day." />
+                            <EmptyState icon={Clock} title="Không có đơn chờ" description="Tất cả đơn mới sẽ hiển thị tại đây." />
                         ) : (
                             pendingApps.map((app, idx) => (
                                 <AnimatedSection key={app.id || `pending-${idx}`} delay={idx * 55}>
                                     <View background="$background" borderColor="$borderColor" style={{ borderWidth: 1, borderRadius: 12, padding: 14, marginBottom: 10 }}>
                                         <YStack style={{ marginBottom: 12 }}>
-                                            <Text fontSize="$5" fontWeight="700" color="$color12">{app.orgName || 'To chuc'}</Text>
+                                            <Text fontSize="$5" fontWeight="700" color="$color12">{app.orgName || 'Tổ chức'}</Text>
                                             <Text fontSize="$2" color="$color10" style={{ marginTop: 6 }}>
-                                                {app.orgType === 'hospital' ? 'Benh vien' : 'Phong kham'} - {truncateAddr(app.applicantAddress || app.address)}
+                                                {app.orgType === 'hospital' ? 'Bệnh viện' : 'Phòng khám'} - {truncateAddr(app.applicantAddress || app.address)}
                                             </Text>
                                             <Text fontSize="$2" color="$color9" style={{ marginTop: 4 }}>
-                                                Ngay nop: {app.createdAt ? new Date(app.createdAt).toLocaleDateString('vi-VN') : ''}
+                                                Ngày nộp: {app.createdAt ? new Date(app.createdAt).toLocaleDateString('vi-VN') : ''}
                                             </Text>
                                         </YStack>
                                         <XStack style={{ gap: 8 }}>
                                             <Button flex={1} background="$green9" pressStyle={{ background: '$green10' }} icon={<Check size={16} color="white" />} onPress={() => handleApprove(app)}>
-                                                <Text color="white" fontWeight="700">Duyet</Text>
+                                                <Text color="white" fontWeight="700">Duyệt</Text>
                                             </Button>
                                             <Button flex={1} variant="outlined" borderColor="$red6" pressStyle={{ background: '$red3' }} icon={<X size={16} color="#DC2626" />} onPress={() => handleReject(app)}>
-                                                <Text color="$red10" fontWeight="700">Tu choi</Text>
+                                                <Text color="$red10" fontWeight="700">Từ chối</Text>
                                             </Button>
                                         </XStack>
                                     </View>
@@ -244,3 +244,8 @@ export default function MinistryDashboardScreen() {
         </SafeAreaView>
     );
 }
+
+
+
+
+

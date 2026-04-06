@@ -4,9 +4,18 @@ import { z } from 'zod';
 import { authenticate } from '../middleware/auth.js';
 import prisma from '../config/database.js';
 import { createPublicClient, http, keccak256, encodePacked } from 'viem';
-
 import { arbitrumSepolia } from 'viem/chains';
+import { requireOnChainRoles } from '../middleware/onChainRole.js';
+import {
+    RequestType,
+    OnChainRequestStatus,
+    ONCHAIN_STATUS_NAMES,
+    REQUEST_TYPE_NAMES,
+    CHAIN_STATUS_TO_DB,
+} from '../constants/contractEnums.js';
+import { createLogger } from '../utils/logger.js';
 
+const log = createLogger('RequestRoutes');
 const router = Router();
 
 // Contract config
@@ -41,6 +50,8 @@ const publicClient = createPublicClient({
     transport: http(process.env.RPC_URL),
 });
 
+const requirePatientRole = requireOnChainRoles('patient');
+const requireDoctorRole = requireOnChainRoles('doctor');
 
 // Validation schemas
 const createRequestSchema = z.object({
@@ -52,13 +63,9 @@ const createRequestSchema = z.object({
     onChainReqId: z.string().regex(/^0x[a-fA-F0-9]{64}$/).optional().nullable(),
 });
 
-// Request Status enum
-const RequestStatus = {
-    PENDING: 0,
-    APPROVED: 1,
-    REJECTED: 2,
-    EXPIRED: 3,
-};
+// Request status enum removed — use canonical mapping from contractEnums.js
+// On-chain: Pending=0, RequesterApproved=1, PatientApproved=2, Completed=3, Rejected=4
+// DB strings: 'pending', 'signed', 'claimed', 'rejected'
 
 // Helper to serialize AccessRequest for JSON (BigInt -> String)
 const serializeRequest = (request) => ({
@@ -71,7 +78,7 @@ const serializeRequest = (request) => ({
 // This is a simplified version - in production, use events from blockchain
 
 // GET /api/requests/incoming - Get requests made TO current user (as Patient)
-router.get('/incoming', authenticate, async (req, res, next) => {
+router.get('/incoming', authenticate, requirePatientRole, async (req, res, next) => {
     try {
         const patientAddress = req.user.walletAddress.toLowerCase();
 
@@ -105,7 +112,7 @@ router.get('/incoming', authenticate, async (req, res, next) => {
 });
 
 // GET /api/requests/outgoing - Get requests made BY current user (as Doctor)
-router.get('/outgoing', authenticate, async (req, res, next) => {
+router.get('/outgoing', authenticate, requireDoctorRole, async (req, res, next) => {
     try {
         const doctorAddress = req.user.walletAddress.toLowerCase();
 
@@ -125,11 +132,11 @@ router.get('/outgoing', authenticate, async (req, res, next) => {
 
 // GET /api/requests/signed - Get requests that Patient signed (for Doctor to claim)
 // IMPORTANT: Must be BEFORE /:requestId to avoid matching 'signed' as a requestId
-router.get('/signed', authenticate, async (req, res, next) => {
+router.get('/signed', authenticate, requireDoctorRole, async (req, res, next) => {
     try {
         const doctorAddress = req.user.walletAddress.toLowerCase();
 
-        // Get requests where Doctor is requester AND status is 'signed'
+        // Get requests where Doctor is requester AND status is 'signed' AND not expired
         const requests = await prisma.accessRequest.findMany({
             where: {
                 requesterAddress: doctorAddress,
@@ -138,9 +145,16 @@ router.get('/signed', authenticate, async (req, res, next) => {
             orderBy: { createdAt: 'desc' },
         });
 
+        // Filter out expired signatures (deadline passed)
+        const now = Math.floor(Date.now() / 1000);
+        const validRequests = requests.filter(r => {
+            if (!r.signatureDeadline) return true;
+            return Number(r.signatureDeadline) > now;
+        });
+
         res.json({
-            count: requests.length,
-            requests: requests.map(serializeRequest),
+            count: validRequests.length,
+            requests: validRequests.map(serializeRequest),
         });
     } catch (error) {
         next(error);
@@ -209,32 +223,35 @@ router.get('/:requestId', authenticate, async (req, res, next) => {
                     args: [requestId],
                 });
 
+                const statusRaw = Number(onChainRequest.status);
                 return res.json({
                     requestId,
                     requesterAddress: onChainRequest.requester,
                     patientAddress: onChainRequest.patient,
-                    cidHash: onChainRequest.rootCidHash, // ABI field: rootCidHash
-                    requestType: onChainRequest.reqType, // ABI field: reqType
-                    status: ['pending', 'approved', 'rejected', 'expired'][onChainRequest.status],
-                    // firstApprovalTime is when first party approved (0 if not approved yet)
+                    cidHash: onChainRequest.rootCidHash,
+                    requestType: Number(onChainRequest.reqType),
+                    requestTypeName: REQUEST_TYPE_NAMES[Number(onChainRequest.reqType)] || 'Unknown',
+                    status: CHAIN_STATUS_TO_DB[statusRaw] || `unknown_${statusRaw}`,
+                    onChainStatusRaw: statusRaw,
+                    onChainStatusName: ONCHAIN_STATUS_NAMES[statusRaw] || `Unknown(${statusRaw})`,
                     createdAt: onChainRequest.firstApprovalTime > 0
                         ? new Date(Number(onChainRequest.firstApprovalTime) * 1000)
                         : null,
-                    deadline: new Date(Number(onChainRequest.expiry) * 1000), // ABI field: expiry
+                    deadline: new Date(Number(onChainRequest.expiry) * 1000),
                 });
             } catch (e) {
-                console.error('Error reading from blockchain:', e);
+                log.warn('Blockchain read error for request', { requestId, error: e.message });
             }
         }
 
-        res.status(404).json({ error: 'Request not found' });
+        res.status(404).json({ code: 'REQUEST_NOT_FOUND', error: 'Request not found', message: 'Request not found' });
     } catch (error) {
         next(error);
     }
 });
 
 // POST /api/requests/create - Create a new access request (Doctor calls this AFTER on-chain tx)
-router.post('/create', authenticate, async (req, res, next) => {
+router.post('/create', authenticate, requireDoctorRole, async (req, res, next) => {
     try {
         const { patientAddress, cidHash, requestType, durationDays, txHash, onChainReqId } = createRequestSchema.parse(req.body);
         const doctorAddress = req.user.walletAddress.toLowerCase();
@@ -277,7 +294,7 @@ router.post('/create', authenticate, async (req, res, next) => {
 });
 
 // GET /api/requests/:requestId/approval-message - Get EIP-712 message for signing
-router.get('/:requestId/approval-message', authenticate, async (req, res, next) => {
+router.get('/:requestId/approval-message', authenticate, requirePatientRole, async (req, res, next) => {
     try {
         const { requestId } = req.params;
 
@@ -287,7 +304,7 @@ router.get('/:requestId/approval-message', authenticate, async (req, res, next) 
         });
 
         if (!request) {
-            return res.status(404).json({ error: 'Request not found' });
+            return res.status(404).json({ code: 'REQUEST_NOT_FOUND', error: 'Request not found', message: 'Request not found' });
         }
 
         // Create EIP-712 typed data for signing - MUST MATCH CONTRACT CONFIRM_TYPEHASH
@@ -333,7 +350,7 @@ router.get('/:requestId/approval-message', authenticate, async (req, res, next) 
 });
 
 // POST /api/requests/approve-with-sig - Patient signs approval (Doctor will claim later)
-router.post('/approve-with-sig', authenticate, async (req, res, next) => {
+router.post('/approve-with-sig', authenticate, requirePatientRole, async (req, res, next) => {
     try {
         const { requestId, signature, deadline, encryptedKeyPayload, cidHash, senderPublicKey } = req.body;
         const patientAddress = req.user.walletAddress.toLowerCase();
@@ -344,11 +361,20 @@ router.post('/approve-with-sig', authenticate, async (req, res, next) => {
         });
 
         if (!request) {
-            return res.status(404).json({ error: 'Request not found' });
+            return res.status(404).json({ code: 'REQUEST_NOT_FOUND', error: 'Request not found', message: 'Request not found' });
         }
 
         if (request.patientAddress !== patientAddress) {
-            return res.status(403).json({ error: 'Not authorized' });
+            return res.status(403).json({ code: 'REQUEST_NOT_AUTHORIZED', error: 'Not authorized', message: 'Not authorized' });
+        }
+
+        // Only pending requests can be approved
+        if (request.status !== 'pending') {
+            return res.status(400).json({
+                code: 'REQUEST_INVALID_STATUS',
+                error: `Yêu cầu không thể duyệt (trạng thái hiện tại: ${request.status})`,
+                message: `Yêu cầu không thể duyệt (trạng thái hiện tại: ${request.status})`,
+            });
         }
 
         // Store signature - Doctor will claim on-chain
@@ -405,7 +431,7 @@ router.post('/approve-with-sig', authenticate, async (req, res, next) => {
 });
 
 // POST /api/requests/mark-claimed - Mark request as claimed after Doctor submits on-chain
-router.post('/mark-claimed', authenticate, async (req, res, next) => {
+router.post('/mark-claimed', authenticate, requireDoctorRole, async (req, res, next) => {
     try {
         const { requestId, claimTxHash } = req.body;
         const doctorAddress = req.user.walletAddress.toLowerCase();
@@ -416,7 +442,7 @@ router.post('/mark-claimed', authenticate, async (req, res, next) => {
         });
 
         if (!request || request.requesterAddress !== doctorAddress) {
-            return res.status(403).json({ error: 'Not authorized' });
+            return res.status(403).json({ code: 'REQUEST_NOT_AUTHORIZED', error: 'Not authorized', message: 'Not authorized' });
         }
 
         // Update status to claimed
@@ -465,7 +491,7 @@ router.post('/grant-as-delegate', authenticate, async (req, res, next) => {
         });
 
         if (!request) {
-            return res.status(404).json({ error: 'Request not found' });
+            return res.status(404).json({ code: 'REQUEST_NOT_FOUND', error: 'Request not found', message: 'Request not found' });
         }
 
         // 2. Verify delegation
@@ -478,7 +504,7 @@ router.post('/grant-as-delegate', authenticate, async (req, res, next) => {
         });
 
         if (!delegation) {
-            return res.status(403).json({ error: 'You are not a delegate for this patient' });
+            return res.status(403).json({ code: 'DELEGATION_NOT_FOUND', error: 'You are not a delegate for this patient', message: 'You are not a delegate for this patient' });
         }
 
         // 3. Update Request Status directly to 'claimed' (since grant is direct)
@@ -527,9 +553,10 @@ router.post('/grant-as-delegate', authenticate, async (req, res, next) => {
             message: 'Access granted successfully as delegate.',
         });
     } catch (error) {
-        console.error('Grant as delegate error:', error);
+        log.error('Grant as delegate error', { error: error.message, wallet: req.user?.walletAddress });
         next(error);
     }
 });
 
 export default router;
+

@@ -1,6 +1,9 @@
 // Socket.io Service - Real-time WebSocket for EHR updates
 import { Server } from 'socket.io';
 import jwt from 'jsonwebtoken';
+import { createLogger } from '../utils/logger.js';
+
+const log = createLogger('Socket');
 
 let io;
 
@@ -30,7 +33,7 @@ export function initSocket(server) {
 
             return next();
         } catch (err) {
-            console.error('WebSocket auth error:', err.message);
+            log.error('WebSocket auth error', { error: err.message });
             return next(new Error('Authentication error: Invalid token'));
         }
     });
@@ -44,7 +47,7 @@ export function initSocket(server) {
 
         // Error handling
         socket.on('error', (err) => {
-            console.error('Socket error:', err);
+            log.error('Socket error', { error: err.message || err });
         });
     });
 }
@@ -57,7 +60,7 @@ export function initSocket(server) {
  */
 export function emitToUser(wallet, event, data) {
     if (!io) {
-        console.warn('Socket.io not initialized, skipping emit');
+        log.warn('Socket.io not initialized, skipping emit');
         return;
     }
     io.to(wallet.toLowerCase()).emit(event, data);

@@ -42,12 +42,44 @@ class ApiService {
         const error = new Error(message);
         error.status = response.status;
         error.data = data;
+        if (data?.code) error.code = data.code;
+        if (data?.details) error.details = data.details;
+        if (data?.txHash) error.txHash = data.txHash;
+        return error;
+    }
+
+    isNetworkError(error) {
+        if (!error) return false;
+
+        const raw = String(error?.message || '').toLowerCase();
+        if (error instanceof TypeError) return true;
+
+        return (
+            raw.includes('network request failed')
+            || raw.includes('failed to fetch')
+            || raw.includes('networkerror')
+            || raw.includes('fetch failed')
+            || raw.includes('socket')
+            || raw.includes('connection')
+        );
+    }
+
+    buildBackendUnavailableError() {
+        const error = new Error(
+            `Không thể kết nối backend (${this.baseUrl}). Hãy bật backend và kiểm tra EXPO_PUBLIC_API_URL.`
+        );
+        error.code = 'BACKEND_UNREACHABLE';
         return error;
     }
 
     async request(endpoint, options = {}) {
         const url = `${this.baseUrl}${endpoint}`;
         const timeoutMs = options.timeoutMs ?? 15000;
+        const method = String(options.method || 'GET').toUpperCase();
+        const retryCount = Number.isInteger(options.retryCount)
+            ? options.retryCount
+            : (method === 'GET' ? 1 : 0);
+        const retryDelayMs = options.retryDelayMs ?? 350;
 
         const headers = {
             'Content-Type': 'application/json',
@@ -58,35 +90,54 @@ class ApiService {
             headers['Authorization'] = `Bearer ${this.getToken()}`;
         }
 
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+        for (let attempt = 0; attempt <= retryCount; attempt += 1) {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
-        try {
-            const response = await fetch(url, {
-                ...options,
-                headers,
-                signal: options.signal || controller.signal,
-            });
+            try {
+                const response = await fetch(url, {
+                    ...options,
+                    headers,
+                    signal: options.signal || controller.signal,
+                });
 
-            const data = await this.parseResponseBody(response);
+                const data = await this.parseResponseBody(response);
 
-            if (!response.ok) {
-                throw this.buildHttpError(response, data, 'API request failed');
+                if (!response.ok) {
+                    throw this.buildHttpError(response, data, 'API request failed');
+                }
+
+                return data;
+            } catch (error) {
+                const canRetry = attempt < retryCount;
+
+                if (error?.name === 'AbortError') {
+                    if (canRetry) {
+                        await new Promise((resolve) => setTimeout(resolve, retryDelayMs));
+                        continue;
+                    }
+
+                    throw new Error('Kết nối đến máy chủ quá thời gian. Vui lòng thử lại.');
+                }
+
+                if (this.isNetworkError(error)) {
+                    if (canRetry) {
+                        await new Promise((resolve) => setTimeout(resolve, retryDelayMs));
+                        continue;
+                    }
+
+                    throw this.buildBackendUnavailableError();
+                }
+
+                throw error;
+            } finally {
+                clearTimeout(timeoutId);
             }
-
-            return data;
-        } catch (error) {
-            if (error?.name === 'AbortError') {
-                throw new Error('Ket noi den may chu qua thoi gian. Vui long thu lai.');
-            }
-            console.error(`API Error on ${endpoint}:`, error);
-            throw error;
-        } finally {
-            clearTimeout(timeoutId);
         }
+
+        throw new Error('API request failed unexpectedly.');
     }
 
-    // GET request
     async get(endpoint, query = null) {
         let finalEndpoint = endpoint;
 
@@ -106,7 +157,6 @@ class ApiService {
         return this.request(finalEndpoint, { method: 'GET' });
     }
 
-    // POST request (JSON)
     async post(endpoint, body) {
         return this.request(endpoint, {
             method: 'POST',
@@ -114,7 +164,6 @@ class ApiService {
         });
     }
 
-    // PUT request (JSON)
     async put(endpoint, body) {
         return this.request(endpoint, {
             method: 'PUT',
@@ -122,7 +171,6 @@ class ApiService {
         });
     }
 
-    // POST FormData (for file uploads)
     async postFormData(endpoint, formData) {
         const url = `${this.baseUrl}${endpoint}`;
         const timeoutMs = 20000;
@@ -130,7 +178,6 @@ class ApiService {
         const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
         const headers = {};
-        // Don't set Content-Type - browser sets it automatically with boundary for FormData
 
         if (this.getToken()) {
             headers['Authorization'] = `Bearer ${this.getToken()}`;
@@ -153,18 +200,25 @@ class ApiService {
             return data;
         } catch (error) {
             if (error?.name === 'AbortError') {
-                throw new Error('Tai tep qua thoi gian. Vui long thu lai.');
+                throw new Error('Tải tệp quá thời gian. Vui lòng thử lại.');
             }
-            console.error(`API Error on formData ${endpoint}:`, error);
+
+            if (this.isNetworkError(error)) {
+                throw this.buildBackendUnavailableError();
+            }
+
             throw error;
         } finally {
             clearTimeout(timeoutId);
         }
     }
 
-    // DELETE request
     async delete(endpoint) {
         return this.request(endpoint, { method: 'DELETE' });
+    }
+
+    async ping() {
+        return this.request('/health', { method: 'GET', timeoutMs: 6000, retryCount: 0 });
     }
 }
 

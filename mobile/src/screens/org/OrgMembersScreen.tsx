@@ -31,7 +31,7 @@ const MemberItem = React.memo(({ item }: { item: Member }) => {
                     <Users size={20} color="#0F766E" />
                 </View>
                 <YStack style={{ flex: 1 }}>
-                    <Text fontSize="$4" fontWeight="700" color="$color12">{item.fullName || 'Bac si'}</Text>
+                    <Text fontSize="$4" fontWeight="700" color="$color12">{item.fullName || 'Bác sĩ'}</Text>
                     {item.specialty ? <Text fontSize="$3" color="$color10">{item.specialty}</Text> : null}
                     <Text fontSize="$2" color="$color9" style={{ marginTop: 4 }}>{truncateAddr(item.address || item.walletAddress)}</Text>
                 </YStack>
@@ -39,7 +39,7 @@ const MemberItem = React.memo(({ item }: { item: Member }) => {
                     <XStack style={{ alignItems: 'center' }}>
                         {isVerified ? <Shield size={12} color="#15803d" style={{ marginRight: 4 }} /> : <Clock size={12} color="#b45309" style={{ marginRight: 4 }} />}
                         <Text fontSize="$2" style={{ color: isVerified ? '#166534' : '#92400e', fontWeight: '700' }}>
-                            {isVerified ? 'Da xac thuc' : 'Cho xac thuc'}
+                            {isVerified ? 'Đã xác thực' : 'Chờ xác thực'}
                         </Text>
                     </XStack>
                 </View>
@@ -92,16 +92,16 @@ export default function OrgMembersScreen() {
         );
     });
 
-    if (isLoading) return <LoadingSpinner message="Dang tai danh sach thanh vien..." />;
+    if (isLoading) return <LoadingSpinner message="Đang tải danh sách thành viên..." />;
 
     return (
-        <SafeAreaView style={{ flex: 1, backgroundColor: '#F8FAFC' }} edges={['right', 'left']}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: '#F8FAF3' }} edges={['right', 'left']}>
             <YStack style={{ paddingHorizontal: 16, paddingTop: 12, paddingBottom: 6 }}>
                 <Text fontSize="$7" fontWeight="800" color="$color12" style={{ marginBottom: 2 }}>
-                    Thanh vien to chuc
+                    Thành viên tổ chức
                 </Text>
                 <Text fontSize="$3" color="$color10" style={{ marginBottom: 10 }}>
-                    Tim kiem va theo doi trang thai xac thuc bac si
+                    Tìm kiếm và theo dõi trạng thái xác thực bác sĩ
                 </Text>
                 <XStack background="$background" borderColor="$borderColor" style={{ borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, alignItems: 'center' }}>
                     <Search size={16} color="#64748B" style={{ marginRight: 8 }} />
@@ -110,7 +110,7 @@ export default function OrgMembersScreen() {
                         unstyled
                         value={searchTerm}
                         onChangeText={setSearchTerm}
-                        placeholder="Tim kiem bac si..."
+                        placeholder="Tìm kiếm bác sĩ..."
                         style={{ paddingVertical: 12 }}
                     />
                 </XStack>
@@ -119,8 +119,8 @@ export default function OrgMembersScreen() {
             {filteredMembers.length === 0 ? (
                 <EmptyState
                     icon={Users}
-                    title={searchTerm ? 'Khong tim thay ket qua' : 'Chua co thanh vien nao'}
-                    description={searchTerm ? 'Thu tim voi tu khoa khac.' : 'Cac bac si trong to chuc se hien thi tai day.'}
+                    title={searchTerm ? 'Không tìm thấy kết quả' : 'Chưa có thành viên nào'}
+                    description={searchTerm ? 'Thử tìm với từ khoá khác.' : 'Các bác sĩ trong tổ chức sẽ hiển thị tại đây.'}
                 />
             ) : (
                 <FlatList
@@ -131,9 +131,9 @@ export default function OrgMembersScreen() {
                     refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} colors={['#7c3aed']} />}
                     ListHeaderComponent={
                         <XStack style={{ alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-                            <Text fontSize="$3" color="$color10">{filteredMembers.length} bac si</Text>
+                            <Text fontSize="$3" color="$color10">{filteredMembers.length} bác sĩ</Text>
                             <Text fontSize="$3" fontWeight="700" color="$green10">
-                                {filteredMembers.filter((m) => m.verified || m.isVerified).length} da xac thuc
+                                {filteredMembers.filter((m) => m.verified || m.isVerified).length} đã xác thực
                             </Text>
                         </XStack>
                     }
@@ -142,4 +142,10 @@ export default function OrgMembersScreen() {
         </SafeAreaView>
     );
 }
+
+
+
+
+
+
 

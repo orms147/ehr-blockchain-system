@@ -1,14 +1,42 @@
 import React, { useState, useEffect } from 'react';
-import { Alert, ScrollView, Pressable } from 'react-native';
+import { Alert, ScrollView, Pressable, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
-import { User, LogOut, Shield, Droplets, ChevronRight, Edit3, Calendar, Settings, Info } from 'lucide-react-native';
+import {
+    User, LogOut, Shield, Droplets, ChevronRight,
+    Edit3, Calendar, Settings, Info, Wallet, Copy,
+} from 'lucide-react-native';
 import { YStack, XStack, Text, Button, View } from 'tamagui';
+import Animated, {
+    useSharedValue,
+    useAnimatedStyle,
+    withSpring,
+    withDelay,
+    interpolate,
+} from 'react-native-reanimated';
+import * as Clipboard from 'expo-clipboard';
 
 import LoadingSpinner from '../components/LoadingSpinner';
 import RoleSwitcher from '../components/RoleSwitcher';
 import profileService from '../services/profile.service';
 import useAuthStore from '../store/authStore';
+import {
+    EHR_ON_PRIMARY,
+    EHR_ON_SURFACE,
+    EHR_ON_SURFACE_VARIANT,
+    EHR_OUTLINE_VARIANT,
+    EHR_PRIMARY,
+    EHR_PRIMARY_CONTAINER,
+    EHR_PRIMARY_FIXED,
+    EHR_SECONDARY,
+    EHR_SECONDARY_CONTAINER,
+    EHR_SHADOW,
+    EHR_SURFACE,
+    EHR_SURFACE_LOW,
+    EHR_SURFACE_LOWEST,
+} from '../constants/uiColors';
+
+const SPRING = { damping: 18, stiffness: 120, mass: 0.8 };
 
 export default function ProfileScreen() {
     const navigation = useNavigation<any>();
@@ -17,22 +45,50 @@ export default function ProfileScreen() {
     const [isLoading, setIsLoading] = useState(true);
     const [isMockMode, setIsMockMode] = useState(false);
 
+    const enter = useSharedValue(0);
+    const cardEnter = useSharedValue(0);
+    const menuEnter = useSharedValue(0);
+
+    useEffect(() => {
+        enter.value = withSpring(1, SPRING);
+        cardEnter.value = withDelay(100, withSpring(1, SPRING));
+        menuEnter.value = withDelay(200, withSpring(1, SPRING));
+    }, []);
+
+    const avatarStyle = useAnimatedStyle(() => ({
+        opacity: interpolate(enter.value, [0, 0.3, 1], [0, 0.5, 1]),
+        transform: [
+            { perspective: 800 },
+            { translateY: interpolate(enter.value, [0, 1], [20, 0]) },
+            { scale: interpolate(enter.value, [0, 1], [0.9, 1]) },
+        ],
+    }));
+
+    const cardStyle = useAnimatedStyle(() => ({
+        opacity: interpolate(cardEnter.value, [0, 0.3, 1], [0, 0.6, 1]),
+        transform: [
+            { perspective: 800 },
+            { translateY: interpolate(cardEnter.value, [0, 1], [18, 0]) },
+            { rotateX: `${interpolate(cardEnter.value, [0, 1], [6, 0])}deg` },
+        ],
+    }));
+
+    const menuStyle = useAnimatedStyle(() => ({
+        opacity: interpolate(menuEnter.value, [0, 0.3, 1], [0, 0.6, 1]),
+        transform: [
+            { translateY: interpolate(menuEnter.value, [0, 1], [16, 0]) },
+        ],
+    }));
+
     useEffect(() => {
         const fetchProfile = async () => {
-            if (!token) {
-                setIsLoading(false);
-                return;
-            }
-            if (token === 'mock_jwt_token') {
-                setIsMockMode(true);
-                setIsLoading(false);
-                return;
-            }
+            if (!token) { setIsLoading(false); return; }
+            if (token === 'mock_jwt_token') { setIsMockMode(true); setIsLoading(false); return; }
             try {
                 const data = await profileService.getMyProfile();
                 setProfile(data);
-            } catch (error) {
-                console.error('Failed to fetch profile', error);
+            } catch (error: any) {
+                console.warn('Failed to fetch profile', error?.message || error);
             } finally {
                 setIsLoading(false);
             }
@@ -41,9 +97,9 @@ export default function ProfileScreen() {
     }, [token]);
 
     const handleLogout = () => {
-        Alert.alert('Dang xuat', 'Ban co chac chan muon dang xuat khoi thiet bi nay?', [
-            { text: 'Huy', style: 'cancel' },
-            { text: 'Dang xuat', style: 'destructive', onPress: () => logout() },
+        Alert.alert('Đăng xuất', 'Bạn có chắc chắn muốn đăng xuất khỏi thiết bị này?', [
+            { text: 'Huỷ', style: 'cancel' },
+            { text: 'Đăng xuất', style: 'destructive', onPress: () => logout() },
         ]);
     };
 
@@ -53,152 +109,299 @@ export default function ProfileScreen() {
             setIsLoading(true);
             const updated = await profileService.updateMyProfile(profile);
             setProfile(updated || profile);
-            Alert.alert('Thanh cong', 'Da cap nhat thong tin ca nhan.');
+            Alert.alert('Thành công', 'Đã cập nhật thông tin cá nhân.');
         } catch (error: any) {
-            Alert.alert('Loi', error?.message || 'Khong the cap nhat ho so.');
+            Alert.alert('Lỗi', error?.message || 'Không thể cập nhật hồ sơ.');
         } finally {
             setIsLoading(false);
         }
     };
 
-    if (isLoading) return <LoadingSpinner message="Dang tai thong tin ca nhan..." />;
+    const copyAddress = async () => {
+        const addr = userData.walletAddress || userData.address;
+        if (addr) {
+            await Clipboard.setStringAsync(addr);
+            Alert.alert('Đã sao chép', 'Địa chỉ ví đã được sao chép.');
+        }
+    };
+
+    if (isLoading) return <LoadingSpinner message="Đang tải thông tin cá nhân..." />;
 
     const userData = { ...(user || {}), ...(profile || {}) };
     const truncateAddress = (addr?: string) => (addr ? `${addr.substring(0, 10)}...${addr.slice(-6)}` : '0x000...');
 
-    const MenuItem = ({ label, onPress }: { label: string; onPress?: () => void }) => (
-        <Pressable onPress={onPress}>
-            <XStack style={{ padding: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderBottomWidth: 1, borderBottomColor: '#e2e8f0' }}>
-                <Text fontSize="$4" fontWeight="500" color="$color12">{label}</Text>
-                <ChevronRight size={18} color="#94A3B8" />
+    const genderDisplay =
+        userData.gender === 'MALE' || userData.gender === 'male' ? 'Nam'
+        : userData.gender === 'FEMALE' || userData.gender === 'female' ? 'Nữ'
+        : userData.gender ? 'Khác' : 'Chưa rõ';
+
+    const MenuItem = ({ icon: Icon, label, onPress, destructive = false }: {
+        icon?: any; label: string; onPress?: () => void; destructive?: boolean;
+    }) => (
+        <Pressable onPress={onPress} style={({ pressed }) => [s.menuItem, pressed && { backgroundColor: EHR_SURFACE_LOW }]}>
+            <XStack style={{ alignItems: 'center', flex: 1 }}>
+                {Icon ? <Icon size={18} color={destructive ? '#DC2626' : EHR_ON_SURFACE_VARIANT} style={{ marginRight: 12 }} /> : null}
+                <Text style={[s.menuLabel, destructive && { color: '#DC2626', fontWeight: '700' }]}>{label}</Text>
             </XStack>
+            {destructive ? (
+                <LogOut size={18} color="#DC2626" />
+            ) : (
+                <ChevronRight size={16} color={EHR_OUTLINE_VARIANT} />
+            )}
         </Pressable>
     );
 
     return (
-        <SafeAreaView style={{ flex: 1, backgroundColor: '#F8FAFC' }} edges={['right', 'left']}>
-            <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 100 }}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: EHR_SURFACE }} edges={['right', 'left']}>
+            <ScrollView contentContainerStyle={s.scrollContent} showsVerticalScrollIndicator={false}>
                 {isMockMode ? (
-                    <View background="$purple3" borderColor="$purple5" style={{ borderWidth: 1, borderRadius: 10, padding: 12, marginBottom: 16 }}>
-                        <XStack style={{ alignItems: 'center' }}>
-                            <Info size={16} color="#7C3AED" />
-                            <Text fontSize="$3" color="$purple11" style={{ flex: 1, marginLeft: 8 }}>
-                                Dang o che do Demo (chua ket noi vi that). Du lieu ben duoi la mau.
-                            </Text>
-                        </XStack>
+                    <View style={s.mockBanner}>
+                        <Info size={14} color={EHR_PRIMARY} />
+                        <Text style={s.mockText}>Chế độ Demo — dữ liệu bên dưới là mẫu.</Text>
                     </View>
                 ) : null}
 
                 <RoleSwitcher />
-                <View style={{ height: 20 }} />
+                <View style={{ height: 16 }} />
 
-                <YStack style={{ alignItems: 'center', marginBottom: 24 }}>
-                    <View background="olive" style={{ width: 100, height: 100, borderRadius: 50, marginBottom: 12, alignItems: 'center', justifyContent: 'center' }}>
-                        <User size={40} color="#2563EB" />
+                {/* ── Avatar section ── */}
+                <Animated.View style={avatarStyle}>
+                    <YStack style={s.avatarSection}>
+                        <View style={s.avatarCircle}>
+                            <User size={40} color={EHR_PRIMARY} />
+                        </View>
+                        <Text style={s.userName}>{userData.fullName || 'Chưa cập nhật tên'}</Text>
+
+                        <Pressable onPress={copyAddress} style={s.addressRow}>
+                            <Wallet size={12} color={EHR_ON_SURFACE_VARIANT} />
+                            <Text style={s.addressText}>
+                                {truncateAddress(userData.walletAddress || userData.address)}
+                            </Text>
+                            <Copy size={12} color={EHR_OUTLINE_VARIANT} />
+                        </Pressable>
+
+                        <View style={s.verifiedBadge}>
+                            <Shield size={12} color={EHR_PRIMARY} />
+                            <Text style={s.verifiedText}>Blockchain Verified</Text>
+                        </View>
+                    </YStack>
+                </Animated.View>
+
+                {/* ── Health info card ── */}
+                <Animated.View style={cardStyle}>
+                    <View style={s.healthCard}>
+                        <XStack style={{ justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                            <Text style={s.cardTitle}>Thông tin sức khoẻ</Text>
+                            <Pressable onPress={() => navigation.navigate('EditProfile')} style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                <Edit3 size={13} color={EHR_PRIMARY} />
+                                <Text style={s.editLink}>Sửa</Text>
+                            </Pressable>
+                        </XStack>
+
+                        <XStack style={{ flexWrap: 'wrap' }}>
+                            {/* Blood type */}
+                            <YStack style={s.healthItem}>
+                                <View style={[s.healthIcon, { backgroundColor: EHR_SECONDARY_CONTAINER }]}>
+                                    <Droplets size={16} color={EHR_SECONDARY} />
+                                </View>
+                                <Text style={s.healthLabel}>Nhóm máu</Text>
+                                <Text style={s.healthValue}>{userData.bloodType || 'Chưa rõ'}</Text>
+                            </YStack>
+
+                            {/* Gender */}
+                            <YStack style={s.healthItem}>
+                                <View style={[s.healthIcon, { backgroundColor: EHR_PRIMARY_FIXED }]}>
+                                    <User size={16} color={EHR_PRIMARY} />
+                                </View>
+                                <Text style={s.healthLabel}>Giới tính</Text>
+                                <Text style={s.healthValue}>{genderDisplay}</Text>
+                            </YStack>
+
+                            {/* Birth year */}
+                            <YStack style={s.healthItem}>
+                                <View style={[s.healthIcon, { backgroundColor: EHR_SURFACE_LOW }]}>
+                                    <Calendar size={16} color={EHR_PRIMARY} />
+                                </View>
+                                <Text style={s.healthLabel}>Năm sinh</Text>
+                                <Text style={s.healthValue}>
+                                    {userData.dateOfBirth
+                                        ? new Date(userData.dateOfBirth).getFullYear()
+                                        : userData.DOB || 'Chưa rõ'}
+                                </Text>
+                            </YStack>
+                        </XStack>
+
+                        <View style={s.divider} />
+                        <Text style={s.healthLabel}>Dị ứng và ghi chú</Text>
+                        <Text style={s.allergyText}>
+                            {userData.allergies || 'Không có ghi nhận dị ứng y tế đặc biệt.'}
+                        </Text>
                     </View>
-                    <Text fontSize="$6" fontWeight="700" color="$color12" style={{ marginBottom: 4 }}>{userData.fullName || 'Chua cap nhat ten'}</Text>
-                    <Text fontSize="$3" color="$color10" style={{ marginBottom: 10 }}>{truncateAddress(userData.walletAddress || userData.address)}</Text>
-                    <XStack style={{ backgroundColor: '#dcfce7', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6, alignItems: 'center' }}>
-                        <Shield size={14} color="#16a34a" />
-                        <Text style={{ color: '#166534', fontSize: 11, fontWeight: '700', marginLeft: 6, textTransform: 'uppercase' }}>Blockchain Verified</Text>
-                    </XStack>
-                </YStack>
+                </Animated.View>
 
-                <View background="$background" borderColor="$borderColor" style={{ borderWidth: 1, borderRadius: 12, marginBottom: 20, padding: 16 }}>
-                    <XStack style={{ alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-                        <Text fontSize="$5" fontWeight="700" color="$color12">Thong tin suc khoe</Text>
-                        <XStack style={{ alignItems: 'center' }}>
-                            <Edit3 size={14} color="#2563EB" />
-                            <Text fontSize="$3" fontWeight="500" color="olive" style={{ marginLeft: 4 }}>Sua</Text>
-                        </XStack>
-                    </XStack>
-
-                    <XStack style={{ flexWrap: 'wrap' }}>
-                        <YStack style={{ width: '50%', paddingRight: 8, marginBottom: 10 }}>
-                            <XStack style={{ alignItems: 'center' }}>
-                                <View background="$red3" style={{ width: 36, height: 36, borderRadius: 18, marginRight: 8, alignItems: 'center', justifyContent: 'center' }}>
-                                    <Droplets size={16} color="#DC2626" />
-                                </View>
-                                <YStack>
-                                    <Text fontSize="$2" color="$color9" style={{ textTransform: 'uppercase' }}>Nhom mau</Text>
-                                    <Text fontSize="$4" fontWeight="700" color="$color12">{userData.bloodType || 'Chua ro'}</Text>
-                                </YStack>
-                            </XStack>
-                        </YStack>
-
-                        <YStack style={{ width: '50%', paddingLeft: 8, marginBottom: 10 }}>
-                            <XStack style={{ alignItems: 'center' }}>
-                                <View background="olive" style={{ width: 36, height: 36, borderRadius: 18, marginRight: 8, alignItems: 'center', justifyContent: 'center' }}>
-                                    <User size={16} color="#2563EB" />
-                                </View>
-                                <YStack>
-                                    <Text fontSize="$2" color="$color9" style={{ textTransform: 'uppercase' }}>Gioi tinh</Text>
-                                    <Text fontSize="$4" fontWeight="700" color="$color12">
-                                        {userData.gender === 'male' ? 'Nam' : userData.gender === 'female' ? 'Nu' : (userData.gender || 'Khac')}
-                                    </Text>
-                                </YStack>
-                            </XStack>
-                        </YStack>
-
-                        <YStack style={{ width: '50%', paddingRight: 8 }}>
-                            <XStack style={{ alignItems: 'center' }}>
-                                <View background="$green3" style={{ width: 36, height: 36, borderRadius: 18, marginRight: 8, alignItems: 'center', justifyContent: 'center' }}>
-                                    <Calendar size={16} color="#16A34A" />
-                                </View>
-                                <YStack>
-                                    <Text fontSize="$2" color="$color9" style={{ textTransform: 'uppercase' }}>Nam sinh</Text>
-                                    <Text fontSize="$4" fontWeight="700" color="$color12">{userData.DOB || 'Chua ro'}</Text>
-                                </YStack>
-                            </XStack>
-                        </YStack>
-                    </XStack>
-
-                    <View style={{ height: 1, backgroundColor: '#e2e8f0', marginVertical: 12 }} />
-                    <Text fontSize="$2" color="$color9" style={{ textTransform: 'uppercase', marginBottom: 4 }}>Di ung & ghi chu</Text>
-                    <Text fontSize="$3" color="$color11" style={{ lineHeight: 22 }}>
-                        {userData.allergies || 'Khong co ghi nhan di ung y te dac biet.'}
-                    </Text>
-                </View>
-
-                <View background="$background" borderColor="$borderColor" style={{ borderWidth: 1, borderRadius: 12, overflow: 'hidden' }}>
-                    <Pressable onPress={() => navigation.navigate('Settings')}>
-                        <XStack style={{ padding: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderBottomWidth: 1, borderBottomColor: '#e2e8f0' }}>
-                            <XStack style={{ alignItems: 'center' }}>
-                                <Settings size={18} color="#475569" style={{ marginRight: 10 }} />
-                                <Text fontSize="$4" fontWeight="500" color="$color12">Cai dat & Vi</Text>
-                            </XStack>
-                            <ChevronRight size={18} color="#94A3B8" />
-                        </XStack>
-                    </Pressable>
-                    <MenuItem label="Chinh sua ho so" />
-                    <Pressable onPress={handleSaveProfile}>
-                        <XStack style={{ padding: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderBottomWidth: 1, borderBottomColor: '#e2e8f0' }}>
-                            <Text fontSize="$4" fontWeight="500" color="$color12">Luu ho so hien tai</Text>
-                            <ChevronRight size={18} color="#94A3B8" />
-                        </XStack>
-                    </Pressable>
-                    <MenuItem label="Quan ly bao mat" />
-                    <MenuItem label="Ve ung dung" />
-
-                    <Button
-                        unstyled
-                        onPress={handleLogout}
-                        pressStyle={{ background: '$red3' }}
-                        style={{ padding: 16 }}
-                    >
-                        <XStack style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                            <Text fontSize="$4" fontWeight="700" color="$red10">Dang xuat</Text>
-                            <LogOut size={18} color="#DC2626" />
-                        </XStack>
-                    </Button>
-                </View>
+                {/* ── Menu items ── */}
+                <Animated.View style={menuStyle}>
+                    <View style={s.menuCard}>
+                        <MenuItem icon={Settings} label="Cài đặt và ví" onPress={() => navigation.navigate('Settings')} />
+                        <MenuItem icon={Edit3} label="Chỉnh sửa hồ sơ" onPress={() => navigation.navigate('EditProfile')} />
+                        <MenuItem icon={Shield} label="Quản lý bảo mật" onPress={() => navigation.navigate('Settings')} />
+                        <MenuItem icon={Info} label="Về ứng dụng" onPress={() => Alert.alert('EHR Chain', 'Hệ thống lưu trữ hồ sơ bệnh án phi tập trung.\nPhiên bản: 1.0.0-beta\nMạng: Arbitrum Sepolia')} />
+                        <MenuItem label="Đăng xuất" onPress={handleLogout} destructive />
+                    </View>
+                </Animated.View>
             </ScrollView>
         </SafeAreaView>
     );
 }
 
-
-
-
-
-
+const s = StyleSheet.create({
+    scrollContent: { padding: 20, paddingBottom: 100 },
+    mockBanner: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: EHR_PRIMARY_FIXED,
+        borderColor: EHR_OUTLINE_VARIANT,
+        borderWidth: 1,
+        borderRadius: 14,
+        padding: 12,
+        marginBottom: 16,
+        gap: 8,
+    },
+    mockText: { flex: 1, fontSize: 12, color: EHR_PRIMARY },
+    // Avatar
+    avatarSection: { alignItems: 'center', marginBottom: 24 },
+    avatarCircle: {
+        width: 100,
+        height: 100,
+        borderRadius: 50,
+        backgroundColor: EHR_PRIMARY_FIXED,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: 14,
+        shadowColor: EHR_SHADOW,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 1,
+        shadowRadius: 16,
+        elevation: 3,
+    },
+    userName: {
+        fontSize: 22,
+        fontWeight: '800',
+        color: EHR_ON_SURFACE,
+        marginBottom: 8,
+    },
+    addressRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        backgroundColor: EHR_SURFACE_LOW,
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 999,
+        marginBottom: 10,
+    },
+    addressText: {
+        fontSize: 12,
+        fontFamily: 'monospace',
+        color: EHR_ON_SURFACE_VARIANT,
+    },
+    verifiedBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        backgroundColor: EHR_PRIMARY_FIXED,
+        borderRadius: 999,
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+    },
+    verifiedText: {
+        fontSize: 10,
+        fontWeight: '700',
+        color: EHR_PRIMARY,
+        textTransform: 'uppercase',
+        letterSpacing: 0.8,
+    },
+    // Health card
+    healthCard: {
+        backgroundColor: EHR_SURFACE_LOWEST,
+        borderColor: EHR_OUTLINE_VARIANT,
+        borderWidth: 1,
+        borderRadius: 20,
+        padding: 20,
+        marginBottom: 20,
+        shadowColor: EHR_SHADOW,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 1,
+        shadowRadius: 16,
+        elevation: 2,
+    },
+    cardTitle: {
+        fontSize: 17,
+        fontWeight: '700',
+        color: EHR_ON_SURFACE,
+    },
+    editLink: {
+        fontSize: 13,
+        fontWeight: '600',
+        color: EHR_PRIMARY,
+        marginLeft: 4,
+    },
+    healthItem: {
+        width: '33.33%',
+        alignItems: 'center',
+        marginBottom: 14,
+    },
+    healthIcon: {
+        width: 42,
+        height: 42,
+        borderRadius: 21,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: 8,
+    },
+    healthLabel: {
+        fontSize: 10,
+        color: EHR_ON_SURFACE_VARIANT,
+        textTransform: 'uppercase',
+        letterSpacing: 0.8,
+        marginBottom: 2,
+    },
+    healthValue: {
+        fontSize: 15,
+        fontWeight: '700',
+        color: EHR_ON_SURFACE,
+    },
+    divider: {
+        height: 1,
+        backgroundColor: EHR_OUTLINE_VARIANT,
+        marginVertical: 14,
+    },
+    allergyText: {
+        fontSize: 13,
+        color: EHR_ON_SURFACE_VARIANT,
+        lineHeight: 20,
+        marginTop: 4,
+    },
+    // Menu
+    menuCard: {
+        backgroundColor: EHR_SURFACE_LOWEST,
+        borderColor: EHR_OUTLINE_VARIANT,
+        borderWidth: 1,
+        borderRadius: 20,
+        overflow: 'hidden',
+    },
+    menuItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingVertical: 16,
+        paddingHorizontal: 18,
+        borderBottomWidth: 1,
+        borderBottomColor: `${EHR_OUTLINE_VARIANT}60`,
+    },
+    menuLabel: {
+        fontSize: 15,
+        fontWeight: '500',
+        color: EHR_ON_SURFACE,
+    },
+});

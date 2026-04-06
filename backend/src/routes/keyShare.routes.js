@@ -4,7 +4,9 @@ import prisma from '../config/database.js';
 import { authenticate } from '../middleware/auth.js';
 import { checkConsent } from '../config/blockchain.js';
 import { emitToUser } from '../services/socket.service.js';
+import { createLogger } from '../utils/logger.js';
 
+const log = createLogger('KeyShareRoutes');
 const router = Router();
 
 // Validation schemas
@@ -33,7 +35,7 @@ router.post('/', authenticate, async (req, res, next) => {
         });
 
         if (!record) {
-            return res.status(404).json({ error: 'Record not found' });
+            return res.status(404).json({ code: 'RECORD_NOT_FOUND', error: 'Record not found', message: 'Record not found' });
         }
 
         // Check sender/recipient roles
@@ -44,7 +46,7 @@ router.post('/', authenticate, async (req, res, next) => {
         if (isCreator) {
             // Creator bypass - no consent check needed
         }
-        // CASE 2: Owner shares (Patient→Doctor flow)
+        // CASE 2: Owner shares (Patientâ†’Doctor flow)
         // Requires on-chain consent from patient to doctor
         else if (isOwner) {
             let hasConsentForRecipient = await checkConsent(
@@ -154,16 +156,6 @@ router.post('/', authenticate, async (req, res, next) => {
         // UPDATE: Allow Creator to delegate too (fixes Patient as Creator creating share).
         const finalAllowDelegate = (isOwner || isCreator) ? (allowDelegate === true) : false;
 
-        // CLEANUP: Force delete existing share to ensure clean state (Fixes "Zombie Status" bug)
-        // Instead of upsert, we wipe and recreate to guarantee status resets to 'pending'
-        await prisma.keyShare.deleteMany({
-            where: {
-                cidHash: cidHashLower,
-                senderAddress: senderAddress,
-                recipientAddress: recipientLower,
-            }
-        });
-
         // INHERITANCE ENFORCEMENT: Check parent expiry
         let finalExpiresAt = expiresAt;
 
@@ -182,25 +174,35 @@ router.post('/', authenticate, async (req, res, next) => {
                 // If parent has expiry, child MUST have expiry <= parent
                 // (If parent is restricted, child cannot be 'Forever' (null) or longer)
                 if (!requestedExpiry || requestedExpiry > parentExpiry) {
-                    console.log(`[Backend] Clamping expiry to match parent: ${parentExpiry.toISOString()}`);
+                    log.info('Clamping expiry to parent', { parentExpiry: parentExpiry.toISOString() });
                     finalExpiresAt = parentExpiry.toISOString();
                 }
             }
         }
 
-        // Create fresh key share
-        const keyShare = await prisma.keyShare.create({
-            data: {
-                cidHash: cidHashLower,
-                senderAddress,
-                recipientAddress: recipientLower,
-                encryptedPayload,
-                senderPublicKey,
-                allowDelegate: finalAllowDelegate,
-                status: (senderAddress.toLowerCase() === recipientLower) ? 'claimed' : 'pending',
-                claimedAt: (senderAddress.toLowerCase() === recipientLower) ? new Date() : null,
-                expiresAt: finalExpiresAt ? new Date(finalExpiresAt) : null,
-            }
+        // ATOMIC: Delete + Create in transaction to prevent race condition
+        const keyShare = await prisma.$transaction(async (tx) => {
+            await tx.keyShare.deleteMany({
+                where: {
+                    cidHash: cidHashLower,
+                    senderAddress: senderAddress,
+                    recipientAddress: recipientLower,
+                }
+            });
+
+            return tx.keyShare.create({
+                data: {
+                    cidHash: cidHashLower,
+                    senderAddress,
+                    recipientAddress: recipientLower,
+                    encryptedPayload,
+                    senderPublicKey,
+                    allowDelegate: finalAllowDelegate,
+                    status: (senderAddress.toLowerCase() === recipientLower) ? 'claimed' : 'pending',
+                    claimedAt: (senderAddress.toLowerCase() === recipientLower) ? new Date() : null,
+                    expiresAt: finalExpiresAt ? new Date(finalExpiresAt) : null,
+                }
+            });
         });
 
         // Log access
@@ -226,7 +228,7 @@ router.post('/', authenticate, async (req, res, next) => {
             keyShareId: keyShare.id,
             cidHash: cidHashLower,
             senderAddress: senderAddress,
-            recordTitle: record.title || 'Hồ sơ mới',
+            recordTitle: record.title || 'Há»“ sÆ¡ má»›i',
         });
 
     } catch (error) {
@@ -242,12 +244,8 @@ router.get('/my', authenticate, async (req, res, next) => {
         const keyShares = await prisma.keyShare.findMany({
             where: {
                 recipientAddress,
-                // IMPORTANT: Exclude 'revoked', 'awaiting_claim' AND 'rejected' from DB
-                status: { notIn: ['revoked', 'awaiting_claim', 'rejected'] },
-                // IMPORTANT: We now return ALL records (including expired) so Doctor can potential see history.
-                // Sensitive data will be scrubbed for expired records below.
-                status: { notIn: ['revoked', 'awaiting_claim', 'rejected'] },
-                // removed expiresAt filter to support Expired Tab
+                // Exclude revoked/rejected. Show 'awaiting_claim' so doctor can claim.
+                status: { notIn: ['revoked', 'rejected'] },
             },
             include: {
                 record: true,
@@ -270,28 +268,29 @@ router.get('/my', authenticate, async (req, res, next) => {
         // Resolve status based on DB and Parent Inheritance (No RPC Loop)
         const processedRecords = keyShares.map(ks => {
             const isSelfCreated = ks.record?.createdBy?.toLowerCase() === recipientAddress;
+            const senderKey = ks.senderPublicKey || ks.sender?.encryptionPublicKey || null;
 
             // 1. Check direct expiry
             let isExpired = ks.expiresAt && new Date(ks.expiresAt).getTime() < Date.now();
             let isActive = !isExpired;
 
-            // 2. Chain Inheritance Logic:
-            // If current record is expired (or missing explicit grant), but has a Parent, check Parent.
-            // (Only for Doctor-created updates or delegated records)
-            if (isExpired && ks.record?.parentCidHash) {
-                // Find parent key share in our list
-                // NOTE: This assumes we have the parent key share. If we don't, we can't verify access locally.
-                // In that case, we might still fail to show it, but usually doctors have the chain.
-                // Or we can look it up in DB if not in `keyShares` list (but `keyShares` has all recipients' keys).
+            // 2. Chain Inheritance Logic (bidirectional):
+            // a) If child is expired but parent is valid → child inherits parent validity
+            // b) If parent is expired → child MUST also be expired (parent revoke kills children)
+            if (ks.record?.parentCidHash) {
                 const parentShare = recordsMap.get(ks.record.parentCidHash?.toLowerCase());
 
                 if (parentShare) {
                     const parentExpired = parentShare.expiresAt && new Date(parentShare.expiresAt).getTime() < Date.now();
-                    if (!parentExpired) {
-                        // Parent is valid -> Child inherits validity!
+
+                    if (parentExpired) {
+                        // Parent expired → force child expired too (revocation propagation)
+                        isActive = false;
+                        isExpired = true;
+                    } else if (isExpired && !parentExpired) {
+                        // Child expired but parent valid → child inherits parent validity
                         isActive = true;
                         isExpired = false;
-                        // Propagate expiry date from parent for UI display
                         ks.inheritedExpiresAt = parentShare.expiresAt;
                     }
                 }
@@ -316,13 +315,12 @@ router.get('/my', authenticate, async (req, res, next) => {
 
                 // SECURITY: Scrub keys if not active
                 encryptedPayload: isActive ? ks.encryptedPayload : null,
-                senderPublicKey: isActive ? ks.senderPublicKey : null,
+                senderPublicKey: isActive ? senderKey : null,
 
                 // Legacy fields for frontend compatibility
                 hasOnChainAccess: isActive,
                 parentCidHash: ks.record?.parentCidHash || null,
                 rootCidHash: computedRootCidHash || null, // FIX: Use computed root
-                senderPublicKey: ks.senderPublicKey || ks.sender?.encryptionPublicKey || null,
             };
         });
 
@@ -419,7 +417,7 @@ router.get('/delegatable', authenticate, async (req, res, next) => {
                             }
                         }
                     } catch (err) {
-                        console.warn(`[DELEGATABLE] On-chain check failed for ${ks.cidHash}:`, err.message);
+                        log.warn('On-chain check failed for delegatable', { cidHash: ks.cidHash, error: err.message });
                         // If check fails, we might want to default to false or keep true if logic implies?
                         // Original logic defaulted 'hasOnChainAccess = true' then checked.
                         // But if check throws, it stays true? RISK.
@@ -502,7 +500,7 @@ router.get('/recipients/:cidHash', authenticate, async (req, res, next) => {
         const isCreator = record?.createdBy?.toLowerCase() === requesterAddress;
 
         if (!myAccess && !isOwner && !isCreator) {
-            return res.status(403).json({ error: 'You do not have access to this record' });
+            return res.status(403).json({ code: 'CONSENT_NOT_FOUND', error: 'You do not have access to this record', message: 'You do not have access to this record' });
         }
 
         // 2. Fetch all recipients who have claimed the key for this record
@@ -560,7 +558,7 @@ router.get('/record/:cidHash', authenticate, async (req, res, next) => {
                     select: { walletAddress: true, encryptionPublicKey: true }
                 },
                 record: {
-                    select: { ownerAddress: true, createdBy: true }
+                    select: { ownerAddress: true, createdBy: true, parentCidHash: true }
                 }
             }
         });
@@ -589,7 +587,7 @@ router.get('/record/:cidHash', authenticate, async (req, res, next) => {
                     });
                 }
             }
-            return res.status(404).json({ error: 'No key share found for this record' });
+            return res.status(404).json({ code: 'KEY_SHARE_NOT_FOUND', error: 'No key share found for this record', message: 'No key share found for this record' });
         }
 
         // CRITICAL: Check on-chain consent before returning key
@@ -602,13 +600,13 @@ router.get('/record/:cidHash', authenticate, async (req, res, next) => {
             if (ownerAddress) {
                 // 1. Check strict consent for this specific version
                 let hasOnChainConsent = await checkConsent(ownerAddress, requesterAddress, cidHashLower);
-                if (hasOnChainConsent) console.log(`[ACCESS] Strict consent GRANT for ${cidHashLower}`);
-                else console.log(`[ACCESS] Strict consent DENY for ${cidHashLower}`);
+                if (hasOnChainConsent) log.debug('Strict consent GRANT', { cidHash: cidHashLower });
+                else log.debug('Strict consent DENY', { cidHash: cidHashLower });
 
                 // 2. INHERITANCE: If strict consent fails, check if consent exists for the ROOT/ANCESTOR.
                 // This implements the standard "Revoke Root kills Tree" logic.
                 if (!hasOnChainConsent && keyShare.record?.parentCidHash) {
-                    console.log(`[ACCESS] Checking ancestors for ${cidHashLower}...`);
+                    log.debug('Checking ancestors', { cidHash: cidHashLower });
 
                     // Traverse up to find root/ancestor with consent
                     let currentCid = keyShare.record.parentCidHash;
@@ -617,12 +615,12 @@ router.get('/record/:cidHash', authenticate, async (req, res, next) => {
                     while (currentCid && depth < 20) {
                         const hasAncestorConsent = await checkConsent(ownerAddress, requesterAddress, currentCid.toLowerCase());
                         if (hasAncestorConsent) {
-                            console.log(`[ACCESS] Inherited Consent FOUND at Ancestor: ${currentCid}`);
+                            log.debug('Inherited consent found', { ancestor: currentCid });
                             hasOnChainConsent = true;
                             break;
                         }
 
-                        console.log(`[ACCESS] Ancestor ${currentCid} consent: FALSE`);
+                        log.debug('Ancestor consent false', { ancestor: currentCid });
 
                         // Get next parent
                         const parentRecord = await prisma.recordMetadata.findUnique({
@@ -637,10 +635,10 @@ router.get('/record/:cidHash', authenticate, async (req, res, next) => {
                 }
 
                 if (!hasOnChainConsent) {
-                    console.warn(`[ACCESS] DENIED FINAL for ${cidHashLower} (User: ${requesterAddress})`);
+                    log.warn('Access DENIED', { cidHash: cidHashLower, user: requesterAddress });
                     return res.status(403).json({
-                        error: 'Quyền truy cập đã bị thu hồi',
-                        message: 'Chủ sở hữu đã thu hồi quyền truy cập hồ sơ này (hoặc hồ sơ gốc)',
+                        error: 'Quyá»n truy cáº­p Ä‘Ã£ bá»‹ thu há»“i',
+                        message: 'Chá»§ sá»Ÿ há»¯u Ä‘Ã£ thu há»“i quyá»n truy cáº­p há»“ sÆ¡ nÃ y (hoáº·c há»“ sÆ¡ gá»‘c)',
                         consentRevoked: true,
                     });
                 }
@@ -672,27 +670,27 @@ router.post('/:id/claim', authenticate, async (req, res, next) => {
         });
 
         if (!keyShare) {
-            return res.status(404).json({ error: 'Key share not found' });
+            return res.status(404).json({ code: 'KEY_SHARE_NOT_FOUND', error: 'Key share not found', message: 'Key share not found' });
         }
 
         if (keyShare.recipientAddress !== req.user.walletAddress) {
-            return res.status(403).json({ error: 'Not authorized' });
+            return res.status(403).json({ code: 'REQUEST_NOT_AUTHORIZED', error: 'Not authorized', message: 'Not authorized' });
         }
 
         if (keyShare.status === 'revoked') {
-            return res.status(400).json({ error: 'Key share has been revoked' });
+            return res.status(400).json({ code: 'KEY_SHARE_REVOKED', error: 'Key share has been revoked', message: 'Key share has been revoked' });
         }
 
         if (keyShare.expiresAt && keyShare.expiresAt < new Date()) {
-            return res.status(400).json({ error: 'Key share has expired' });
+            return res.status(400).json({ code: 'KEY_SHARE_EXPIRED', error: 'Key share has expired', message: 'Key share has expired' });
         }
 
-        // ⚠️ SECURITY: Check KeyShare status instead of on-chain
+        // âš ï¸ SECURITY: Check KeyShare status instead of on-chain
         // KeyShare only becomes 'pending' after Doctor claims on-chain via mark-claimed route
         // This is secure because mark-claimed requires the claim tx hash
         if (keyShare.status === 'awaiting_claim') {
             return res.status(403).json({
-                error: 'Please claim access on-chain first by clicking "Nhận truy cập".',
+                error: 'Please claim access on-chain first by clicking "Nháº­n truy cáº­p".',
                 requiresOnChainClaim: true,
             });
         }
@@ -735,11 +733,11 @@ router.delete('/:id', authenticate, async (req, res, next) => {
         });
 
         if (!keyShare) {
-            return res.status(404).json({ error: 'Key share not found' });
+            return res.status(404).json({ code: 'KEY_SHARE_NOT_FOUND', error: 'Key share not found', message: 'Key share not found' });
         }
 
         if (keyShare.senderAddress !== req.user.walletAddress) {
-            return res.status(403).json({ error: 'Only sender can revoke' });
+            return res.status(403).json({ code: 'REQUEST_NOT_AUTHORIZED', error: 'Only sender can revoke', message: 'Only sender can revoke' });
         }
 
         await prisma.keyShare.update({
@@ -768,19 +766,19 @@ router.post('/:id/reject', authenticate, async (req, res, next) => {
         });
 
         if (!keyShare) {
-            return res.status(404).json({ error: 'Key share not found' });
+            return res.status(404).json({ code: 'KEY_SHARE_NOT_FOUND', error: 'Key share not found', message: 'Key share not found' });
         }
 
         if (keyShare.recipientAddress !== req.user.walletAddress) {
-            return res.status(403).json({ error: 'Only recipient can reject' });
+            return res.status(403).json({ code: 'REQUEST_NOT_AUTHORIZED', error: 'Only recipient can reject', message: 'Only recipient can reject' });
         }
 
         if (keyShare.status === 'claimed') {
-            return res.status(400).json({ error: 'Cannot reject after viewing. You have already accessed this record.' });
+            return res.status(400).json({ code: 'KEY_SHARE_ALREADY_CLAIMED', error: 'Cannot reject after viewing. You have already accessed this record.', message: 'Cannot reject after viewing. You have already accessed this record.' });
         }
 
         if (keyShare.status === 'rejected') {
-            return res.status(400).json({ error: 'Already rejected' });
+            return res.status(400).json({ code: 'REQUEST_ALREADY_PROCESSED', error: 'Already rejected', message: 'Already rejected' });
         }
 
         await prisma.keyShare.update({
@@ -802,3 +800,6 @@ router.post('/:id/reject', authenticate, async (req, res, next) => {
 });
 
 export default router;
+
+
+

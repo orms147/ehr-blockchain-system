@@ -1,17 +1,26 @@
 import crypto from 'crypto';
 import dotenv from 'dotenv';
+import { createLogger } from './logger.js';
 dotenv.config();
+
+const log = createLogger('Crypto');
 
 // Ensure 32 byte key for AES-256
 const getEncryptionKey = () => {
-    let key = process.env.CREDENTIAL_ENCRYPTION_KEY;
+    const key = process.env.CREDENTIAL_ENCRYPTION_KEY;
     if (!key) {
-        console.warn('⚠️ CREDENTIAL_ENCRYPTION_KEY not set in .env. Using ephemeral key (credentials may be lost on restart).');
-        key = crypto.randomBytes(32).toString('hex');
+        log.error('CREDENTIAL_ENCRYPTION_KEY not set! Encrypted credentials will be LOST on restart. Set a 64-char hex value in .env');
+        // Still generate ephemeral key so server doesn't crash, but log loudly
+        return crypto.randomBytes(32);
     }
-    // Pad or truncate to exactly 32 bytes
-    if (key.length < 32) return Buffer.from(key.padEnd(32, '0'));
-    return Buffer.from(key.slice(0, 32));
+    // Key should be 64-char hex string → 32 bytes
+    const hexClean = key.replace(/^0x/, '');
+    if (/^[a-fA-F0-9]{64}$/.test(hexClean)) {
+        return Buffer.from(hexClean, 'hex');
+    }
+    // Fallback: hash whatever string was provided to get 32 bytes
+    log.warn('CREDENTIAL_ENCRYPTION_KEY is not 64-char hex. Hashing it to derive key.');
+    return crypto.createHash('sha256').update(key).digest();
 };
 
 const ENCRYPTION_KEY = getEncryptionKey();
@@ -33,7 +42,7 @@ export function encryptAES(text) {
         // Format: iv:encrypted:authTag
         return `${iv.toString('hex')}:${encrypted}:${authTag}`;
     } catch (error) {
-        console.error('Encryption error:', error.message);
+        log.error('Encryption error', { error: error.message });
         throw new Error('Encryption failed');
     }
 }
@@ -61,7 +70,7 @@ export function decryptAES(encryptedPayload) {
 
         return decrypted;
     } catch (e) {
-        console.error('Decryption error:', e.message);
+        log.error('Decryption error', { error: e.message });
         return null;
     }
 }

@@ -1,6 +1,15 @@
 import jwt from 'jsonwebtoken';
 import prisma from '../config/database.js';
 
+function mergeAuthenticatedUser(user, decoded) {
+    const { iat, exp, nbf, jti, ...claims } = decoded ?? {};
+    return {
+        ...user,
+        ...claims,
+        walletAddress: user.walletAddress,
+    };
+}
+
 // Middleware to verify JWT token
 export async function authenticate(req, res, next) {
     try {
@@ -11,7 +20,6 @@ export async function authenticate(req, res, next) {
         }
 
         const token = authHeader.split(' ')[1];
-
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
         // Get user from database
@@ -23,8 +31,8 @@ export async function authenticate(req, res, next) {
             return res.status(401).json({ error: 'User not found' });
         }
 
-        // Attach user to request
-        req.user = user;
+        req.auth = decoded;
+        req.user = mergeAuthenticatedUser(user, decoded);
         next();
     } catch (error) {
         if (error.name === 'TokenExpiredError') {
@@ -37,7 +45,7 @@ export async function authenticate(req, res, next) {
     }
 }
 
-// Optional authentication - doesn't fail if no token
+// Optional authentication - does not fail if no token
 export async function optionalAuth(req, res, next) {
     try {
         const authHeader = req.headers.authorization;
@@ -51,7 +59,8 @@ export async function optionalAuth(req, res, next) {
             });
 
             if (user) {
-                req.user = user;
+                req.auth = decoded;
+                req.user = mergeAuthenticatedUser(user, decoded);
             }
         }
 

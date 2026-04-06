@@ -1,60 +1,172 @@
-import React from 'react';
-import { FlatList, RefreshControl } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { FlatList, Pressable, RefreshControl, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Text, View, YStack } from 'tamagui';
+import { FilePlus2, Search, ChevronRight } from 'lucide-react-native';
+import { Text, View, XStack, YStack } from 'tamagui';
+import Animated, {
+    useSharedValue,
+    useAnimatedStyle,
+    withSpring,
+    withDelay,
+    interpolate,
+} from 'react-native-reanimated';
+import { LinearGradient } from 'expo-linear-gradient';
 
 import RecordCard from '../components/RecordCard';
 import EmptyState from '../components/EmptyState';
 import LoadingSpinner from '../components/LoadingSpinner';
 import useRecords from '../hooks/useRecords';
+import {
+    EHR_ERROR,
+    EHR_ERROR_CONTAINER,
+    EHR_ON_PRIMARY,
+    EHR_ON_SURFACE,
+    EHR_ON_SURFACE_VARIANT,
+    EHR_OUTLINE_VARIANT,
+    EHR_PRIMARY,
+    EHR_PRIMARY_CONTAINER,
+    EHR_PRIMARY_FIXED,
+    EHR_PRIMARY_FIXED_DIM,
+    EHR_SECONDARY,
+    EHR_SHADOW,
+    EHR_SURFACE,
+    EHR_SURFACE_CONTAINER,
+    EHR_SURFACE_HIGH,
+    EHR_SURFACE_LOW,
+    EHR_SURFACE_LOWEST,
+} from '../constants/uiColors';
+
+const SPRING = { damping: 18, stiffness: 120, mass: 0.8 };
+
+const FILTER_OPTIONS = [
+    { key: 'all', label: 'Tất cả' },
+    { key: 'active', label: 'Hoạt động' },
+    { key: 'shared', label: 'Đã chia sẻ' },
+] as const;
+
+type FilterKey = (typeof FILTER_OPTIONS)[number]['key'];
 
 export default function RecordsScreen({ navigation }: any) {
     const { records, isLoading, isRefreshing, error, refresh } = useRecords();
+    const [activeFilter, setActiveFilter] = useState<FilterKey>('all');
+
+    const headerEnter = useSharedValue(0);
+    useEffect(() => {
+        headerEnter.value = withSpring(1, SPRING);
+    }, []);
+
+    const headerStyle = useAnimatedStyle(() => ({
+        opacity: interpolate(headerEnter.value, [0, 0.3, 1], [0, 0.6, 1]),
+        transform: [
+            { translateY: interpolate(headerEnter.value, [0, 1], [16, 0]) },
+        ],
+    }));
+
+    const filteredRecords = records.filter((r: any) => {
+        if (activeFilter === 'all') return true;
+        if (activeFilter === 'shared') return r.sharedWith?.length > 0 || r.status === 'shared';
+        return !r.archived;
+    });
 
     const handleRecordPress = (record: any) => {
-        navigation.navigate('RecordDetail', { record });
+        const serializableRecord = {
+            ...record,
+            createdAt: record?.createdAt instanceof Date ? record.createdAt.toISOString() : record?.createdAt || null,
+        };
+        navigation.navigate('RecordDetail', { record: serializableRecord });
+    };
+
+    const handleCreateRecord = () => {
+        navigation.navigate('CreateRecord');
     };
 
     if (isLoading && !isRefreshing) {
-        return <LoadingSpinner message="Dang tai danh sach ho so..." />;
+        return <LoadingSpinner message="Đang tải danh sách hồ sơ..." />;
     }
 
     return (
-        <SafeAreaView style={{ flex: 1, backgroundColor: '#F8FAFC' }} edges={['right', 'left']}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: EHR_SURFACE }} edges={['right', 'left']}>
             {error && !isLoading ? (
-                <View background="$red2" borderColor="$red4" style={{ marginHorizontal: 16, marginTop: 16, borderWidth: 1, borderRadius: 10, padding: 12 }}>
-                    <Text color="$red11" fontSize="$3" style={{ textAlign: 'center' }}>{error}</Text>
+                <View style={s.errorBanner}>
+                    <Text fontSize="$3" style={{ textAlign: 'center', color: EHR_ERROR }}>{error}</Text>
                 </View>
             ) : null}
 
             {records.length === 0 && !error ? (
                 <EmptyState
-                    title="Chua co ho so y te"
-                    description="Tat ca ho so kham benh va xet nghiem se hien thi tai day."
-                    actionLabel="Tai lai"
-                    onAction={refresh}
+                    title="Chưa có hồ sơ y tế"
+                    description="Hãy tạo hồ sơ đầu tiên để bắt đầu lưu trữ dữ liệu sức khoẻ trên blockchain."
+                    actionLabel="Tạo hồ sơ đầu tiên"
+                    onAction={handleCreateRecord}
                 />
             ) : (
                 <FlatList
-                    data={records}
+                    data={filteredRecords}
                     keyExtractor={(item: any, idx) => item.cidHash || `record-${idx}`}
                     renderItem={({ item }) => <RecordCard record={item} onPress={handleRecordPress} />}
-                    contentContainerStyle={{ padding: 16 }}
-                    refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={refresh} colors={['#2563eb']} />}
+                    contentContainerStyle={{ padding: 16, paddingBottom: 100 }}
+                    refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={refresh} colors={[EHR_PRIMARY]} />}
                     ListHeaderComponent={
-                        <YStack style={{ marginBottom: 10 }}>
-                            <Text fontSize="$7" fontWeight="800" color="$color12" style={{ marginBottom: 4 }}>
-                                Ho so y te
+                        <Animated.View style={headerStyle}>
+                            {/* Title + count */}
+                            <XStack style={{ justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 6 }}>
+                                <Text style={s.title}>Hồ sơ y tế</Text>
+                                <Pressable onPress={() => navigation.navigate('Records')} style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                    <Text style={s.seeAll}>Xem tất cả</Text>
+                                </Pressable>
+                            </XStack>
+                            <Text style={s.subtitle}>
+                                Tổng cộng {records.length} hồ sơ
                             </Text>
-                            <Text fontSize="$3" color="$color10" style={{ marginBottom: 8 }}>
-                                Tong cong {records.length} ho so (chi hien thi phien ban moi nhat)
-                            </Text>
-                            <View background="olive" borderColor="olive" style={{ borderWidth: 1, borderRadius: 10, padding: 10 }}>
-                                <Text fontSize="$2" color="olive">
-                                    Keo xuong de lam moi danh sach. Nhan vao tung the de xem chi tiet.
+
+                            {/* Filter chips */}
+                            <XStack style={s.filterRow}>
+                                {FILTER_OPTIONS.map((f) => {
+                                    const active = activeFilter === f.key;
+                                    return (
+                                        <Pressable
+                                            key={f.key}
+                                            onPress={() => setActiveFilter(f.key)}
+                                            style={[s.filterChip, active && s.filterChipActive]}
+                                        >
+                                            <Text style={[s.filterText, active && s.filterTextActive]}>{f.label}</Text>
+                                        </Pressable>
+                                    );
+                                })}
+                            </XStack>
+
+                            {/* Create CTA */}
+                            <Pressable onPress={handleCreateRecord}>
+                                <View style={s.ctaWrap}>
+                                    <LinearGradient
+                                        colors={[EHR_PRIMARY, EHR_PRIMARY_CONTAINER]}
+                                        start={{ x: 0, y: 0 }}
+                                        end={{ x: 1, y: 1 }}
+                                        style={s.ctaGradient}
+                                    >
+                                        <XStack style={{ alignItems: 'center', flex: 1 }}>
+                                            <View style={s.ctaIcon}>
+                                                <FilePlus2 size={22} color={EHR_ON_PRIMARY} />
+                                            </View>
+                                            <YStack style={{ flex: 1 }}>
+                                                <Text style={s.ctaTitle}>Tạo hồ sơ mới</Text>
+                                                <Text style={s.ctaSub}>
+                                                    Nhập nội dung, mã hoá, upload IPFS và đăng ký lên blockchain.
+                                                </Text>
+                                            </YStack>
+                                        </XStack>
+                                        <ChevronRight size={16} color={EHR_ON_PRIMARY} />
+                                    </LinearGradient>
+                                </View>
+                            </Pressable>
+
+                            {/* Info tip */}
+                            <View style={s.infoTip}>
+                                <Text style={s.infoText}>
+                                    Kéo xuống để làm mới. Nhấn vào thẻ để xem chi tiết hồ sơ.
                                 </Text>
                             </View>
-                        </YStack>
+                        </Animated.View>
                     }
                 />
             )}
@@ -62,6 +174,105 @@ export default function RecordsScreen({ navigation }: any) {
     );
 }
 
-
-
-
+const s = StyleSheet.create({
+    errorBanner: {
+        marginHorizontal: 16,
+        marginTop: 16,
+        borderWidth: 1,
+        borderRadius: 16,
+        padding: 12,
+        backgroundColor: EHR_ERROR_CONTAINER,
+        borderColor: EHR_OUTLINE_VARIANT,
+    },
+    title: {
+        fontSize: 28,
+        fontWeight: '800',
+        color: EHR_ON_SURFACE,
+        letterSpacing: -0.5,
+    },
+    subtitle: {
+        fontSize: 13,
+        color: EHR_ON_SURFACE_VARIANT,
+        marginBottom: 16,
+    },
+    seeAll: {
+        fontSize: 13,
+        fontWeight: '600',
+        color: EHR_SECONDARY,
+    },
+    // Filter chips
+    filterRow: {
+        gap: 8,
+        marginBottom: 16,
+    },
+    filterChip: {
+        paddingHorizontal: 16,
+        paddingVertical: 8,
+        borderRadius: 999,
+        backgroundColor: EHR_SURFACE_LOWEST,
+        borderWidth: 1,
+        borderColor: EHR_OUTLINE_VARIANT,
+    },
+    filterChipActive: {
+        backgroundColor: EHR_PRIMARY,
+        borderColor: EHR_PRIMARY,
+    },
+    filterText: {
+        fontSize: 13,
+        fontWeight: '600',
+        color: EHR_ON_SURFACE_VARIANT,
+    },
+    filterTextActive: {
+        color: EHR_ON_PRIMARY,
+    },
+    // CTA
+    ctaWrap: {
+        borderRadius: 20,
+        overflow: 'hidden',
+        marginBottom: 12,
+        shadowColor: `${EHR_PRIMARY}33`,
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 1,
+        shadowRadius: 16,
+        elevation: 3,
+    },
+    ctaGradient: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: 16,
+    },
+    ctaIcon: {
+        width: 42,
+        height: 42,
+        borderRadius: 14,
+        backgroundColor: 'rgba(255,255,255,0.2)',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginRight: 12,
+    },
+    ctaTitle: {
+        fontSize: 15,
+        fontWeight: '800',
+        color: EHR_ON_PRIMARY,
+    },
+    ctaSub: {
+        fontSize: 11,
+        color: EHR_ON_PRIMARY,
+        opacity: 0.9,
+        marginTop: 2,
+    },
+    // Info tip
+    infoTip: {
+        backgroundColor: EHR_PRIMARY_FIXED,
+        borderColor: EHR_PRIMARY_FIXED_DIM,
+        borderWidth: 1,
+        borderRadius: 14,
+        padding: 12,
+        marginBottom: 12,
+    },
+    infoText: {
+        fontSize: 12,
+        color: EHR_PRIMARY,
+        lineHeight: 18,
+    },
+});

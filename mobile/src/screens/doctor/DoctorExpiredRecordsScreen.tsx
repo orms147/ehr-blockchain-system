@@ -58,16 +58,16 @@ const ExpiredRecordItem = React.memo(({ item }: { item: ExpiredItem }) => {
                 <View style={{ backgroundColor: '#e5e7eb', borderRadius: 6, paddingVertical: 4, paddingHorizontal: 8 }}>
                     <XStack style={{ alignItems: 'center' }}>
                         <ShieldOff size={11} color="#4b5563" style={{ marginRight: 4 }} />
-                        <Text fontSize="$2" fontWeight="700" style={{ color: '#4b5563' }}>Het han</Text>
+                        <Text fontSize="$2" fontWeight="700" style={{ color: '#4b5563' }}>Hết hạn</Text>
                     </XStack>
                 </View>
             </XStack>
 
             <XStack style={{ alignItems: 'center', marginTop: 4 }}>
                 <Clock size={12} color="#94A3B8" style={{ marginRight: 4 }} />
-                <Text fontSize="$2" color="$color9">Chia se: {formatDate(item.createdAt)}</Text>
+                <Text fontSize="$2" color="$color9">Chia sẻ: {formatDate(item.createdAt)}</Text>
                 {item.expiresAt ? (
-                    <Text fontSize="$2" style={{ color: '#b91c1c', marginLeft: 12 }}>Het han: {formatDate(item.expiresAt)}</Text>
+                    <Text fontSize="$2" style={{ color: '#b91c1c', marginLeft: 12 }}>Hết hạn: {formatDate(item.expiresAt)}</Text>
                 ) : null}
             </XStack>
         </View>
@@ -103,21 +103,21 @@ export default function DoctorExpiredRecordsScreen() {
         fetchExpired();
     }, [fetchExpired]);
 
-    if (isLoading) return <LoadingSpinner message="Dang tai ho so het han..." />;
+    if (isLoading) return <LoadingSpinner message="Đang tải hồ sơ hết hạn..." />;
 
     return (
-        <SafeAreaView style={{ flex: 1, backgroundColor: '#F8FAFC' }} edges={['right', 'left']}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: '#F8FAF3' }} edges={['right', 'left']}>
             <YStack style={{ paddingHorizontal: 16, paddingTop: 14, paddingBottom: 8 }}>
-                <Text fontSize="$7" fontWeight="800" color="$color12">Ho so het han</Text>
+                <Text fontSize="$7" fontWeight="800" color="$color12">Hồ sơ hết hạn</Text>
                 <Text fontSize="$3" color="$color10" style={{ marginTop: 2 }}>
-                    Danh sach quyen truy cap da het han hoac bi thu hoi
+                    Danh sách quyền truy cập đã hết hạn hoặc bị thu hồi
                 </Text>
             </YStack>
             {expiredRecords.length === 0 ? (
                 <EmptyState
                     icon={Clock}
-                    title="Khong co ho so het han"
-                    description="Cac ho so da het han hoac bi thu hoi se hien thi tai day."
+                    title="Không có hồ sơ hết hạn"
+                    description="Các hồ sơ đã hết hạn hoặc bị thu hồi sẽ hiển thị tại đây."
                 />
             ) : (
                 <FlatList
@@ -128,7 +128,7 @@ export default function DoctorExpiredRecordsScreen() {
                     refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} colors={['#14b8a6']} />}
                     ListHeaderComponent={
                         <Text fontSize="$3" color="$color10" style={{ marginBottom: 12 }}>
-                            {expiredRecords.length} ho so da het han / bi thu hoi
+                            {expiredRecords.length} hồ sơ đã hết hạn / bị thu hồi
                         </Text>
                     }
                 />
@@ -136,5 +136,9 @@ export default function DoctorExpiredRecordsScreen() {
         </SafeAreaView>
     );
 }
+
+
+
+
 
 

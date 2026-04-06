@@ -6,13 +6,16 @@ import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { authenticate } from '../middleware/auth.js';
+import { requireOnChainRoles } from '../middleware/onChainRole.js';
 import prisma from '../config/database.js';
+import { getUserRoleStrict } from '../config/blockchain.js';
 import { encryptAES } from '../utils/crypto.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const router = Router();
+const requireMinistryRole = requireOnChainRoles('ministry');
 
 // ============ MULTER CONFIG ============
 const uploadDir = path.join(__dirname, '../../uploads/licenses');
@@ -378,7 +381,7 @@ router.post('/:orgId/remove-member/:memberId', authenticate, async (req, res, ne
 });
 
 // GET /api/org/all - Get all organizations (for Ministry/Admin)
-router.get('/all', authenticate, async (req, res, next) => {
+router.get('/all', authenticate, requireMinistryRole, async (req, res, next) => {
     try {
         const { status, type } = req.query;
 
@@ -402,13 +405,10 @@ router.get('/all', authenticate, async (req, res, next) => {
 });
 
 // POST /api/org/:orgId/verify - Verify organization (Ministry only)
-router.post('/:orgId/verify', authenticate, async (req, res, next) => {
+router.post('/:orgId/verify', authenticate, requireMinistryRole, async (req, res, next) => {
     try {
         const { orgId } = req.params;
         const verifierAddress = req.user.walletAddress.toLowerCase();
-
-        // TODO: Check if user is Ministry
-
         await prisma.organization.update({
             where: { id: orgId },
             data: {
@@ -449,8 +449,9 @@ router.post('/doctor-credential', authenticate, async (req, res, next) => {
             }
         });
 
-        // Ministry can also save credentials
-        const isMinistry = req.user.role === 'ministry';
+        // Ministry can also save credentials (source of truth: on-chain)
+        const onChainRoles = await getUserRoleStrict(adminAddress);
+        const isMinistry = onChainRoles.isMinistry === true;
 
         if (!adminOrg && !isMinistry) {
             return res.status(403).json({ error: 'Chỉ Admin tổ chức hoặc Bộ Y tế mới có thể lưu chứng chỉ' });
@@ -485,3 +486,4 @@ router.post('/doctor-credential', authenticate, async (req, res, next) => {
 });
 
 export default router;
+

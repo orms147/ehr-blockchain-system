@@ -168,8 +168,8 @@ if (typeof g.process.version !== 'string') {
 
 if (typeof g.process.versions !== 'object' || g.process.versions === null) {
     g.process.versions = { node: '20.0.0' };
-} else if (typeof g.process.versions.node !== 'string') {
-    g.process.versions.node = '20.0.0';
+} else if (typeof g.process.versions.nođể !== 'string') {
+    g.process.versions.nođể = '20.0.0';
 }
 
 if (typeof g.process.browser !== 'boolean') {
@@ -199,3 +199,4 @@ const patchUrlProperty = (propertyName) => {
 
 patchUrlProperty('search');
 patchUrlProperty('hash');
+

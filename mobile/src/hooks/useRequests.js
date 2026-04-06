@@ -16,7 +16,7 @@ export default function useRequests() {
             const data = await requestService.getIncomingRequests();
             setRequests(Array.isArray(data) ? data : (data?.requests || []));
         } catch (err) {
-            console.error('Failed to fetch requests:', err);
+            console.warn('Failed to fetch requests:', err?.message || err);
         } finally {
             setIsLoading(false);
             setIsRefreshing(false);

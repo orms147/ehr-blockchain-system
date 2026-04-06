@@ -2,9 +2,11 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { authenticate } from '../middleware/auth.js';
+import { requireOnChainRoles } from '../middleware/onChainRole.js';
 import prisma from '../config/database.js';
 
 const router = Router();
+const requireDoctorRole = requireOnChainRoles('doctor');
 
 // Validation schemas
 const createEmergencySchema = z.object({
@@ -17,7 +19,7 @@ const createEmergencySchema = z.object({
 });
 
 // POST /api/emergency/request - Doctor requests emergency access
-router.post('/request', authenticate, async (req, res, next) => {
+router.post('/request', authenticate, requireDoctorRole, async (req, res, next) => {
     try {
         const data = createEmergencySchema.parse(req.body);
         const doctorAddress = req.user.walletAddress.toLowerCase();

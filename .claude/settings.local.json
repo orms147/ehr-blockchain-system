@@ -1,0 +1,38 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(xargs -I {} basename {})",
+      "Bash(npx expo:*)",
+      "Bash(npm install:*)",
+      "Bash(ls c:/University/DATN/EHR/frontend/src/app/dashboard/profile/page.*)",
+      "Bash(ipconfig)",
+      "Bash(adb devices:*)",
+      "Bash(ipconfig.exe)",
+      "Bash(ls -la /c/University/DATN/EHR/mobile/src/services/*.service.js)",
+      "Bash(grep -E \"\\\\.\\(ts|js\\)$\")",
+      "Bash(xargs grep:*)",
+      "Bash(node -e \"const fs=require\\('fs'\\); const f='c:/University/DATN/EHR/mobile/src/screens/doctor/DoctorDashboardScreen.tsx'; let c=fs.readFileSync\\(f,'utf8'\\); c=c.replace\\(/\\\\\\\\\\\\\\\\u\\([0-9A-Fa-f]{4}\\)/g,\\(_,h\\)=>String.fromCharCode\\(parseInt\\(h,16\\)\\)\\); fs.writeFileSync\\(f,c,'utf8'\\);\")",
+      "Bash(node -e \"const fs=require\\('fs'\\); const f='c:/University/DATN/EHR/mobile/src/screens/doctor/DoctorOutgoingScreen.tsx'; let c=fs.readFileSync\\(f,'utf8'\\); c=c.replace\\(/\\\\\\\\\\\\\\\\u\\([0-9A-Fa-f]{4}\\)/g,\\(_,h\\)=>String.fromCharCode\\(parseInt\\(h,16\\)\\)\\); fs.writeFileSync\\(f,c,'utf8'\\);\")",
+      "Bash(node -e \"const fs=require\\('fs'\\); const f='c:/University/DATN/EHR/mobile/src/screens/doctor/DoctorCreateUpdateScreen.tsx'; let c=fs.readFileSync\\(f,'utf8'\\); c=c.replace\\(/\\\\\\\\\\\\\\\\u\\([0-9A-Fa-f]{4}\\)/g,\\(_,h\\)=>String.fromCharCode\\(parseInt\\(h,16\\)\\)\\); fs.writeFileSync\\(f,c,'utf8'\\);\")",
+      "Bash(node -e \"const fs=require\\('fs'\\); const f='c:/University/DATN/EHR/mobile/src/screens/RequestsScreen.tsx'; let c=fs.readFileSync\\(f,'utf8'\\); c=c.replace\\(/\\\\\\\\\\\\\\\\u\\([0-9A-Fa-f]{4}\\)/g,\\(_,h\\)=>String.fromCharCode\\(parseInt\\(h,16\\)\\)\\); fs.writeFileSync\\(f,c,'utf8'\\);\")",
+      "Bash(node -e \"const fs=require\\('fs'\\); const f='c:/University/DATN/EHR/mobile/src/screens/EditProfileScreen.tsx'; let c=fs.readFileSync\\(f,'utf8'\\); c=c.replace\\(/\\\\\\\\\\\\\\\\u\\([0-9A-Fa-f]{4}\\)/g,\\(_,h\\)=>String.fromCharCode\\(parseInt\\(h,16\\)\\)\\); fs.writeFileSync\\(f,c,'utf8'\\);\")",
+      "Bash(node -e ':*)",
+      "Bash(node -e 'const fs=require\\(\"fs\"\\); const files=[\"screens/doctor/DoctorDashboardScreen.tsx\",\"screens/doctor/DoctorOutgoingScreen.tsx\",\"screens/doctor/DoctorCreateUpdateScreen.tsx\",\"screens/RequestsScreen.tsx\",\"screens/EditProfileScreen.tsx\",\"components/SharedRecordCard.tsx\"]; files.forEach\\(f=>{let c=fs.readFileSync\\(f,\"utf8\"\\); c=c.replace\\(/\\\\\\\\\\([^\\\\x00-\\\\x7F]\\)/g,\"$1\"\\); fs.writeFileSync\\(f,c,\"utf8\"\\); console.log\\(\"fixed\",f\\);}\\)')",
+      "Bash(node -e 'const fs=require\\(\"fs\"\\); const files=[\"screens/doctor/DoctorDashboardScreen.tsx\",\"screens/doctor/DoctorOutgoingScreen.tsx\",\"screens/doctor/DoctorCreateUpdateScreen.tsx\",\"screens/RequestsScreen.tsx\",\"screens/EditProfileScreen.tsx\",\"components/SharedRecordCard.tsx\"]; files.forEach\\(f=>{let c=fs.readFileSync\\(f,\"utf8\"\\); const re=new RegExp\\(\"\\\\\\\\\\\\\\\\\\([^\\\\\\\\x00-\\\\\\\\x7F]\\)\",\"g\"\\); c=c.replace\\(re,\"$1\"\\); fs.writeFileSync\\(f,c,\"utf8\"\\); console.log\\(\"fixed\",f\\);}\\)')",
+      "Bash(node fix_backslash.js)",
+      "Bash(rm -f mobile/fix_backslash.js)",
+      "Bash(grep -c '\\\\\\\\\\\\\\\\[ồơđệạảềẻ]' mobile/src/screens/doctor/DoctorDashboardScreen.tsx)",
+      "Bash(grep -r \"\\\\/api\\\\/\" /c/University/DATN/EHR/mobile/src/services/*.js)",
+      "Bash(grep -r \"router\\\\.\" /c/University/DATN/EHR/backend/src/routes/*.js)",
+      "Bash(grep -n \"process\\\\.env\\\\.\" /c/University/DATN/EHR/mobile/src/services/*.js)",
+      "Bash(grep -n \"estimateGas\\\\|gasPrice\\\\|gasLimit\\\\|maxFeePerGas\\\\|maxPriorityFeePerGas\" /c/University/DATN/EHR/mobile/src/services/*.js)",
+      "Bash(grep -n \"setToken\\\\|clearToken\\\\|getToken\" /c/University/DATN/EHR/mobile/src/services/*.js)",
+      "Bash(npx prisma:*)",
+      "Bash(grep -l \"delegation\\\\|Delegation\\\\|transfer\\\\|Transfer\" /c/University/DATN/EHR/mobile/src/services/*.js)",
+      "Bash(ls -1 /c/University/DATN/EHR/mobile/src/screens/*.tsx /c/University/DATN/EHR/mobile/src/screens/*/*.tsx)",
+      "WebSearch",
+      "WebFetch(domain:motion.dev)",
+      "WebFetch(domain:github.com)"
+    ]
+  }
+}

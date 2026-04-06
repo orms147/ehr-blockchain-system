@@ -2,9 +2,13 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { authenticate } from '../middleware/auth.js';
+import { requireOnChainRoles } from '../middleware/onChainRole.js';
 import relayerService from '../services/relayer.service.js';
+import { createLogger } from '../utils/logger.js';
 
+const log = createLogger('RelayerRoutes');
 const router = Router();
+const requirePatientRole = requireOnChainRoles('patient');
 
 // Validation schemas
 const registerSchema = z.object({
@@ -75,7 +79,7 @@ router.post('/register', authenticate, async (req, res, next) => {
         }
 
     } catch (error) {
-        console.error('Relayer register error:', error);
+        log.error('Register role failed', { error: error.message, wallet: req.user?.walletAddress });
         next(error);
     }
 });
@@ -133,7 +137,7 @@ const revokeSchema = z.object({
 });
 
 // POST /api/relayer/revoke - Sponsor revoke consent (quota limited)
-router.post('/revoke', authenticate, async (req, res, next) => {
+router.post('/revoke', authenticate, requirePatientRole, async (req, res, next) => {
     try {
         const { granteeAddress, cidHash } = revokeSchema.parse(req.body);
 
@@ -142,7 +146,9 @@ router.post('/revoke', authenticate, async (req, res, next) => {
 
         if (!quota.hasSelfWallet && quota.revokesRemaining <= 0) {
             return res.status(400).json({
+                code: 'QUOTA_EXHAUSTED',
                 error: 'Đã hết quota revoke miễn phí tháng này',
+                message: 'Đã hết quota revoke miễn phí tháng này',
                 suggestion: 'Vui lòng kết nối ví có ETH hoặc chờ đến tháng sau',
                 revokesRemaining: 0,
             });
@@ -160,7 +166,7 @@ router.post('/revoke', authenticate, async (req, res, next) => {
             txHash: result.txHash,
         });
     } catch (error) {
-        console.error('Relayer revoke error:', error);
+        log.error('Revoke failed', { error: error.message, wallet: req.user?.walletAddress });
         next(error);
     }
 });
@@ -178,7 +184,7 @@ const grantSchema = z.object({
 });
 
 // POST /api/relayer/grant - Sponsor grant consent (with Patient's EIP-712 signature)
-router.post('/grant', authenticate, async (req, res, next) => {
+router.post('/grant', authenticate, requirePatientRole, async (req, res, next) => {
     try {
         const data = grantSchema.parse(req.body);
 
@@ -200,10 +206,11 @@ router.post('/grant', authenticate, async (req, res, next) => {
             txHash: result.txHash,
         });
     } catch (error) {
-        console.error('Relayer grant error:', error);
+        log.error('Grant failed', { error: error.message, wallet: req.user?.walletAddress });
         next(error);
     }
 });
 
 export default router;
+
 

@@ -1,3 +1,5 @@
+import { Buffer } from 'buffer';
+
 // IPFS Service - Upload/Download encrypted files via Pinata (Mobile App)
 
 // Assuming EXPO_PUBLIC environment variables are set in .env
@@ -55,10 +57,7 @@ export const ipfsService = {
 
             const response = await fetch('https://api.pinata.cloud/pinning/pinFileToIPFS', {
                 method: 'POST',
-                headers: {
-                    ...headers,
-                    'Content-Type': 'multipart/form-data',
-                },
+                headers,
                 body: formData,
             });
 
@@ -73,14 +72,30 @@ export const ipfsService = {
     },
 
     // Download encrypted data from IPFS
-    async download(cid) {
+        async download(cid) {
         const response = await fetch(`${PINATA_GATEWAY}/ipfs/${cid}`);
 
         if (!response.ok) {
             throw new Error('Failed to download from IPFS');
         }
 
-        return await response.text();
+        const arrayBuffer = await response.arrayBuffer();
+        const rawBuffer = Buffer.from(arrayBuffer);
+
+        // Backward compatibility:
+        // - Legacy records: payload stored as base64 text.
+        // - Current records: payload stored as binary bytes.
+        const utf8Candidate = rawBuffer.toString('utf8').trim();
+        const looksLikeBase64 =
+            utf8Candidate.length >= 24
+            && utf8Candidate.length % 4 === 0
+            && /^[A-Za-z0-9+/=]+$/.test(utf8Candidate);
+
+        if (looksLikeBase64) {
+            return utf8Candidate;
+        }
+
+        return rawBuffer.toString('base64');
     },
 
     // Upload already-encrypted content to IPFS

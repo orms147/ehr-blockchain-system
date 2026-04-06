@@ -1,46 +1,85 @@
-// Global error handler
+// Global error handler — standardized response format.
+// Response shape: { code, error, message, details?, txHash? }
+// Both 'error' and 'message' carry the human-readable string for backward compat.
+import { createLogger } from '../utils/logger.js';
+
+const log = createLogger('ErrorHandler');
+
 export function errorHandler(err, req, res, next) {
-    console.error('Error:', err);
-
-    // Prisma errors
+    // Prisma: unique constraint violation
     if (err.code === 'P2002') {
+        const field = err.meta?.target?.[0] || 'unknown';
+        const msg = `Resource already exists (${field})`;
         return res.status(409).json({
-            error: 'Resource already exists',
-            field: err.meta?.target?.[0]
+            code: 'RESOURCE_DUPLICATE',
+            error: msg,
+            message: msg,
+            details: { field },
         });
     }
 
+    // Prisma: record not found
     if (err.code === 'P2025') {
-        return res.status(404).json({ error: 'Resource not found' });
-    }
-
-    // Validation errors
-    if (err.name === 'ZodError') {
-        return res.status(400).json({
-            error: 'Validation failed',
-            details: err.errors
+        const msg = 'Resource not found';
+        return res.status(404).json({
+            code: 'RESOURCE_NOT_FOUND',
+            error: msg,
+            message: msg,
         });
     }
 
-    // Multer errors (File upload)
-    if (err.name === 'MulterError') {
-        if (err.code === 'LIMIT_FILE_SIZE') {
-            return res.status(400).json({ error: 'File quá lớn. Vui lòng chọn file dưới 50MB.' });
-        }
-        return res.status(400).json({ error: `Upload error: ${err.message}` });
+    // Zod validation errors
+    if (err.name === 'ZodError') {
+        const msg = 'Validation failed';
+        return res.status(400).json({
+            code: 'VALIDATION_ERROR',
+            error: msg,
+            message: msg,
+            details: err.errors,
+        });
     }
 
-    // Default error
-    const statusCode = err.statusCode || 500;
-    const message = err.message || 'Internal server error';
+    // Multer file upload errors
+    if (err.name === 'MulterError') {
+        const msg = err.code === 'LIMIT_FILE_SIZE'
+            ? 'File quá lớn. Vui lòng chọn file dưới 50MB.'
+            : `Upload error: ${err.message}`;
+        return res.status(400).json({
+            code: `UPLOAD_${err.code || 'ERROR'}`,
+            error: msg,
+            message: msg,
+        });
+    }
 
-    res.status(statusCode).json({ error: message });
+    // AppError or generic errors
+    const statusCode = err.statusCode || 500;
+    const code = err.code || 'INTERNAL_ERROR';
+    const msg = err.message || 'Internal server error';
+
+    const body = {
+        code,
+        error: msg,
+        message: msg,
+    };
+
+    if (err.details) body.details = err.details;
+    if (err.txHash) body.txHash = err.txHash;
+
+    if (statusCode === 500) {
+        log.error('Unhandled error', { error: err.message, stack: err.stack?.split('\n')[1]?.trim() });
+    }
+
+    res.status(statusCode).json(body);
 }
 
-// Custom error class
+// Enhanced error class with error code and optional metadata.
 export class AppError extends Error {
-    constructor(message, statusCode = 500) {
+    constructor(message, statusCode = 500, code = 'INTERNAL_ERROR', extra = {}) {
         super(message);
         this.statusCode = statusCode;
+        this.code = code;
+        this.details = extra.details || null;
+        this.txHash = extra.txHash || null;
     }
 }
+

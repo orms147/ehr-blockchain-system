@@ -39,7 +39,13 @@ export function encryptForRecipient(message, recipientPublicKey, senderSecretKey
 }
 
 export function decryptFromSender(encryptedJson, senderPublicKey, recipientSecretKey) {
-    const { nonce, ciphertext } = JSON.parse(encryptedJson);
+    let parsed;
+    try {
+        parsed = JSON.parse(encryptedJson);
+    } catch (e) {
+        throw new Error('Dữ liệu mã hóa không hợp lệ');
+    }
+    const { nonce, ciphertext } = parsed;
 
     const decrypted = nacl.box.open(
         decodeBase64(ciphertext),
@@ -88,7 +94,13 @@ function encryptSecretKeyForStorage(secretKey, signature, walletAddress) {
 }
 
 function decryptSecretKeyFromStorage(encryptedJson, signature, walletAddress) {
-    const { nonce, ciphertext } = JSON.parse(encryptedJson);
+    let parsed;
+    try {
+        parsed = JSON.parse(encryptedJson);
+    } catch (e) {
+        throw new Error('Dữ liệu khóa lưu trữ không hợp lệ');
+    }
+    const { nonce, ciphertext } = parsed;
     const derivedKey = deriveKeyFromWalletSignature(signature, walletAddress);
 
     const decrypted = nacl.secretbox.open(

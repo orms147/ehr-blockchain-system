@@ -1,30 +1,20 @@
-// Event Sync Worker — Listen on-chain events → sync DB (authoritative)
-// Architecture: blockchain = source of truth, DB = cache for UI
-//
-// Events: MemberAdded, MemberRemoved, DoctorVerified, VerificationRevoked,
-//         OrganizationCreated, OrganizationStatusChanged
-//
-// Features:
-// - Realtime via watchContractEvent (WebSocket)
-// - Periodic catchup via getLogs (every 5 min)
-// - Reorg-safe: stores blockHash, detects reorg → reprocess
-// - Idempotent upserts (safe to replay events)
-// - Socket.io emit for frontend auto-refresh
+// Event Sync Worker - Listen on-chain events and sync the DB cache.
+// Blockchain remains the source of truth for authorization decisions.
 
-import { createPublicClient, http, parseAbiItem } from 'viem';
+import { createPublicClient, http, parseAbi, parseAbiItem } from 'viem';
 import { arbitrumSepolia } from 'viem/chains';
 import prisma from '../config/database.js';
 import { emitToUser, getIO } from './socket.service.js';
+import { createLogger } from '../utils/logger.js';
 
-// ============ CONFIG ============
+const log = createLogger('EventSync');
 
 const ACCESS_CONTROL_ADDRESS = process.env.ACCESS_CONTROL_ADDRESS;
 const RPC_URL = process.env.RPC_URL || 'https://sepolia-rollup.arbitrum.io/rpc';
-const CATCHUP_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
-const REORG_SAFETY_BLOCKS = 5; // Consider blocks < (latest - 5) as finalized
+const CATCHUP_INTERVAL_MS = 5 * 60 * 1000;
+const REORG_SAFETY_BLOCKS = 5;
 const CONTRACT_NAME = 'AccessControl';
-
-// ============ ABI EVENTS ============
+const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
 
 const EVENTS = {
     MemberAdded: parseAbiItem('event MemberAdded(address indexed org, address indexed doctor)'),
@@ -36,7 +26,9 @@ const EVENTS = {
     OrganizationAdminChanged: parseAbiItem('event OrganizationAdminChanged(uint256 indexed orgId, address oldPrimary, address newPrimary, address oldBackup, address newBackup)'),
 };
 
-// ============ PUBLIC CLIENT ============
+const ACCESS_CONTROL_READ_ABI = parseAbi([
+    'function getOrganization(uint256 orgId) view returns ((uint256 id, string name, address primaryAdmin, address backupAdmin, uint40 createdAt, bool active))',
+]);
 
 let publicClient;
 
@@ -50,25 +42,145 @@ function getPublicClient() {
     return publicClient;
 }
 
-// ============ SYNC STATE (Reorg-safe) ============
+function normalizeAddress(value) {
+    return typeof value === 'string' ? value.toLowerCase() : null;
+}
 
-async function getSyncState() {
-    let state = await prisma.eventSyncState.findUnique({
-        where: { contractName: CONTRACT_NAME },
+function normalizeChainOrgId(value) {
+    if (value === undefined || value === null) {
+        return null;
+    }
+
+    return typeof value === 'bigint' ? value : BigInt(value.toString());
+}
+
+function isZeroAddress(value) {
+    return !value || value === ZERO_ADDRESS;
+}
+
+async function findOrganizationRecord({ chainOrgId = null, adminAddress = null }) {
+    const conditions = [];
+
+    if (chainOrgId !== null) {
+        conditions.push({ chainOrgId });
+    }
+    if (adminAddress) {
+        conditions.push({ address: adminAddress });
+    }
+
+    if (conditions.length === 0) {
+        return null;
+    }
+
+    return prisma.organization.findFirst({
+        where: { OR: conditions },
     });
-    if (!state) {
-        // First run — start from current block minus safety margin
-        const client = getPublicClient();
-        const currentBlock = await client.getBlockNumber();
-        const startBlock = currentBlock > 1000n ? currentBlock - 1000n : 0n;
-        state = await prisma.eventSyncState.create({
+}
+
+async function ensureUserRecord(walletAddress) {
+    if (!walletAddress) {
+        return null;
+    }
+
+    return prisma.user.upsert({
+        where: { walletAddress },
+        update: {},
+        create: { walletAddress },
+    });
+}
+
+async function upsertAdminMembership(orgDbId, adminAddress) {
+    if (!orgDbId || !adminAddress) {
+        return;
+    }
+
+    await prisma.organizationMember.upsert({
+        where: {
+            orgId_memberAddress: {
+                orgId: orgDbId,
+                memberAddress: adminAddress,
+            },
+        },
+        update: {
+            role: 'admin',
+            status: 'active',
+            leftAt: null,
+        },
+        create: {
+            orgId: orgDbId,
+            memberAddress: adminAddress,
+            role: 'admin',
+            status: 'active',
+        },
+    });
+}
+
+async function hydrateOrganizationFromChain(chainOrgId) {
+    if (!ACCESS_CONTROL_ADDRESS || chainOrgId === null) {
+        return null;
+    }
+
+    const client = getPublicClient();
+    const onChainOrg = await client.readContract({
+        address: ACCESS_CONTROL_ADDRESS,
+        abi: ACCESS_CONTROL_READ_ABI,
+        functionName: 'getOrganization',
+        args: [chainOrgId],
+    });
+
+    const primaryAdmin = normalizeAddress(onChainOrg.primaryAdmin);
+    const backupAdmin = normalizeAddress(onChainOrg.backupAdmin);
+    const existingOrg = await findOrganizationRecord({ chainOrgId, adminAddress: primaryAdmin });
+    const orgData = {
+        chainOrgId,
+        name: onChainOrg.name,
+        address: primaryAdmin,
+        backupAdminAddress: isZeroAddress(backupAdmin) ? null : backupAdmin,
+        isActive: Boolean(onChainOrg.active),
+    };
+
+    const organization = existingOrg
+        ? await prisma.organization.update({
+            where: { id: existingOrg.id },
+            data: orgData,
+        })
+        : await prisma.organization.create({
             data: {
-                contractName: CONTRACT_NAME,
-                lastSyncedBlock: startBlock,
+                ...orgData,
+                orgType: 'hospital',
             },
         });
+
+    await upsertAdminMembership(organization.id, primaryAdmin);
+    return organization;
+}
+
+function isUniqueConflict(error) {
+    return error?.code === 'P2002';
+}
+
+async function getSyncState() {
+    const existing = await prisma.eventSyncState.findUnique({
+        where: { contractName: CONTRACT_NAME },
+    });
+
+    if (existing) {
+        return existing;
     }
-    return state;
+
+    const client = getPublicClient();
+    const currentBlock = await client.getBlockNumber();
+    const startBlock = currentBlock > 1000n ? currentBlock - 1000n : 0n;
+
+    // contractName is @unique, id is @default(cuid()) — each contract gets a unique row.
+    return prisma.eventSyncState.upsert({
+        where: { contractName: CONTRACT_NAME },
+        update: {},
+        create: {
+            contractName: CONTRACT_NAME,
+            lastSyncedBlock: startBlock,
+        },
+    });
 }
 
 async function updateSyncState(blockNumber, blockHash) {
@@ -86,31 +198,25 @@ async function updateSyncState(blockNumber, blockHash) {
     });
 }
 
-// ============ EVENT HANDLERS (Idempotent) ============
-
-/**
- * MemberAdded(org, doctor) → upsert OrganizationMember
- * org = primaryAdmin of the organization (not orgId — legacy event format)
- */
 async function handleMemberAdded(log) {
-    const orgAdminAddress = log.args.org?.toLowerCase();
-    const doctorAddress = log.args.doctor?.toLowerCase();
-    if (!orgAdminAddress || !doctorAddress) return;
-
-    // Resolve orgId from admin address
-    const org = await prisma.organization.findFirst({
-        where: { address: orgAdminAddress },
-    });
-    if (!org) {
-        console.warn(`[EventSync] MemberAdded: No org found for admin ${orgAdminAddress}`);
+    const orgAdminAddress = normalizeAddress(log.args.org);
+    const doctorAddress = normalizeAddress(log.args.doctor);
+    if (!orgAdminAddress || !doctorAddress) {
         return;
     }
 
-    // Idempotent upsert
+    const organization = await findOrganizationRecord({ adminAddress: orgAdminAddress });
+    if (!organization) {
+        log.warn('MemberAdded: no organization found', { adminAddress: orgAdminAddress });
+        return;
+    }
+
+    await ensureUserRecord(doctorAddress);
+
     await prisma.organizationMember.upsert({
         where: {
             orgId_memberAddress: {
-                orgId: org.id,
+                orgId: organization.id,
                 memberAddress: doctorAddress,
             },
         },
@@ -119,39 +225,45 @@ async function handleMemberAdded(log) {
             leftAt: null,
         },
         create: {
-            orgId: org.id,
+            orgId: organization.id,
             memberAddress: doctorAddress,
             role: 'doctor',
             status: 'active',
         },
     });
 
-    console.log(`[EventSync] MemberAdded: ${doctorAddress} → org ${org.name}`);
+    log.info('MemberAdded', { doctor: doctorAddress, org: organization.name });
 
-    // Emit socket events
-    emitToUser(orgAdminAddress, 'orgMemberUpdated', { orgId: org.id, action: 'added', doctor: doctorAddress });
-    emitToUser(doctorAddress, 'orgMemberUpdated', { orgId: org.id, action: 'added_me' });
+    emitToUser(orgAdminAddress, 'orgMemberUpdated', {
+        orgId: organization.id,
+        chainOrgId: organization.chainOrgId?.toString() ?? null,
+        action: 'added',
+        doctor: doctorAddress,
+    });
+    emitToUser(doctorAddress, 'orgMemberUpdated', {
+        orgId: organization.id,
+        chainOrgId: organization.chainOrgId?.toString() ?? null,
+        action: 'added_me',
+    });
 }
 
-/**
- * MemberRemoved(org, doctor) → soft-delete OrganizationMember
- */
 async function handleMemberRemoved(log) {
-    const orgAdminAddress = log.args.org?.toLowerCase();
-    const doctorAddress = log.args.doctor?.toLowerCase();
-    if (!orgAdminAddress || !doctorAddress) return;
+    const orgAdminAddress = normalizeAddress(log.args.org);
+    const doctorAddress = normalizeAddress(log.args.doctor);
+    if (!orgAdminAddress || !doctorAddress) {
+        return;
+    }
 
-    const org = await prisma.organization.findFirst({
-        where: { address: orgAdminAddress },
-    });
-    if (!org) return;
+    const organization = await findOrganizationRecord({ adminAddress: orgAdminAddress });
+    if (!organization) {
+        return;
+    }
 
-    // Idempotent: update if exists
     try {
         await prisma.organizationMember.update({
             where: {
                 orgId_memberAddress: {
-                    orgId: org.id,
+                    orgId: organization.id,
                     memberAddress: doctorAddress,
                 },
             },
@@ -160,58 +272,80 @@ async function handleMemberRemoved(log) {
                 leftAt: new Date(),
             },
         });
-    } catch (e) {
-        // Member might not exist in DB — ignore
+    } catch {
+        // Ignore if the membership was never cached locally.
     }
 
-    console.log(`[EventSync] MemberRemoved: ${doctorAddress} from org ${org.name}`);
+    log.info('MemberRemoved', { doctor: doctorAddress, org: organization.name });
 
-    emitToUser(orgAdminAddress, 'orgMemberUpdated', { orgId: org.id, action: 'removed', doctor: doctorAddress });
-    emitToUser(doctorAddress, 'orgMemberUpdated', { orgId: org.id, action: 'removed_me' });
+    emitToUser(orgAdminAddress, 'orgMemberUpdated', {
+        orgId: organization.id,
+        chainOrgId: organization.chainOrgId?.toString() ?? null,
+        action: 'removed',
+        doctor: doctorAddress,
+    });
+    emitToUser(doctorAddress, 'orgMemberUpdated', {
+        orgId: organization.id,
+        chainOrgId: organization.chainOrgId?.toString() ?? null,
+        action: 'removed_me',
+    });
 }
 
-/**
- * DoctorVerified(doctor, verifier, orgId, credential) → update User verified cache
- */
 async function handleDoctorVerified(log) {
-    const doctorAddress = log.args.doctor?.toLowerCase();
-    const verifierAddress = log.args.verifier?.toLowerCase();
-    const orgId = log.args.orgId?.toString();
-    if (!doctorAddress) return;
-
-    // Cache verified status in User model (if field exists)
-    try {
-        await prisma.user.update({
-            where: { walletAddress: doctorAddress },
-            data: { role: 'doctor' }, // Ensure role is set
-        });
-    } catch (e) {
-        // User might not exist yet
+    const doctorAddress = normalizeAddress(log.args.doctor);
+    const verifierAddress = normalizeAddress(log.args.verifier);
+    const chainOrgId = normalizeChainOrgId(log.args.orgId);
+    if (!doctorAddress) {
+        return;
     }
 
-    console.log(`[EventSync] DoctorVerified: ${doctorAddress} by ${verifierAddress} (orgId: ${orgId})`);
+    await ensureUserRecord(doctorAddress);
 
-    emitToUser(doctorAddress, 'doctorVerified', { doctor: doctorAddress, verifier: verifierAddress });
-    // Broadcast to org admin
+    const verificationUpdate = {
+        status: 'approved',
+        reviewedAt: new Date(),
+    };
     if (verifierAddress) {
-        emitToUser(verifierAddress, 'doctorVerified', { doctor: doctorAddress, action: 'verified_by_me' });
+        verificationUpdate.reviewedBy = verifierAddress;
     }
-    // Broadcast to all connected clients in the org
+
+    await prisma.verificationRequest.updateMany({
+        where: {
+            doctorAddress,
+            status: { in: ['pending', 'approved'] },
+        },
+        data: verificationUpdate,
+    });
+
+    log.info('DoctorVerified', { doctor: doctorAddress, verifier: verifierAddress, chainOrgId: chainOrgId?.toString() ?? 'n/a' });
+
+    emitToUser(doctorAddress, 'doctorVerified', {
+        doctor: doctorAddress,
+        verifier: verifierAddress,
+        chainOrgId: chainOrgId?.toString() ?? null,
+    });
+    if (verifierAddress) {
+        emitToUser(verifierAddress, 'doctorVerified', {
+            doctor: doctorAddress,
+            action: 'verified_by_me',
+            chainOrgId: chainOrgId?.toString() ?? null,
+        });
+    }
+
     const io = getIO();
     if (io) {
         io.emit('verificationUpdated', { doctor: doctorAddress, verified: true });
     }
 }
 
-/**
- * VerificationRevoked(user, revoker)
- */
 async function handleVerificationRevoked(log) {
-    const userAddress = log.args.user?.toLowerCase();
-    const revokerAddress = log.args.revoker?.toLowerCase();
-    if (!userAddress) return;
+    const userAddress = normalizeAddress(log.args.user);
+    const revokerAddress = normalizeAddress(log.args.revoker);
+    if (!userAddress) {
+        return;
+    }
 
-    console.log(`[EventSync] VerificationRevoked: ${userAddress} by ${revokerAddress}`);
+    log.info('VerificationRevoked', { user: userAddress, revoker: revokerAddress });
 
     emitToUser(userAddress, 'verificationRevoked', { user: userAddress, revoker: revokerAddress });
     const io = getIO();
@@ -220,77 +354,157 @@ async function handleVerificationRevoked(log) {
     }
 }
 
-/**
- * OrganizationCreated(orgId, name, primaryAdmin, backupAdmin) → upsert Organization
- */
 async function handleOrganizationCreated(log) {
-    const orgId = log.args.orgId?.toString();
+    const chainOrgId = normalizeChainOrgId(log.args.orgId);
     const name = log.args.name;
-    const primaryAdmin = log.args.primaryAdmin?.toLowerCase();
-    const backupAdmin = log.args.backupAdmin?.toLowerCase();
-    if (!orgId || !name || !primaryAdmin) return;
+    const primaryAdmin = normalizeAddress(log.args.primaryAdmin);
+    const backupAdmin = normalizeAddress(log.args.backupAdmin);
+    if (chainOrgId === null || !name || !primaryAdmin) {
+        return;
+    }
 
-    // Upsert organization
-    await prisma.organization.upsert({
-        where: { address: primaryAdmin },
-        update: {
-            name: name,
-            isVerified: true,
-            verifiedAt: new Date(),
-        },
-        create: {
-            name: name,
-            address: primaryAdmin,
-            orgType: 'hospital',
-            isVerified: true,
-            verifiedAt: new Date(),
-        },
-    });
+    const existingOrg = await findOrganizationRecord({ chainOrgId, adminAddress: primaryAdmin });
+    const orgData = {
+        chainOrgId,
+        name,
+        address: primaryAdmin,
+        backupAdminAddress: isZeroAddress(backupAdmin) ? null : backupAdmin,
+        isVerified: true,
+        isActive: true,
+        verifiedAt: existingOrg?.verifiedAt ?? new Date(),
+    };
 
-    // Create admin membership
-    await prisma.organizationMember.upsert({
-        where: {
-            orgId_memberAddress: {
-                orgId: orgId,  // This uses blockchain orgId — may differ from DB id
-                memberAddress: primaryAdmin,
+    const organization = existingOrg
+        ? await prisma.organization.update({
+            where: { id: existingOrg.id },
+            data: orgData,
+        })
+        : await prisma.organization.create({
+            data: {
+                ...orgData,
+                orgType: 'hospital',
             },
-        },
-        update: { status: 'active', role: 'admin' },
-        create: {
-            orgId: orgId,
-            memberAddress: primaryAdmin,
-            role: 'admin',
-            status: 'active',
-        },
+        });
+
+    await upsertAdminMembership(organization.id, primaryAdmin);
+
+    log.info('OrganizationCreated', { name, chainOrgId: chainOrgId.toString() });
+
+    emitToUser(primaryAdmin, 'orgCreated', {
+        orgId: organization.id,
+        chainOrgId: chainOrgId.toString(),
+        name,
     });
-
-    console.log(`[EventSync] OrganizationCreated: "${name}" (orgId: ${orgId})`);
-
-    emitToUser(primaryAdmin, 'orgCreated', { orgId, name });
-    if (backupAdmin && backupAdmin !== '0x0000000000000000000000000000000000000000') {
-        emitToUser(backupAdmin, 'orgCreated', { orgId, name });
+    if (!isZeroAddress(backupAdmin)) {
+        emitToUser(backupAdmin, 'orgCreated', {
+            orgId: organization.id,
+            chainOrgId: chainOrgId.toString(),
+            name,
+        });
     }
 }
 
-/**
- * OrganizationStatusChanged(orgId, active) → update org active status
- */
 async function handleOrganizationStatusChanged(log) {
-    const orgId = log.args.orgId?.toString();
-    const active = log.args.active;
-    if (!orgId) return;
+    const chainOrgId = normalizeChainOrgId(log.args.orgId);
+    const active = Boolean(log.args.active);
+    if (chainOrgId === null) {
+        return;
+    }
 
-    // Find org by orgId (stored in membership or by admin lookup)
-    // Since our DB uses address as primary key, we look up via admin
-    console.log(`[EventSync] OrgStatusChanged: orgId ${orgId} → active: ${active}`);
+    let organization = await prisma.organization.findUnique({
+        where: { chainOrgId },
+    });
+    if (!organization) {
+        try {
+            organization = await hydrateOrganizationFromChain(chainOrgId);
+        } catch (error) {
+            log.warn('OrgStatusChanged: could not hydrate org', { chainOrgId: chainOrgId.toString(), error: error.message });
+        }
+    }
+    if (!organization) {
+        return;
+    }
+
+    organization = await prisma.organization.update({
+        where: { id: organization.id },
+        data: { isActive: active },
+    });
+
+    log.info('OrgStatusChanged', { chainOrgId: chainOrgId.toString(), active });
 
     const io = getIO();
     if (io) {
-        io.emit('orgStatusUpdated', { orgId, active });
+        io.emit('orgStatusUpdated', {
+            orgId: organization.id,
+            chainOrgId: chainOrgId.toString(),
+            active,
+        });
     }
 }
 
-// ============ EVENT ROUTER ============
+async function handleOrganizationAdminChanged(log) {
+    const chainOrgId = normalizeChainOrgId(log.args.orgId);
+    const oldPrimary = normalizeAddress(log.args.oldPrimary);
+    const newPrimary = normalizeAddress(log.args.newPrimary);
+    const oldBackup = normalizeAddress(log.args.oldBackup);
+    const newBackup = normalizeAddress(log.args.newBackup);
+    if (chainOrgId === null || !newPrimary) {
+        return;
+    }
+
+    let organization = await prisma.organization.findUnique({
+        where: { chainOrgId },
+    });
+    if (!organization) {
+        try {
+            organization = await hydrateOrganizationFromChain(chainOrgId);
+        } catch (error) {
+            log.warn('OrgAdminChanged: could not hydrate org', { chainOrgId: chainOrgId.toString(), error: error.message });
+        }
+    }
+    if (!organization) {
+        return;
+    }
+
+    organization = await prisma.organization.update({
+        where: { id: organization.id },
+        data: {
+            address: newPrimary,
+            backupAdminAddress: isZeroAddress(newBackup) ? null : newBackup,
+        },
+    });
+
+    await upsertAdminMembership(organization.id, newPrimary);
+
+    log.info('OrgAdminChanged', { chainOrgId: chainOrgId.toString(), oldPrimary, newPrimary });
+
+    emitToUser(newPrimary, 'orgAdminUpdated', {
+        orgId: organization.id,
+        chainOrgId: chainOrgId.toString(),
+        action: 'became_primary_admin',
+    });
+    if (oldPrimary && oldPrimary !== newPrimary) {
+        emitToUser(oldPrimary, 'orgAdminUpdated', {
+            orgId: organization.id,
+            chainOrgId: chainOrgId.toString(),
+            action: 'no_longer_primary_admin',
+        });
+    }
+    if (!isZeroAddress(newBackup)) {
+        emitToUser(newBackup, 'orgAdminUpdated', {
+            orgId: organization.id,
+            chainOrgId: chainOrgId.toString(),
+            action: 'backup_admin_updated',
+        });
+    }
+    if (!isZeroAddress(oldBackup) && oldBackup !== newBackup) {
+        emitToUser(oldBackup, 'orgAdminUpdated', {
+            orgId: organization.id,
+            chainOrgId: chainOrgId.toString(),
+            action: 'backup_admin_removed',
+        });
+    }
+}
 
 const EVENT_HANDLERS = {
     MemberAdded: handleMemberAdded,
@@ -299,6 +513,7 @@ const EVENT_HANDLERS = {
     VerificationRevoked: handleVerificationRevoked,
     OrganizationCreated: handleOrganizationCreated,
     OrganizationStatusChanged: handleOrganizationStatusChanged,
+    OrganizationAdminChanged: handleOrganizationAdminChanged,
 };
 
 async function processLog(eventName, log) {
@@ -308,15 +523,13 @@ async function processLog(eventName, log) {
             await handler(log);
         }
     } catch (error) {
-        console.error(`[EventSync] Error processing ${eventName}:`, error.message);
+        log.error(`Error processing ${eventName}`, { error: error.message });
     }
 }
 
-// ============ CATCHUP (getLogs) ============
-
 async function catchupLogs() {
     if (!ACCESS_CONTROL_ADDRESS) {
-        console.warn('[EventSync] ACCESS_CONTROL_ADDRESS not set, skipping catchup');
+        log.warn('ACCESS_CONTROL_ADDRESS not set, skipping catchup');
         return;
     }
 
@@ -324,38 +537,33 @@ async function catchupLogs() {
         const client = getPublicClient();
         const syncState = await getSyncState();
         const currentBlock = await client.getBlockNumber();
-
-        // Apply safety margin for reorg protection
         const safeBlock = currentBlock - BigInt(REORG_SAFETY_BLOCKS);
         const fromBlock = syncState.lastSyncedBlock + 1n;
 
         if (fromBlock > safeBlock) {
-            return; // Already caught up
+            return;
         }
 
-        console.log(`[EventSync] Catching up from block ${fromBlock} to ${safeBlock}...`);
+        log.info('Catching up', { fromBlock, toBlock: safeBlock });
 
-        // Reorg detection: verify last known block hash
         if (syncState.lastBlockHash && syncState.lastSyncedBlock > 0n) {
             try {
                 const lastBlock = await client.getBlock({
                     blockNumber: syncState.lastSyncedBlock,
                 });
                 if (lastBlock.hash !== syncState.lastBlockHash) {
-                    console.warn(`[EventSync] ⚠️ REORG DETECTED at block ${syncState.lastSyncedBlock}! Reprocessing...`);
-                    // Rollback 50 blocks and reprocess
+                    log.warn('Reorg detected, reprocessing', { block: syncState.lastSyncedBlock });
                     const rollbackBlock = syncState.lastSyncedBlock > 50n
                         ? syncState.lastSyncedBlock - 50n
                         : 0n;
                     await updateSyncState(rollbackBlock, null);
-                    return catchupLogs(); // Recursive retry
+                    return catchupLogs();
                 }
-            } catch (e) {
-                console.warn('[EventSync] Could not verify block hash:', e.message);
+            } catch (error) {
+                log.warn('Could not verify block hash', { error: error.message });
             }
         }
 
-        // Fetch logs in chunks (max 10000 blocks at a time for RPC limits)
         const CHUNK_SIZE = 10000n;
         let chunkFrom = fromBlock;
 
@@ -374,35 +582,32 @@ async function catchupLogs() {
                     for (const log of logs) {
                         await processLog(eventName, log);
                     }
-                } catch (e) {
-                    console.error(`[EventSync] Error fetching ${eventName} logs:`, e.message);
+                } catch (error) {
+                    log.error(`Error fetching ${eventName} logs`, { error: error.message });
                 }
             }
 
-            // Update sync state after each chunk
             try {
                 const block = await client.getBlock({ blockNumber: chunkTo });
                 await updateSyncState(chunkTo, block.hash);
-            } catch (e) {
+            } catch {
                 await updateSyncState(chunkTo, null);
             }
 
             chunkFrom = chunkTo + 1n;
         }
 
-        console.log(`[EventSync] Catchup complete. Synced to block ${safeBlock}`);
+        log.info('Catchup complete', { syncedToBlock: safeBlock });
     } catch (error) {
-        console.error('[EventSync] Catchup error:', error.message);
+        log.error('Catchup error', { error: error.message });
     }
 }
-
-// ============ REALTIME WATCH ============
 
 let unwatchFunctions = [];
 
 function startRealtimeWatch() {
     if (!ACCESS_CONTROL_ADDRESS) {
-        console.warn('[EventSync] ACCESS_CONTROL_ADDRESS not set, skipping realtime watch');
+        log.warn('ACCESS_CONTROL_ADDRESS not set, skipping realtime watch');
         return;
     }
 
@@ -415,59 +620,56 @@ function startRealtimeWatch() {
                 abi: [eventAbi],
                 onLogs: async (logs) => {
                     for (const log of logs) {
-                        console.log(`[EventSync] Realtime ${eventName} at block ${log.blockNumber}`);
+                        log.info(`Realtime ${eventName}`, { blockNumber: log.blockNumber });
                         await processLog(eventName, log);
                     }
                 },
                 onError: (error) => {
-                    console.error(`[EventSync] Watch error for ${eventName}:`, error.message);
+                    log.error(`Watch error for ${eventName}`, { error: error.message });
                 },
             });
             unwatchFunctions.push(unwatch);
-        } catch (e) {
-            console.error(`[EventSync] Failed to watch ${eventName}:`, e.message);
+        } catch (error) {
+            log.error(`Failed to watch ${eventName}`, { error: error.message });
         }
     }
 
-    console.log(`[EventSync] Realtime watching ${Object.keys(EVENTS).length} events on ${ACCESS_CONTROL_ADDRESS}`);
+    log.info('Realtime watching started', { eventCount: Object.keys(EVENTS).length, contract: ACCESS_CONTROL_ADDRESS });
 }
-
-// ============ MAIN ============
 
 let catchupInterval = null;
 
 export function startEventSync() {
     if (!ACCESS_CONTROL_ADDRESS) {
-        console.warn('[EventSync] ⚠️ ACCESS_CONTROL_ADDRESS not set in .env — event sync disabled');
-        console.warn('[EventSync] Set ACCESS_CONTROL_ADDRESS=0x... in .env to enable');
+        log.warn('ACCESS_CONTROL_ADDRESS not set - event sync disabled');
+        log.warn('Set ACCESS_CONTROL_ADDRESS=0x... in .env to enable');
         return;
     }
 
-    console.log('[EventSync] 🚀 Starting event sync worker...');
-    console.log(`[EventSync] Contract: ${ACCESS_CONTROL_ADDRESS}`);
-    console.log(`[EventSync] RPC: ${RPC_URL}`);
+    log.info('Starting event sync worker');
+    log.info('Contract', { address: ACCESS_CONTROL_ADDRESS });
+    log.info('RPC', { url: RPC_URL });
 
-    // Initial catchup
     catchupLogs().then(() => {
-        console.log('[EventSync] Initial catchup done');
+        log.info('Initial catchup done');
     });
 
-    // Start realtime watch
     startRealtimeWatch();
-
-    // Periodic catchup (safety net — catches any missed events)
     catchupInterval = setInterval(catchupLogs, CATCHUP_INTERVAL_MS);
 }
 
 export function stopEventSync() {
-    console.log('[EventSync] Stopping event sync worker...');
-    // Unwatch all events
+    log.info('Stopping event sync worker');
+
     for (const unwatch of unwatchFunctions) {
-        try { unwatch(); } catch (e) { /* ignore */ }
+        try {
+            unwatch();
+        } catch {
+            // Ignore shutdown noise.
+        }
     }
     unwatchFunctions = [];
 
-    // Clear catchup interval
     if (catchupInterval) {
         clearInterval(catchupInterval);
         catchupInterval = null;
@@ -475,3 +677,5 @@ export function stopEventSync() {
 }
 
 export default { startEventSync, stopEventSync };
+
+

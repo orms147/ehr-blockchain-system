@@ -1,4 +1,4 @@
-import api from './api';
+﻿import api from './api';
 
 // Request types enum (matches smart contract)
 export const REQUEST_TYPES = {
@@ -38,9 +38,19 @@ export const requestService = {
         });
     },
 
-    // For patients: Archive a request (hide without on-chain reject)
+    // For patients: Archive a request (hiđể without on-chain reject)
     async archiveRequest(requestId) {
         return api.post('/api/relayer/archive-request', { requestId });
+    },
+
+    // For doctors: Mark request as claimed after on-chain transaction
+    async markClaimed(requestId, claimTxHash) {
+        return api.post('/api/requests/mark-claimed', { requestId, claimTxHash });
+    },
+
+    // For doctors: Get signed requests ready for on-chain claim
+    async getSignedRequests() {
+        return api.get('/api/requests/signed');
     },
 
     // Get request details
@@ -50,3 +60,4 @@ export const requestService = {
 };
 
 export default requestService;
+

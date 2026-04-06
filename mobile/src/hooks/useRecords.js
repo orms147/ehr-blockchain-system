@@ -1,10 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import recordService from '../services/record.service';
+import localRecordRetryService from '../services/localRecordRetry.service';
 import useAuthStore from '../store/authStore';
 
 /**
  * Shared hook to fetch, transform, and cache patient records.
- * Used by both DashboardScreen (recent 3) and RecordsScreen (full list).
+ * Includes local failed/pending drafts so users can keep working even when on-chain is unstable.
  */
 export default function useRecords() {
     const { token } = useAuthStore();
@@ -17,6 +19,12 @@ export default function useRecords() {
         const transformedRecords = data.map((record, index) => {
             const recordType = record.recordType || 'Record';
             const isCreatedBySelf = record.createdBy?.toLowerCase() === record.ownerAddress?.toLowerCase();
+
+            const createdAtSource = record.createdAt || record.confirmedAt || record.submittedAt || Date.now();
+            const createdAtDate = new Date(createdAtSource);
+            const createdAtTs = Number.isNaN(createdAtDate.getTime()) ? Date.now() : createdAtDate.getTime();
+            const createdAtIso = new Date(createdAtTs).toISOString();
+
             return {
                 id: record.id || index + 1,
                 cidHash: record.cidHash,
@@ -24,18 +32,21 @@ export default function useRecords() {
                 type: recordType,
                 title: record.title || `${recordType} #${record.id || index + 1}`,
                 description: record.description || null,
-                date: new Date(record.createdAt).toLocaleDateString('vi-VN'),
-                createdAt: new Date(record.createdAt),
+                date: new Date(createdAtTs).toLocaleDateString('vi-VN'),
+                createdAt: createdAtIso,
+                createdAtTs,
                 createdBy: record.createdBy,
                 createdByDisplay: isCreatedBySelf
                     ? 'Bạn'
                     : `BS. ${(record.createdBy || '').substring(0, 6)}...`,
                 isCreatedByDoctor: !isCreatedBySelf,
                 ownerAddress: record.ownerAddress,
+                syncStatus: record.syncStatus || 'confirmed',
+                syncError: record.syncError || null,
+                isLocalDraft: false,
             };
         });
 
-        // Filter to show only latest versions (records not superseded by children)
         const parentCidHashes = new Set(
             transformedRecords.map((r) => r.parentCidHash).filter(Boolean)
         );
@@ -43,25 +54,56 @@ export default function useRecords() {
             (r) => !parentCidHashes.has(r.cidHash)
         );
 
-        // Sort by newest first
-        latestRecords.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+        latestRecords.sort((a, b) => (b.createdAtTs || 0) - (a.createdAtTs || 0));
         return latestRecords;
     };
 
-    const fetchRecords = useCallback(async () => {
+    const mergeServerAndLocal = (serverRecords, localDrafts) => {
+        const merged = [...(serverRecords || [])];
+        const existingCid = new Set(merged.map((item) => item.cidHash));
+
+        for (const localRecord of localDrafts || []) {
+            if (!existingCid.has(localRecord.cidHash)) {
+                merged.push(localRecord);
+            }
+        }
+
+        merged.sort((a, b) => (b.createdAtTs || 0) - (a.createdAtTs || 0));
+        return merged;
+    };
+
+    const fetchRecords = useCallback(async ({ refreshing = false } = {}) => {
         try {
             setError(null);
-            const data = await recordService.getMyRecords();
-            const latest = transformRecords(data);
-            setRecords(latest);
+            if (refreshing) {
+                setIsRefreshing(true);
+            }
+
+            // Auto-retry a few failed local drafts each refresh cycle.
+            await localRecordRetryService.retryFailedLocalRecords({ limit: refreshing ? 8 : 3 });
+
+            const [serverData, localDrafts] = await Promise.all([
+                recordService.getMyRecords(),
+                localRecordRetryService.getLocalDraftRecords(),
+            ]);
+
+            const latestServer = transformRecords(serverData);
+            const merged = mergeServerAndLocal(latestServer, localDrafts);
+            setRecords(merged);
         } catch (err) {
-            console.error('Failed to fetch records:', err);
-            setError(err.message || 'Không thể tải hồ sơ');
+            console.warn('Failed to fetch records:', err?.message || err);
+
+            const localDrafts = await localRecordRetryService.getLocalDraftRecords();
+            if (localDrafts.length > 0) {
+                setRecords(localDrafts.sort((a, b) => (b.createdAtTs || 0) - (a.createdAtTs || 0)));
+                setError(`${err?.message || 'Không thể tải hồ sơ'} (đang hiển thị bản local)`);
+            } else {
+                setError(err?.message || 'Không thể tải hồ sơ');
+            }
         } finally {
             setIsLoading(false);
             setIsRefreshing(false);
         }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     useEffect(() => {
@@ -72,9 +114,16 @@ export default function useRecords() {
         }
     }, [token, fetchRecords]);
 
+    useFocusEffect(
+        useCallback(() => {
+            if (token) {
+                fetchRecords();
+            }
+        }, [token, fetchRecords])
+    );
+
     const refresh = useCallback(() => {
-        setIsRefreshing(true);
-        fetchRecords();
+        fetchRecords({ refreshing: true });
     }, [fetchRecords]);
 
     return { records, isLoading, isRefreshing, error, refresh };

@@ -1,5 +1,10 @@
 # Workspace-local
 .agent/
+.agents/
+
+#docs
+context/
+skills-lock.json
 
 # Dependencies
 backend/node_modules/

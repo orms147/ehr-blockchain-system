@@ -2,11 +2,14 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { authenticate } from '../middleware/auth.js';
+import { requireOnChainRoles } from '../middleware/onChainRole.js';
 import prisma from '../config/database.js';
 import { keccak256, toBytes } from 'viem';
 import { emitToUser } from '../services/socket.service.js';
 
 const router = Router();
+const requireDoctorRole = requireOnChainRoles('doctor');
+const requirePatientRole = requireOnChainRoles('patient');
 
 // Validation schemas
 const createPendingUpdateSchema = z.object({
@@ -30,7 +33,7 @@ function calculateContentHash(content) {
 }
 
 // POST /api/pending-updates - Create pending update (Doctor)
-router.post('/', authenticate, async (req, res, next) => {
+router.post('/', authenticate, requireDoctorRole, async (req, res, next) => {
     try {
         const { parentCidHash, patientAddress, encryptedContent, recordType, title } =
             createPendingUpdateSchema.parse(req.body);
@@ -38,12 +41,15 @@ router.post('/', authenticate, async (req, res, next) => {
 
 
         // Verify parent record exists
-        const parentRecord = await prisma.recordMetadata.findUnique({
-            where: { cidHash: parentCidHash.toLowerCase() }
+        const parentRecord = await prisma.recordMetadata.findFirst({
+            where: {
+                cidHash: parentCidHash.toLowerCase(),
+                syncStatus: 'confirmed',
+            }
         });
 
         if (!parentRecord) {
-            return res.status(404).json({ error: 'Hồ sơ gốc không tồn tại' });
+            return res.status(404).json({ code: 'RECORD_NOT_FOUND', error: 'Hồ sơ gốc không tồn tại', message: 'Hồ sơ gốc không tồn tại' });
         }
 
         // Auto-detect patientAddress from parent record's owner
@@ -65,19 +71,26 @@ router.post('/', authenticate, async (req, res, next) => {
 
         if (!hasAccess) {
             return res.status(403).json({
-                error: 'Bạn không có quyền truy cập hồ sơ này. Vui lòng yêu cầu quyền truy cập trước.'
+                code: 'CONSENT_NOT_FOUND',
+                error: 'Bạn không có quyền truy cập hồ sơ này. Vui lòng yêu cầu quyền truy cập trước.',
+                message: 'Bạn không có quyền truy cập hồ sơ này. Vui lòng yêu cầu quyền truy cập trước.',
             });
         }
 
         // Check if this record already has children (updates)
         const existingChild = await prisma.recordMetadata.findFirst({
-            where: { parentCidHash: parentCidHash.toLowerCase() }
+            where: {
+                parentCidHash: parentCidHash.toLowerCase(),
+                syncStatus: 'confirmed',
+            }
         });
 
         if (existingChild) {
             return res.status(400).json({
+                code: 'PENDING_UPDATE_ALREADY_PROCESSED',
                 error: 'Hồ sơ này đã có bản cập nhật. Vui lòng cập nhật từ phiên bản mới nhất.',
-                latestCidHash: existingChild.cidHash
+                message: 'Hồ sơ này đã có bản cập nhật. Vui lòng cập nhật từ phiên bản mới nhất.',
+                latestCidHash: existingChild.cidHash,
             });
         }
 
@@ -125,7 +138,7 @@ router.post('/', authenticate, async (req, res, next) => {
 });
 
 // GET /api/pending-updates/incoming - Get updates for me (Patient)
-router.get('/incoming', authenticate, async (req, res, next) => {
+router.get('/incoming', authenticate, requirePatientRole, async (req, res, next) => {
     try {
         const patientAddress = req.user.walletAddress.toLowerCase();
 
@@ -148,7 +161,7 @@ router.get('/incoming', authenticate, async (req, res, next) => {
 });
 
 // GET /api/pending-updates/outgoing - Get updates I created (Doctor)
-router.get('/outgoing', authenticate, async (req, res, next) => {
+router.get('/outgoing', authenticate, requireDoctorRole, async (req, res, next) => {
     try {
         const doctorAddress = req.user.walletAddress.toLowerCase();
 
@@ -170,7 +183,7 @@ router.get('/outgoing', authenticate, async (req, res, next) => {
 });
 
 // GET /api/pending-updates/approved - Get approved updates ready to claim (Doctor)
-router.get('/approved', authenticate, async (req, res, next) => {
+router.get('/approved', authenticate, requireDoctorRole, async (req, res, next) => {
     try {
         const doctorAddress = req.user.walletAddress.toLowerCase();
 
@@ -202,12 +215,12 @@ router.get('/:id', authenticate, async (req, res, next) => {
         });
 
         if (!update) {
-            return res.status(404).json({ error: 'Không tìm thấy yêu cầu cập nhật' });
+            return res.status(404).json({ code: 'PENDING_UPDATE_NOT_FOUND', error: 'Không tìm thấy yêu cầu cập nhật', message: 'Không tìm thấy yêu cầu cập nhật' });
         }
 
         // Check access - only doctor or patient can view
         if (update.doctorAddress !== userAddress && update.patientAddress !== userAddress) {
-            return res.status(403).json({ error: 'Không có quyền xem yêu cầu này' });
+            return res.status(403).json({ code: 'REQUEST_NOT_AUTHORIZED', error: 'Không có quyền xem yêu cầu này', message: 'Không có quyền xem yêu cầu này' });
         }
 
         res.json(update);
@@ -217,7 +230,7 @@ router.get('/:id', authenticate, async (req, res, next) => {
 });
 
 // POST /api/pending-updates/:id/approve - Approve update (Patient)
-router.post('/:id/approve', authenticate, async (req, res, next) => {
+router.post('/:id/approve', authenticate, requirePatientRole, async (req, res, next) => {
     try {
         const { id } = req.params;
         const patientAddress = req.user.walletAddress.toLowerCase();
@@ -227,19 +240,19 @@ router.post('/:id/approve', authenticate, async (req, res, next) => {
         });
 
         if (!update) {
-            return res.status(404).json({ error: 'Không tìm thấy yêu cầu cập nhật' });
+            return res.status(404).json({ code: 'PENDING_UPDATE_NOT_FOUND', error: 'Không tìm thấy yêu cầu cập nhật', message: 'Không tìm thấy yêu cầu cập nhật' });
         }
 
         if (update.patientAddress !== patientAddress) {
-            return res.status(403).json({ error: 'Chỉ bệnh nhân mới có thể phê duyệt' });
+            return res.status(403).json({ code: 'REQUEST_NOT_AUTHORIZED', error: 'Chỉ bệnh nhân mới có thể phê duyệt', message: 'Chỉ bệnh nhân mới có thể phê duyệt' });
         }
 
         if (update.status !== 'pending') {
-            return res.status(400).json({ error: `Yêu cầu này đã ${update.status}` });
+            return res.status(400).json({ code: 'PENDING_UPDATE_ALREADY_PROCESSED', error: `Yêu cầu này đã ${update.status}`, message: `Yêu cầu này đã ${update.status}` });
         }
 
         if (new Date() > update.expiresAt) {
-            return res.status(400).json({ error: 'Yêu cầu đã hết hạn' });
+            return res.status(400).json({ code: 'PENDING_UPDATE_EXPIRED', error: 'Yêu cầu đã hết hạn', message: 'Yêu cầu đã hết hạn' });
         }
 
         // Update status to approved
@@ -268,7 +281,7 @@ router.post('/:id/approve', authenticate, async (req, res, next) => {
 });
 
 // POST /api/pending-updates/:id/reject - Reject update (Patient)
-router.post('/:id/reject', authenticate, async (req, res, next) => {
+router.post('/:id/reject', authenticate, requirePatientRole, async (req, res, next) => {
     try {
         const { id } = req.params;
         const patientAddress = req.user.walletAddress.toLowerCase();
@@ -278,15 +291,15 @@ router.post('/:id/reject', authenticate, async (req, res, next) => {
         });
 
         if (!update) {
-            return res.status(404).json({ error: 'Không tìm thấy yêu cầu cập nhật' });
+            return res.status(404).json({ code: 'PENDING_UPDATE_NOT_FOUND', error: 'Không tìm thấy yêu cầu cập nhật', message: 'Không tìm thấy yêu cầu cập nhật' });
         }
 
         if (update.patientAddress !== patientAddress) {
-            return res.status(403).json({ error: 'Chỉ bệnh nhân mới có thể từ chối' });
+            return res.status(403).json({ code: 'REQUEST_NOT_AUTHORIZED', error: 'Chỉ bệnh nhân mới có thể từ chối', message: 'Chỉ bệnh nhân mới có thể từ chối' });
         }
 
         if (update.status !== 'pending') {
-            return res.status(400).json({ error: `Yêu cầu này đã ${update.status}` });
+            return res.status(400).json({ code: 'PENDING_UPDATE_ALREADY_PROCESSED', error: `Yêu cầu này đã ${update.status}`, message: `Yêu cầu này đã ${update.status}` });
         }
 
         // Update status to rejected
@@ -311,7 +324,7 @@ router.post('/:id/reject', authenticate, async (req, res, next) => {
 });
 
 // POST /api/pending-updates/:id/claim - Claim approved update (Doctor)
-router.post('/:id/claim', authenticate, async (req, res, next) => {
+router.post('/:id/claim', authenticate, requireDoctorRole, async (req, res, next) => {
     try {
         const { id } = req.params;
         const { cidHash, txHash, cid, aesKey } = claimUpdateSchema.parse(req.body);
@@ -322,41 +335,76 @@ router.post('/:id/claim', authenticate, async (req, res, next) => {
         });
 
         if (!update) {
-            return res.status(404).json({ error: 'Không tìm thấy yêu cầu cập nhật' });
+            return res.status(404).json({ code: 'PENDING_UPDATE_NOT_FOUND', error: 'Không tìm thấy yêu cầu cập nhật', message: 'Không tìm thấy yêu cầu cập nhật' });
         }
 
         if (update.doctorAddress !== doctorAddress) {
-            return res.status(403).json({ error: 'Chỉ bác sĩ tạo yêu cầu mới có thể xác nhận' });
+            return res.status(403).json({ code: 'REQUEST_NOT_AUTHORIZED', error: 'Chỉ bác sĩ tạo yêu cầu mới có thể xác nhận', message: 'Chỉ bác sĩ tạo yêu cầu mới có thể xác nhận' });
         }
 
         if (update.status !== 'approved') {
             return res.status(400).json({
+                code: 'PENDING_UPDATE_ALREADY_PROCESSED',
                 error: update.status === 'pending'
                     ? 'Yêu cầu chưa được bệnh nhân phê duyệt'
-                    : `Yêu cầu này đã ${update.status}`
+                    : `Yêu cầu này đã ${update.status}`,
+                message: update.status === 'pending'
+                    ? 'Yêu cầu chưa được bệnh nhân phê duyệt'
+                    : `Yêu cầu này đã ${update.status}`,
             });
         }
 
-        // Update status to claimed with txHash and cidHash
-        const claimed = await prisma.pendingUpdate.update({
-            where: { id },
+        // ATOMIC: Update status to claimed only if still approved (prevents race condition)
+        const claimedAt = new Date();
+        const normalizedCidHash = cidHash.toLowerCase();
+        const normalizedTxHash = txHash.toLowerCase();
+
+        const claimResult = await prisma.pendingUpdate.updateMany({
+            where: { id, status: 'approved' },
             data: {
                 status: 'claimed',
-                cidHash: cidHash.toLowerCase(),
-                txHash,
-                claimedAt: new Date(),
+                cidHash: normalizedCidHash,
+                txHash: normalizedTxHash,
+                claimedAt,
             },
         });
 
-        // Also create record metadata
-        await prisma.recordMetadata.create({
-            data: {
-                cidHash: cidHash.toLowerCase(),
-                ownerAddress: update.patientAddress, // Patient owns the record
-                createdBy: doctorAddress, // Doctor created it
+        if (claimResult.count === 0) {
+            return res.status(409).json({
+                code: 'PENDING_UPDATE_ALREADY_CLAIMED',
+                error: 'Yêu cầu đã được xử lý bởi người khác',
+                message: 'Yêu cầu đã được xử lý bởi người khác',
+            });
+        }
+
+        const claimed = await prisma.pendingUpdate.findUnique({ where: { id } });
+
+        await prisma.recordMetadata.upsert({
+            where: { cidHash: normalizedCidHash },
+            update: {
+                ownerAddress: update.patientAddress,
+                createdBy: doctorAddress,
                 parentCidHash: update.parentCidHash,
                 title: update.title || null,
                 recordType: update.recordType || null,
+                syncStatus: 'confirmed',
+                txHash: normalizedTxHash,
+                submittedAt: claimedAt,
+                confirmedAt: claimedAt,
+                failedAt: null,
+                syncError: null,
+            },
+            create: {
+                cidHash: normalizedCidHash,
+                ownerAddress: update.patientAddress,
+                createdBy: doctorAddress,
+                parentCidHash: update.parentCidHash,
+                title: update.title || null,
+                recordType: update.recordType || null,
+                syncStatus: 'confirmed',
+                txHash: normalizedTxHash,
+                submittedAt: claimedAt,
+                confirmedAt: claimedAt,
             },
         });
 
@@ -442,3 +490,4 @@ router.post('/:id/claim', authenticate, async (req, res, next) => {
 });
 
 export default router;
+

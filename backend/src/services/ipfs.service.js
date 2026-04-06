@@ -1,12 +1,12 @@
 // Mock IPFS Service for development
 // Replaces actual Pinata/IPFS upload since no keys are configured in .env
+import { createLogger } from '../utils/logger.js';
+
+const log = createLogger('MockIPFS');
 
 export const ipfsService = {
     async uploadFile(fileBuffer, mimeType) {
-        console.log('[MockIPFS] Uploading file...', {
-            size: fileBuffer.length,
-            type: mimeType
-        });
+        log.info('Uploading file', { size: fileBuffer.length, type: mimeType });
 
         // Simulate network delay
         await new Promise(resolve => setTimeout(resolve, 1000));
@@ -21,7 +21,7 @@ export const ipfsService = {
     },
 
     async uploadJSON(jsonData) {
-        console.log('[MockIPFS] Uploading JSON...', Object.keys(jsonData));
+        log.info('Uploading JSON', { keys: Object.keys(jsonData) });
         const fakeCid = 'Qm' + Math.random().toString(36).substring(2, 15);
         return {
             cid: fakeCid,

@@ -1,5 +1,6 @@
-﻿/// <reference types="nativewind/types" />
+/// <reference types="nativewind/types" />
 import 'fast-text-encoding';
+import '@tamagui/native/setup-zeego';
 import React, { useEffect } from 'react';
 import { useColorScheme } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
@@ -40,3 +41,4 @@ export default function App() {
     </TamaguiProvider>
   );
 }
+

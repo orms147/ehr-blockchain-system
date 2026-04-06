@@ -3,6 +3,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { authenticate } from '../middleware/auth.js';
 import prisma from '../config/database.js';
+import { requireOnChainRoles } from '../middleware/onChainRole.js';
 import { createPublicClient, http, parseAbi } from 'viem';
 import { arbitrumSepolia } from 'viem/chains';
 
@@ -20,6 +21,9 @@ const publicClient = createPublicClient({
     chain: arbitrumSepolia,
     transport: http(process.env.RPC_URL),
 });
+
+const requireDoctorRole = requireOnChainRoles('doctor');
+const requireMinistryRole = requireOnChainRoles('ministry');
 
 // Validation schemas
 const submitVerificationSchema = z.object({
@@ -95,7 +99,7 @@ router.get('/status', authenticate, async (req, res, next) => {
 });
 
 // POST /api/verification/submit - Submit verification request
-router.post('/submit', authenticate, async (req, res, next) => {
+router.post('/submit', authenticate, requireDoctorRole, async (req, res, next) => {
     try {
         const data = submitVerificationSchema.parse(req.body);
         const doctorAddress = req.user.walletAddress.toLowerCase();
@@ -139,9 +143,8 @@ router.post('/submit', authenticate, async (req, res, next) => {
 });
 
 // GET /api/verification/pending - Get all pending requests (Ministry/Admin only)
-router.get('/pending', authenticate, async (req, res, next) => {
+router.get('/pending', authenticate, requireMinistryRole, async (req, res, next) => {
     try {
-        // TODO: Add role check for Ministry/Admin
         const requests = await prisma.verificationRequest.findMany({
             where: { status: 'pending' },
             orderBy: { createdAt: 'asc' },
@@ -157,7 +160,7 @@ router.get('/pending', authenticate, async (req, res, next) => {
 });
 
 // GET /api/verification/all - Get all verification requests (Ministry/Admin only)
-router.get('/all', authenticate, async (req, res, next) => {
+router.get('/all', authenticate, requireMinistryRole, async (req, res, next) => {
     try {
         const { status } = req.query;
 
@@ -178,13 +181,10 @@ router.get('/all', authenticate, async (req, res, next) => {
 });
 
 // POST /api/verification/review - Approve or reject verification (Ministry/Admin only)
-router.post('/review', authenticate, async (req, res, next) => {
+router.post('/review', authenticate, requireMinistryRole, async (req, res, next) => {
     try {
         const { requestId, approved, rejectionReason } = reviewVerificationSchema.parse(req.body);
         const reviewerAddress = req.user.walletAddress.toLowerCase();
-
-        // TODO: Add role check for Ministry/Admin
-
         const request = await prisma.verificationRequest.findUnique({
             where: { id: requestId },
         });
@@ -226,3 +226,5 @@ router.post('/review', authenticate, async (req, res, next) => {
 });
 
 export default router;
+
+

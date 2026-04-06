@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+﻿import React, { useState } from 'react';
 import { Alert, KeyboardAvoidingView, Platform, ScrollView, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Send, User, FileText, AlertCircle, CheckCircle } from 'lucide-react-native';
@@ -7,8 +7,8 @@ import { YStack, XStack, Text, Button, Input, TextArea, View } from 'tamagui';
 import api from '../../services/api';
 
 const REQUEST_TYPES = [
-    { value: 0, label: 'Chi xem', description: 'Xem ho so ma khong chinh sua' },
-    { value: 1, label: 'Toan quyen', description: 'Xem va cap nhat ho so' },
+    { value: 0, label: 'Chỉ xem', description: 'Xem hồ sơ mà không chỉnh sửa' },
+    { value: 1, label: 'Toàn quyền', description: 'Xem và cập nhật hồ sơ' },
 ];
 
 export default function DoctorRequestAccessScreen() {
@@ -23,11 +23,11 @@ export default function DoctorRequestAccessScreen() {
 
     const handleSubmit = async () => {
         if (!patientAddress.trim()) {
-            Alert.alert('Thieu thong tin', 'Vui long nhap dia chi vi benh nhan.');
+            Alert.alert('Thiếu thông tin', 'Vui lòng nhập địa chỉ ví bệnh nhân.');
             return;
         }
         if (!isValidAddress(patientAddress.trim())) {
-            Alert.alert('Dia chi khong hop le', 'Dia chi vi phai bat dau bang 0x va co 42 ky tu.');
+            Alert.alert('Địa chỉ không hợp lệ', 'Địa chỉ ví phải bắt đầu bằng 0x và có 42 ký tự.');
             return;
         }
 
@@ -48,7 +48,7 @@ export default function DoctorRequestAccessScreen() {
             setSelectedType(0);
             setReason('');
         } catch (error: any) {
-            Alert.alert('Loi', error?.message || 'Khong the gui yeu cau. Vui long thu lai.');
+            Alert.alert('Lỗi', error?.message || 'Không thể gửi yêu cầu. Vui lòng thử lại.');
         } finally {
             setIsSubmitting(false);
         }
@@ -56,25 +56,25 @@ export default function DoctorRequestAccessScreen() {
 
     if (isSuccess) {
         return (
-            <SafeAreaView style={{ flex: 1, backgroundColor: '#F8FAFC' }} edges={['right', 'left']}>
+            <SafeAreaView style={{ flex: 1, backgroundColor: '#F8FAF3' }} edges={['right', 'left']}>
                 <YStack style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 }}>
                     <View background="$green3" style={{ width: 80, height: 80, borderRadius: 40, alignItems: 'center', justifyContent: 'center', marginBottom: 20 }}>
                         <CheckCircle size={40} color="#16A34A" />
                     </View>
                     <Text fontSize="$6" fontWeight="700" color="$color12" style={{ marginBottom: 8, textAlign: 'center' }}>
-                        Da gui yeu cau
+                        Đã gửi yêu cầu
                     </Text>
                     <Text fontSize="$4" color="$color11" style={{ textAlign: 'center', lineHeight: 22 }}>
-                        Yeu cau truy cap da duoc gui toi benh nhan.
+                        Yêu cầu truy cập đã được gửi tới bệnh nhân.
                     </Text>
                     <Button
                         style={{ marginTop: 20 }}
                         size="$4"
                         onPress={() => setIsSuccess(false)}
-                        background="olive"
-                        pressStyle={{ background: 'olive' }}
+                        background="#55624D"
+                        pressStyle={{ background: '#98A68E' }}
                     >
-                        <Text color="white" fontWeight="700">Tao yeu cau moi</Text>
+                        <Text color="white" fontWeight="700">Tạo yêu cầu mới</Text>
                     </Button>
                 </YStack>
             </SafeAreaView>
@@ -82,21 +82,21 @@ export default function DoctorRequestAccessScreen() {
     }
 
     return (
-        <SafeAreaView style={{ flex: 1, backgroundColor: '#F8FAFC' }} edges={['right', 'left']}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: '#F8FAF3' }} edges={['right', 'left']}>
             <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
                 <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 80 }} keyboardShouldPersistTaps="handled">
                     <View background="$color2" borderColor="$color4" style={{ borderWidth: 1, borderRadius: 12, padding: 16, marginBottom: 20 }}>
                         <XStack style={{ alignItems: 'flex-start' }}>
                             <AlertCircle size={18} color="#475569" />
                             <Text fontSize="$3" color="$color11" style={{ flex: 1, marginLeft: 10, lineHeight: 20 }}>
-                                Gui yeu cau de truy cap ho so benh nhan. Benh nhan se nhan thong bao va phe duyet hoac tu choi.
+                                Gửi yêu cầu để truy cập hồ sơ bệnh nhân. Bệnh nhân sẽ nhận thông báo và phê duyệt hoặc từ chối.
                             </Text>
                         </XStack>
                     </View>
 
                     <YStack style={{ marginBottom: 16 }}>
                         <Text fontSize="$3" fontWeight="700" color="$color11" style={{ marginBottom: 8 }}>
-                            Dia chi vi benh nhan <Text color="$red10">*</Text>
+                            Địa chỉ ví bệnh nhân <Text color="$red10">*</Text>
                         </Text>
                         <XStack
                             background="$background"
@@ -119,14 +119,14 @@ export default function DoctorRequestAccessScreen() {
                         </XStack>
                         {patientAddress.length > 0 && !isValidAddress(patientAddress) ? (
                             <Text fontSize="$2" color="$red10" style={{ marginTop: 6, marginLeft: 4 }}>
-                                Dia chi khong hop le
+                                Địa chỉ không hợp lệ
                             </Text>
                         ) : null}
                     </YStack>
 
                     <YStack style={{ marginBottom: 16 }}>
                         <Text fontSize="$3" fontWeight="700" color="$color11" style={{ marginBottom: 8 }}>
-                            CID Hash (tuy chon)
+                            CID Hash (tuỳ chọn)
                         </Text>
                         <XStack background="$background" borderColor="$borderColor" style={{ borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, alignItems: 'center' }}>
                             <FileText size={16} color="#64748B" />
@@ -135,7 +135,7 @@ export default function DoctorRequestAccessScreen() {
                                 unstyled
                                 fontSize="$4"
                                 color="$color12"
-                                placeholder="Nhap CID neu yeu cau"
+                                placeholder="Nhập CID nếu yêu cầu"
                                 value={cidHash}
                                 onChangeText={setCidHash}
                                 autoCapitalize="none"
@@ -146,7 +146,7 @@ export default function DoctorRequestAccessScreen() {
                     </YStack>
 
                     <YStack style={{ marginBottom: 16 }}>
-                        <Text fontSize="$3" fontWeight="700" color="$color11" style={{ marginBottom: 8 }}>Loai yeu cau</Text>
+                        <Text fontSize="$3" fontWeight="700" color="$color11" style={{ marginBottom: 8 }}>Loại yêu cầu</Text>
                         <XStack style={{ gap: 10 }}>
                             {REQUEST_TYPES.map((type) => {
                                 const isActive = selectedType === type.value;
@@ -176,12 +176,12 @@ export default function DoctorRequestAccessScreen() {
                     </YStack>
 
                     <YStack style={{ marginBottom: 24 }}>
-                        <Text fontSize="$3" fontWeight="700" color="$color11" style={{ marginBottom: 8 }}>Ly do (tuy chon)</Text>
+                        <Text fontSize="$3" fontWeight="700" color="$color11" style={{ marginBottom: 8 }}>Lý do (tuỳ chọn)</Text>
                         <TextArea
                             borderColor="$borderColor"
                             background="$background"
                             color="$color12"
-                            placeholder="VD: Kham dinh ky..."
+                            placeholder="VD: Khám định kỳ..."
                             value={reason}
                             onChangeText={setReason}
                             numberOfLines={4}
@@ -199,7 +199,7 @@ export default function DoctorRequestAccessScreen() {
                         onPress={handleSubmit}
                     >
                         <Text color="white" fontWeight="700" fontSize="$5">
-                            {isSubmitting ? 'Dang gui...' : 'Gui yeu cau truy cap'}
+                            {isSubmitting ? 'Đang gửi...' : 'Gửi yêu cầu truy cập'}
                         </Text>
                     </Button>
                 </ScrollView>
@@ -207,6 +207,13 @@ export default function DoctorRequestAccessScreen() {
         </SafeAreaView>
     );
 }
+
+
+
+
+
+
+
 
 
 

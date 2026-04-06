@@ -87,7 +87,11 @@ export async function decryptData(encryptedBase64, base64Key) {
     }
 
     const decryptedUtf8 = forge.util.decodeUtf8(decipher.output.getBytes());
-    return JSON.parse(decryptedUtf8);
+    try {
+        return JSON.parse(decryptedUtf8);
+    } catch (e) {
+        throw new Error('Giải mã thành công nhưng dữ liệu không hợp lệ');
+    }
 }
 
 // Create payload for key sharing
@@ -101,5 +105,9 @@ export async function createKeySharePayload(cid, aesKey) {
 
 // Parse key share payload
 export function parseKeySharePayload(payload) {
-    return JSON.parse(payload);
+    try {
+        return JSON.parse(payload);
+    } catch (e) {
+        throw new Error('Dữ liệu chia sẻ khóa không hợp lệ');
+    }
 }

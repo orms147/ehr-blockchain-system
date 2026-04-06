@@ -2,6 +2,11 @@
 import api from './api';
 
 export const authService = {
+    // Backend health check
+    async ping() {
+        return api.ping();
+    },
+
     // Get nonce for wallet signature
     async getNonce(walletAddress) {
         return api.get(`/api/auth/nonce/${walletAddress}`);
@@ -22,9 +27,15 @@ export const authService = {
         return response;
     },
 
-    // Register public key for encryption
+    // Register public key for encryption (legacy - writes to publicKey field)
     async registerPublicKey(publicKey) {
         return api.post('/api/auth/register-pubkey', { publicKey });
+    },
+
+    // Register NaCl encryption public key (writes to encryptionPublicKey field, required for key sharing)
+    // message must include the first 20 chars of encryptionPublicKey as proof
+    async registerEncryptionKey(encryptionPublicKey, signature, message) {
+        return api.post('/api/auth/encryption-key', { encryptionPublicKey, signature, message });
     },
 
     // Get current user info
