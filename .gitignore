@@ -1,6 +1,7 @@
 # Workspace-local
 .agent/
 .agents/
+.claude/
 
 #docs
 context/

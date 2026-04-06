@@ -63,6 +63,9 @@ contract DeployAll is Script {
         // 8. Setup ConsentLedger
         consentLedger.authorizeContract(address(ehrSystem), true);
         consentLedger.authorizeContract(address(doctorUpdate), true);
+        // FIX (audit #3): wire AccessControl so canAccess() can cascade-revoke
+        // consents granted to doctors whose verification was later revoked.
+        consentLedger.setAccessControl(address(accessControl));
         console.log("ConsentLedger configured");
 
 

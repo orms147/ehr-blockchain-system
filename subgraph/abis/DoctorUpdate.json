@@ -1,0 +1,334 @@
+[
+  {
+    "type": "constructor",
+    "inputs": [
+      {
+        "name": "_accessControl",
+        "type": "address",
+        "internalType": "contract IAccessControl"
+      },
+      {
+        "name": "_recordRegistry",
+        "type": "address",
+        "internalType": "contract IRecordRegistry"
+      },
+      {
+        "name": "_consentLedger",
+        "type": "address",
+        "internalType": "contract IConsentLedger"
+      }
+    ],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "accessControl",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "contract IAccessControl"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "addRecordByDoctor",
+    "inputs": [
+      {
+        "name": "cidHash",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "parentCidHash",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "recordTypeHash",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "patient",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "doctorEncKeyHash",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "doctorAccessHours",
+        "type": "uint40",
+        "internalType": "uint40"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "consentLedger",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "contract IConsentLedger"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getAccessLimits",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "minHours",
+        "type": "uint40",
+        "internalType": "uint40"
+      },
+      {
+        "name": "maxHours",
+        "type": "uint40",
+        "internalType": "uint40"
+      },
+      {
+        "name": "defaultHours",
+        "type": "uint40",
+        "internalType": "uint40"
+      },
+      {
+        "name": "emergencyHours",
+        "type": "uint40",
+        "internalType": "uint40"
+      },
+      {
+        "name": "minWitnesses",
+        "type": "uint8",
+        "internalType": "uint8"
+      }
+    ],
+    "stateMutability": "pure"
+  },
+  {
+    "type": "function",
+    "name": "grantEmergencyAccess",
+    "inputs": [
+      {
+        "name": "patient",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "cidHash",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "encKeyHash",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "justification",
+        "type": "string",
+        "internalType": "string"
+      },
+      {
+        "name": "witnesses",
+        "type": "address[]",
+        "internalType": "address[]"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "recordRegistry",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "contract IRecordRegistry"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "event",
+    "name": "EmergencyAccessGranted",
+    "inputs": [
+      {
+        "name": "doctor",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "patient",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "cidHash",
+        "type": "bytes32",
+        "indexed": true,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "justification",
+        "type": "string",
+        "indexed": false,
+        "internalType": "string"
+      },
+      {
+        "name": "witnesses",
+        "type": "address[]",
+        "indexed": false,
+        "internalType": "address[]"
+      },
+      {
+        "name": "expireAt",
+        "type": "uint40",
+        "indexed": false,
+        "internalType": "uint40"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "RecordAddedByDoctor",
+    "inputs": [
+      {
+        "name": "doctor",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "patient",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "cidHash",
+        "type": "bytes32",
+        "indexed": true,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "parentCidHash",
+        "type": "bytes32",
+        "indexed": false,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "recordTypeHash",
+        "type": "bytes32",
+        "indexed": false,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "doctorAccessExpiry",
+        "type": "uint40",
+        "indexed": false,
+        "internalType": "uint40"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "TemporaryAccessGranted",
+    "inputs": [
+      {
+        "name": "patient",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "doctor",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "cidHash",
+        "type": "bytes32",
+        "indexed": true,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "expireAt",
+        "type": "uint40",
+        "indexed": false,
+        "internalType": "uint40"
+      },
+      {
+        "name": "duration",
+        "type": "uint40",
+        "indexed": false,
+        "internalType": "uint40"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "error",
+    "name": "InsufficientWitnesses",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidAccessDuration",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidParameter",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidWitness",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "NotDoctor",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "NotPatient",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "RecordNotExist",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "ReentrancyGuardReentrantCall",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "TooManyWitnesses",
+    "inputs": []
+  }
+]

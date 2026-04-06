@@ -1,0 +1,594 @@
+[
+  {
+    "type": "constructor",
+    "inputs": [
+      {
+        "name": "_accessControl",
+        "type": "address",
+        "internalType": "contract IAccessControl"
+      }
+    ],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "accessControl",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "contract IAccessControl"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "addRecord",
+    "inputs": [
+      {
+        "name": "cidHash",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "parentCidHash",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "recordTypeHash",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "addRecordByDoctor",
+    "inputs": [
+      {
+        "name": "cidHash",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "parentCidHash",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "recordTypeHash",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "patient",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "addRecordFor",
+    "inputs": [
+      {
+        "name": "cidHash",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "parentCidHash",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "recordTypeHash",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "patient",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "authorizeContract",
+    "inputs": [
+      {
+        "name": "contractAddr",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "isAuthorized",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "authorizeSponsor",
+    "inputs": [
+      {
+        "name": "sponsorAddr",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "isAuthorized",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "authorizedContracts",
+    "inputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "authorizedSponsors",
+    "inputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "consentLedger",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "contract IConsentLedger"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "deployer",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getChildCount",
+    "inputs": [
+      {
+        "name": "parentCidHash",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getChildRecords",
+    "inputs": [
+      {
+        "name": "parentCidHash",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32[]",
+        "internalType": "bytes32[]"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getMaxChildrenLimit",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint8",
+        "internalType": "uint8"
+      }
+    ],
+    "stateMutability": "pure"
+  },
+  {
+    "type": "function",
+    "name": "getOwnerRecordCount",
+    "inputs": [
+      {
+        "name": "owner",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getOwnerRecords",
+    "inputs": [
+      {
+        "name": "owner",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32[]",
+        "internalType": "bytes32[]"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getRecord",
+    "inputs": [
+      {
+        "name": "cidHash",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "tuple",
+        "internalType": "struct IRecordRegistry.Record",
+        "components": [
+          {
+            "name": "cidHash",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "parentCidHash",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "createdBy",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "owner",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "recordTypeHash",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "createdAt",
+            "type": "uint40",
+            "internalType": "uint40"
+          },
+          {
+            "name": "version",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "exists",
+            "type": "bool",
+            "internalType": "bool"
+          }
+        ]
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "recordExists",
+    "inputs": [
+      {
+        "name": "cidHash",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "setConsentLedger",
+    "inputs": [
+      {
+        "name": "_consentLedger",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "transferOwnership",
+    "inputs": [
+      {
+        "name": "cidHash",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "newOwner",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "updateRecordCID",
+    "inputs": [
+      {
+        "name": "oldCidHash",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "newCidHash",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "event",
+    "name": "OwnershipTransferred",
+    "inputs": [
+      {
+        "name": "previousOwner",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "newOwner",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "cidHash",
+        "type": "bytes32",
+        "indexed": true,
+        "internalType": "bytes32"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "RecordAdded",
+    "inputs": [
+      {
+        "name": "owner",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "cidHash",
+        "type": "bytes32",
+        "indexed": true,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "parentCidHash",
+        "type": "bytes32",
+        "indexed": false,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "recordTypeHash",
+        "type": "bytes32",
+        "indexed": false,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "timestamp",
+        "type": "uint40",
+        "indexed": false,
+        "internalType": "uint40"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "RecordUpdated",
+    "inputs": [
+      {
+        "name": "oldCidHash",
+        "type": "bytes32",
+        "indexed": true,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "newCidHash",
+        "type": "bytes32",
+        "indexed": true,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "owner",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "SponsorAuthorized",
+    "inputs": [
+      {
+        "name": "sponsor",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "isAuthorized",
+        "type": "bool",
+        "indexed": false,
+        "internalType": "bool"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "error",
+    "name": "EmptyCID",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidAddress",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "MaxVersionReached",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "NotDoctor",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "NotOwner",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "NotPatient",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "NotSponsor",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "ParentNotExist",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "RecordExists",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "RecordHasChildren",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "RecordNotExist",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "TooManyChildren",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "Unauthorized",
+    "inputs": []
+  }
+]

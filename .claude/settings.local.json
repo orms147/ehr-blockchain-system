@@ -37,7 +37,16 @@
       "Bash(grep -l \"event \" c:/University/DATN/EHR/contracts/contracts/*.sol)",
       "Bash(grep -l \"getOutgoing\\\\|getIncoming\\\\|getRecords\\\\|getShared\" c:/University/DATN/EHR/mobile/src/services/*.js)",
       "Bash(node -e \"const p=require\\('./package.json'\\);console.log\\(Object.keys\\(p.dependencies\\).join\\('\\\\n'\\)\\)\")",
-      "Bash(ls /c/University/DATN/EHR/backend/.env*)"
+      "Bash(ls /c/University/DATN/EHR/backend/.env*)",
+      "Bash(node -e \"const p=require\\('./package.json'\\);console.log\\(Object.keys\\(p.dependencies\\).filter\\(k=>k.includes\\('expo'\\)||k.includes\\('notif'\\)\\).join\\('\\\\n'\\)\\)\")",
+      "Bash(grep -E \"\\\\.sol$\")",
+      "Bash(find ./broadcast -name \"run-latest.json\" -exec grep -l \"AccessControl\\\\|ConsentLedger\\\\|RecordRegistry\\\\|EHRSystemSecure\\\\|DoctorUpdate\" {} \\\\;)",
+      "Bash(ls /c/University/DATN/EHR/contracts/out/*.json)",
+      "Bash(grep -E \"\\(AccessControl|ConsentLedger|RecordRegistry|EHRSystem|DoctorUpdate\\)\\\\.json$\")",
+      "Bash(bash /tmp/extract_events.sh)",
+      "Bash(forge build:*)",
+      "Bash(ls /c/University/DATN/EHR/frontend/.env*)",
+      "Bash(ls /c/University/DATN/EHR/mobile/.env*)"
     ]
   }
 }

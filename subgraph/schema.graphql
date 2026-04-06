@@ -1,0 +1,106 @@
+# EHR Subgraph schema
+# Privacy note: NEVER store plaintext CIDs / payloads — only on-chain bytes32 hashes.
+
+type Record @entity(immutable: false) {
+  id: ID!                        # cidHash (bytes32 hex)
+  cidHash: Bytes!
+  owner: Patient!
+  parentCidHash: Bytes
+  recordTypeHash: Bytes
+  createdAt: BigInt!
+  createdAtBlock: BigInt!
+  createdTxHash: Bytes!
+  # History of in-place version updates pointing this id forward.
+  updates: [RecordUpdate!]! @derivedFrom(field: "fromRecord")
+}
+
+type RecordUpdate @entity(immutable: true) {
+  id: ID!                        # txHash + logIndex
+  fromRecord: Record!
+  oldCidHash: Bytes!
+  newCidHash: Bytes!
+  owner: Bytes!
+  timestamp: BigInt!
+  txHash: Bytes!
+}
+
+type Patient @entity(immutable: false) {
+  id: ID!                        # address (lowercased)
+  address: Bytes!
+  recordCount: Int!
+  firstSeenAt: BigInt!
+  records: [Record!]! @derivedFrom(field: "owner")
+  accessRequests: [AccessRequest!]! @derivedFrom(field: "patient")
+}
+
+type Doctor @entity(immutable: false) {
+  id: ID!                        # address (lowercased)
+  address: Bytes!
+  verified: Boolean!
+  verifiedAt: BigInt
+  orgId: BigInt
+  credential: String
+  verifier: Bytes
+}
+
+type Organization @entity(immutable: false) {
+  id: ID!                        # orgId as string
+  orgId: BigInt!
+  name: String!
+  primaryAdmin: Bytes!
+  backupAdmin: Bytes!
+  active: Boolean!
+  createdAt: BigInt!
+}
+
+enum RequestType {
+  DirectAccess
+  FullDelegation
+  RecordDelegation
+}
+
+enum RequestStatus {
+  Pending
+  RequesterApproved
+  PatientApproved
+  Completed
+  Rejected
+}
+
+type AccessRequest @entity(immutable: false) {
+  id: ID!                        # reqId (bytes32 hex)
+  reqId: Bytes!
+  requester: Bytes!
+  patient: Patient!
+  rootCidHash: Bytes!
+  reqType: RequestType!
+  status: RequestStatus!
+  expiry: BigInt!
+  requestedAt: BigInt!
+  completedAt: BigInt
+  rejectedAt: BigInt
+  txHash: Bytes!
+}
+
+type ConsentEvent @entity(immutable: true) {
+  id: ID!                        # txHash + logIndex
+  kind: String!                  # granted | revoked
+  patient: Bytes!
+  grantee: Bytes!
+  rootCidHash: Bytes!
+  expireAt: BigInt
+  allowDelegate: Boolean
+  timestamp: BigInt!
+  txHash: Bytes!
+}
+
+type DelegationEvent @entity(immutable: true) {
+  id: ID!                        # txHash + logIndex
+  kind: String!                  # granted | revoked
+  patient: Bytes!
+  delegatee: Bytes!
+  expiresAt: BigInt
+  allowSubDelegate: Boolean
+  timestamp: BigInt!
+  txHash: Bytes!
+}

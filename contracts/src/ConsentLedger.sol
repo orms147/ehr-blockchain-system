@@ -5,6 +5,7 @@ import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
 import {IConsentLedger} from "src/interfaces/IConsentLedger.sol";
+import {IAccessControl} from "src/interfaces/IAccessControl.sol";
 
 /**
  * @title ConsentLedger - Privacy-Safe Version
@@ -41,6 +42,14 @@ contract ConsentLedger is EIP712, ReentrancyGuard, IConsentLedger {
     
     // Authorized sponsors (EOAs that can revoke/reject on behalf of patients)
     mapping(address => bool) public authorizedSponsors;
+
+    // FIX (audit #4): track which delegatee originated a delegated grant.
+    // consentKey => delegatee that performed grantUsingDelegation. address(0) if direct grant.
+    mapping(bytes32 => address) public consentDelegationSource;
+
+    // FIX (audit #3): reference to AccessControl so canAccess can check doctor verification status.
+    // Set once by admin via setAccessControl after deploy (avoids constructor circular dep).
+    IAccessControl public accessControl;
 
     address public immutable admin;
 
@@ -86,6 +95,14 @@ contract ConsentLedger is EIP712, ReentrancyGuard, IConsentLedger {
         if (sponsorAddr == address(0)) revert Unauthorized();
         authorizedSponsors[sponsorAddr] = allowed;
         emit SponsorAuthorized(sponsorAddr, allowed);
+    }
+
+    /// @notice Wire AccessControl reference (one-time, admin only).
+    /// FIX (audit #3): allows canAccess() to invalidate consents granted to doctors
+    /// whose verification was later revoked.
+    function setAccessControl(address ac) external onlyAdmin {
+        if (ac == address(0)) revert Unauthorized();
+        accessControl = IAccessControl(ac);
     }
 
 
@@ -313,7 +330,10 @@ contract ConsentLedger is EIP712, ReentrancyGuard, IConsentLedger {
             revert InvalidDuration();
         }
 
-        uint40 expiresAt = uint40(block.timestamp) + duration;
+        // FIX (audit #7): explicit overflow guard on uint40 cast.
+        uint256 expiresAt256 = block.timestamp + duration;
+        if (expiresAt256 > type(uint40).max) revert InvalidDuration();
+        uint40 expiresAt = uint40(expiresAt256);
 
         uint256 packed = 
             uint256(expiresAt) |
@@ -368,6 +388,10 @@ contract ConsentLedger is EIP712, ReentrancyGuard, IConsentLedger {
             false,
             false
         );
+
+        // FIX (audit #4): record delegation provenance so canAccess can cascade-revoke.
+        bytes32 ck = keccak256(abi.encode(patient, newGrantee, rootCidHash));
+        consentDelegationSource[ck] = msg.sender;
 
         emit AccessGrantedViaDelegation(patient, newGrantee, msg.sender, rootCidHash);
     }
@@ -425,6 +449,25 @@ contract ConsentLedger is EIP712, ReentrancyGuard, IConsentLedger {
 
         if (!c.active) return false;
         if (c.expireAt != FOREVER && block.timestamp > c.expireAt) return false;
+
+        // FIX (audit #3): if AccessControl is wired and grantee carries the doctor flag,
+        // require their verification to still be active. Revoking a doctor's verification
+        // therefore cascades to invalidate every prior consent.
+        if (address(accessControl) != address(0)) {
+            if (accessControl.isDoctor(grantee) && !accessControl.isVerifiedDoctor(grantee)) {
+                return false;
+            }
+        }
+
+        // FIX (audit #4): if this consent originated from a delegation, the underlying
+        // delegation must still be active and unexpired.
+        address delegator = consentDelegationSource[key];
+        if (delegator != address(0)) {
+            uint256 data = _delegations[patient][delegator];
+            if (((data >> ACTIVE_BIT) & 1) == 0) return false;
+            uint40 dExp = uint40(data & EXPIRES_MASK);
+            if (block.timestamp > dExp) return false;
+        }
 
         return true;
     }

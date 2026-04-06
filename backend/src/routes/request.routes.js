@@ -14,6 +14,7 @@ import {
     CHAIN_STATUS_TO_DB,
 } from '../constants/contractEnums.js';
 import { createLogger } from '../utils/logger.js';
+import pushService from '../services/push.service.js';
 
 const log = createLogger('RequestRoutes');
 const router = Router();
@@ -281,6 +282,13 @@ router.post('/create', authenticate, requireDoctorRole, async (req, res, next) =
                 txHash: txHash || null,
             },
         });
+
+        // Fire-and-forget push to patient. Don't block the response on it.
+        pushService.sendPushToWallet(patientAddress, {
+            title: 'Yêu cầu truy cập mới',
+            body: `Bác sĩ ${doctorAddress.substring(0, 8)}... đang yêu cầu xem hồ sơ của bạn.`,
+            data: { type: 'access_request', requestId },
+        }).catch(() => { });
 
         res.json({
             success: true,

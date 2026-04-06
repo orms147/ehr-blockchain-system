@@ -249,6 +249,7 @@ contract AccessControl is IAccessControl{
             adminToOrgId[admin] = 0;
             _roles[admin] &= ~(ORGANIZATION | VERIFIED_ORG);
             orgVerifications[admin].active = false;  // Sync with roles
+            emit OrgAdminCleared(admin);
         }
     }
 

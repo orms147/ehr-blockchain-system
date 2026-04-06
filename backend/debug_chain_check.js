@@ -3,7 +3,7 @@ import { createPublicClient, http } from 'viem';
 import { arbitrumSepolia } from 'viem/chains';
 
 const RPC_URL = process.env.RPC_URL || 'https://sepolia-rollup.arbitrum.io/rpc';
-const CONSENT_LEDGER_ADDRESS = '0x1c117C0e4262d717325b9C18338906A3Cb3d7531';
+const CONSENT_LEDGER_ADDRESS = process.env.CONSENT_LEDGER_ADDRESS || '0xdF6b60e5887a4256ea7CA745Cf60CFfd9D5a4bff';
 
 const CONSENT_LEDGER_ABI = [
     {

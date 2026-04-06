@@ -39,6 +39,8 @@ interface IAccessControl {
     event MemberRemoved(address indexed org, address indexed doctor);
     event VerificationRevoked(address indexed user, address indexed revoker);
     event RelayerUpdated(address indexed relayer, bool authorized);
+    // FIX (audit #11): explicit event when an old org admin is cleared during rotation.
+    event OrgAdminCleared(address indexed admin);
     
     // Deprecation Warning
     event DeprecatedFunctionCalled(address indexed caller, string functionName);

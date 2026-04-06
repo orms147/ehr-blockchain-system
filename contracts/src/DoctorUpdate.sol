@@ -27,6 +27,7 @@ contract DoctorUpdate is ReentrancyGuard {
     uint40 private constant EMERGENCY_ACCESS_DURATION = 24 hours;
 
     uint8 private constant MIN_WITNESSES = 2;
+    uint8 private constant MAX_WITNESSES = 10;
 
     // ================ EVENTS ================
     event RecordAddedByDoctor(
@@ -63,7 +64,9 @@ contract DoctorUpdate is ReentrancyGuard {
     error InvalidParameter();
     error InvalidAccessDuration();
     error InsufficientWitnesses();
+    error TooManyWitnesses();
     error InvalidWitness();
+    error RecordNotExist();
 
     // ================ CONSTRUCTOR ================
     constructor(
@@ -156,14 +159,20 @@ contract DoctorUpdate is ReentrancyGuard {
     ) external onlyDoctor nonReentrant {
         if (!accessControl.isPatient(patient)) revert NotPatient();
         if (witnesses.length < MIN_WITNESSES) revert InsufficientWitnesses();
+        if (witnesses.length > MAX_WITNESSES) revert TooManyWitnesses();
         if (bytes(justification).length == 0) revert InvalidParameter();
         if (encKeyHash == bytes32(0)) revert InvalidParameter();
         if (cidHash == bytes32(0)) revert InvalidParameter();
+        // FIX (audit #5): emergency access must reference an existing record.
+        if (!recordRegistry.recordExists(cidHash)) revert RecordNotExist();
 
         // Validate witnesses
         _validateWitnesses(witnesses);
 
-        uint40 expireAt = uint40(block.timestamp) + EMERGENCY_ACCESS_DURATION;
+        // FIX (audit #7): explicit overflow guard on uint40 cast.
+        uint256 expireAt256 = block.timestamp + EMERGENCY_ACCESS_DURATION;
+        if (expireAt256 > type(uint40).max) revert InvalidAccessDuration();
+        uint40 expireAt = uint40(expireAt256);
 
         consentLedger.grantInternal(
             patient,
@@ -206,7 +215,10 @@ contract DoctorUpdate is ReentrancyGuard {
             }
         }
 
-        expireAt = uint40(block.timestamp) + duration;
+        // FIX (audit #7): explicit overflow guard on uint40 cast.
+        uint256 expireAt256 = block.timestamp + duration;
+        if (expireAt256 > type(uint40).max) revert InvalidAccessDuration();
+        expireAt = uint40(expireAt256);
 
         consentLedger.grantInternal(
             patient,

@@ -37,6 +37,8 @@ contract RecordRegistry is IRecordRegistry {
 
     // Constants
     uint8 private constant MAX_CHILDREN = 100;
+    // FIX (audit #12): doctor in-place update window — was hardcoded `1 days`.
+    uint40 private constant DOCTOR_UPDATE_WINDOW = 1 days;
 
     // Constructor
     constructor(IAccessControl _accessControl) {
@@ -208,8 +210,8 @@ contract RecordRegistry is IRecordRegistry {
         
         if (!isOwner) {
             if (isCreator) {
-                // Doctor can only fix within 24 hours
-                if (block.timestamp > rec.createdAt + 1 days) {
+                // Doctor can only fix within DOCTOR_UPDATE_WINDOW (24h)
+                if (block.timestamp > rec.createdAt + DOCTOR_UPDATE_WINDOW) {
                     revert Unauthorized();
                 }
             } else {

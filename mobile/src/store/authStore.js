@@ -4,6 +4,7 @@ import api from '../services/api';
 import walletActionService from '../services/walletAction.service';
 import { deriveRolesFromUser, resolveActiveRole, sanitizeRoles } from '../utils/authRoles';
 import { setSentryUser } from '../lib/sentry';
+import pushService from '../services/push.service';
 
 const ROLE_CONFIG = {
     patient: { label: 'Bệnh nhân', emoji: '👤' },
@@ -109,6 +110,9 @@ const useAuthStore = create((set, get) => ({
         });
 
         setSentryUser(userData ? { id: userData.id, walletAddress } : null);
+
+        // Fire-and-forget — don't block login on push registration.
+        pushService.syncPushTokenWithBackend().catch(() => { });
     },
 
     logout: async () => {
@@ -118,6 +122,9 @@ const useAuthStore = create((set, get) => ({
         } catch (error) {
             console.warn('Web3Auth logout warning:', error);
         }
+
+        // Tell backend to forget our push token before clearing the JWT.
+        await pushService.unregisterPushToken().catch(() => { });
 
         await clearPersistedAuth();
 

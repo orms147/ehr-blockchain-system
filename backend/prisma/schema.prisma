@@ -89,6 +89,9 @@ model User {
   // If user connects own wallet with ETH, no quota limits
   hasSelfWallet         Boolean  @default(false)
 
+  // Expo push notification token (one per user — last device wins).
+  expoPushToken         String?  @db.Text
+
   ownedRecords   RecordMetadata[] @relation("owner")
   createdRecords RecordMetadata[] @relation("creator")
   sentKeys       KeyShare[]       @relation("sender")
