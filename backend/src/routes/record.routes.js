@@ -149,9 +149,10 @@ router.post('/', authenticate, async (req, res, next) => {
         }
 
         const quota = await relayerService.getQuotaStatus(walletAddress);
-        if (!quota.hasSelfWallet && quota.uploadsRemaining <= 0) {
+        if (!quota.hasSelfWallet && quota.signaturesRemaining <= 0) {
             return res.status(429).json({
-                error: 'Monthly sponsored upload quota exhausted. Please connect a wallet with ETH to continue.',
+                code: 'QUOTA_EXHAUSTED',
+                error: 'Monthly sponsored signature quota exhausted. Please connect a wallet with ETH to continue.',
                 quota,
             });
         }

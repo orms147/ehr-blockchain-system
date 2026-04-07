@@ -23,6 +23,7 @@ import profileRoutes from './routes/profile.routes.js';
 import testRoutes from './routes/test.routes.js';
 import { startEventSync } from './services/eventSync.service.js';
 import { startRecordRegistrySync } from './services/recordRegistrySync.service.js';
+import { startConsentLedgerSync } from './services/consentLedgerSync.service.js';
 import { errorHandler } from './middleware/errorHandler.js';
 
 dotenv.config();
@@ -85,6 +86,7 @@ server.listen(PORT, () => {
     // Start blockchain event sync workers
     startEventSync();
     startRecordRegistrySync();
+    startConsentLedgerSync();
 });
 
 export default app;

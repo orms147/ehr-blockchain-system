@@ -817,6 +817,37 @@ router.post('/:id/claim', authenticate, async (req, res, next) => {
             });
         }
 
+        // CRITICAL: Revalidate on-chain consent at claim time.
+        // DB row may still say 'pending' even though a parent delegator in the
+        // CHAIN has since revoked. Epoch bumps make downstream consents dead
+        // without touching this cached row. Ask canAccess() which walks the
+        // full delegation chain including parent-epoch and patient-epoch mismatches.
+        const ownerAddress = keyShare.record?.ownerAddress?.toLowerCase();
+        if (ownerAddress) {
+            const hasAccess = await checkConsent(
+                ownerAddress,
+                keyShare.recipientAddress.toLowerCase(),
+                keyShare.cidHash.toLowerCase(),
+            );
+            if (!hasAccess) {
+                await prisma.keyShare.update({
+                    where: { id: keyShare.id },
+                    data: { status: 'revoked' },
+                });
+                log.warn('Claim blocked: on-chain consent missing (possibly cascade-revoked)', {
+                    keyShareId: keyShare.id,
+                    owner: ownerAddress,
+                    recipient: keyShare.recipientAddress,
+                    cidHash: keyShare.cidHash,
+                });
+                return res.status(403).json({
+                    code: 'ONCHAIN_CONSENT_MISSING',
+                    error: 'Quyền truy cập không còn hợp lệ trên blockchain (có thể bị bệnh nhân hoặc bác sĩ cấp trên thu hồi).',
+                    message: 'On-chain consent revoked or delegation chain broken.',
+                });
+            }
+        }
+
         const updated = await prisma.keyShare.update({
             where: { id: req.params.id },
             data: {

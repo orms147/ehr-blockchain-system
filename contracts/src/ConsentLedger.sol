@@ -47,6 +47,25 @@ contract ConsentLedger is EIP712, ReentrancyGuard, IConsentLedger {
     // consentKey => delegatee that performed grantUsingDelegation. address(0) if direct grant.
     mapping(bytes32 => address) public consentDelegationSource;
 
+    // CHAIN topology (Option B): parent pointer for multi-hop sub-delegation.
+    // patient => delegatee => the parent that sub-delegated them. address(0) when the
+    // delegation was granted directly by the patient (chain root).
+    mapping(address => mapping(address => address)) public delegationParent;
+
+    // Epoch counter per (patient, delegator). Every revokeDelegation /
+    // revokeSubDelegation targeting `delegator` bumps this by 1. Downstream artifacts
+    // (consents + sub-delegations) snapshot the epoch at creation time; any mismatch
+    // during canAccess walk means an ancestor was revoked and the chain is broken.
+    mapping(address => mapping(address => uint64)) public delegationEpoch;
+
+    // Snapshot of `delegationEpoch[patient][parent]` taken when a sub-delegation link
+    // was created. Used by canAccess to detect parent revocation.
+    mapping(address => mapping(address => uint64)) public delegationParentEpochAtCreate;
+
+    // Snapshot of `delegationEpoch[patient][delegator]` taken when that delegator
+    // called grantUsingDelegation. Used by canAccess to detect delegator revocation.
+    mapping(bytes32 => uint64) public consentDelegatorEpochAtGrant;
+
     // FIX (audit #3): reference to AccessControl so canAccess can check doctor verification status.
     // Set once by admin via setAccessControl after deploy (avoids constructor circular dep).
     IAccessControl public accessControl;
@@ -62,6 +81,11 @@ contract ConsentLedger is EIP712, ReentrancyGuard, IConsentLedger {
     uint256 private constant EXPIRES_MASK = 0xFFFFFFFFFF;
     uint256 private constant ALLOW_SUB_DELEGATE_BIT = 40;
     uint256 private constant ACTIVE_BIT = 41;
+
+    // Max sub-delegation chain depth walked by canAccess. Prevents OOG on pathological
+    // chains and caps the effective tree height (8 hops is far beyond any realistic
+    // clinical referral depth).
+    uint256 private constant MAX_DELEGATION_WALK = 8;
 
     // Constructor
     constructor(address admin_) EIP712("EHR Consent Ledger", "2") {
@@ -335,12 +359,21 @@ contract ConsentLedger is EIP712, ReentrancyGuard, IConsentLedger {
         if (expiresAt256 > type(uint40).max) revert InvalidDuration();
         uint40 expiresAt = uint40(expiresAt256);
 
-        uint256 packed = 
+        uint256 packed =
             uint256(expiresAt) |
             (allowSubDelegate ? (1 << ALLOW_SUB_DELEGATE_BIT) : 0) |
             (1 << ACTIVE_BIT);
 
         _delegations[patient][delegatee] = packed;
+
+        // CHAIN topology sanity: this is a DIRECT delegation from patient, so the
+        // chain root is the patient. Clear any stale parent pointer from a previous
+        // sub-delegation to the same address — otherwise canAccess would walk into
+        // an obsolete chain. Epoch is NOT cleared/bumped here: re-granting a direct
+        // delegation is semantically fresh, and downstream consents from any earlier
+        // link are already invalidated by the prior revoke's epoch bump.
+        delegationParent[patient][delegatee] = address(0);
+        delegationParentEpochAtCreate[patient][delegatee] = 0;
 
         emit DelegationGranted(patient, delegatee, expiresAt, allowSubDelegate);
     }
@@ -353,45 +386,135 @@ contract ConsentLedger is EIP712, ReentrancyGuard, IConsentLedger {
         }
 
         _delegations[msg.sender][delegatee] = data & ~(1 << ACTIVE_BIT);
-        
+        // Bump the delegatee's epoch so:
+        //  (a) consents they granted via grantUsingDelegation become invalid
+        //      (consentDelegatorEpochAtGrant mismatch in canAccess)
+        //  (b) any sub-delegations they created become invalid
+        //      (delegationParentEpochAtCreate mismatch during the walk)
+        unchecked { delegationEpoch[msg.sender][delegatee] += 1; }
+
         emit DelegationRevoked(msg.sender, delegatee);
+    }
+
+    /**
+     * @notice Parent delegatee creates a sub-delegation (CHAIN topology entry point).
+     * @dev    msg.sender must itself hold an active delegation from `patient` with
+     *         allowSubDelegate = true. The new sub-delegation's expiry is capped to
+     *         the parent's expiry. Creates a parent pointer + epoch snapshot so
+     *         canAccess can cascade-revoke through multi-hop chains.
+     */
+    function subDelegate(
+        address patient,
+        address newDelegatee,
+        uint40 duration,
+        bool allowSubDelegate
+    ) external override nonReentrant {
+        if (newDelegatee == address(0)) revert Unauthorized();
+        if (duration < MIN_DURATION) revert InvalidDuration();
+
+        uint256 parentData = _delegations[patient][msg.sender];
+        if (((parentData >> ACTIVE_BIT) & 1) == 0) revert NoActiveDelegation();
+        if (((parentData >> ALLOW_SUB_DELEGATE_BIT) & 1) == 0) revert SubDelegateNotAllowed();
+        uint40 parentExp = uint40(parentData & EXPIRES_MASK);
+        if (block.timestamp > parentExp) revert NoActiveDelegation();
+
+        // Cap expiry to the parent's — sub-delegation can never outlive its parent.
+        uint256 expiresAt256 = block.timestamp + duration;
+        if (expiresAt256 > uint256(parentExp)) {
+            expiresAt256 = uint256(parentExp);
+        }
+        if (expiresAt256 > type(uint40).max) revert InvalidDuration();
+        uint40 expiresAt = uint40(expiresAt256);
+
+        _delegations[patient][newDelegatee] =
+            uint256(expiresAt) |
+            (allowSubDelegate ? (1 << ALLOW_SUB_DELEGATE_BIT) : 0) |
+            (1 << ACTIVE_BIT);
+
+        delegationParent[patient][newDelegatee] = msg.sender;
+        delegationParentEpochAtCreate[patient][newDelegatee] = delegationEpoch[patient][msg.sender];
+
+        emit DelegationGranted(patient, newDelegatee, expiresAt, allowSubDelegate);
+    }
+
+    /**
+     * @notice Parent of a sub-delegation revokes it. Bumps the sub-delegatee's epoch
+     *         so their consents + further sub-delegations also cascade out.
+     * @dev    Only the direct parent that created the sub-delegation may call this.
+     *         The patient themselves should use revokeDelegation (which also bumps
+     *         the epoch).
+     */
+    function revokeSubDelegation(address patient, address subDelegatee)
+        external
+        override
+        nonReentrant
+    {
+        if (delegationParent[patient][subDelegatee] != msg.sender) revert Unauthorized();
+
+        uint256 data = _delegations[patient][subDelegatee];
+        if (data == 0 || ((data >> ACTIVE_BIT) & 1) == 0) revert NoActiveDelegation();
+
+        _delegations[patient][subDelegatee] = data & ~(1 << ACTIVE_BIT);
+        unchecked { delegationEpoch[patient][subDelegatee] += 1; }
+
+        emit DelegationRevoked(patient, subDelegatee);
     }
 
     // ============ USING DELEGATION (Hash-based) ============
 
     /**
-     * @notice Delegatee grants access to someone else
-     * @param rootCidHash keccak256(bytes(rootCID)) - computed OFF-CHAIN
+     * @notice Delegatee grants access to someone else.
+     * @dev    msg.sender may be either a direct delegatee of patient or a sub-delegatee
+     *         further down the chain — both write `_delegations[patient][msg.sender]`,
+     *         so the active-bit check works uniformly. Consent expiry is capped to the
+     *         caller's delegation expiry so a delegated grant cannot outlive its source
+     *         of authority. The granting delegator's current epoch is snapshotted so
+     *         canAccess can cascade-revoke across multi-hop chains.
+     * @param  rootCidHash    keccak256(bytes(rootCID)) - computed OFF-CHAIN
+     * @param  includeUpdates Whether the new consent traverses the update chain
+     * @param  allowDelegate  Whether the new grantee may further sub-delegate this consent
      */
     function grantUsingDelegation(
         address patient,
         address newGrantee,
         bytes32 rootCidHash,
         bytes32 encKeyHash,
-        uint40 expireAt
+        uint40 expireAt,
+        bool includeUpdates,
+        bool allowDelegate
     ) external override nonReentrant {
         uint256 data = _delegations[patient][msg.sender];
-        
+
         if (((data >> ACTIVE_BIT) & 1) == 0) revert NoActiveDelegation();
-        
-        uint40 expiresAt = uint40(data & EXPIRES_MASK);
-        if (block.timestamp > expiresAt) revert NoActiveDelegation();
+
+        uint40 delegationExpiresAt = uint40(data & EXPIRES_MASK);
+        if (block.timestamp > delegationExpiresAt) revert NoActiveDelegation();
 
         if (rootCidHash == bytes32(0)) revert EmptyCID();
+
+        // Cap consent expiry to the delegation expiry. `expireAt == 0` means the caller
+        // asked for FOREVER — clamp it to the delegation's window.
+        uint40 finalExpiry = expireAt;
+        if (finalExpiry == 0 || finalExpiry > delegationExpiresAt) {
+            finalExpiry = delegationExpiresAt;
+        }
+        if (finalExpiry <= block.timestamp) revert InvalidExpire();
 
         _grantConsent(
             patient,
             newGrantee,
             rootCidHash,
             encKeyHash,
-            expireAt,
-            false,
-            false
+            finalExpiry,
+            includeUpdates,
+            allowDelegate
         );
 
-        // FIX (audit #4): record delegation provenance so canAccess can cascade-revoke.
+        // FIX (audit #4) + CHAIN topology: record delegation provenance + epoch snapshot
+        // so canAccess can walk the chain and invalidate on any upstream revoke.
         bytes32 ck = keccak256(abi.encode(patient, newGrantee, rootCidHash));
         consentDelegationSource[ck] = msg.sender;
+        consentDelegatorEpochAtGrant[ck] = delegationEpoch[patient][msg.sender];
 
         emit AccessGrantedViaDelegation(patient, newGrantee, msg.sender, rootCidHash);
     }
@@ -459,14 +582,39 @@ contract ConsentLedger is EIP712, ReentrancyGuard, IConsentLedger {
             }
         }
 
-        // FIX (audit #4): if this consent originated from a delegation, the underlying
-        // delegation must still be active and unexpired.
+        // FIX (audit #4) + CHAIN topology: if this consent originated from a delegation,
+        // walk the sub-delegation chain up to the patient (the root) and verify every
+        // link is still active, unexpired, and holds the same epoch as captured at
+        // creation time. Any ancestor revoke invalidates every descendant consent.
         address delegator = consentDelegationSource[key];
         if (delegator != address(0)) {
-            uint256 data = _delegations[patient][delegator];
-            if (((data >> ACTIVE_BIT) & 1) == 0) return false;
-            uint40 dExp = uint40(data & EXPIRES_MASK);
-            if (block.timestamp > dExp) return false;
+            // The grantor's own epoch must match the snapshot taken at grant time.
+            if (delegationEpoch[patient][delegator] != consentDelegatorEpochAtGrant[key]) {
+                return false;
+            }
+
+            address cur = delegator;
+            for (uint256 hops = 0; hops < MAX_DELEGATION_WALK; hops++) {
+                uint256 data = _delegations[patient][cur];
+                if (((data >> ACTIVE_BIT) & 1) == 0) return false;
+                uint40 dExp = uint40(data & EXPIRES_MASK);
+                if (block.timestamp > dExp) return false;
+
+                address parent = delegationParent[patient][cur];
+                if (parent == address(0)) {
+                    // Reached the root: `cur` was delegated directly by the patient.
+                    return true;
+                }
+                // The parent's current epoch must match what was captured when this
+                // sub-delegation was created — otherwise the parent was revoked and
+                // re-granted, breaking this chain.
+                if (delegationEpoch[patient][parent] != delegationParentEpochAtCreate[patient][cur]) {
+                    return false;
+                }
+                cur = parent;
+            }
+            // Walk exceeded MAX_DELEGATION_WALK without reaching the patient.
+            return false;
         }
 
         return true;

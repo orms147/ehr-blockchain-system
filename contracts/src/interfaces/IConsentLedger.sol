@@ -74,6 +74,8 @@ interface IConsentLedger {
     error InvalidDuration();
     error EmptyCID();
     error NotSponsor();
+    error SubDelegateNotAllowed();
+    error DelegationChainTooDeep();
 
     // ============ CONSENT FUNCTIONS (Hash-based) ============
 
@@ -156,15 +158,39 @@ interface IConsentLedger {
     function revokeDelegation(address delegatee) external;
 
     /**
+     * @notice Parent delegatee (who holds an active delegation from patient with
+     *         allowSubDelegate = true) creates a sub-delegation for another doctor.
+     *         This is the CHAIN topology entry point — enables N-hop delegation chains.
+     * @dev    Sub-delegation expiry is capped to the parent's expiry.
+     */
+    function subDelegate(
+        address patient,
+        address newDelegatee,
+        uint40 duration,
+        bool allowSubDelegate
+    ) external;
+
+    /**
+     * @notice Parent of a sub-delegation revokes it. Bumps the delegatee's epoch
+     *         so every consent they granted via grantUsingDelegation becomes invalid.
+     */
+    function revokeSubDelegation(address patient, address subDelegatee) external;
+
+    /**
      * @notice Delegatee grants access to someone else
      * @param rootCidHash keccak256(bytes(rootCID)) - computed OFF-CHAIN
+     * @param includeUpdates Whether the new consent can traverse the update chain
+     * @param allowDelegate Whether the new grantee may further sub-delegate this consent
+     * @dev    Consent expiry is capped to the caller's active delegation expiry.
      */
     function grantUsingDelegation(
         address patient,
         address newGrantee,
         bytes32 rootCidHash,
         bytes32 encKeyHash,
-        uint40 expireAt
+        uint40 expireAt,
+        bool includeUpdates,
+        bool allowDelegate
     ) external;
 
     /**

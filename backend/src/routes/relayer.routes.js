@@ -19,7 +19,7 @@ const archiveRequestSchema = z.object({
     requestId: z.string().regex(/^0x[a-fA-F0-9]{64}$/),
 });
 
-// GET /api/relayer/quota - Get current quota status
+// GET /api/relayer/quota - Get unified signature quota (100/month pool)
 router.get('/quota', authenticate, async (req, res, next) => {
     try {
         const quota = await relayerService.getQuotaStatus(req.user.walletAddress);
@@ -29,7 +29,7 @@ router.get('/quota', authenticate, async (req, res, next) => {
             limits: relayerService.QUOTA_LIMITS,
             message: quota.hasSelfWallet
                 ? 'Bạn đang sử dụng ví riêng - không giới hạn'
-                : `Còn ${quota.uploadsRemaining} lần upload và ${quota.revokesRemaining} lần revoke miễn phí tháng này`,
+                : `Còn ${quota.signaturesRemaining}/${quota.signaturesLimit} chữ ký miễn phí tháng này (gồm upload, cập nhật, cấp quyền, thu hồi, uỷ quyền)`,
         });
     } catch (error) {
         next(error);
@@ -136,23 +136,10 @@ const revokeSchema = z.object({
     cidHash: z.string().regex(/^0x[a-fA-F0-9]{64}$/),
 });
 
-// POST /api/relayer/revoke - Sponsor revoke consent (quota limited)
+// POST /api/relayer/revoke - Sponsor revoke consent (unified quota pool)
 router.post('/revoke', authenticate, requirePatientRole, async (req, res, next) => {
     try {
         const { granteeAddress, cidHash } = revokeSchema.parse(req.body);
-
-        // Check quota first
-        const quota = await relayerService.getQuotaStatus(req.user.walletAddress);
-
-        if (!quota.hasSelfWallet && quota.revokesRemaining <= 0) {
-            return res.status(400).json({
-                code: 'QUOTA_EXHAUSTED',
-                error: 'Đã hết quota revoke miễn phí tháng này',
-                message: 'Đã hết quota revoke miễn phí tháng này',
-                suggestion: 'Vui lòng kết nối ví có ETH hoặc chờ đến tháng sau',
-                revokesRemaining: 0,
-            });
-        }
 
         const result = await relayerService.sponsorRevoke(
             req.user.walletAddress,
@@ -194,6 +181,46 @@ router.get('/grant-context', authenticate, async (req, res, next) => {
         res.json(ctx);
     } catch (error) {
         log.error('grant-context failed', { error: error.message });
+        next(error);
+    }
+});
+
+// Validation schema for delegation authority grant (CHAIN topology root grant)
+const delegateAuthoritySchema = z.object({
+    delegateeAddress: z.string().regex(/^0x[a-fA-F0-9]{40}$/),
+    expiresAt: z.number().int().positive(), // unix seconds
+    allowSubDelegate: z.boolean().default(false),
+    deadline: z.number().int().positive(),   // EIP-712 sig deadline (unix seconds)
+    signature: z.string().regex(/^0x[a-fA-F0-9]+$/),
+    scopeNote: z.string().max(500).optional().nullable(), // off-chain clinical purpose
+});
+
+// POST /api/relayer/delegate-authority
+// Patient signs a DelegationPermit off-chain, backend relays delegateAuthorityBySig.
+// This is the ROOT grant of a CHAIN: a direct patient -> doctor delegation with
+// chainDepth=1. Sub-delegations are issued on-chain by the delegatee via
+// ConsentLedger.subDelegate (no relayer, no patient signature needed).
+router.post('/delegate-authority', authenticate, requirePatientRole, async (req, res, next) => {
+    try {
+        const data = delegateAuthoritySchema.parse(req.body);
+
+        const result = await relayerService.sponsorDelegateAuthority({
+            patientAddress: req.user.walletAddress,
+            delegateeAddress: data.delegateeAddress,
+            expiresAt: data.expiresAt,
+            allowSubDelegate: data.allowSubDelegate,
+            deadline: data.deadline,
+            signature: data.signature,
+            scopeNote: data.scopeNote ?? null,
+        });
+
+        res.json({
+            success: true,
+            message: 'Đã uỷ quyền cho bác sĩ thành công',
+            txHash: result.txHash,
+        });
+    } catch (error) {
+        log.error('delegate-authority failed', { error: error.message, wallet: req.user?.walletAddress });
         next(error);
     }
 });

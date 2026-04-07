@@ -11,9 +11,12 @@ import {
     CONSENT_LEDGER_ABI,
 } from '../config/contractABI.js';
 
+// Unified gas sponsorship quota — 100 signatures/month pool covering every
+// patient on-chain action (upload, update, grant/share, revoke, delegate).
+// Rationale: splitting into per-action buckets caused confusing 429s mid-flow.
+// One pool keeps "patient never pays gas" as a single guarantee.
 const QUOTA_LIMITS = {
-    UPLOADS_PER_MONTH: 100,
-    REVOKES_PER_MONTH: 20,
+    SIGNATURES_PER_MONTH: 100,
 };
 
 const CONTRACTS = {
@@ -223,14 +226,47 @@ async function checkAndResetQuota(user) {
         await prisma.user.update({
             where: { walletAddress: user.walletAddress },
             data: {
-                uploadsThisMonth: 0,
-                revokesThisMonth: 0,
+                signaturesThisMonth: 0,
                 quotaResetDate: now,
             }
         });
-        return { ...user, uploadsThisMonth: 0, revokesThisMonth: 0 };
+        return { ...user, signaturesThisMonth: 0 };
     }
     return user;
+}
+
+// Internal: require quota + bump counter atomically. Throws a 429 error when
+// the pool is exhausted and the user does not self-pay gas.
+async function consumeQuota(walletAddress, actionLabel) {
+    const address = walletAddress.toLowerCase();
+    let user = await prisma.user.findUnique({
+        where: { walletAddress: address },
+    });
+
+    if (!user) {
+        throw createRelayerError('User not found', {
+            code: 'USER_NOT_FOUND',
+            statusCode: 404,
+        });
+    }
+
+    user = await checkAndResetQuota(user);
+
+    if (!user.hasSelfWallet && user.signaturesThisMonth >= QUOTA_LIMITS.SIGNATURES_PER_MONTH) {
+        throw createRelayerError(
+            `Đã hết quota chữ ký miễn phí tháng này (${QUOTA_LIMITS.SIGNATURES_PER_MONTH}). Vui lòng kết nối ví có ETH hoặc chờ sang tháng sau.`,
+            { code: 'QUOTA_EXHAUSTED', statusCode: 429, details: actionLabel }
+        );
+    }
+
+    return user;
+}
+
+async function bumpSignatureCounter(walletAddress) {
+    await prisma.user.update({
+        where: { walletAddress: walletAddress.toLowerCase() },
+        data: { signaturesThisMonth: { increment: 1 } },
+    });
 }
 
 export async function getQuotaStatus(walletAddress) {
@@ -241,8 +277,8 @@ export async function getQuotaStatus(walletAddress) {
     if (!user) {
         return {
             registrationAvailable: true,
-            uploadsRemaining: QUOTA_LIMITS.UPLOADS_PER_MONTH,
-            revokesRemaining: QUOTA_LIMITS.REVOKES_PER_MONTH,
+            signaturesRemaining: QUOTA_LIMITS.SIGNATURES_PER_MONTH,
+            signaturesLimit: QUOTA_LIMITS.SIGNATURES_PER_MONTH,
             hasSelfWallet: false,
         };
     }
@@ -251,8 +287,8 @@ export async function getQuotaStatus(walletAddress) {
 
     return {
         registrationAvailable: !user.registrationSponsored,
-        uploadsRemaining: QUOTA_LIMITS.UPLOADS_PER_MONTH - user.uploadsThisMonth,
-        revokesRemaining: QUOTA_LIMITS.REVOKES_PER_MONTH - user.revokesThisMonth,
+        signaturesRemaining: Math.max(0, QUOTA_LIMITS.SIGNATURES_PER_MONTH - user.signaturesThisMonth),
+        signaturesLimit: QUOTA_LIMITS.SIGNATURES_PER_MONTH,
         hasSelfWallet: user.hasSelfWallet,
         quotaResetDate: user.quotaResetDate,
     };
@@ -338,33 +374,7 @@ export async function sponsorUploadRecord(walletAddress, cidHash, parentCidHash,
     ensureSponsorWalletConfigured();
 
     const address = walletAddress.toLowerCase();
-
-    let user = await prisma.user.findUnique({
-        where: { walletAddress: address },
-    });
-
-    if (!user) {
-        throw createRelayerError('User not found', {
-            code: 'USER_NOT_FOUND',
-            statusCode: 404,
-        });
-    }
-
-    user = await checkAndResetQuota(user);
-
-    if (user.uploadsThisMonth >= QUOTA_LIMITS.UPLOADS_PER_MONTH) {
-        if (user.hasSelfWallet) {
-            throw createRelayerError('QUOTA_EXHAUSTED_USE_OWN_WALLET', {
-                code: 'QUOTA_EXHAUSTED',
-                statusCode: 429,
-            });
-        }
-
-        throw createRelayerError(
-            `Da het quota upload thang nay (${QUOTA_LIMITS.UPLOADS_PER_MONTH}). Vui long ket noi vi co ETH de tiep tuc.`,
-            { code: 'QUOTA_EXHAUSTED', statusCode: 429 }
-        );
-    }
+    await consumeQuota(address, 'upload');
 
     await ensurePatientRegistered(address);
 
@@ -404,10 +414,7 @@ export async function sponsorUploadRecord(walletAddress, cidHash, parentCidHash,
         throw buildUploadError(error, hash);
     }
 
-    await prisma.user.update({
-        where: { walletAddress: address },
-        data: { uploadsThisMonth: { increment: 1 } },
-    });
+    await bumpSignatureCounter(address);
 
     return { txHash: hash, receipt };
 }
@@ -416,24 +423,7 @@ export async function sponsorRevoke(walletAddress, granteeAddress, cidHash) {
     ensureSponsorWalletConfigured();
 
     const address = walletAddress.toLowerCase();
-
-    let user = await prisma.user.findUnique({
-        where: { walletAddress: address },
-    });
-
-    if (!user) {
-        throw new Error('User not found');
-    }
-
-    user = await checkAndResetQuota(user);
-
-    if (user.revokesThisMonth >= QUOTA_LIMITS.REVOKES_PER_MONTH) {
-        if (user.hasSelfWallet) {
-            throw new Error('QUOTA_EXHAUSTED_USE_OWN_WALLET');
-        }
-
-        throw new Error(`Da het quota revoke thang nay (${QUOTA_LIMITS.REVOKES_PER_MONTH}). Vui long ket noi vi co ETH de tiep tuc.`);
-    }
+    await consumeQuota(address, 'revoke');
 
     const hash = await walletClient.writeContract({
         address: CONTRACTS.CONSENT_LEDGER,
@@ -444,10 +434,7 @@ export async function sponsorRevoke(walletAddress, granteeAddress, cidHash) {
 
     const receipt = await publicClient.waitForTransactionReceipt({ hash });
 
-    await prisma.user.update({
-        where: { walletAddress: address },
-        data: { revokesThisMonth: { increment: 1 } },
-    });
+    await bumpSignatureCounter(address);
 
     return { txHash: hash, receipt };
 }
@@ -466,17 +453,7 @@ export async function sponsorGrantConsent(
     ensureSponsorWalletConfigured();
 
     const patient = patientAddress.toLowerCase();
-    const user = await prisma.user.findUnique({
-        where: { walletAddress: patient },
-    });
-
-    if (!user) {
-        throw new Error('User not found');
-    }
-
-    if (user.uploadsThisMonth >= QUOTA_LIMITS.UPLOADS_PER_MONTH) {
-        throw new Error('Monthly upload/grant quota exceeded. Please pay gas yourself.');
-    }
+    await consumeQuota(patient, 'grant');
 
     const hash = await walletClient.writeContract({
         address: CONTRACTS.CONSENT_LEDGER,
@@ -497,10 +474,102 @@ export async function sponsorGrantConsent(
 
     const receipt = await publicClient.waitForTransactionReceipt({ hash });
 
-    await prisma.user.update({
-        where: { walletAddress: patient },
-        data: { uploadsThisMonth: { increment: 1 } },
-    });
+    await bumpSignatureCounter(patient);
+    return { txHash: hash, receipt };
+}
+
+// Relay a delegation grant via ConsentLedger.delegateAuthorityBySig.
+// Patient signs EIP-712 DelegationPermit off-chain; backend submits with sponsor gas.
+// Counts against the same 100/month pool as other patient actions.
+export async function sponsorDelegateAuthority({
+    patientAddress,
+    delegateeAddress,
+    expiresAt,
+    allowSubDelegate,
+    deadline,
+    signature,
+    scopeNote = null,
+}) {
+    ensureSponsorWalletConfigured();
+
+    const patient = patientAddress.toLowerCase();
+    const delegatee = delegateeAddress.toLowerCase();
+    await consumeQuota(patient, 'delegate');
+
+    let hash;
+    try {
+        const simulation = await publicClient.simulateContract({
+            account: sponsorAccount,
+            address: CONTRACTS.CONSENT_LEDGER,
+            abi: CONSENT_LEDGER_ABI,
+            functionName: 'delegateAuthorityBySig',
+            args: [
+                patient,
+                delegatee,
+                BigInt(expiresAt),
+                Boolean(allowSubDelegate),
+                BigInt(deadline),
+                signature,
+            ],
+        });
+        hash = await walletClient.writeContract(simulation.request);
+    } catch (error) {
+        throw buildUploadError(error);
+    }
+
+    let receipt;
+    try {
+        receipt = await publicClient.waitForTransactionReceipt({ hash });
+    } catch (error) {
+        throw buildUploadError(error, hash);
+    }
+
+    await bumpSignatureCounter(patient);
+
+    // Write DB cache row eagerly so the patient's UI sees it before the
+    // DelegationGranted event catches up. Event sync will re-upsert later
+    // (idempotent on @@unique(patientAddress, delegateeAddress)).
+    try {
+        await prisma.delegation.upsert({
+            where: {
+                patientAddress_delegateeAddress: {
+                    patientAddress: patient,
+                    delegateeAddress: delegatee,
+                },
+            },
+            update: {
+                chainDepth: 1,
+                parentDelegator: null,
+                allowSubDelegate: Boolean(allowSubDelegate),
+                expiresAt: new Date(Number(expiresAt) * 1000),
+                scopeNote,
+                grantTxHash: hash,
+                grantBlockNumber: receipt?.blockNumber ?? null,
+                grantedAt: new Date(),
+                status: 'active',
+                revokedTxHash: null,
+                revokedAt: null,
+                revokedBy: null,
+            },
+            create: {
+                patientAddress: patient,
+                delegateeAddress: delegatee,
+                chainDepth: 1,
+                parentDelegator: null,
+                epoch: 0n,
+                allowSubDelegate: Boolean(allowSubDelegate),
+                expiresAt: new Date(Number(expiresAt) * 1000),
+                scopeNote,
+                grantTxHash: hash,
+                grantBlockNumber: receipt?.blockNumber ?? null,
+                status: 'active',
+            },
+        });
+    } catch (dbError) {
+        // DB cache failure is not fatal — chain is source of truth.
+        // Event sync will eventually populate the row.
+    }
+
     return { txHash: hash, receipt };
 }
 
@@ -535,7 +604,8 @@ export async function getGrantContext(patientAddress, granteeAddress) {
         nonce: nonce.toString(),
         isDoctor,
         isVerifiedDoctor,
-        uploadsRemaining: quota.uploadsRemaining,
+        signaturesRemaining: quota.signaturesRemaining,
+        signaturesLimit: quota.signaturesLimit,
         hasSelfWallet: quota.hasSelfWallet,
     };
 }
@@ -580,6 +650,7 @@ export default {
     sponsorUploadRecord,
     sponsorRevoke,
     sponsorGrantConsent,
+    sponsorDelegateAuthority,
     getGrantContext,
     archiveRequest,
     getArchivedRequests,

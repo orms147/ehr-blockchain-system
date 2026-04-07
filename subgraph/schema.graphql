@@ -104,3 +104,15 @@ type DelegationEvent @entity(immutable: true) {
   timestamp: BigInt!
   txHash: Bytes!
 }
+
+# Audit trail for consents minted by a delegatee/sub-delegatee via grantUsingDelegation.
+# Distinct from ConsentEvent so the mobile UI can show "who issued this access via the chain".
+type DelegationAccessGrant @entity(immutable: true) {
+  id: ID!                        # txHash + logIndex
+  patient: Bytes!                # root owner
+  newGrantee: Bytes!             # doctor that received the consent
+  byDelegatee: Bytes!            # delegatee/sub-delegatee that invoked grantUsingDelegation
+  rootCidHash: Bytes!
+  timestamp: BigInt!
+  txHash: Bytes!
+}

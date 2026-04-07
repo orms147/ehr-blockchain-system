@@ -4,8 +4,13 @@ import {
   ConsentRevoked,
   DelegationGranted,
   DelegationRevoked,
+  AccessGrantedViaDelegation,
 } from "../generated/ConsentLedger/ConsentLedger";
-import { ConsentEvent, DelegationEvent } from "../generated/schema";
+import {
+  ConsentEvent,
+  DelegationEvent,
+  DelegationAccessGrant,
+} from "../generated/schema";
 
 function eventId(txHash: string, logIndex: BigInt): string {
   return txHash + "-" + logIndex.toString();
@@ -56,6 +61,20 @@ export function handleDelegationRevoked(event: DelegationRevoked): void {
   e.kind = "revoked";
   e.patient = event.params.patient;
   e.delegatee = event.params.delegatee;
+  e.timestamp = event.block.timestamp;
+  e.txHash = event.transaction.hash;
+  e.save();
+}
+
+export function handleAccessGrantedViaDelegation(
+  event: AccessGrantedViaDelegation
+): void {
+  let id = eventId(event.transaction.hash.toHexString(), event.logIndex);
+  let e = new DelegationAccessGrant(id);
+  e.patient = event.params.patient;
+  e.newGrantee = event.params.newGrantee;
+  e.byDelegatee = event.params.byDelegatee;
+  e.rootCidHash = event.params.rootCidHash;
   e.timestamp = event.block.timestamp;
   e.txHash = event.transaction.hash;
   e.save();

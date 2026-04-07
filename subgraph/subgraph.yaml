@@ -8,9 +8,9 @@ dataSources:
     name: RecordRegistry
     network: arbitrum-sepolia
     source:
-      address: "0x5414291fBc3DaF246A7A58cE37998174747Ee300"
+      address: "0x914B750Fc543A5b01412a7CC098de5D56B65f9c3"
       abi: RecordRegistry
-      startBlock: 257002858
+      startBlock: 257316716
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.7
@@ -33,9 +33,9 @@ dataSources:
     name: EHRSystem
     network: arbitrum-sepolia
     source:
-      address: "0x08960A39Bd7A18567007810019a60c1E69FA5Bd0"
+      address: "0xb5691a002d301bf766a09559C4C2E10E5064718f"
       abi: EHRSystem
-      startBlock: 257002864
+      startBlock: 257316723
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.7
@@ -59,9 +59,9 @@ dataSources:
     name: ConsentLedger
     network: arbitrum-sepolia
     source:
-      address: "0xdF6b60e5887a4256ea7CA745Cf60CFfd9D5a4bff"
+      address: "0x86192039236F8a9912eeeeA4Aa00E0A41e428AC7"
       abi: ConsentLedger
-      startBlock: 257002853
+      startBlock: 257316710
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.7
@@ -70,6 +70,7 @@ dataSources:
       entities:
         - ConsentEvent
         - DelegationEvent
+        - DelegationAccessGrant
       abis:
         - name: ConsentLedger
           file: ./abis/ConsentLedger.json
@@ -82,14 +83,16 @@ dataSources:
           handler: handleDelegationGranted
         - event: DelegationRevoked(indexed address,indexed address)
           handler: handleDelegationRevoked
+        - event: AccessGrantedViaDelegation(indexed address,indexed address,indexed address,bytes32)
+          handler: handleAccessGrantedViaDelegation
 
   - kind: ethereum/contract
     name: AccessControl
     network: arbitrum-sepolia
     source:
-      address: "0xA695F7C2A07F08F372c13b60858C882A8ceab8Eb"
+      address: "0xD23555123C94A7CF254269A2f85CE9fC5C84B63E"
       abi: AccessControl
-      startBlock: 257002846
+      startBlock: 257316703
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.7

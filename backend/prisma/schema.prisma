@@ -80,10 +80,12 @@ model User {
   bloodType     String?  @db.VarChar(5)    // A+, B-, AB+, O-
   allergies     String?  @db.Text          // Free text
   
-  // Quota tracking for gas sponsorship
+  // Quota tracking for gas sponsorship — single 100/month pool covering
+  // all patient on-chain actions (upload, update, share/grant, revoke, delegate).
+  // Rationale: one budget is simpler for users and matches the "patient never pays gas"
+  // invariant; breaking it into per-action buckets just surfaced confusing 429s.
   registrationSponsored Boolean  @default(false)  // 1 time only
-  uploadsThisMonth      Int      @default(0)      // max 100/month
-  revokesThisMonth      Int      @default(0)      // max 20/month
+  signaturesThisMonth   Int      @default(0)      // max 100/month (pooled)
   quotaResetDate        DateTime @default(now())  // reset monthly
   
   // If user connects own wallet with ETH, no quota limits
@@ -297,23 +299,63 @@ model EmergencyAccess {
   @@index([status])
 }
 
-// Delegation - for patients to delegate access to family members
+// Delegation - CHAIN topology mirror of ConsentLedger.delegations.
+// This table is a CACHE populated by event sync — on-chain canAccess() is the
+// source of truth for authorization. Never make permission decisions from here
+// directly; use it only for UX (listing, filtering, scope notes).
+//
+// chainDepth: 1 = direct patient->delegatee (delegateAuthorityBySig/grantDelegation),
+//             2+ = sub-delegations via ConsentLedger.subDelegate.
+// parentDelegator: null when chainDepth==1, else the immediate parent delegatee.
+// epoch: mirrors on-chain delegationEpoch[patient][delegatee]; bumped on any revoke so
+//        downstream grants become unverifiable via epoch mismatch.
 model Delegation {
-  id              String   @id @default(uuid())
-  patientAddress  String   @db.VarChar(42)
-  delegateAddress String   @db.VarChar(42)   // Family member
-  
-  // Delegation scope
-  delegationType  String   @default("full")  // full, limited, emergency_only
-  
-  // Audit
-  status          String   @default("active")  // active, revoked
-  createdAt       DateTime @default(now())
-  revokedAt       DateTime?
-  
-  @@unique([patientAddress, delegateAddress])
+  id                 String    @id @default(uuid())
+  patientAddress     String    @db.VarChar(42)   // root owner
+  delegateeAddress   String    @db.VarChar(42)   // doctor/sub-doctor receiving authority
+  parentDelegator    String?   @db.VarChar(42)   // null = direct from patient
+  chainDepth         Int       @default(1)
+  epoch              BigInt    @default(0)
+
+  // On-chain delegation bits
+  allowSubDelegate   Boolean   @default(false)
+  expiresAt          DateTime
+  scopeNote          String?   @db.Text          // off-chain clinical purpose / ICD-10 notes
+
+  // Grant audit
+  grantTxHash        String?   @db.VarChar(66)
+  grantBlockNumber   BigInt?
+  grantedAt          DateTime  @default(now())
+
+  // Revoke audit (cascade-aware: set when parent or patient revokes upstream)
+  status             String    @default("active")  // active, revoked, expired
+  revokedTxHash      String?   @db.VarChar(66)
+  revokedAt          DateTime?
+  revokedBy          String?   @db.VarChar(42)     // patient | parentDelegator | self
+
+  @@unique([patientAddress, delegateeAddress])
+  @@index([patientAddress, status])
+  @@index([delegateeAddress, status])
+  @@index([parentDelegator])
+}
+
+// DelegationAccessLog - audit trail for consents minted via ConsentLedger.grantUsingDelegation.
+// Mirrors the on-chain AccessGrantedViaDelegation event. Lets patients see
+// "who in the delegation chain issued which access, to whom, for which record".
+model DelegationAccessLog {
+  id             String   @id @default(uuid())
+  patientAddress String   @db.VarChar(42)   // root owner of the record
+  newGrantee     String   @db.VarChar(42)   // doctor that received the consent
+  byDelegatee    String   @db.VarChar(42)   // delegatee/sub-delegatee that invoked grantUsingDelegation
+  rootCidHash    String   @db.VarChar(66)
+  txHash         String   @db.VarChar(66)
+  blockNumber    BigInt
+  createdAt      DateTime @default(now())
+
   @@index([patientAddress])
-  @@index([delegateAddress])
+  @@index([byDelegatee])
+  @@index([newGrantee])
+  @@index([rootCidHash])
 }
 
 // Organization - Hospitals and clinics

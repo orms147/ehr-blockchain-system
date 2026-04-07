@@ -57,7 +57,10 @@
       "Bash(grep -n \"checkConsent\\\\|hasConsent\" c:/University/DATN/EHR/backend/src/routes/keyShare.routes.js c:/University/DATN/EHR/backend/src/services/*.js)",
       "Bash(grep -r \"keyShare\\\\|encryptedPayload\\\\|senderPublicKey\" /c/University/DATN/EHR/frontend/src/services/*.js)",
       "Bash(python -c \"f=open\\(r'c:\\\\University\\\\DATN\\\\EHR\\\\backend\\\\src\\\\routes\\\\keyShare.routes.js','rb'\\).read\\(\\); i=f.find\\(b'Access DENIED'\\); print\\(repr\\(f[i:i+400]\\)\\)\")",
-      "Bash(python)"
+      "Bash(python)",
+      "Bash(forge test:*)",
+      "Bash(node -e \"const b=require\\('./broadcast/DeployAll.s.sol/421614/run-latest.json'\\); const txs=b.transactions||[]; const rcs=b.receipts||[]; const addrs={'0xd23555123c94a7cf254269a2f85ce9fc5c84b63e':'AccessControl','0x86192039236f8a9912eeeea4aa00e0a41e428ac7':'ConsentLedger','0x914b750fc543a5b01412a7cc098de5d56b65f9c3':'RecordRegistry','0xb5691a002d301bf766a09559c4c2e10e5064718f':'EHRSystemSecure','0x0c56f22be4b03793bb01036de4f98a064d4bd715':'DoctorUpdate'}; for \\(const r of rcs\\){const addr=\\(r.contractAddress||''\\).toLowerCase\\(\\); if\\(addrs[addr]\\){console.log\\(addrs[addr].padEnd\\(18\\), r.contractAddress, 'block:', parseInt\\(r.blockNumber, 16\\)\\);}}\")",
+      "Bash(grep -l \"EventSyncState\" prisma/migrations/*/migration.sql)"
     ]
   }
 }
