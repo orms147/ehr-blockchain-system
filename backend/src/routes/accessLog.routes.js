@@ -37,7 +37,7 @@ router.get('/:cidHash', authenticate, async (req, res, next) => {
 router.get('/my/activity', authenticate, async (req, res, next) => {
     try {
         const logs = await prisma.accessLog.findMany({
-            where: { accessorAddress: req.user.walletAddress },
+            where: { accessorAddress: req.user.walletAddress?.toLowerCase() },
             orderBy: { createdAt: 'desc' },
             take: 50
         });

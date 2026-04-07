@@ -1,7 +1,11 @@
 import React, { useMemo, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import QRCode from 'react-native-qrcode-svg';
+import recordService from '../services/record.service';
 import { Alert, Image, Modal, Pressable, ScrollView, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { QrCode, Lock, Clock, FileText, User, Share2, Unlock, X } from 'lucide-react-native';
+import { QrCode, Lock, Clock, FileText, User, Share2, Unlock, X, FilePlus2 } from 'lucide-react-native';
+import useAuthStore from '../store/authStore';
 import { YStack, XStack, Text, Button, View } from 'tamagui';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -9,6 +13,7 @@ import { getOrCreateEncryptionKeypair, decryptFromSender, encryptForRecipient } 
 import { importAESKey, decryptData } from '../services/crypto';
 import ipfsService from '../services/ipfs.service';
 import keyShareService from '../services/keyShare.service';
+import consentService from '../services/consent.service';
 import walletActionService from '../services/walletAction.service';
 import authService from '../services/auth.service';
 import {
@@ -82,11 +87,32 @@ function extractImageFromPayload(payload: any): DecryptedImage | null {
     return null;
 }
 
-export default function RecordDetailScreen({ route }: any) {
+export default function RecordDetailScreen({ route, navigation }: any) {
     const record: RouteRecord = route?.params?.record || {};
+    const { user } = useAuthStore();
+    const me = String(user?.walletAddress || '').toLowerCase();
+    const ownerAddrLc = String((record as any)?.ownerAddress || '').toLowerCase();
+    const creatorAddrLc = String((record as any)?.createdBy || '').toLowerCase();
+    const iAmOwner = !!me && (me === ownerAddrLc || me === creatorAddrLc);
 
     const [isDecrypting, setIsDecrypting] = useState(false);
     const [decryptedData, setDecryptedData] = useState<any>(null);
+
+    const { data: chain } = useQuery({
+        queryKey: ['recordChain', record?.cidHash],
+        queryFn: () => recordService.getRecordChain(record.cidHash!),
+        enabled: !!record?.cidHash,
+        staleTime: 60_000,
+    });
+    // Full tree (all ancestors + all descendants) ordered by createdAt asc.
+    // We use this for the "Chuỗi phiên bản" strip so mid-chain views don't
+    // silently hide siblings/grandparents.
+    const { data: fullChain } = useQuery({
+        queryKey: ['recordChainCids', record?.cidHash],
+        queryFn: () => recordService.getChainCids(record.cidHash!),
+        enabled: !!record?.cidHash,
+        staleTime: 60_000,
+    });
     const [decryptError, setDecryptError] = useState<string | null>(null);
 
     // Share via address
@@ -96,6 +122,15 @@ export default function RecordDetailScreen({ route }: any) {
 
     // QR modal — hiển thị cidHash để bác sĩ nhập thủ công
     const [showQrModal, setShowQrModal] = useState(false);
+
+    // Fullscreen image viewer
+    const [showImageViewer, setShowImageViewer] = useState(false);
+
+    // Share expiry (giờ). Null = không giới hạn.
+    const [shareExpiryHours, setShareExpiryHours] = useState<number | null>(24 * 7);
+    const [customExpiryOpen, setCustomExpiryOpen] = useState(false);
+    const [customExpiryValue, setCustomExpiryValue] = useState('');
+    const [customExpiryUnit, setCustomExpiryUnit] = useState<'hour' | 'day'>('day');
 
     const decryptedImage = useMemo(() => extractImageFromPayload(decryptedData), [decryptedData]);
 
@@ -145,10 +180,11 @@ export default function RecordDetailScreen({ route }: any) {
         throw new Error('Key đã được mã hoá bằng khoá cũ hoặc không hợp lệ.');
     };
 
-    const saveLocalKey = async (cidHash: string | undefined, cid: string, aesKeyString: string, title: string | undefined) => {
-        if (!cidHash) {
-            return;
-        }
+    const saveLocalKey = async (cidHash: string | undefined, cid: string, aesKeyString: string, title: string | undefined, iAmOwner: boolean) => {
+        if (!cidHash) return;
+        // SECURITY: only persist AES key locally if the current user is the record owner.
+        // Caching shared-key for non-owner would let revoked/unverified doctors keep decrypting forever.
+        if (!iAmOwner) return;
 
         const latestLocalRecordsString = await AsyncStorage.getItem('ehr_local_records');
         const latestRecords = latestLocalRecordsString ? JSON.parse(latestLocalRecordsString) : {};
@@ -180,6 +216,15 @@ function classifyDecryptError(error: any): string {
     if (code === 'CONSENT_NOT_FOUND') {
         return 'Chưa có quyền on-chain cho hồ sơ này. Vui lòng yêu cầu truy cập.';
     }
+    if (code === 'DOCTOR_NOT_VERIFIED') {
+        return 'Tài khoản bác sĩ của bạn chưa được tổ chức y tế xác minh on-chain. Liên hệ quản trị viên tổ chức để được duyệt.';
+    }
+    if (code === 'CREATOR_KEY_LOST') {
+        return 'Khoá AES của hồ sơ chỉ được lưu trên thiết bị đã tạo. Hãy mở lại trên thiết bị cũ hoặc liên hệ quản trị viên để phục hồi.';
+    }
+    if (code === 'OWNER_KEY_MISSING') {
+        return 'Chưa có khoá chia sẻ cho hồ sơ này. Có thể bác sĩ cập nhật chưa chia sẻ khoá cho bạn.';
+    }
     if (code === 'BACKEND_UNREACHABLE' || raw.includes('network') || raw.includes('fetch')) {
         return 'Không kết nối được server. Kiểm tra kết nối mạng.';
     }
@@ -187,50 +232,223 @@ function classifyDecryptError(error: any): string {
     return error?.message || 'Không thể giải mã hồ sơ. Vui lòng thử lại.';
 }
 
-    const handleShare = async () => {
-        const address = shareAddress.trim().toLowerCase();
-        if (!/^0x[a-f0-9]{40}$/.test(address)) {
-            Alert.alert('Địa chỉ không hợp lệ', 'Vui lòng nhập địa chỉ ví hợp lệ (0x...).');
+    const performShare = async (address: string) => {
+        // Load local CID + AES key
+        const localStr = await AsyncStorage.getItem('ehr_local_records');
+        const localRecords = localStr ? JSON.parse(localStr) : {};
+        const local = localRecords[record.cidHash || ''];
+        if (!local?.cid || !local?.aesKey) {
+            Alert.alert('Chưa giải mã', 'Hãy giải mã hồ sơ trước khi chia sẻ để lấy khóa.');
             return;
         }
 
+        // Get recipient NaCl public key
+        const recipientKeyRes = await authService.getEncryptionKey(address);
+        const recipientPubKey = recipientKeyRes?.encryptionPublicKey;
+        if (!recipientPubKey) {
+            Alert.alert('Không tìm thấy khóa', 'Địa chỉ ví này chưa đăng ký khóa mã hoá trong hệ thống.');
+            return;
+        }
+
+        const expiresAtMs = shareExpiryHours ? Date.now() + shareExpiryHours * 3600 * 1000 : 0;
+
+        // CRITICAL: on-chain consent must be keyed on the ACTUAL CHAIN ROOT,
+        // not the version the patient is currently viewing. With includeUpdates=true
+        // the root consent covers every descendant version. If we hash the current
+        // version's CID the doctor only gets access to that one version and the
+        // backend's ancestor walk cannot find consent when they open older ones.
+        let rootCid = local.cid;
+        let rootAesKey = local.aesKey;
+        try {
+            const chainRes: any = await recordService.getChainCids(record.cidHash!);
+            const rootHash: string | undefined = chainRes?.rootCidHash;
+            if (rootHash && rootHash.toLowerCase() !== String(record.cidHash).toLowerCase()) {
+                const rootLocal = localRecords[rootHash];
+                if (rootLocal?.cid && rootLocal?.aesKey) {
+                    rootCid = rootLocal.cid;
+                    rootAesKey = rootLocal.aesKey;
+                } else {
+                    console.warn('Root local key missing, falling back to current version as consent key', rootHash);
+                }
+            }
+        } catch (e) {
+            console.warn('Could not resolve chain root, using current version', e);
+        }
+
+        // 1. ON-CHAIN CONSENT — patient signs EIP-712, relayer submits grantBySig.
+        // cid/aesKey here become rootCidHash/encKeyHash — always the chain root.
+        const grantResult = await consentService.grantConsentOnChain({
+            granteeAddress: address,
+            cid: rootCid,
+            aesKey: rootAesKey,
+            expiresAtMs,
+            includeUpdates: true,
+            allowDelegate: false,
+        });
+
+        // 2. Off-chain encrypted payload (blind mailbox)
+        const { walletClient, address: myAddress } = await walletActionService.getWalletContext();
+        const myKeypair = await getOrCreateEncryptionKeypair(walletClient, myAddress);
+        const payload = JSON.stringify({ cid: local.cid, aesKey: local.aesKey });
+        const encryptedPayload = encryptForRecipient(payload, recipientPubKey, myKeypair.secretKey);
+
+        await keyShareService.shareKey({
+            cidHash: record.cidHash!,
+            recipientAddress: address,
+            encryptedPayload,
+            senderPublicKey: myKeypair.publicKey,
+            expiresAt: expiresAtMs ? new Date(expiresAtMs).toISOString() : null,
+        });
+
+        // CASCADE: Also create keyShare entries for every other version in the chain
+        // for which the patient has local keys. The on-chain consent already covers the
+        // whole tree (includeUpdates=true), so we just need DB rows so backend lookup
+        // finds a key for whichever version the doctor opens.
+        try {
+            // Full chain loop: fetch ALL versions in the tree (ancestors + descendants)
+            // via backend chain-cids endpoint, then create keyShare for each.
+            let versionsToShare: any[] = [];
+            try {
+                const chainRes: any = await recordService.getChainCids(record.cidHash!);
+                const all = chainRes?.records || [];
+                versionsToShare = all.filter((v: any) => v?.cidHash && v.cidHash !== record.cidHash);
+            } catch (e) {
+                console.warn('getChainCids failed, falling back to parent/children', e);
+                if (chain?.parent?.cidHash && chain.parent.cidHash !== record.cidHash) {
+                    versionsToShare.push(chain.parent);
+                }
+                (chain?.children || []).forEach((c: any) => {
+                    if (c?.cidHash && c.cidHash !== record.cidHash) versionsToShare.push(c);
+                });
+            }
+
+            for (const v of versionsToShare) {
+                const vLocal = localRecords[v.cidHash];
+                if (!vLocal?.cid || !vLocal?.aesKey) continue; // patient doesn't have key for this version
+                const vPayload = JSON.stringify({ cid: vLocal.cid, aesKey: vLocal.aesKey });
+                const vEncrypted = encryptForRecipient(vPayload, recipientPubKey, myKeypair.secretKey);
+                try {
+                    await keyShareService.shareKey({
+                        cidHash: v.cidHash,
+                        recipientAddress: address,
+                        encryptedPayload: vEncrypted,
+                        senderPublicKey: myKeypair.publicKey,
+                        expiresAt: expiresAtMs ? new Date(expiresAtMs).toISOString() : null,
+                    });
+                } catch (e) {
+                    console.warn('Cascade keyShare failed for version', v.cidHash, e);
+                }
+            }
+        } catch (e) {
+            console.warn('Cascade keyShare error', e);
+        }
+
+        setShowShareModal(false);
+        setShareAddress('');
+
+        const warn = grantResult.isDoctor && !grantResult.isVerifiedDoctor
+            ? '\n\n⚠️ Bác sĩ này chưa được xác minh — họ sẽ chỉ đọc được hồ sơ sau khi tổ chức y tế xác minh.'
+            : '';
+        Alert.alert(
+            'Chia sẻ thành công',
+            `Đã cấp quyền on-chain (tx: ${grantResult.txHash.slice(0, 10)}…).\nCòn ${grantResult.uploadsRemaining} lượt miễn phí tháng này.${warn}`
+        );
+    };
+
+    const handleShare = async () => {
+        const raw = shareAddress.trim();
+        if (!raw) {
+            Alert.alert('Thiếu địa chỉ', 'Vui lòng nhập địa chỉ ví của người nhận.');
+            return;
+        }
+        if (!/^0x[a-fA-F0-9]{40}$/.test(raw)) {
+            Alert.alert(
+                'Địa chỉ sai định dạng',
+                'Địa chỉ ví Ethereum phải bắt đầu bằng 0x và có đúng 40 ký tự hex (vd: 0xabc...123).'
+            );
+            return;
+        }
+        const address = raw.toLowerCase();
+
         setIsSharing(true);
         try {
-            // Load local CID + AES key
-            const localStr = await AsyncStorage.getItem('ehr_local_records');
-            const localRecords = localStr ? JSON.parse(localStr) : {};
-            const local = localRecords[record.cidHash || ''];
-            if (!local?.cid || !local?.aesKey) {
-                Alert.alert('Chưa giải mã', 'Hãy giải mã hồ sơ trước khi chia sẻ để lấy khóa.');
+            // Pre-check 1: recipient must have registered an encryption key (NaCl pubkey)
+            let recipientPub: string | null = null;
+            try {
+                const k = await authService.getEncryptionKey(address);
+                recipientPub = k?.encryptionPublicKey || null;
+            } catch {}
+            if (!recipientPub) {
+                Alert.alert(
+                    'Người nhận chưa đăng ký',
+                    'Địa chỉ này chưa đăng nhập vào hệ thống EHR hoặc chưa tạo khóa mã hoá. Hãy yêu cầu họ đăng nhập app trước khi bạn chia sẻ.'
+                );
+                setIsSharing(false);
                 return;
             }
 
-            // Get recipient NaCl public key
-            const recipientKeyRes = await authService.getEncryptionKey(address);
-            const recipientPubKey = recipientKeyRes?.encryptionPublicKey;
-            if (!recipientPubKey) {
-                Alert.alert('Không tìm thấy khóa', 'Địa chỉ ví này chưa đăng ký khóa mã hóa trong hệ thống.');
-                return;
+            // Pre-check 2: doctor verification status
+            let ctx: any = null;
+            try {
+                ctx = await consentService.fetchGrantContext(address);
+            } catch {
+                // if context fails, let the actual grant call surface the real error
             }
 
-            // Encrypt payload with NaCl box
-            const { walletClient, address: myAddress } = await walletActionService.getWalletContext();
-            const myKeypair = await getOrCreateEncryptionKeypair(walletClient, myAddress);
-            const payload = JSON.stringify({ cid: local.cid, aesKey: local.aesKey });
-            const encryptedPayload = encryptForRecipient(payload, recipientPubKey, myKeypair.secretKey);
+            if (ctx && !ctx.isDoctor) {
+                const ok = await new Promise<boolean>((resolve) => {
+                    Alert.alert(
+                        'Không phải bác sĩ',
+                        'Địa chỉ này không đăng ký là bác sĩ trong hệ thống. Bạn có chắc muốn chia sẻ hồ sơ y tế cho địa chỉ này?',
+                        [
+                            { text: 'Huỷ', style: 'cancel', onPress: () => resolve(false) },
+                            { text: 'Vẫn chia sẻ', style: 'destructive', onPress: () => resolve(true) },
+                        ],
+                        { cancelable: true, onDismiss: () => resolve(false) }
+                    );
+                });
+                if (!ok) { setIsSharing(false); return; }
+            }
 
-            await keyShareService.shareKey({
-                cidHash: record.cidHash!,
-                recipientAddress: address,
-                encryptedPayload,
-                senderPublicKey: myKeypair.publicKey,
-            });
+            if (ctx?.isDoctor && !ctx?.isVerifiedDoctor) {
+                const confirmed = await new Promise<boolean>((resolve) => {
+                    Alert.alert(
+                        'Bác sĩ chưa xác minh',
+                        'Địa chỉ này đăng ký là bác sĩ nhưng chưa được tổ chức y tế xác minh. Hồ sơ bạn chia sẻ sẽ CHỈ ĐỌC ĐƯỢC sau khi họ được xác minh. Tiếp tục?',
+                        [
+                            { text: 'Huỷ', style: 'cancel', onPress: () => resolve(false) },
+                            { text: 'Vẫn chia sẻ', style: 'destructive', onPress: () => resolve(true) },
+                        ],
+                        { cancelable: true, onDismiss: () => resolve(false) }
+                    );
+                });
+                if (!confirmed) {
+                    setIsSharing(false);
+                    return;
+                }
+            }
 
-            setShowShareModal(false);
-            setShareAddress('');
-            Alert.alert('Chia sẻ thành công', 'Đã gửi khóa hồ sơ cho bác sĩ.');
+            await performShare(address);
         } catch (err: any) {
-            Alert.alert('Chia sẻ thất bại', err?.message || 'Không thể chia sẻ hồ sơ.');
+            const raw = String(err?.data?.message || err?.data?.error || err?.message || '').toLowerCase();
+            let title = 'Chia sẻ thất bại';
+            let msg = err?.data?.message || err?.data?.error || err?.message || 'Không thể chia sẻ hồ sơ.';
+            if (raw.includes('quota') || raw.includes('limit') || raw.includes('miễn phí')) {
+                title = 'Hết lượt miễn phí';
+                msg = 'Bạn đã dùng hết lượt giao dịch on-chain miễn phí trong tháng. Hãy thử lại tháng sau hoặc dùng ví riêng.';
+            } else if (raw.includes('nonce')) {
+                title = 'Lỗi đồng bộ chữ ký';
+                msg = 'Nonce on-chain không khớp. Vui lòng thử lại.';
+            } else if (raw.includes('signature') || raw.includes('sign')) {
+                title = 'Lỗi ký giao dịch';
+            } else if (raw.includes('network') || raw.includes('fetch') || raw.includes('timeout')) {
+                title = 'Lỗi kết nối';
+                msg = 'Không kết nối được server hoặc blockchain. Kiểm tra mạng và thử lại.';
+            } else if (raw.includes('revert')) {
+                title = 'Giao dịch bị từ chối';
+                msg = 'Smart contract từ chối giao dịch: ' + msg;
+            }
+            Alert.alert(title, String(msg));
         } finally {
             setIsSharing(false);
         }
@@ -244,14 +462,24 @@ function classifyDecryptError(error: any): string {
             let cid: string | undefined;
             let aesKeyString: string | undefined;
 
+            // SECURITY: only allow local AES cache when current user IS the record owner/creator.
+            // Otherwise we bypass the backend canAccess gate (FIX #3, revocation cascade) entirely.
+            const { address: myAddress } = await walletActionService.getWalletContext();
+            const me = String(myAddress || '').toLowerCase();
+            const ownerAddr = String(record?.ownerAddress || '').toLowerCase();
+            const creatorAddr = String(record?.createdBy || '').toLowerCase();
+            const iAmOwner = !!me && (me === ownerAddr || me === creatorAddr);
+
             const localRecordsString = await AsyncStorage.getItem('ehr_local_records');
             const localRecords = localRecordsString ? JSON.parse(localRecordsString) : {};
             const localData = localRecords[record.cidHash || ''];
 
-            if (localData?.cid && localData?.aesKey) {
+            if (iAmOwner && localData?.cid && localData?.aesKey) {
                 cid = localData.cid;
                 aesKeyString = localData.aesKey;
             } else {
+                // Forces a round-trip through backend, which calls on-chain canAccess.
+                // If the patient revoked, or doctor became unverified, this path returns 403.
                 const sharedPayload = await decodeSharedKeyPayload(record.cidHash);
                 cid = sharedPayload.cid;
                 aesKeyString = sharedPayload.aesKeyString;
@@ -289,7 +517,7 @@ function classifyDecryptError(error: any): string {
                 throw new Error('Thiếu dữ liệu key sau khi giải mã.');
             }
 
-            await saveLocalKey(record.cidHash, cid, aesKeyString, decrypted?.meta?.title || record.title);
+            await saveLocalKey(record.cidHash, cid, aesKeyString, decrypted?.meta?.title || record.title, iAmOwner);
         } catch (error: any) {
             const message = classifyDecryptError(error);
             console.warn('Decrypt error:', error?.message || error);
@@ -344,83 +572,310 @@ function classifyDecryptError(error: any): string {
                         {decryptedImage ? (
                             <YStack style={{ marginBottom: 12 }}>
                                 <Text style={{ marginBottom: 8, fontSize: 13, fontWeight: '700' }} color="$color11">Ảnh đính kèm</Text>
-                                <View borderColor={EHR_OUTLINE_VARIANT} style={{ borderWidth: 1, borderRadius: 10, overflow: 'hidden' }}>
-                                    <Image
-                                        source={{ uri: decryptedImage.uri }}
-                                        style={{ width: '100%', height: 220, backgroundColor: EHR_SURFACE_LOW }}
-                                        resizeMode="cover"
-                                    />
-                                </View>
-                                {decryptedImage.fileName ? (
-                                    <Text fontSize="$2" color="$color10" style={{ marginTop: 8 }}>
-                                        {decryptedImage.fileName}
-                                    </Text>
-                                ) : null}
+                                <Pressable onPress={() => setShowImageViewer(true)}>
+                                    <View borderColor={EHR_OUTLINE_VARIANT} style={{ borderWidth: 1, borderRadius: 10, overflow: 'hidden' }}>
+                                        <Image
+                                            source={{ uri: decryptedImage.uri }}
+                                            style={{ width: '100%', height: 220, backgroundColor: EHR_SURFACE_LOW }}
+                                            resizeMode="cover"
+                                        />
+                                    </View>
+                                </Pressable>
+                                <Text fontSize="$2" color="$color10" style={{ marginTop: 8 }}>
+                                    {decryptedImage.fileName || 'Ảnh đính kèm'} • Chạm để xem toàn màn hình
+                                </Text>
                             </YStack>
                         ) : null}
 
                         {decryptedData?.meta ? (
-                            <YStack style={{ marginBottom: 12 }}>
-                                <Text fontSize="$3" fontWeight="700" color="$color11">Thông tin bổ sung:</Text>
-                                <Text fontSize="$3" color="$color12">- Tiêu đề: {decryptedData.meta.title}</Text>
-                                <Text fontSize="$3" color="$color12">- Loại: {decryptedData.meta.type}</Text>
-                                {decryptedData.meta.description ? (
-                                    <Text fontSize="$3" color="$color12">- Mô tả: {decryptedData.meta.description}</Text>
-                                ) : null}
-                            </YStack>
+                            <View style={{
+                                backgroundColor: EHR_PRIMARY_FIXED,
+                                borderRadius: 14,
+                                padding: 14,
+                                marginBottom: 14,
+                                borderLeftWidth: 4,
+                                borderLeftColor: EHR_PRIMARY,
+                            }}>
+                                <Text fontSize="$2" fontWeight="700" style={{ color: EHR_PRIMARY, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>
+                                    Thông tin hồ sơ
+                                </Text>
+                                <YStack style={{ gap: 6 }}>
+                                    <XStack style={{ justifyContent: 'space-between' }}>
+                                        <Text fontSize="$3" color="$color10">Tiêu đề</Text>
+                                        <Text fontSize="$3" fontWeight="700" color="$color12" style={{ flex: 1, textAlign: 'right' }}>{decryptedData.meta.title || '—'}</Text>
+                                    </XStack>
+                                    <XStack style={{ justifyContent: 'space-between' }}>
+                                        <Text fontSize="$3" color="$color10">Loại</Text>
+                                        <Text fontSize="$3" fontWeight="700" color="$color12">{decryptedData.meta.type || '—'}</Text>
+                                    </XStack>
+                                    {decryptedData.meta.description ? (
+                                        <YStack style={{ marginTop: 4 }}>
+                                            <Text fontSize="$2" color="$color10" style={{ marginBottom: 2 }}>Mô tả</Text>
+                                            <Text fontSize="$3" color="$color12" style={{ lineHeight: 20 }}>{decryptedData.meta.description}</Text>
+                                        </YStack>
+                                    ) : null}
+                                </YStack>
+                            </View>
                         ) : null}
 
                         {decryptedData?.summary ? (
-                            <YStack style={{ marginBottom: 12 }}>
-                                <Text fontSize="$4" fontWeight="700" color="$color11" style={{ marginBottom: 6 }}>Tóm tắt</Text>
-                                <Text fontSize="$3" color="$color12" style={{ lineHeight: 20 }}>{decryptedData.summary}</Text>
-                            </YStack>
+                            <View style={{
+                                backgroundColor: EHR_SURFACE_LOWEST,
+                                borderRadius: 14,
+                                padding: 14,
+                                marginBottom: 14,
+                                borderWidth: 1,
+                                borderColor: EHR_OUTLINE_VARIANT,
+                            }}>
+                                <Text fontSize="$2" fontWeight="700" style={{ color: EHR_SECONDARY, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 }}>
+                                    Tóm tắt
+                                </Text>
+                                <Text fontSize="$3" color="$color12" style={{ lineHeight: 22 }}>{decryptedData.summary}</Text>
+                            </View>
                         ) : null}
 
                         {decryptedData?.notes ? (
-                            <YStack style={{ marginBottom: 12 }}>
-                                <Text fontSize="$4" fontWeight="700" color="$color11" style={{ marginBottom: 6 }}>Ghi chú</Text>
-                                <Text fontSize="$3" color="$color12" style={{ lineHeight: 20 }}>{decryptedData.notes}</Text>
-                            </YStack>
+                            <View style={{
+                                backgroundColor: EHR_SURFACE_LOWEST,
+                                borderRadius: 14,
+                                padding: 14,
+                                marginBottom: 14,
+                                borderWidth: 1,
+                                borderColor: EHR_OUTLINE_VARIANT,
+                            }}>
+                                <Text fontSize="$2" fontWeight="700" style={{ color: EHR_ON_SURFACE_VARIANT, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 }}>
+                                    Ghi chú lâm sàng
+                                </Text>
+                                <Text fontSize="$3" color="$color12" style={{ lineHeight: 22 }}>{decryptedData.notes}</Text>
+                            </View>
                         ) : null}
 
                         {decryptedData?.observations && Object.keys(decryptedData.observations).length > 0 ? (
-                            <YStack>
-                                <Text fontSize="$4" fontWeight="700" color="$color11" style={{ marginBottom: 8 }}>Quan trắc lâm sàng</Text>
-                                {Object.entries(decryptedData.observations).map(([key, val]: any) => (
-                                    <XStack key={key} style={{ justifyContent: 'space-between', borderBottomWidth: 1, borderBottomColor: EHR_OUTLINE_VARIANT, paddingVertical: 6 }}>
+                            <View style={{
+                                backgroundColor: EHR_SURFACE_LOWEST,
+                                borderRadius: 14,
+                                padding: 14,
+                                marginBottom: 14,
+                                borderWidth: 1,
+                                borderColor: EHR_OUTLINE_VARIANT,
+                            }}>
+                                <Text fontSize="$2" fontWeight="700" style={{ color: EHR_PRIMARY, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>
+                                    Chỉ số lâm sàng
+                                </Text>
+                                {Object.entries(decryptedData.observations).map(([key, val]: any, idx: number, arr: any[]) => (
+                                    <XStack key={key} style={{
+                                        justifyContent: 'space-between',
+                                        alignItems: 'center',
+                                        paddingVertical: 8,
+                                        borderBottomWidth: idx === arr.length - 1 ? 0 : 1,
+                                        borderBottomColor: EHR_OUTLINE_VARIANT,
+                                    }}>
                                         <Text fontSize="$3" color="$color10" style={{ textTransform: 'capitalize' }}>{key}</Text>
-                                        <Text fontSize="$3" fontWeight="700" color="$color12">{String(val)}</Text>
+                                        <View style={{
+                                            backgroundColor: EHR_PRIMARY_FIXED,
+                                            paddingHorizontal: 10,
+                                            paddingVertical: 4,
+                                            borderRadius: 8,
+                                        }}>
+                                            <Text fontSize="$3" fontWeight="700" style={{ color: EHR_PRIMARY }}>{String(val)}</Text>
+                                        </View>
                                     </XStack>
                                 ))}
-                            </YStack>
+                            </View>
                         ) : null}
 
                         {decryptedData?.diagnoses?.length ? (
-                            <YStack style={{ marginTop: 12 }}>
-                                <Text fontSize="$4" fontWeight="700" color="$color11" style={{ marginBottom: 8 }}>Chẩn đoán</Text>
+                            <View style={{
+                                backgroundColor: '#fff5f5',
+                                borderRadius: 14,
+                                padding: 14,
+                                marginBottom: 14,
+                                borderLeftWidth: 4,
+                                borderLeftColor: '#DC2626',
+                            }}>
+                                <Text fontSize="$2" fontWeight="700" style={{ color: '#DC2626', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>
+                                    Chẩn đoán
+                                </Text>
                                 {decryptedData.diagnoses.map((diagnosis: string, index: number) => (
-                                    <Text key={index} fontSize="$3" color="$color12" style={{ marginBottom: 4 }}>- {diagnosis}</Text>
+                                    <XStack key={index} style={{ alignItems: 'flex-start', marginBottom: 4, gap: 8 }}>
+                                        <Text fontSize="$3" style={{ color: '#DC2626', fontWeight: '700' }}>•</Text>
+                                        <Text fontSize="$3" color="$color12" style={{ flex: 1, lineHeight: 20 }}>{diagnosis}</Text>
+                                    </XStack>
                                 ))}
-                            </YStack>
+                            </View>
                         ) : null}
 
                         {decryptedData?.prescriptions?.length ? (
-                            <YStack style={{ marginTop: 12 }}>
-                                <Text fontSize="$4" fontWeight="700" color="$color11" style={{ marginBottom: 8 }}>Đơn thuốc</Text>
-                                {decryptedData.prescriptions.map((prescription: any, index: number) => (
-                                    <Text key={index} fontSize="$3" color="$color12" style={{ marginBottom: 4 }}>
-                                        - {prescription.medication} - {prescription.dosage} ({prescription.frequency})
-                                    </Text>
+                            <View style={{
+                                backgroundColor: '#f0fdf4',
+                                borderRadius: 14,
+                                padding: 14,
+                                marginBottom: 14,
+                                borderLeftWidth: 4,
+                                borderLeftColor: '#16A34A',
+                            }}>
+                                <Text fontSize="$2" fontWeight="700" style={{ color: '#16A34A', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>
+                                    Đơn thuốc
+                                </Text>
+                                {decryptedData.prescriptions.map((p: any, index: number) => (
+                                    <View key={index} style={{
+                                        backgroundColor: '#fff',
+                                        borderRadius: 10,
+                                        padding: 10,
+                                        marginBottom: 6,
+                                        borderWidth: 1,
+                                        borderColor: '#dcfce7',
+                                    }}>
+                                        <Text fontSize="$3" fontWeight="700" color="$color12">{p.medication || 'Thuốc'}</Text>
+                                        <XStack style={{ gap: 12, marginTop: 4 }}>
+                                            {p.dosage ? (
+                                                <Text fontSize="$2" color="$color10">Liều: <Text fontWeight="700" color="$color12">{p.dosage}</Text></Text>
+                                            ) : null}
+                                            {p.frequency ? (
+                                                <Text fontSize="$2" color="$color10">Tần suất: <Text fontWeight="700" color="$color12">{p.frequency}</Text></Text>
+                                            ) : null}
+                                        </XStack>
+                                    </View>
                                 ))}
-                            </YStack>
+                            </View>
                         ) : null}
                     </View>
                 )}
 
+                {((fullChain?.records && fullChain.records.length > 1) || (chain && (chain.parent || (chain.children && chain.children.length > 0)))) ? (
+                    <YStack style={{ marginBottom: 16 }}>
+                        <XStack style={{ alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                            <Text fontSize="$5" fontWeight="700" color="$color12">Chuỗi phiên bản</Text>
+                            <View style={{
+                                backgroundColor: EHR_PRIMARY_FIXED,
+                                paddingHorizontal: 10,
+                                paddingVertical: 4,
+                                borderRadius: 999,
+                            }}>
+                                <Text fontSize={11} fontWeight="700" style={{ color: EHR_PRIMARY }}>
+                                    v{chain.version || 1}
+                                </Text>
+                            </View>
+                        </XStack>
+                        {(() => {
+                            const all: any[] = [];
+                            const currentHashLc = String(record.cidHash || '').toLowerCase();
+                            if (fullChain?.records && fullChain.records.length > 0) {
+                                // Use full tree ordered by createdAt asc (v1 → vN).
+                                for (const r of fullChain.records) {
+                                    const isCur = String(r.cidHash || '').toLowerCase() === currentHashLc;
+                                    all.push({ ...r, _role: isCur ? 'current' : 'other' });
+                                }
+                            } else {
+                                if (chain?.parent) all.push({ ...chain.parent, _role: 'parent' });
+                                all.push({ cidHash: record.cidHash, title: record.title, createdAt: (record as any)?.createdAt, createdBy: (record as any)?.createdBy, _role: 'current' });
+                                (chain?.children || []).forEach((c: any) => all.push({ ...c, _role: 'child' }));
+                            }
+                            return (
+                                <ScrollView
+                                    horizontal
+                                    showsHorizontalScrollIndicator={false}
+                                    contentContainerStyle={{ paddingVertical: 4, paddingRight: 8 }}
+                                >
+                                    {all.map((v, idx) => {
+                                        const isCurrent = v._role === 'current';
+                                        const tint = isCurrent ? EHR_PRIMARY : EHR_ON_SURFACE_VARIANT;
+                                        const bg = isCurrent ? EHR_PRIMARY_FIXED : EHR_SURFACE_LOWEST;
+                                        const border = isCurrent ? EHR_PRIMARY : EHR_OUTLINE_VARIANT;
+                                        const onPress = isCurrent ? undefined : () => navigation.replace('RecordDetail', { record: { ...v, createdAt: v?.createdAt ? new Date(v.createdAt).toISOString() : null } });
+                                        return (
+                                            <React.Fragment key={v.cidHash || idx}>
+                                                <Pressable onPress={onPress} disabled={isCurrent}>
+                                                    <View
+                                                        style={{
+                                                            width: 168,
+                                                            backgroundColor: bg,
+                                                            borderRadius: 16,
+                                                            borderWidth: isCurrent ? 2 : 1,
+                                                            borderColor: border,
+                                                            padding: 12,
+                                                            marginRight: 10,
+                                                        }}
+                                                    >
+                                                        <XStack style={{ alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                                                            <View style={{
+                                                                backgroundColor: isCurrent ? EHR_PRIMARY : EHR_SURFACE_LOW,
+                                                                paddingHorizontal: 8,
+                                                                paddingVertical: 2,
+                                                                borderRadius: 999,
+                                                            }}>
+                                                                <Text fontSize={10} fontWeight="800" style={{ color: isCurrent ? '#FFFFFF' : EHR_ON_SURFACE_VARIANT }}>
+                                                                    v{idx + 1}
+                                                                </Text>
+                                                            </View>
+                                                            {isCurrent ? (
+                                                                <Text fontSize={10} fontWeight="700" style={{ color: tint }}>HIỆN TẠI</Text>
+                                                            ) : null}
+                                                        </XStack>
+                                                        <Text fontSize="$3" fontWeight="700" color="$color12" numberOfLines={2} style={{ marginBottom: 4 }}>
+                                                            {v.title || `Phiên bản ${idx + 1}`}
+                                                        </Text>
+                                                        {v.createdAt ? (
+                                                            <Text fontSize={11} color="$color10">
+                                                                {new Date(v.createdAt).toLocaleDateString('vi-VN')}
+                                                            </Text>
+                                                        ) : null}
+                                                        <Text fontSize={10} color="$color9" numberOfLines={1} style={{ marginTop: 2 }}>
+                                                            {String(v.cidHash || '').slice(0, 14)}…
+                                                        </Text>
+                                                    </View>
+                                                </Pressable>
+                                                {idx < all.length - 1 ? (
+                                                    <View style={{ alignSelf: 'center', marginRight: 10 }}>
+                                                        <Text style={{ color: EHR_ON_SURFACE_VARIANT, fontSize: 18 }}>→</Text>
+                                                    </View>
+                                                ) : null}
+                                            </React.Fragment>
+                                        );
+                                    })}
+                                </ScrollView>
+                            );
+                        })()}
+                    </YStack>
+                ) : null}
+
+                {iAmOwner && (!chain?.children || chain.children.length === 0) ? (
+                    <YStack style={{ marginBottom: 16 }}>
+                        <Text fontSize="$5" fontWeight="700" color="$color12" style={{ marginBottom: 12 }}>Cập nhật hồ sơ</Text>
+                        <Pressable
+                            onPress={() => navigation.navigate('CreateRecord', {
+                                parentCidHash: record.cidHash,
+                                initialTitle: record.title,
+                                initialRecordType: (record as any)?.type || (record as any)?.recordType,
+                            })}
+                        >
+                            <View style={{ backgroundColor: EHR_SURFACE_LOWEST, borderColor: EHR_OUTLINE_VARIANT, borderWidth: 1, borderRadius: 20, padding: 14 }}>
+                                <XStack style={{ alignItems: 'center' }}>
+                                    <View style={{ width: 40, height: 40, borderRadius: 20, marginRight: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: EHR_PRIMARY_FIXED }}>
+                                        <FilePlus2 size={20} color={EHR_PRIMARY} />
+                                    </View>
+                                    <YStack style={{ flex: 1 }}>
+                                        <Text fontSize="$4" fontWeight="700" color="$color12">Tạo phiên bản mới</Text>
+                                        <Text fontSize="$2" color="$color10">Liên kết với hồ sơ gốc, các bên đã chia sẻ vẫn truy cập được.</Text>
+                                    </YStack>
+                                </XStack>
+                            </View>
+                        </Pressable>
+                    </YStack>
+                ) : null}
+
                 <Text fontSize="$5" fontWeight="700" color="$color12" style={{ marginBottom: 12 }}>Tuỳ chọn chia sẻ</Text>
                 <YStack style={{ gap: 10 }}>
-                    <Pressable onPress={() => setShowShareModal(true)}>
+                    <Pressable onPress={() => {
+                        if (!iAmOwner && !(record as any)?.allowDelegate) {
+                            Alert.alert(
+                                'Không có quyền chia sẻ',
+                                'Hồ sơ này không cho phép bạn ủy quyền tiếp. Chỉ bệnh nhân hoặc bác sĩ được cấp quyền "allowDelegate" mới có thể chia sẻ lại.'
+                            );
+                            return;
+                        }
+                        setShowShareModal(true);
+                    }}>
                         <View style={{ backgroundColor: EHR_SURFACE_LOWEST, borderColor: EHR_OUTLINE_VARIANT, borderWidth: 1, borderRadius: 20, padding: 14 }}>
                             <XStack style={{ alignItems: 'center' }}>
                                 <View style={{ width: 40, height: 40, borderRadius: 20, marginRight: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: EHR_PRIMARY_FIXED }}>
@@ -485,17 +940,152 @@ function classifyDecryptError(error: any): string {
                                     backgroundColor: EHR_SURFACE_LOW,
                                 }}
                             />
-                            <Button
-                                size="$4"
-                                background={EHR_PRIMARY}
-                                disabled={isSharing}
-                                opacity={isSharing ? 0.7 : 1}
-                                onPress={handleShare}
-                            >
-                                <Text color="white" fontWeight="700">
-                                    {isSharing ? 'Đang chia sẻ...' : 'Xác nhận chia sẻ'}
-                                </Text>
-                            </Button>
+                            <Text fontSize="$3" fontWeight="700" color="$color11" style={{ marginBottom: 8 }}>
+                                Thời hạn truy cập
+                            </Text>
+                            <XStack style={{ flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
+                                {[
+                                    { label: 'Không giới hạn', value: null as number | null },
+                                    { label: '5 phút (test)', value: 5 / 60 },
+                                    { label: '10 phút (test)', value: 10 / 60 },
+                                    { label: '1 giờ', value: 1 },
+                                    { label: '24 giờ', value: 24 },
+                                    { label: '7 ngày', value: 24 * 7 },
+                                    { label: '30 ngày', value: 24 * 30 },
+                                ].map((opt) => {
+                                    const active = !customExpiryOpen && shareExpiryHours === opt.value;
+                                    return (
+                                        <Pressable
+                                            key={opt.label}
+                                            onPress={() => {
+                                                setCustomExpiryOpen(false);
+                                                setShareExpiryHours(opt.value);
+                                            }}
+                                        >
+                                            <View
+                                                style={{
+                                                    paddingHorizontal: 12,
+                                                    paddingVertical: 6,
+                                                    borderRadius: 20,
+                                                    borderWidth: 1,
+                                                    borderColor: active ? EHR_PRIMARY : EHR_OUTLINE_VARIANT,
+                                                    backgroundColor: active ? EHR_PRIMARY_FIXED : EHR_SURFACE_LOW,
+                                                }}
+                                            >
+                                                <Text
+                                                    fontSize="$2"
+                                                    fontWeight={active ? '700' : '500'}
+                                                    style={{ color: active ? EHR_PRIMARY : EHR_ON_SURFACE_VARIANT }}
+                                                >
+                                                    {opt.label}
+                                                </Text>
+                                            </View>
+                                        </Pressable>
+                                    );
+                                })}
+                                <Pressable onPress={() => setCustomExpiryOpen(true)}>
+                                    <View
+                                        style={{
+                                            paddingHorizontal: 12,
+                                            paddingVertical: 6,
+                                            borderRadius: 20,
+                                            borderWidth: 1,
+                                            borderColor: customExpiryOpen ? EHR_PRIMARY : EHR_OUTLINE_VARIANT,
+                                            backgroundColor: customExpiryOpen ? EHR_PRIMARY_FIXED : EHR_SURFACE_LOW,
+                                        }}
+                                    >
+                                        <Text
+                                            fontSize="$2"
+                                            fontWeight={customExpiryOpen ? '700' : '500'}
+                                            style={{ color: customExpiryOpen ? EHR_PRIMARY : EHR_ON_SURFACE_VARIANT }}
+                                        >
+                                            Tuỳ chỉnh
+                                        </Text>
+                                    </View>
+                                </Pressable>
+                            </XStack>
+
+                            {customExpiryOpen ? (
+                                <XStack style={{ gap: 8, marginBottom: 16, alignItems: 'center' }}>
+                                    <TextInput
+                                        value={customExpiryValue}
+                                        onChangeText={(text) => {
+                                            const clean = text.replace(/[^0-9]/g, '');
+                                            setCustomExpiryValue(clean);
+                                            const num = parseInt(clean, 10);
+                                            if (!Number.isNaN(num) && num > 0) {
+                                                const hours = customExpiryUnit === 'day' ? num * 24 : num;
+                                                setShareExpiryHours(hours);
+                                            }
+                                        }}
+                                        placeholder="VD: 3"
+                                        placeholderTextColor={EHR_ON_SURFACE_VARIANT}
+                                        keyboardType="number-pad"
+                                        style={{
+                                            flex: 1,
+                                            borderWidth: 1,
+                                            borderColor: EHR_OUTLINE_VARIANT,
+                                            borderRadius: 10,
+                                            padding: 10,
+                                            fontSize: 14,
+                                            color: EHR_ON_SURFACE_VARIANT,
+                                            backgroundColor: EHR_SURFACE_LOW,
+                                        }}
+                                    />
+                                    {(['hour', 'day'] as const).map((unit) => {
+                                        const active = customExpiryUnit === unit;
+                                        return (
+                                            <Pressable
+                                                key={unit}
+                                                onPress={() => {
+                                                    setCustomExpiryUnit(unit);
+                                                    const num = parseInt(customExpiryValue, 10);
+                                                    if (!Number.isNaN(num) && num > 0) {
+                                                        setShareExpiryHours(unit === 'day' ? num * 24 : num);
+                                                    }
+                                                }}
+                                            >
+                                                <View
+                                                    style={{
+                                                        paddingHorizontal: 14,
+                                                        paddingVertical: 10,
+                                                        borderRadius: 10,
+                                                        borderWidth: 1,
+                                                        borderColor: active ? EHR_PRIMARY : EHR_OUTLINE_VARIANT,
+                                                        backgroundColor: active ? EHR_PRIMARY_FIXED : EHR_SURFACE_LOW,
+                                                    }}
+                                                >
+                                                    <Text
+                                                        fontSize="$2"
+                                                        fontWeight={active ? '700' : '500'}
+                                                        style={{ color: active ? EHR_PRIMARY : EHR_ON_SURFACE_VARIANT }}
+                                                    >
+                                                        {unit === 'hour' ? 'Giờ' : 'Ngày'}
+                                                    </Text>
+                                                </View>
+                                            </Pressable>
+                                        );
+                                    })}
+                                </XStack>
+                            ) : (
+                                <View style={{ marginBottom: 16 }} />
+                            )}
+
+                            <Pressable onPress={isSharing ? undefined : handleShare}>
+                                <View
+                                    style={{
+                                        backgroundColor: EHR_PRIMARY,
+                                        borderRadius: 14,
+                                        paddingVertical: 14,
+                                        alignItems: 'center',
+                                        opacity: isSharing ? 0.7 : 1,
+                                    }}
+                                >
+                                    <Text style={{ color: '#FFFFFF', fontWeight: '700', fontSize: 15 }}>
+                                        {isSharing ? 'Đang chia sẻ...' : 'Xác nhận chia sẻ'}
+                                    </Text>
+                                </View>
+                            </Pressable>
                         </View>
                     </Pressable>
                 </Pressable>
@@ -516,8 +1106,24 @@ function classifyDecryptError(error: any): string {
                                 </Pressable>
                             </XStack>
                             <Text fontSize="$3" color="$color10" style={{ marginBottom: 12 }}>
-                                Cung cấp mã này cho bác sĩ để họ nhập vào form yêu cầu truy cập.
+                                Bác sĩ quét QR hoặc nhập CID Hash dưới đây vào form yêu cầu truy cập.
                             </Text>
+                            {record.cidHash ? (
+                                <View style={{
+                                    alignSelf: 'center',
+                                    backgroundColor: '#fff',
+                                    padding: 14,
+                                    borderRadius: 16,
+                                    marginBottom: 14,
+                                }}>
+                                    <QRCode
+                                        value={record.cidHash}
+                                        size={220}
+                                        backgroundColor="#fff"
+                                        color={EHR_PRIMARY}
+                                    />
+                                </View>
+                            ) : null}
                             <View style={{ backgroundColor: EHR_PRIMARY_FIXED, borderRadius: 14, padding: 14 }}>
                                 <Text
                                     fontSize="$2"
@@ -528,9 +1134,40 @@ function classifyDecryptError(error: any): string {
                                 </Text>
                             </View>
                             <Text fontSize="$2" color="$color10" style={{ marginTop: 10 }}>
-                                Nhấn giữ để sao chép mã.
+                                Nhấn giữ để sao chép mã hoặc dùng QR phía trên.
                             </Text>
                         </View>
+                    </Pressable>
+                </Pressable>
+            </Modal>
+            {/* Modal: Fullscreen image viewer */}
+            <Modal visible={showImageViewer} transparent animationType="fade" onRequestClose={() => setShowImageViewer(false)}>
+                <Pressable
+                    style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.95)', justifyContent: 'center', alignItems: 'center' }}
+                    onPress={() => setShowImageViewer(false)}
+                >
+                    {decryptedImage ? (
+                        <Image
+                            source={{ uri: decryptedImage.uri }}
+                            style={{ width: '100%', height: '100%' }}
+                            resizeMode="contain"
+                        />
+                    ) : null}
+                    <Pressable
+                        onPress={() => setShowImageViewer(false)}
+                        style={{
+                            position: 'absolute',
+                            top: 40,
+                            right: 20,
+                            width: 40,
+                            height: 40,
+                            borderRadius: 20,
+                            backgroundColor: 'rgba(0,0,0,0.6)',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                        }}
+                    >
+                        <X size={22} color="white" />
                     </Pressable>
                 </Pressable>
             </Modal>

@@ -35,6 +35,11 @@ const MOUNT_SPRING = { damping: 18, stiffness: 120, mass: 0.8 };
 
 export default function SharedRecordCard({ record, onView, onCreateUpdate }: SharedRecordCardProps) {
     const isPending = record?.status === 'pending';
+    const statusLower = String(record?.status || '').toLowerCase();
+    const isRevoked = statusLower === 'revoked' || statusLower === 'rejected';
+    const isExpiredByTime = !!record?.expiresAt && new Date(record.expiresAt).getTime() < Date.now();
+    const isExpired = statusLower === 'expired' || isExpiredByTime;
+    const isInactive = record?.active === false || isRevoked || isExpired;
     const truncateAddr = (addr: string) => (addr ? `${addr.substring(0, 8)}...${addr.slice(-4)}` : '???');
 
     const mountProgress = useSharedValue(0);
@@ -94,7 +99,7 @@ export default function SharedRecordCard({ record, onView, onCreateUpdate }: Sha
         <Animated.View style={mountStyle}>
             <Pressable onPress={() => onView?.(record)} onPressIn={handlePressIn} onPressOut={handlePressOut}>
                 <Animated.View style={pressStyle}>
-                    <View style={s.card}>
+                    <View style={[s.card, isInactive && s.cardInactive]}>
                         {/* Top row: icon + info + status */}
                         <XStack style={s.topRow}>
                             <View style={[s.iconWrap, { backgroundColor: iconBg }]}>
@@ -111,10 +116,20 @@ export default function SharedRecordCard({ record, onView, onCreateUpdate }: Sha
                             </YStack>
 
                             <YStack style={s.rightInfo}>
-                                <XStack style={s.verifiedBadge}>
-                                    <ShieldCheck size={10} color={EHR_PRIMARY} />
-                                    <Text style={s.verifiedText}>Đã xác minh</Text>
-                                </XStack>
+                                {isRevoked ? (
+                                    <View style={s.statusBadgeRevoked}>
+                                        <Text style={s.statusBadgeText}>Đã thu hồi</Text>
+                                    </View>
+                                ) : isExpired ? (
+                                    <View style={s.statusBadgeExpired}>
+                                        <Text style={s.statusBadgeText}>Hết hạn</Text>
+                                    </View>
+                                ) : (
+                                    <XStack style={s.verifiedBadge}>
+                                        <ShieldCheck size={10} color={EHR_PRIMARY} />
+                                        <Text style={s.verifiedText}>Đã xác minh</Text>
+                                    </XStack>
+                                )}
                                 <Text style={s.dateText}>
                                     {formatDate(record?.createdAt)}
                                 </Text>
@@ -145,18 +160,19 @@ export default function SharedRecordCard({ record, onView, onCreateUpdate }: Sha
                             <Button
                                 flex={1}
                                 size="$3"
-                                background={EHR_PRIMARY}
-                                pressStyle={{ background: EHR_PRIMARY_CONTAINER }}
-                                icon={<Eye size={15} color={EHR_ON_PRIMARY} />}
-                                onPress={() => onView?.(record)}
-                                style={{ borderRadius: 12 }}
+                                background={isInactive ? EHR_SURFACE_LOW : EHR_PRIMARY}
+                                pressStyle={{ background: isInactive ? EHR_SURFACE_LOW : EHR_PRIMARY_CONTAINER }}
+                                icon={<Eye size={15} color={isInactive ? EHR_ON_SURFACE_VARIANT : EHR_ON_PRIMARY} />}
+                                onPress={isInactive ? undefined : () => onView?.(record)}
+                                disabled={isInactive}
+                                style={{ borderRadius: 12, opacity: isInactive ? 0.6 : 1 }}
                             >
-                                <Text color={EHR_ON_PRIMARY} fontWeight="700" fontSize="$3">
-                                    {isPending ? 'Nhận và xem' : 'Xem hồ sơ'}
+                                <Text color={isInactive ? EHR_ON_SURFACE_VARIANT : EHR_ON_PRIMARY} fontWeight="700" fontSize="$3">
+                                    {isRevoked ? 'Đã thu hồi' : isExpired ? 'Hết hạn' : isPending ? 'Nhận và xem' : 'Xem hồ sơ'}
                                 </Text>
                             </Button>
 
-                            {onCreateUpdate ? (
+                            {!isInactive && onCreateUpdate ? (
                                 <Button
                                     size="$3"
                                     variant="outlined"
@@ -180,6 +196,30 @@ export default function SharedRecordCard({ record, onView, onCreateUpdate }: Sha
 }
 
 const s = StyleSheet.create({
+    cardInactive: {
+        opacity: 0.7,
+        borderLeftWidth: 4,
+        borderLeftColor: EHR_OUTLINE_VARIANT,
+    },
+    statusBadgeRevoked: {
+        backgroundColor: '#fde0e0',
+        borderRadius: 999,
+        paddingHorizontal: 8,
+        paddingVertical: 3,
+    },
+    statusBadgeExpired: {
+        backgroundColor: `${EHR_OUTLINE_VARIANT}40`,
+        borderRadius: 999,
+        paddingHorizontal: 8,
+        paddingVertical: 3,
+    },
+    statusBadgeText: {
+        fontSize: 9,
+        fontWeight: '700',
+        color: EHR_ON_SURFACE_VARIANT,
+        textTransform: 'uppercase',
+        letterSpacing: 0.3,
+    },
     card: {
         backgroundColor: EHR_SURFACE_LOWEST,
         borderRadius: 16,

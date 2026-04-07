@@ -2,24 +2,32 @@ import React, { useMemo, useState } from 'react';
 import { Alert, Image, Pressable, ScrollView, TextInput, type KeyboardTypeOptions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as ImagePicker from 'expo-image-picker';
 import {
     Activity,
     FilePlus2,
     HeartPulse,
     ImagePlus,
     Pill,
+    Plus,
     Stethoscope,
     TestTubeDiagonal,
     Thermometer,
     Trash2,
+    X,
     type LucideIcon,
 } from 'lucide-react-native';
 import { Button, Text, View, XStack, YStack } from 'tamagui';
 import { keccak256, toBytes } from 'viem';
 
+import Icd10Picker from '../components/Icd10Picker';
+import type { Icd10Code } from '../constants/icd10';
 import { encryptData, generateAESKey } from '../services/crypto';
 import ipfsService from '../services/ipfs.service';
 import recordService from '../services/record.service';
+import keyShareService from '../services/keyShare.service';
+import walletActionService from '../services/walletAction.service';
+import { getOrCreateEncryptionKeypair, encryptForRecipient } from '../services/nacl-crypto';
 import useAuthStore from '../store/authStore';
 import {
     EHR_ERROR,
@@ -63,13 +71,23 @@ type BuildPayloadInput = {
     title: string;
     description: string;
     recordTypeLabel: string;
-    diagnosis: string;
+    icd10Codes: Icd10Code[];
+    diagnosisNote: string;
     medication: string;
     dosage: string;
     frequency: string;
+    route: string;
+    quantity: string;
+    duration: string;
+    instruction: string;
     heartRate: string;
-    bloodPressure: string;
+    systolic: string;
+    diastolic: string;
     temperature: string;
+    respRate: string;
+    spo2: string;
+    weight: string;
+    height: string;
     notes: string;
     attachment?: SelectedImage | null;
 };
@@ -148,28 +166,57 @@ function buildPayload({
     title,
     description,
     recordTypeLabel,
-    diagnosis,
+    icd10Codes,
+    diagnosisNote,
     medication,
     dosage,
     frequency,
+    route,
+    quantity,
+    duration,
+    instruction,
     heartRate,
-    bloodPressure,
+    systolic,
+    diastolic,
     temperature,
+    respRate,
+    spo2,
+    weight,
+    height,
     notes,
     attachment,
 }: BuildPayloadInput) {
     const observations: Record<string, string> = {};
 
     if (heartRate) observations.heartRate = `${heartRate} bpm`;
-    if (bloodPressure) observations.bloodPressure = bloodPressure;
-    if (temperature) observations.temperature = `${temperature} C`;
+    if (systolic && diastolic) observations.bloodPressure = `${systolic}/${diastolic} mmHg`;
+    else if (systolic) observations.bloodPressureSystolic = `${systolic} mmHg`;
+    if (temperature) observations.temperature = `${temperature} °C`;
+    if (respRate) observations.respiratoryRate = `${respRate} lần/phút`;
+    if (spo2) observations.spo2 = `${spo2} %`;
+    if (weight) observations.weight = `${weight} kg`;
+    if (height) observations.height = `${height} cm`;
+    if (weight && height) {
+        const h = parseFloat(height) / 100;
+        const w = parseFloat(weight);
+        if (h > 0 && w > 0) {
+            observations.bmi = (w / (h * h)).toFixed(1);
+        }
+    }
 
-    const diagnoses = splitLines(diagnosis);
+    const diagnoses = [
+        ...icd10Codes.map((c) => `[${c.code}] ${c.name}`),
+        ...splitLines(diagnosisNote),
+    ];
     const prescriptions = medication
         ? [{
             medication: medication.trim(),
             dosage: dosage.trim() || 'Theo chỉ định',
             frequency: frequency.trim() || 'Theo hướng dẫn',
+            route: route.trim() || undefined,
+            quantity: quantity.trim() || undefined,
+            duration: duration.trim() || undefined,
+            instruction: instruction.trim() || undefined,
         }]
         : [];
 
@@ -204,21 +251,39 @@ function buildPayload({
     };
 }
 
-export default function CreateRecordScreen({ navigation }: any) {
+export default function CreateRecordScreen({ navigation, route: navRoute }: any) {
     const { user } = useAuthStore();
     const recordApi: any = recordService;
+    const parentCidHash: string | null = navRoute?.params?.parentCidHash || null;
+    const initialTitle: string = navRoute?.params?.initialTitle || '';
+    const initialRecordType: string | null = navRoute?.params?.initialRecordType || null;
+    const isUpdateMode = Boolean(parentCidHash);
 
-    const [title, setTitle] = useState('');
+    const [title, setTitle] = useState(initialTitle);
     const [description, setDescription] = useState('');
-    const [recordType, setRecordType] = useState(RECORD_TYPES[0].key);
-    const [diagnosis, setDiagnosis] = useState('');
+    const [recordType, setRecordType] = useState(
+        (initialRecordType && RECORD_TYPES.find((r) => r.key === initialRecordType)?.key) || RECORD_TYPES[0].key
+    );
+    const [icd10Codes, setIcd10Codes] = useState<Icd10Code[]>([]);
+    const [icd10PickerOpen, setIcd10PickerOpen] = useState(false);
+    const [diagnosisNote, setDiagnosisNote] = useState('');
     const [medication, setMedication] = useState('');
     const [dosage, setDosage] = useState('');
     const [frequency, setFrequency] = useState('');
+    const [route, setRoute] = useState('');
+    const [quantity, setQuantity] = useState('');
+    const [duration, setDuration] = useState('');
+    const [instruction, setInstruction] = useState('');
     const [heartRate, setHeartRate] = useState('');
-    const [bloodPressure, setBloodPressure] = useState('');
+    const [systolic, setSystolic] = useState('');
+    const [diastolic, setDiastolic] = useState('');
     const [temperature, setTemperature] = useState('');
+    const [respRate, setRespRate] = useState('');
+    const [spo2, setSpo2] = useState('');
+    const [weight, setWeight] = useState('');
+    const [height, setHeight] = useState('');
     const [notes, setNotes] = useState('');
+    const [simpleMode, setSimpleMode] = useState(true);
     const [selectedImage, setSelectedImage] = useState<SelectedImage | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isPickingImage, setIsPickingImage] = useState(false);
@@ -233,16 +298,7 @@ export default function CreateRecordScreen({ navigation }: any) {
         try {
             setIsPickingImage(true);
 
-            let imagePicker: typeof import('expo-image-picker') | null = null;
-            try {
-                imagePicker = await import('expo-image-picker');
-            } catch {
-                Alert.alert(
-                    'Thiếu module native',
-                    'Ứng dụng hiện tại chưa có expo-image-picker. Hãy build lại bằng npm run android:dev rồi mở lại app.'
-                );
-                return;
-            }
+            const imagePicker = ImagePicker;
 
             const permission = await imagePicker.requestMediaLibraryPermissionsAsync();
 
@@ -252,7 +308,7 @@ export default function CreateRecordScreen({ navigation }: any) {
             }
 
             const result = await imagePicker.launchImageLibraryAsync({
-                mediaTypes: imagePicker.MediaTypeOptions.Images,
+                mediaTypes: ['images'],
                 allowsEditing: true,
                 quality: 0.5,
                 base64: true,
@@ -295,7 +351,12 @@ export default function CreateRecordScreen({ navigation }: any) {
             return;
         }
 
-        if (!description.trim() && !diagnosis.trim() && !notes.trim() && !medication.trim() && !selectedImage) {
+        if (simpleMode) {
+            if (!selectedImage && !description.trim()) {
+                Alert.alert('Thiếu nội dung', 'Hãy chụp/chọn ảnh hoặc viết ghi chú cho hồ sơ.');
+                return;
+            }
+        } else if (!description.trim() && !diagnosisNote.trim() && icd10Codes.length === 0 && !notes.trim() && !medication.trim() && !selectedImage) {
             Alert.alert('Thiếu nội dung', 'Hãy nhập nội dung hoặc đính kèm ít nhất một ảnh cho hồ sơ.');
             return;
         }
@@ -311,13 +372,23 @@ export default function CreateRecordScreen({ navigation }: any) {
                 title,
                 description,
                 recordTypeLabel: selectedType.label,
-                diagnosis,
+                icd10Codes,
+                diagnosisNote,
                 medication,
                 dosage,
                 frequency,
+                route,
+                quantity,
+                duration,
+                instruction,
                 heartRate: cleanNumber(heartRate),
-                bloodPressure: cleanNumber(bloodPressure),
+                systolic: cleanNumber(systolic),
+                diastolic: cleanNumber(diastolic),
                 temperature: cleanNumber(temperature),
+                respRate: cleanNumber(respRate),
+                spo2: cleanNumber(spo2),
+                weight: cleanNumber(weight),
+                height: cleanNumber(height),
                 notes,
                 attachment: selectedImage,
             });
@@ -343,7 +414,7 @@ export default function CreateRecordScreen({ navigation }: any) {
                 title: title.trim(),
                 recordType,
                 recordTypeHash,
-                parentCidHash: null,
+                parentCidHash: parentCidHash,
                 description: description.trim(),
                 createdAt: nowIso,
                 createdBy: user?.walletAddress || null,
@@ -365,7 +436,7 @@ export default function CreateRecordScreen({ navigation }: any) {
             const created = await recordApi.createRecord(
                 cidHash,
                 recordTypeHash,
-                null,
+                parentCidHash,
                 title.trim(),
                 description.trim() || null,
                 recordType
@@ -398,7 +469,46 @@ export default function CreateRecordScreen({ navigation }: any) {
                 ownerAddress: user?.walletAddress,
             };
 
-            Alert.alert('Tạo hồ sơ thành công', 'Hồ sơ mới đã được mã hoá, lưu IPFS và đăng ký lên hệ thống.');
+            // AUTO-SYNC: when creating a new version, propagate the new AES key to
+            // every existing recipient of the chain so all doctors who previously had
+            // access can immediately decrypt the new version without re-requesting.
+            if (isUpdateMode && parentCidHash) {
+                try {
+                    const recipients: Array<{ walletAddress: string; encryptionPublicKey: string }> =
+                        await keyShareService.getRecordRecipients(parentCidHash);
+                    if (Array.isArray(recipients) && recipients.length > 0) {
+                        const { walletClient, address: myAddress } = await walletActionService.getWalletContext();
+                        const myKeypair = await getOrCreateEncryptionKeypair(walletClient, myAddress);
+                        const payload = JSON.stringify({ cid, aesKey });
+                        for (const r of recipients) {
+                            if (!r?.walletAddress || !r?.encryptionPublicKey) continue;
+                            if (r.walletAddress.toLowerCase() === String(myAddress).toLowerCase()) continue;
+                            try {
+                                const encryptedPayload = encryptForRecipient(payload, r.encryptionPublicKey, myKeypair.secretKey);
+                                await keyShareService.shareKey({
+                                    cidHash,
+                                    recipientAddress: r.walletAddress.toLowerCase(),
+                                    encryptedPayload,
+                                    senderPublicKey: myKeypair.publicKey,
+                                    expiresAt: null,
+                                    allowDelegate: false,
+                                });
+                            } catch (propErr) {
+                                console.warn('Propagate keyShare failed for', r.walletAddress, propErr);
+                            }
+                        }
+                    }
+                } catch (propErr) {
+                    console.warn('Recipient propagation skipped:', propErr);
+                }
+            }
+
+            Alert.alert(
+                isUpdateMode ? 'Cập nhật hồ sơ thành công' : 'Tạo hồ sơ thành công',
+                isUpdateMode
+                    ? 'Phiên bản mới đã được mã hoá, lưu IPFS và liên kết với hồ sơ gốc.'
+                    : 'Hồ sơ mới đã được mã hoá, lưu IPFS và đăng ký lên hệ thống.'
+            );
             navigation.replace('RecordDetail', { record: toSerializableRecord(record) });
         } catch (submitError: any) {
             const message = buildCreateRecordErrorMessage(submitError);
@@ -490,19 +600,60 @@ export default function CreateRecordScreen({ navigation }: any) {
                             <FilePlus2 size={26} color={EHR_PRIMARY} />
                         </View>
                         <YStack style={{ flex: 1 }}>
-                            <Text fontSize="$6" fontWeight="800" color="$color12">Tạo hồ sơ mới</Text>
-                            <Text fontSize="$3" color="$color10">Nhập thông tin, mã hoá và đưa lên hệ thống cho bạn.</Text>
+                            <Text fontSize="$6" fontWeight="800" color="$color12">{isUpdateMode ? 'Cập nhật hồ sơ' : 'Tạo hồ sơ mới'}</Text>
+                            <Text fontSize="$3" color="$color10">
+                                {isUpdateMode
+                                    ? 'Tạo phiên bản mới liên kết với hồ sơ gốc. Các bên đã được chia sẻ vẫn truy cập được.'
+                                    : 'Nhập thông tin, mã hoá và đưa lên hệ thống cho bạn.'}
+                            </Text>
                         </YStack>
                     </XStack>
                     <View style={{ backgroundColor: EHR_SURFACE_LOW, borderColor: EHR_OUTLINE_VARIANT, borderWidth: 1, borderRadius: 16, padding: 12 }}>
                         <Text fontSize="$2" style={{ color: EHR_ON_SURFACE_VARIANT }}>
-                            Luồng tạo hồ sơ: nhập nội dung, mã hoá AES, upload IPFS, rồi đăng ký cidHash qua backend/on-chain.
+                            Thông tin của bạn sẽ được mã hoá trước khi lưu. Chỉ bạn mới có thể xem lại.
                         </Text>
                     </View>
                 </View>
 
-                <Text fontSize="$4" fontWeight="800" color="$color12" style={{ marginBottom: 10 }}>Loại hồ sơ</Text>
-                <XStack flexWrap="wrap" style={{ gap: 10, marginBottom: 18 }}>
+                <XStack style={{ gap: 10, marginBottom: 16 }}>
+                    <Pressable style={{ flex: 1 }} onPress={() => setSimpleMode(true)}>
+                        <View style={{
+                            borderRadius: 18,
+                            borderWidth: 1,
+                            borderColor: simpleMode ? EHR_PRIMARY : EHR_OUTLINE_VARIANT,
+                            backgroundColor: simpleMode ? EHR_PRIMARY_FIXED : EHR_SURFACE_LOWEST,
+                            padding: 14,
+                        }}>
+                            <XStack style={{ alignItems: 'center', gap: 10 }}>
+                                <ImagePlus size={20} color={EHR_PRIMARY} />
+                                <YStack style={{ flex: 1 }}>
+                                    <Text fontSize="$3" fontWeight="800" color="$color12">Đơn giản</Text>
+                                    <Text fontSize="$1" color="$color10">Chụp ảnh & ghi chú</Text>
+                                </YStack>
+                            </XStack>
+                        </View>
+                    </Pressable>
+                    <Pressable style={{ flex: 1 }} onPress={() => setSimpleMode(false)}>
+                        <View style={{
+                            borderRadius: 18,
+                            borderWidth: 1,
+                            borderColor: !simpleMode ? EHR_PRIMARY : EHR_OUTLINE_VARIANT,
+                            backgroundColor: !simpleMode ? EHR_PRIMARY_FIXED : EHR_SURFACE_LOWEST,
+                            padding: 14,
+                        }}>
+                            <XStack style={{ alignItems: 'center', gap: 10 }}>
+                                <Stethoscope size={20} color={EHR_PRIMARY} />
+                                <YStack style={{ flex: 1 }}>
+                                    <Text fontSize="$3" fontWeight="800" color="$color12">Chi tiết</Text>
+                                    <Text fontSize="$1" color="$color10">Chuẩn y tế đầy đủ</Text>
+                                </YStack>
+                            </XStack>
+                        </View>
+                    </Pressable>
+                </XStack>
+
+                {!simpleMode && <Text fontSize="$4" fontWeight="800" color="$color12" style={{ marginBottom: 10 }}>Loại hồ sơ</Text>}
+                {!simpleMode && <XStack flexWrap="wrap" style={{ gap: 10, marginBottom: 18 }}>
                     {RECORD_TYPES.map((type: RecordTypeOption) => {
                         const Icon = type.icon;
                         const active = type.key === recordType;
@@ -529,14 +680,59 @@ export default function CreateRecordScreen({ navigation }: any) {
                             </Pressable>
                         );
                     })}
-                </XStack>
+                </XStack>}
 
                 <View style={{ backgroundColor: EHR_SURFACE_LOWEST, borderColor: EHR_OUTLINE_VARIANT, borderWidth: 1, borderRadius: 26, padding: 18, marginBottom: 16 }}>
-                    <Text fontSize="$5" fontWeight="800" color="$color12" style={{ marginBottom: 14 }}>Nội dung chính</Text>
-                    {renderInput('Tiêu đề', title, setTitle, { placeholder: 'Ví dụ: Khám tổng quát tháng 3/2026' })}
-                    {renderInput('Mô tả ngắn', description, setDescription, { placeholder: 'Tóm tắt nhanh kết quả hoặc mục đích buổi khám', multiline: true })}
-                    {renderInput('Chẩn đoán', diagnosis, setDiagnosis, { placeholder: 'Mỗi dòng một chẩn đoán, hoặc ngăn cách bằng dấu chấm phẩy', multiline: true })}
-                    {renderInput('Ghi chú thêm', notes, setNotes, { placeholder: 'Chi tiết bổ sung, lưu ý, lịch hẹn tái khám...', multiline: true })}
+                    <Text fontSize="$5" fontWeight="800" color="$color12" style={{ marginBottom: 14 }}>
+                        {simpleMode ? 'Thông tin hồ sơ' : 'Nội dung chính'}
+                    </Text>
+                    {renderInput('Tiêu đề', title, setTitle, { placeholder: simpleMode ? 'Ví dụ: Ảnh đơn thuốc tháng 3' : 'Ví dụ: Khám tổng quát tháng 3/2026' })}
+                    {renderInput(simpleMode ? 'Ghi chú' : 'Mô tả ngắn', description, setDescription, { placeholder: simpleMode ? 'Ghi chú thêm về ảnh/giấy tờ này (tuỳ chọn)' : 'Tóm tắt nhanh kết quả hoặc mục đích buổi khám', multiline: true })}
+
+                    {!simpleMode && <YStack style={{ marginBottom: 14 }}>
+                        <Text fontSize="$3" fontWeight="700" color="$color11" style={{ marginBottom: 6 }}>
+                            Chẩn đoán (ICD-10)
+                        </Text>
+                        {icd10Codes.length > 0 ? (
+                            <YStack style={{ gap: 8, marginBottom: 8 }}>
+                                {icd10Codes.map((item) => (
+                                    <XStack
+                                        key={item.code}
+                                        style={{
+                                            alignItems: 'center',
+                                            backgroundColor: EHR_PRIMARY_FIXED,
+                                            borderWidth: 1,
+                                            borderColor: EHR_OUTLINE_VARIANT,
+                                            borderRadius: 14,
+                                            paddingHorizontal: 12,
+                                            paddingVertical: 10,
+                                        }}
+                                    >
+                                        <View style={{ minWidth: 56, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6, backgroundColor: EHR_PRIMARY, marginRight: 10, alignItems: 'center' }}>
+                                            <Text fontSize="$2" fontWeight="800" style={{ color: '#fff' }}>{item.code}</Text>
+                                        </View>
+                                        <Text fontSize="$3" color="$color12" style={{ flex: 1 }}>{item.name}</Text>
+                                        <Pressable onPress={() => setIcd10Codes((prev) => prev.filter((c) => c.code !== item.code))}>
+                                            <X size={18} color={EHR_ERROR} />
+                                        </Pressable>
+                                    </XStack>
+                                ))}
+                            </YStack>
+                        ) : null}
+                        <Pressable onPress={() => setIcd10PickerOpen(true)}>
+                            <View style={{ borderRadius: 14, borderWidth: 1, borderStyle: 'dashed', borderColor: EHR_PRIMARY, backgroundColor: EHR_SURFACE_LOW, padding: 12 }}>
+                                <XStack style={{ alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                                    <Plus size={16} color={EHR_PRIMARY} />
+                                    <Text fontSize="$3" fontWeight="700" style={{ color: EHR_PRIMARY }}>
+                                        {icd10Codes.length > 0 ? 'Thêm mã ICD-10 khác' : 'Chọn mã ICD-10 từ danh mục'}
+                                    </Text>
+                                </XStack>
+                            </View>
+                        </Pressable>
+                    </YStack>}
+
+                    {!simpleMode && renderInput('Ghi chú chẩn đoán', diagnosisNote, setDiagnosisNote, { placeholder: 'Mô tả thêm về chẩn đoán nếu không có trong danh mục ICD-10', multiline: true })}
+                    {!simpleMode && renderInput('Ghi chú thêm', notes, setNotes, { placeholder: 'Chi tiết bổ sung, lưu ý, lịch hẹn tái khám...', multiline: true })}
                 </View>
 
                 <View style={{ backgroundColor: EHR_SURFACE_LOWEST, borderColor: EHR_OUTLINE_VARIANT, borderWidth: 1, borderRadius: 26, padding: 18, marginBottom: 16 }}>
@@ -606,41 +802,76 @@ export default function CreateRecordScreen({ navigation }: any) {
                     </Text>
                 </View>
 
-                <View style={{ backgroundColor: EHR_SURFACE_LOWEST, borderColor: EHR_OUTLINE_VARIANT, borderWidth: 1, borderRadius: 26, padding: 18, marginBottom: 16 }}>
-                    <Text fontSize="$5" fontWeight="800" color="$color12" style={{ marginBottom: 14 }}>Chỉ số cơ bản</Text>
-                    <XStack style={{ gap: 10, marginBottom: 8 }}>
-                        <View style={{ flex: 1 }}>
-                            {renderInput('Nhịp tim', heartRate, setHeartRate, { placeholder: '72', keyboardType: 'numeric' })}
-                        </View>
-                        <View style={{ flex: 1 }}>
-                            {renderInput('Huyết áp', bloodPressure, setBloodPressure, { placeholder: '120/80' })}
-                        </View>
-                    </XStack>
-                    <View style={{ marginTop: -6 }}>
-                        {renderInput('Nhiệt độ', temperature, setTemperature, { placeholder: '36.8', keyboardType: 'decimal-pad' })}
-                    </View>
-                    <XStack style={{ alignItems: 'center', gap: 8, marginTop: -4 }}>
-                        <Activity size={16} color={EHR_ON_SURFACE_VARIANT} />
-                        <Text fontSize="$2" color="$color10">Chỉ số này sẽ xuất hiện trong màn chi tiết sau khi giải mã.</Text>
-                    </XStack>
-                </View>
-
-                <View style={{ backgroundColor: EHR_SURFACE_LOWEST, borderColor: EHR_OUTLINE_VARIANT, borderWidth: 1, borderRadius: 26, padding: 18, marginBottom: 16 }}>
-                    <Text fontSize="$5" fontWeight="800" color="$color12" style={{ marginBottom: 14 }}>Đơn thuốc / can thiệp</Text>
-                    {renderInput('Thuốc hoặc can thiệp', medication, setMedication, { placeholder: 'Ví dụ: Paracetamol 500mg' })}
+                {!simpleMode && <View style={{ backgroundColor: EHR_SURFACE_LOWEST, borderColor: EHR_OUTLINE_VARIANT, borderWidth: 1, borderRadius: 26, padding: 18, marginBottom: 16 }}>
+                    <Text fontSize="$5" fontWeight="800" color="$color12" style={{ marginBottom: 4 }}>Dấu hiệu sinh tồn</Text>
+                    <Text fontSize="$2" color="$color10" style={{ marginBottom: 12 }}>Theo chuẩn bệnh án điện tử (TT 46/2018/TT-BYT)</Text>
                     <XStack style={{ gap: 10 }}>
                         <View style={{ flex: 1 }}>
-                            {renderInput('Liều dùng', dosage, setDosage, { placeholder: '1 viên' })}
+                            {renderInput('Mạch (lần/phút)', heartRate, setHeartRate, { placeholder: '72', keyboardType: 'numeric' })}
                         </View>
                         <View style={{ flex: 1 }}>
-                            {renderInput('Tần suất', frequency, setFrequency, { placeholder: '2 lần/ngày' })}
+                            {renderInput('Nhịp thở (lần/phút)', respRate, setRespRate, { placeholder: '18', keyboardType: 'numeric' })}
+                        </View>
+                    </XStack>
+                    <XStack style={{ gap: 10 }}>
+                        <View style={{ flex: 1 }}>
+                            {renderInput('HA tâm thu', systolic, setSystolic, { placeholder: '120', keyboardType: 'numeric' })}
+                        </View>
+                        <View style={{ flex: 1 }}>
+                            {renderInput('HA tâm trương', diastolic, setDiastolic, { placeholder: '80', keyboardType: 'numeric' })}
+                        </View>
+                    </XStack>
+                    <XStack style={{ gap: 10 }}>
+                        <View style={{ flex: 1 }}>
+                            {renderInput('Nhiệt độ (°C)', temperature, setTemperature, { placeholder: '36.8', keyboardType: 'decimal-pad' })}
+                        </View>
+                        <View style={{ flex: 1 }}>
+                            {renderInput('SpO2 (%)', spo2, setSpo2, { placeholder: '98', keyboardType: 'numeric' })}
+                        </View>
+                    </XStack>
+                    <XStack style={{ gap: 10 }}>
+                        <View style={{ flex: 1 }}>
+                            {renderInput('Cân nặng (kg)', weight, setWeight, { placeholder: '60', keyboardType: 'decimal-pad' })}
+                        </View>
+                        <View style={{ flex: 1 }}>
+                            {renderInput('Chiều cao (cm)', height, setHeight, { placeholder: '165', keyboardType: 'numeric' })}
                         </View>
                     </XStack>
                     <XStack style={{ alignItems: 'center', gap: 8, marginTop: -4 }}>
-                        <Pill size={16} color={EHR_ON_SURFACE_VARIANT} />
-                        <Text fontSize="$2" color="$color10">Nếu để trống, hồ sơ vẫn được tạo mà không có mục đơn thuốc.</Text>
+                        <Activity size={16} color={EHR_ON_SURFACE_VARIANT} />
+                        <Text fontSize="$2" color="$color10">BMI được tính tự động từ cân nặng và chiều cao.</Text>
                     </XStack>
-                </View>
+                </View>}
+
+                {!simpleMode && <View style={{ backgroundColor: EHR_SURFACE_LOWEST, borderColor: EHR_OUTLINE_VARIANT, borderWidth: 1, borderRadius: 26, padding: 18, marginBottom: 16 }}>
+                    <Text fontSize="$5" fontWeight="800" color="$color12" style={{ marginBottom: 4 }}>Đơn thuốc</Text>
+                    <Text fontSize="$2" color="$color10" style={{ marginBottom: 12 }}>Theo chuẩn đơn thuốc điện tử (TT 04/2022/TT-BYT)</Text>
+                    {renderInput('Tên thuốc / hoạt chất', medication, setMedication, { placeholder: 'Ví dụ: Paracetamol 500mg' })}
+                    <XStack style={{ gap: 10 }}>
+                        <View style={{ flex: 1 }}>
+                            {renderInput('Hàm lượng / Liều', dosage, setDosage, { placeholder: '1 viên' })}
+                        </View>
+                        <View style={{ flex: 1 }}>
+                            {renderInput('Đường dùng', route, setRoute, { placeholder: 'Uống / Tiêm / Bôi' })}
+                        </View>
+                    </XStack>
+                    <XStack style={{ gap: 10 }}>
+                        <View style={{ flex: 1 }}>
+                            {renderInput('Số lần / ngày', frequency, setFrequency, { placeholder: '2 lần/ngày' })}
+                        </View>
+                        <View style={{ flex: 1 }}>
+                            {renderInput('Số ngày dùng', duration, setDuration, { placeholder: '5 ngày' })}
+                        </View>
+                    </XStack>
+                    {renderInput('Số lượng kê', quantity, setQuantity, { placeholder: '10 viên' })}
+                    {renderInput('Lời dặn bác sĩ', instruction, setInstruction, { placeholder: 'Uống sau ăn, tránh rượu bia...', multiline: true })}
+                    <XStack style={{ alignItems: 'flex-start', gap: 8, marginTop: -4 }}>
+                        <Pill size={16} color={EHR_ON_SURFACE_VARIANT} style={{ marginTop: 2 }} />
+                        <Text fontSize="$2" color="$color10" style={{ flex: 1, flexShrink: 1 }}>
+                            Nếu để trống, hồ sơ vẫn được tạo mà không có mục đơn thuốc.
+                        </Text>
+                    </XStack>
+                </View>}
 
                 {error ? (
                     <View style={{ backgroundColor: EHR_ERROR_CONTAINER, borderColor: EHR_OUTLINE_VARIANT, borderWidth: 1, borderRadius: 16, padding: 12, marginBottom: 16 }}>
@@ -658,7 +889,7 @@ export default function CreateRecordScreen({ navigation }: any) {
                 >
                     <XStack style={{ alignItems: 'center', gap: 10 }}>
                         <FilePlus2 size={18} color={EHR_ON_PRIMARY} />
-                        <Text color={EHR_ON_PRIMARY} fontWeight="800">{isSubmitting ? 'Đang tạo hồ sơ...' : 'Tạo hồ sơ mới'}</Text>
+                        <Text color={EHR_ON_PRIMARY} fontWeight="800">{isSubmitting ? (isUpdateMode ? 'Đang cập nhật...' : 'Đang tạo hồ sơ...') : (isUpdateMode ? 'Cập nhật hồ sơ' : 'Tạo hồ sơ mới')}</Text>
                     </XStack>
                 </Button>
 
@@ -667,6 +898,15 @@ export default function CreateRecordScreen({ navigation }: any) {
                     <Text fontSize="$2" color="$color10">Sau khi tạo xong, bạn có thể mở ngay màn chi tiết để giải mã nội dung.</Text>
                 </XStack>
             </ScrollView>
+
+            <Icd10Picker
+                visible={icd10PickerOpen}
+                onClose={() => setIcd10PickerOpen(false)}
+                onSelect={(item) => {
+                    setIcd10Codes((prev) => (prev.some((c) => c.code === item.code) ? prev : [...prev, item]));
+                }}
+                selectedCodes={icd10Codes.map((c) => c.code)}
+            />
         </SafeAreaView>
     );
 }

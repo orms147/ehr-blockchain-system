@@ -1,5 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { FlatList, Pressable, RefreshControl, Alert, StyleSheet } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import authService from '../../services/auth.service';
+import keyShareService from '../../services/keyShare.service';
+import { encryptForRecipient, getOrCreateEncryptionKeypair } from '../../services/nacl-crypto';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
     Send, Clock, CheckCircle, XCircle, User, FilePlus2,
@@ -280,6 +284,21 @@ export default function DoctorOutgoingScreen() {
 
         setClaimingId(update.id);
         try {
+            // Load the AES key we stashed at create time. Without it, nobody can
+            // decrypt the new version (doctor or patient).
+            const draftsStr = await AsyncStorage.getItem('doctor_update_drafts');
+            const drafts = draftsStr ? JSON.parse(draftsStr) : {};
+            const draft = drafts[update.id];
+            if (!draft?.aesKey) {
+                Alert.alert(
+                    'Thiếu khoá AES',
+                    'Không tìm thấy khoá AES gốc (có thể bạn đang dùng thiết bị khác). Vui lòng tạo lại yêu cầu cập nhật trên thiết bị đã soạn thảo.'
+                );
+                setClaimingId(null);
+                return;
+            }
+            const aesKey: string = draft.aesKey;
+
             const { cid } = await ipfsService.uploadEncrypted({
                 encryptedData: update.encryptedContent,
                 metadata: { title: update.title || 'Doctor update', recordType: update.recordType || 'checkup' },
@@ -287,7 +306,7 @@ export default function DoctorOutgoingScreen() {
 
             const cidHash = keccak256(toBytes(cid));
             const recordTypeHash = keccak256(toBytes(update.recordType || 'checkup'));
-            const { walletClient } = await walletActionService.getWalletContext();
+            const { walletClient, address: myAddress } = await walletActionService.getWalletContext();
 
             const txHash = await walletClient.writeContract({
                 address: RECORD_REGISTRY_ADDRESS,
@@ -304,14 +323,91 @@ export default function DoctorOutgoingScreen() {
                 maxPriorityFeePerGas: parseGwei('0.1'),
             });
 
-            // Use mutation so React Query auto-invalidates outgoing/approved/records lists.
+            // NaCl-encrypt the {cid, aesKey} payload for the patient so the
+            // backend stores a real sealed envelope (not plaintext JSON).
+            const myKeypair = await getOrCreateEncryptionKeypair(walletClient, myAddress);
+            const payloadJson = JSON.stringify({ cid, aesKey });
+
+            let encryptedPayloadForPatient: string | null = null;
+            let patientPubKey: string | null = null;
+            try {
+                const patientKeyRes: any = await authService.getEncryptionKey(update.patientAddress);
+                patientPubKey = patientKeyRes?.encryptionPublicKey || null;
+                if (patientPubKey) {
+                    encryptedPayloadForPatient = encryptForRecipient(
+                        payloadJson,
+                        patientPubKey,
+                        myKeypair.secretKey,
+                    );
+                }
+            } catch (e) {
+                console.warn('Fetch patient pubkey failed:', e);
+            }
+
             await claimMutation.mutateAsync({
                 id: update.id,
                 cidHash,
                 txHash,
                 cid,
-                aesKey: 'doctor-managed',
-            });
+                aesKey,
+                encryptedPayloadForPatient,
+                senderPublicKey: myKeypair.publicKey,
+            } as any);
+
+            // Save to local records so this device can immediately decrypt the
+            // new version without a server round-trip.
+            try {
+                const lrStr = await AsyncStorage.getItem('ehr_local_records');
+                const localRecords = lrStr ? JSON.parse(lrStr) : {};
+                localRecords[cidHash.toLowerCase()] = {
+                    ...(localRecords[cidHash.toLowerCase()] || {}),
+                    cid,
+                    aesKey,
+                    title: update.title || null,
+                    recordType: update.recordType || null,
+                    parentCidHash: update.parentCidHash,
+                    ownerAddress: update.patientAddress,
+                    createdBy: myAddress,
+                    createdAt: new Date().toISOString(),
+                    syncStatus: 'confirmed',
+                    txHash,
+                };
+                await AsyncStorage.setItem('ehr_local_records', JSON.stringify(localRecords));
+            } catch (lrErr) {
+                console.warn('Failed to save local record:', lrErr);
+            }
+
+            // Auto-propagate to other recipients of the parent chain so nobody
+            // silently loses access when a new version is added.
+            try {
+                const recipients: any = await keyShareService.getRecordRecipients(update.parentCidHash);
+                if (Array.isArray(recipients)) {
+                    for (const r of recipients) {
+                        const addr = String(r.walletAddress || '').toLowerCase();
+                        if (!addr || addr === myAddress.toLowerCase() || addr === String(update.patientAddress).toLowerCase()) continue;
+                        if (!r.encryptionPublicKey) continue;
+                        try {
+                            const enc = encryptForRecipient(payloadJson, r.encryptionPublicKey, myKeypair.secretKey);
+                            await keyShareService.shareKey({
+                                cidHash,
+                                recipientAddress: addr,
+                                encryptedPayload: enc,
+                                senderPublicKey: myKeypair.publicKey,
+                            });
+                        } catch (innerErr) {
+                            console.warn('Propagate share failed for', addr, innerErr);
+                        }
+                    }
+                }
+            } catch (propErr) {
+                console.warn('Auto-propagation failed:', propErr);
+            }
+
+            // Clean up draft
+            try {
+                delete drafts[update.id];
+                await AsyncStorage.setItem('doctor_update_drafts', JSON.stringify(drafts));
+            } catch { }
 
             Alert.alert('Đã xác nhận!', 'Hồ sơ đã được lưu lên blockchain.');
         } catch (err: any) {

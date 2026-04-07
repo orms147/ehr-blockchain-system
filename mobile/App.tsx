@@ -17,6 +17,27 @@ import { initSentry, Sentry } from './src/lib/sentry';
 
 initSentry();
 
+// Filter noisy console.error from Web3Auth SDK when user cancels login modal.
+// SDK logs "login flow failed with error type dismiss" before throwing; we already
+// handle the throw silently, so drop the log to avoid red-screen in dev.
+{
+  const originalError = console.error;
+  const SILENCED_PATTERNS = [
+    'login flow failed with error type dismiss',
+    'user closed',
+    'user cancelled',
+    'user canceled',
+  ];
+  console.error = (...args: any[]) => {
+    const joined = args
+      .map((a) => (typeof a === 'string' ? a : a?.message || ''))
+      .join(' ')
+      .toLowerCase();
+    if (SILENCED_PATTERNS.some((p) => joined.includes(p))) return;
+    originalError(...args);
+  };
+}
+
 function App() {
   const colorScheme = useColorScheme();
   const { loadToken, isLoading } = useAuthStore();

@@ -35,10 +35,35 @@ type RequestItem = {
     requesterAddress?: string;
     requestType?: number;
     createdAt?: string;
+    deadline?: string;
     recordTitle?: string;
     cidHash?: string;
     status?: 'pending' | 'approved' | 'rejected' | 'signed' | string;
     signatureDeadline?: string | null;
+    durationDays?: number;
+    durationHours?: number;
+    consentDurationHours?: number;
+};
+
+const formatDuration = (item: RequestItem) => {
+    // 1) Prefer explicit hour fields
+    let hours: number | null = null;
+    if (item.consentDurationHours != null) hours = Number(item.consentDurationHours);
+    else if (item.durationHours != null) hours = Number(item.durationHours);
+    else if (item.durationDays != null) hours = Number(item.durationDays) * 24;
+    // 2) Fallback: derive from deadline - createdAt
+    if (hours == null && item.deadline && item.createdAt) {
+        const diffMs = new Date(item.deadline).getTime() - new Date(item.createdAt).getTime();
+        if (Number.isFinite(diffMs) && diffMs > 0) hours = diffMs / 3600000;
+    }
+    if (hours == null) return null;
+    if (hours < 1) {
+        const mins = Math.max(1, Math.round(hours * 60));
+        return `${mins} phút`;
+    }
+    if (hours < 24) return `${Math.round(hours)} giờ`;
+    const days = Math.round(hours / 24);
+    return `${days} ngày`;
 };
 
 type PendingUpdateItem = {
@@ -140,10 +165,19 @@ const RequestRenderItem = React.memo(({
                 </View>
             </XStack>
 
-            <XStack style={{ alignItems: 'center', marginBottom: isPending ? 12 : 0 }}>
-                <View style={{ backgroundColor: EHR_SURFACE_LOW, borderRadius: 8, paddingVertical: 4, paddingHorizontal: 8, marginRight: 8 }}>
-                    <Text fontSize="$2" color="$color11">{getRequestTypeLabel(item.requestType)}</Text>
+            <XStack style={{ alignItems: 'center', marginBottom: isPending ? 12 : 0, flexWrap: 'wrap', gap: 6 }}>
+                <View style={{ backgroundColor: EHR_PRIMARY_FIXED, borderRadius: 8, paddingVertical: 4, paddingHorizontal: 8 }}>
+                    <Text fontSize="$2" fontWeight="700" style={{ color: EHR_PRIMARY }}>
+                        Loại: {getRequestTypeLabel(item.requestType)}
+                    </Text>
                 </View>
+                {formatDuration(item) ? (
+                    <View style={{ backgroundColor: EHR_SECONDARY_CONTAINER, borderRadius: 8, paddingVertical: 4, paddingHorizontal: 8 }}>
+                        <Text fontSize="$2" fontWeight="700" style={{ color: EHR_SECONDARY }}>
+                            Thời lượng: {formatDuration(item)}
+                        </Text>
+                    </View>
+                ) : null}
                 <XStack style={{ alignItems: 'center' }}>
                     <Clock size={12} color={EHR_ON_SURFACE_VARIANT} style={{ marginRight: 4 }} />
                     <Text fontSize="$2" color="$color9">{formatDate(item.createdAt)}</Text>

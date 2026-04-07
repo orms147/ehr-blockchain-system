@@ -52,7 +52,7 @@ const REGISTRATION_OPTIONS = [
     {
         role: 'patient',
         label: 'B\u1ec7nh nh\u00e2n',
-        description: 'Qu\u1ea3n l\u00fd h\u1ed3 s\u01a1 s\u1ee9c kh\u1ecfe c\u00e1 nh\u00e2n tr\u00ean Blockchain.',
+        description: 'Lưu giữ hồ sơ khám bệnh, đơn thuốc và kết quả xét nghiệm.',
         emoji: '👤',
         badge: 'Quy\u1ec1n truy c\u1eadp c\u00e1 nh\u00e2n',
         Icon: HeartPulse,
@@ -366,7 +366,7 @@ export default function RoleSelectionScreen() {
                     {busyRole === item.role && (
                         <View style={styles.loadingOverlay}>
                             <ActivityIndicator size="small" color={EHR_PRIMARY} />
-                            <Text style={styles.loadingText}>\u0110ang \u0111\u0103ng k\u00fd...</Text>
+                            <Text style={styles.loadingText}>Đang đăng ký...</Text>
                         </View>
                     )}
                 </AnimatedCard>
@@ -410,7 +410,7 @@ export default function RoleSelectionScreen() {
                                 {roleConfig.label}
                             </Text>
                             <Text style={styles.cardDescription}>
-                                \u0110\u0103ng nh\u1eadp v\u1edbi quy\u1ec1n {String(roleConfig.label).toLowerCase()}
+                                Đăng nhập với quyền {String(roleConfig.label).toLowerCase()}
                             </Text>
 
                             {/* Badge chip */}
@@ -455,7 +455,7 @@ export default function RoleSelectionScreen() {
                     {busyRole === role && (
                         <View style={styles.loadingOverlay}>
                             <ActivityIndicator size="small" color={EHR_PRIMARY} />
-                            <Text style={styles.loadingText}>\u0110ang x\u1eed l\u00fd...</Text>
+                            <Text style={styles.loadingText}>Đang xử lý...</Text>
                         </View>
                     )}
                 </AnimatedCard>
@@ -480,7 +480,7 @@ export default function RoleSelectionScreen() {
                         </View>
                         <XStack style={styles.brandWrap}>
                             <ShieldCheck size={18} color={EHR_PRIMARY} />
-                            <Text style={styles.brandText}>EHR Chain Mobile</Text>
+                            <Text style={styles.brandText}>Sổ sức khoẻ</Text>
                         </XStack>
                         <View style={{ width: 36 }} />
                     </XStack>
@@ -489,10 +489,10 @@ export default function RoleSelectionScreen() {
                 {/* Title + Subtitle */}
                 <Animated.View style={[styles.titleBlock, headerAnimStyle]}>
                     <Text style={styles.screenTitle}>
-                        Ch\u1ecdn vai tr\u00f2 c\u1ee7a b\u1ea1n
+                        Bạn là ai?
                     </Text>
                     <Text style={styles.screenSubtitle}>
-                        \u0110\u1ec3 c\u00e1 nh\u00e2n h\u00f3a tr\u1ea3i nghi\u1ec7m qu\u1ea3n l\u00fd h\u1ed3 s\u01a1 y t\u1ebf tr\u00ean Blockchain, vui l\u00f2ng x\u00e1c \u0111\u1ecbnh vai tr\u00f2 hi\u1ec7n t\u1ea1i c\u1ee7a b\u1ea1n.
+                        Chọn vai trò phù hợp để chúng tôi hiển thị đúng nội dung cho bạn.
                     </Text>
                 </Animated.View>
 
@@ -522,7 +522,7 @@ export default function RoleSelectionScreen() {
                                 <ActivityIndicator size="small" color={EHR_ON_PRIMARY} />
                             ) : (
                                 <XStack style={styles.ctaContent}>
-                                    <Text style={styles.ctaText}>Ti\u1ebfp t\u1ee5c</Text>
+                                    <Text style={styles.ctaText}>Tiếp tục</Text>
                                     <ArrowRight size={20} color={EHR_ON_PRIMARY} />
                                 </XStack>
                             )}
@@ -533,9 +533,9 @@ export default function RoleSelectionScreen() {
                 {/* Footer */}
                 <Animated.View style={[styles.footer, footerAnimStyle]}>
                     <Text style={styles.footerText}>
-                        B\u1eb1ng c\u00e1ch ti\u1ebfp t\u1ee5c, b\u1ea1n \u0111\u1ed3ng \u00fd v\u1edbi{' '}
-                        <Text style={styles.footerLink}>Ch\u00ednh s\u00e1ch B\u1ea3o m\u1eadt</Text>
-                        {' '}c\u1ee7a ch\u00fang t\u00f4i.
+                        Bằng cách tiếp tục, bạn đồng ý với{' '}
+                        <Text style={styles.footerLink}>Chính sách Bảo mật</Text>
+                        {' '}của chúng tôi.
                     </Text>
                 </Animated.View>
             </SafeAreaView>

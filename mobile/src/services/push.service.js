@@ -1,24 +1,44 @@
-import * as Notifications from 'expo-notifications';
-import * as Device from 'expo-device';
 import { Platform } from 'react-native';
+import Constants from 'expo-constants';
 import api from './api';
 
-// Show notifications when app is foregrounded.
-Notifications.setNotificationHandler({
-    handleNotification: async () => ({
-        shouldShowAlert: true,
-        shouldPlaySound: true,
-        shouldSetBadge: false,
-        shouldShowBanner: true,
-        shouldShowList: true,
-    }),
-});
+// expo-notifications native module is unavailable in Expo Go (SDK 53+).
+// Lazy-load so Expo Go doesn't crash at module init; real devices / dev builds work normally.
+const IS_EXPO_GO = Constants.appOwnership === 'expo';
+let Notifications = null;
+let Device = null;
+
+function loadNativeModules() {
+    if (IS_EXPO_GO) return false;
+    if (Notifications) return true;
+    try {
+        Notifications = require('expo-notifications');
+        Device = require('expo-device');
+        Notifications.setNotificationHandler({
+            handleNotification: async () => ({
+                shouldShowAlert: true,
+                shouldPlaySound: true,
+                shouldSetBadge: false,
+                shouldShowBanner: true,
+                shouldShowList: true,
+            }),
+        });
+        return true;
+    } catch (err) {
+        console.warn('[Push] expo-notifications unavailable:', err?.message || err);
+        return false;
+    }
+}
 
 /**
  * Request permission and obtain Expo push token.
  * Returns the token string, or null if not granted / not on a real device.
  */
 export async function registerForPushNotificationsAsync() {
+    if (!loadNativeModules()) {
+        console.log('[Push] Running in Expo Go or native module missing — skipping push registration');
+        return null;
+    }
     if (!Device.isDevice) {
         console.log('[Push] Not a physical device — skipping push registration');
         return null;

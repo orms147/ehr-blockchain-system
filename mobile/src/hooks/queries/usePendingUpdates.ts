@@ -74,13 +74,17 @@ export function useClaimPendingUpdate() {
             txHash,
             cid,
             aesKey,
+            encryptedPayloadForPatient,
+            senderPublicKey,
         }: {
             id: string;
             cidHash: string;
             txHash: string;
             cid: string;
             aesKey: string;
-        }) => pendingUpdateService.claim(id, cidHash, txHash, cid, aesKey),
+            encryptedPayloadForPatient?: string | null;
+            senderPublicKey?: string | null;
+        }) => pendingUpdateService.claim(id, cidHash, txHash, cid, aesKey, encryptedPayloadForPatient, senderPublicKey),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: pendingUpdateKeys.outgoing() });
             queryClient.invalidateQueries({ queryKey: pendingUpdateKeys.approved() });

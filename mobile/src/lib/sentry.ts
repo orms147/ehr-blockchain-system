@@ -1,4 +1,16 @@
-import * as Sentry from '@sentry/react-native';
+import * as SentryRN from '@sentry/react-native';
+
+// Pass-through wrap used when Sentry is not initialized (no DSN). Avoids the
+// "Sentry.wrap was called before Sentry.init" warning in dev builds.
+const identityWrap = <T,>(component: T): T => component;
+
+export const Sentry = {
+    ...SentryRN,
+    wrap: ((component: any) => {
+        if (!process.env.EXPO_PUBLIC_SENTRY_DSN) return identityWrap(component);
+        return SentryRN.wrap(component);
+    }) as typeof SentryRN.wrap,
+};
 
 /**
  * Sentry init. Call once at app start before rendering.
@@ -15,7 +27,7 @@ export function initSentry() {
         return;
     }
 
-    Sentry.init({
+        SentryRN.init({
         dsn,
         enableAutoSessionTracking: true,
         // Lower in prod to control quota; full traces in dev for debugging.
@@ -49,4 +61,3 @@ export function setSentryUser(user: { id?: string | number; walletAddress?: stri
     });
 }
 
-export { Sentry };

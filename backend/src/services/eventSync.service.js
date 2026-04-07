@@ -198,9 +198,9 @@ async function updateSyncState(blockNumber, blockHash) {
     });
 }
 
-async function handleMemberAdded(log) {
-    const orgAdminAddress = normalizeAddress(log.args.org);
-    const doctorAddress = normalizeAddress(log.args.doctor);
+async function handleMemberAdded(event) {
+    const orgAdminAddress = normalizeAddress(event.args.org);
+    const doctorAddress = normalizeAddress(event.args.doctor);
     if (!orgAdminAddress || !doctorAddress) {
         return;
     }
@@ -247,9 +247,9 @@ async function handleMemberAdded(log) {
     });
 }
 
-async function handleMemberRemoved(log) {
-    const orgAdminAddress = normalizeAddress(log.args.org);
-    const doctorAddress = normalizeAddress(log.args.doctor);
+async function handleMemberRemoved(event) {
+    const orgAdminAddress = normalizeAddress(event.args.org);
+    const doctorAddress = normalizeAddress(event.args.doctor);
     if (!orgAdminAddress || !doctorAddress) {
         return;
     }
@@ -291,10 +291,10 @@ async function handleMemberRemoved(log) {
     });
 }
 
-async function handleDoctorVerified(log) {
-    const doctorAddress = normalizeAddress(log.args.doctor);
-    const verifierAddress = normalizeAddress(log.args.verifier);
-    const chainOrgId = normalizeChainOrgId(log.args.orgId);
+async function handleDoctorVerified(event) {
+    const doctorAddress = normalizeAddress(event.args.doctor);
+    const verifierAddress = normalizeAddress(event.args.verifier);
+    const chainOrgId = normalizeChainOrgId(event.args.orgId);
     if (!doctorAddress) {
         return;
     }
@@ -338,9 +338,9 @@ async function handleDoctorVerified(log) {
     }
 }
 
-async function handleVerificationRevoked(log) {
-    const userAddress = normalizeAddress(log.args.user);
-    const revokerAddress = normalizeAddress(log.args.revoker);
+async function handleVerificationRevoked(event) {
+    const userAddress = normalizeAddress(event.args.user);
+    const revokerAddress = normalizeAddress(event.args.revoker);
     if (!userAddress) {
         return;
     }
@@ -354,11 +354,11 @@ async function handleVerificationRevoked(log) {
     }
 }
 
-async function handleOrganizationCreated(log) {
-    const chainOrgId = normalizeChainOrgId(log.args.orgId);
-    const name = log.args.name;
-    const primaryAdmin = normalizeAddress(log.args.primaryAdmin);
-    const backupAdmin = normalizeAddress(log.args.backupAdmin);
+async function handleOrganizationCreated(event) {
+    const chainOrgId = normalizeChainOrgId(event.args.orgId);
+    const name = event.args.name;
+    const primaryAdmin = normalizeAddress(event.args.primaryAdmin);
+    const backupAdmin = normalizeAddress(event.args.backupAdmin);
     if (chainOrgId === null || !name || !primaryAdmin) {
         return;
     }
@@ -404,9 +404,9 @@ async function handleOrganizationCreated(log) {
     }
 }
 
-async function handleOrganizationStatusChanged(log) {
-    const chainOrgId = normalizeChainOrgId(log.args.orgId);
-    const active = Boolean(log.args.active);
+async function handleOrganizationStatusChanged(event) {
+    const chainOrgId = normalizeChainOrgId(event.args.orgId);
+    const active = Boolean(event.args.active);
     if (chainOrgId === null) {
         return;
     }
@@ -442,12 +442,12 @@ async function handleOrganizationStatusChanged(log) {
     }
 }
 
-async function handleOrganizationAdminChanged(log) {
-    const chainOrgId = normalizeChainOrgId(log.args.orgId);
-    const oldPrimary = normalizeAddress(log.args.oldPrimary);
-    const newPrimary = normalizeAddress(log.args.newPrimary);
-    const oldBackup = normalizeAddress(log.args.oldBackup);
-    const newBackup = normalizeAddress(log.args.newBackup);
+async function handleOrganizationAdminChanged(event) {
+    const chainOrgId = normalizeChainOrgId(event.args.orgId);
+    const oldPrimary = normalizeAddress(event.args.oldPrimary);
+    const newPrimary = normalizeAddress(event.args.newPrimary);
+    const oldBackup = normalizeAddress(event.args.oldBackup);
+    const newBackup = normalizeAddress(event.args.newBackup);
     if (chainOrgId === null || !newPrimary) {
         return;
     }
@@ -516,11 +516,11 @@ const EVENT_HANDLERS = {
     OrganizationAdminChanged: handleOrganizationAdminChanged,
 };
 
-async function processLog(eventName, log) {
+async function processLog(eventName, eventLog) {
     try {
         const handler = EVENT_HANDLERS[eventName];
         if (handler) {
-            await handler(log);
+            await handler(eventLog);
         }
     } catch (error) {
         log.error(`Error processing ${eventName}`, { error: error.message });
@@ -579,8 +579,8 @@ async function catchupLogs() {
                         toBlock: chunkTo,
                     });
 
-                    for (const log of logs) {
-                        await processLog(eventName, log);
+                    for (const eventLog of logs) {
+                        await processLog(eventName, eventLog);
                     }
                 } catch (error) {
                     log.error(`Error fetching ${eventName} logs`, { error: error.message });
@@ -619,9 +619,9 @@ function startRealtimeWatch() {
                 address: ACCESS_CONTROL_ADDRESS,
                 abi: [eventAbi],
                 onLogs: async (logs) => {
-                    for (const log of logs) {
-                        log.info(`Realtime ${eventName}`, { blockNumber: log.blockNumber });
-                        await processLog(eventName, log);
+                    for (const eventLog of logs) {
+                        log.info(`Realtime ${eventName}`, { blockNumber: eventLog.blockNumber });
+                        await processLog(eventName, eventLog);
                     }
                 },
                 onError: (error) => {

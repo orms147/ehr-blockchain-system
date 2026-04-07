@@ -183,6 +183,21 @@ const grantSchema = z.object({
     signature: z.string().regex(/^0x[a-fA-F0-9]+$/),
 });
 
+// GET /api/relayer/grant-context?grantee=0x... - Nonce + verified status + quota for share UI
+router.get('/grant-context', authenticate, async (req, res, next) => {
+    try {
+        const grantee = String(req.query.grantee || '').toLowerCase();
+        if (!/^0x[a-f0-9]{40}$/.test(grantee)) {
+            return res.status(400).json({ code: 'INVALID_GRANTEE', error: 'grantee query param phải là địa chỉ ví hợp lệ' });
+        }
+        const ctx = await relayerService.getGrantContext(req.user.walletAddress, grantee);
+        res.json(ctx);
+    } catch (error) {
+        log.error('grant-context failed', { error: error.message });
+        next(error);
+    }
+});
+
 // POST /api/relayer/grant - Sponsor grant consent (with Patient's EIP-712 signature)
 router.post('/grant', authenticate, requirePatientRole, async (req, res, next) => {
     try {

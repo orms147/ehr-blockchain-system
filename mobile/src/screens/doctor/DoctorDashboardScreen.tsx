@@ -105,12 +105,14 @@ export default function DoctorDashboardScreen() {
             const uniqueMap = new Map<string, SharedRecord>();
             (records || []).forEach((r) => { if (r?.cidHash) uniqueMap.set(r.cidHash, r); });
             const distinct = Array.from(uniqueMap.values());
-            const activeList = distinct.filter((r) => r.active !== false && r.status !== 'awaiting_claim');
-            const activeParentCids = new Set(
-                activeList.map((r) => r.parentCidHash?.toLowerCase()).filter(Boolean) as string[]
+            // Keep BOTH active and inactive (expired/revoked) so doctor sees historical access.
+            // 'awaiting_claim' is still hidden — those belong to the "Chờ nhận truy cập" section.
+            const visible = distinct.filter((r) => r.status !== 'awaiting_claim');
+            const visibleParentCids = new Set(
+                visible.map((r) => r.parentCidHash?.toLowerCase()).filter(Boolean) as string[]
             );
-            const latestActive = activeList.filter((r) => !activeParentCids.has(r.cidHash?.toLowerCase() || ''));
-            const processed = latestActive.map((record) => {
+            const latest = visible.filter((r) => !visibleParentCids.has(r.cidHash?.toLowerCase() || ''));
+            const processed = latest.map((record) => {
                 let count = 1;
                 let current = record;
                 const visited = new Set([record.cidHash]);
@@ -137,7 +139,16 @@ export default function DoctorDashboardScreen() {
         enabled: !!token,
     });
 
-    const sharedRecords = sharedRecordsQuery.data ?? [];
+    const allShared = sharedRecordsQuery.data ?? [];
+    const isInactive = (r: SharedRecord) => {
+        const s = String(r.status || '').toLowerCase();
+        if (r.active === false) return true;
+        if (s === 'revoked' || s === 'expired' || s === 'rejected') return true;
+        return false;
+    };
+    const activeShared = allShared.filter((r) => !isInactive(r));
+    const inactiveShared = allShared.filter(isInactive);
+    const sharedRecords = [...activeShared, ...inactiveShared];
     const pendingClaims = pendingClaimsQuery.data ?? [];
     const isLoading = (sharedRecordsQuery.isLoading || pendingClaimsQuery.isLoading) && !sharedRecordsQuery.data && !pendingClaimsQuery.data;
     const isRefreshing = sharedRecordsQuery.isFetching || pendingClaimsQuery.isFetching;
@@ -173,6 +184,24 @@ export default function DoctorDashboardScreen() {
             Alert.alert('Phê duyệt đã hết hạn', 'Bệnh nhân đã ký hơn 24 giờ trước. Vui lòng yêu cầu bệnh nhân phê duyệt lại.');
             return;
         }
+        // Liability confirmation: doctor must acknowledge responsibility before viewing
+        const accepted = await new Promise<boolean>((resolve) => {
+            Alert.alert(
+                'Xác nhận trách nhiệm truy cập',
+                `Bạn sắp truy cập hồ sơ y tế của BN ${truncateAddr(claim.patientAddress)}.\n\n` +
+                'Bằng việc tiếp tục, bạn xác nhận:\n' +
+                '• Truy cập chỉ phục vụ mục đích y tế hợp pháp\n' +
+                '• Không tiết lộ thông tin cho bên thứ ba trái phép\n' +
+                '• Mọi hành động truy cập đều được ghi log on-chain và có thể bị kiểm toán\n' +
+                '• Bạn chịu trách nhiệm pháp lý nếu sử dụng sai mục đích',
+                [
+                    { text: 'Huỷ', style: 'cancel', onPress: () => resolve(false) },
+                    { text: 'Tôi đồng ý và chịu trách nhiệm', style: 'destructive', onPress: () => resolve(true) },
+                ],
+                { cancelable: true, onDismiss: () => resolve(false) }
+            );
+        });
+        if (!accepted) return;
         setClaimingId(claim.requestId);
         try {
             const { walletClient } = await walletActionService.getWalletContext();
@@ -209,8 +238,35 @@ export default function DoctorDashboardScreen() {
         }
     };
 
-    const handleViewRecord = (record: SharedRecord) => {
+    const handleViewRecord = async (record: SharedRecord) => {
         if (!record?.cidHash) { Alert.alert('Không mở được hồ sơ', 'Thiếu mã hồ sơ (cidHash).'); return; }
+        // First-time access: ask doctor to confirm liability before claiming.
+        if (record?.status === 'pending') {
+            const patientAddr = record?.record?.ownerAddress || record?.senderAddress || '';
+            const ok = await new Promise<boolean>((resolve) => {
+                Alert.alert(
+                    'Xác nhận trách nhiệm truy cập',
+                    `Bạn sắp lần đầu truy cập hồ sơ của BN ${truncateAddr(patientAddr)}.\n\n` +
+                    'Tôi xác nhận đây là truy cập y tế hợp pháp, sẽ không tiết lộ trái phép, và mọi hành động đều được ghi log on-chain.',
+                    [
+                        { text: 'Huỷ', style: 'cancel', onPress: () => resolve(false) },
+                        { text: 'Đồng ý và xem', style: 'destructive', onPress: () => resolve(true) },
+                    ],
+                    { cancelable: true, onDismiss: () => resolve(false) }
+                );
+            });
+            if (!ok) return;
+        }
+        // Mark key share as claimed the first time doctor opens it, so next visit shows "Xem hồ sơ".
+        if (record?.status === 'pending' && record?.id) {
+            try {
+                await keyShareService.claimKey(record.id);
+                queryClient.invalidateQueries({ queryKey: ['doctor', 'sharedRecords'] });
+            } catch (e) {
+                // Non-fatal — the claim can be retried next view, still allow navigating.
+                console.warn('claimKey failed:', (e as any)?.message || e);
+            }
+        }
         const displayDate = record?.createdAt ? new Date(record.createdAt).toLocaleDateString('vi-VN') : '';
         const patientAddress = record?.record?.ownerAddress || record?.senderAddress || '';
         navigation.navigate('RecordDetail', {
@@ -363,6 +419,29 @@ export default function DoctorDashboardScreen() {
                                 })}
                             </View>
                         )}
+
+                        {/* Delegation shortcut */}
+                        <Pressable
+                            onPress={() => navigation.navigate('DoctorDelegatableRecords')}
+                            style={{
+                                backgroundColor: '#ede9fe',
+                                borderWidth: 1,
+                                borderColor: '#c4b5fd',
+                                borderRadius: 16,
+                                padding: 14,
+                                marginBottom: 16,
+                                flexDirection: 'row',
+                                alignItems: 'center',
+                            }}
+                        >
+                            <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: '#8b5cf6', alignItems: 'center', justifyContent: 'center', marginRight: 12 }}>
+                                <Users size={20} color="white" />
+                            </View>
+                            <YStack flex={1}>
+                                <Text fontSize={14} fontWeight="700" color="#4c1d95">Hồ sơ ủy quyền được</Text>
+                                <Text fontSize={12} color="#6d28d9">Chia sẻ lại cho bác sĩ khác (A → B)</Text>
+                            </YStack>
+                        </Pressable>
 
                         {/* Shared records header */}
                         <Text style={s.sectionTitle}>Hồ sơ đã nhận ({sharedRecords.length})</Text>

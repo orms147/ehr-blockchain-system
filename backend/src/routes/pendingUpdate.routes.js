@@ -25,6 +25,8 @@ const claimUpdateSchema = z.object({
     txHash: z.string().regex(/^0x[a-fA-F0-9]{64}$/),
     cid: z.string().min(1), // IPFS CID
     aesKey: z.string().min(1), // AES key string
+    encryptedPayloadForPatient: z.string().nullable().optional(),
+    senderPublicKey: z.string().nullable().optional(),
 });
 
 // Helper: Calculate content hash
@@ -327,7 +329,7 @@ router.post('/:id/reject', authenticate, requirePatientRole, async (req, res, ne
 router.post('/:id/claim', authenticate, requireDoctorRole, async (req, res, next) => {
     try {
         const { id } = req.params;
-        const { cidHash, txHash, cid, aesKey } = claimUpdateSchema.parse(req.body);
+        const { cidHash, txHash, cid, aesKey, encryptedPayloadForPatient, senderPublicKey } = claimUpdateSchema.parse(req.body);
         const doctorAddress = req.user.walletAddress.toLowerCase();
 
         const update = await prisma.pendingUpdate.findUnique({
@@ -425,8 +427,11 @@ router.post('/:id/claim', authenticate, requireDoctorRole, async (req, res, next
         // Use parent's expiresAt, or if null (permanent access for owner), use null
         const doctorExpiresAt = parentKeyShare?.expiresAt || null;
 
-        // Create proper key payload with CID and AES key (standard format)
-        const keyPayload = JSON.stringify({ cid, aesKey });
+        // Plaintext fallback (legacy). Real clients MUST send NaCl-sealed
+        // `encryptedPayloadForPatient`, otherwise the patient cannot decrypt
+        // because their device only knows how to open NaCl envelopes.
+        const plaintextPayload = JSON.stringify({ cid, aesKey });
+        const patientEncryptedPayload = encryptedPayloadForPatient || plaintextPayload;
 
         // Create KeyShare for Patient (owner) - permanent access
         await prisma.keyShare.upsert({
@@ -439,14 +444,16 @@ router.post('/:id/claim', authenticate, requireDoctorRole, async (req, res, next
             },
             update: {
                 status: 'pending',
-                encryptedPayload: keyPayload, // Standard format {cid, aesKey}
+                encryptedPayload: patientEncryptedPayload,
+                senderPublicKey: senderPublicKey || undefined,
             },
             create: {
                 cidHash: cidHash.toLowerCase(),
                 senderAddress: doctorAddress,
                 recipientAddress: update.patientAddress,
-                encryptedPayload: keyPayload,
-                status: 'pending', // Patient can access immediately
+                encryptedPayload: patientEncryptedPayload,
+                senderPublicKey: senderPublicKey || null,
+                status: 'pending',
             },
         });
 
@@ -467,7 +474,7 @@ router.post('/:id/claim', authenticate, requireDoctorRole, async (req, res, next
                 cidHash: cidHash.toLowerCase(),
                 senderAddress: update.patientAddress,
                 recipientAddress: doctorAddress,
-                encryptedPayload: keyPayload, // Standard format {cid, aesKey}
+                encryptedPayload: plaintextPayload, // Doctor reads via local records; this row exists only for authorization.
                 status: 'claimed', // Doctor has access
                 expiresAt: doctorExpiresAt,
             },

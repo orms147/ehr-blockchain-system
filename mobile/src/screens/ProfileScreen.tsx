@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import {
     User, LogOut, Shield, Droplets, ChevronRight,
-    Edit3, Calendar, Settings, Info, Wallet, Copy, UserCheck,
+    Edit3, Calendar, Settings, Info, Wallet, Copy, UserCheck, QrCode,
 } from 'lucide-react-native';
 import { YStack, XStack, Text, Button, View } from 'tamagui';
 import Animated, {
@@ -17,6 +17,7 @@ import Animated, {
 import * as Clipboard from 'expo-clipboard';
 
 import LoadingSpinner from '../components/LoadingSpinner';
+import MyAddressModal from '../components/MyAddressModal';
 import RoleSwitcher from '../components/RoleSwitcher';
 import profileService from '../services/profile.service';
 import useAuthStore from '../store/authStore';
@@ -44,6 +45,7 @@ export default function ProfileScreen() {
     const [profile, setProfile] = useState<any>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [isMockMode, setIsMockMode] = useState(false);
+    const [addressModalOpen, setAddressModalOpen] = useState(false);
 
     const enter = useSharedValue(0);
     const cardEnter = useSharedValue(0);
@@ -172,12 +174,12 @@ export default function ProfileScreen() {
                         </View>
                         <Text style={s.userName}>{userData.fullName || 'Chưa cập nhật tên'}</Text>
 
-                        <Pressable onPress={copyAddress} style={s.addressRow}>
+                        <Pressable onPress={() => setAddressModalOpen(true)} style={s.addressRow}>
                             <Wallet size={12} color={EHR_ON_SURFACE_VARIANT} />
                             <Text style={s.addressText}>
                                 {truncateAddress(userData.walletAddress || userData.address)}
                             </Text>
-                            <Copy size={12} color={EHR_OUTLINE_VARIANT} />
+                            <QrCode size={12} color={EHR_PRIMARY} />
                         </Pressable>
 
                         <View style={s.verifiedBadge}>
@@ -242,6 +244,7 @@ export default function ProfileScreen() {
                 {/* ── Menu items ── */}
                 <Animated.View style={menuStyle}>
                     <View style={s.menuCard}>
+                        <MenuItem icon={QrCode} label="Địa chỉ của tôi (QR)" onPress={() => setAddressModalOpen(true)} />
                         <MenuItem icon={Settings} label="Cài đặt và ví" onPress={() => navigation.navigate('Settings')} />
                         <MenuItem icon={Edit3} label="Chỉnh sửa hồ sơ" onPress={() => navigation.navigate('EditProfile')} />
                         <MenuItem icon={Shield} label="Quản lý bảo mật" onPress={() => navigation.navigate('Settings')} />
@@ -251,6 +254,14 @@ export default function ProfileScreen() {
                     </View>
                 </Animated.View>
             </ScrollView>
+
+            <MyAddressModal
+                visible={addressModalOpen}
+                onClose={() => setAddressModalOpen(false)}
+                address={userData.walletAddress || userData.address}
+                displayName={userData.fullName}
+                role={userData.role || user?.role}
+            />
         </SafeAreaView>
     );
 }

@@ -49,11 +49,13 @@ export async function signGrantConsent(walletClient, params) {
         nonce,
     } = params;
 
-    // Get account from wallet client
-    const [account] = await walletClient.getAddresses();
+    // Use the local account attached to walletClient (privateKeyToAccount) so signing
+    // happens offline. Passing an address string here would make viem dispatch via
+    // eth_signTypedData_v4 over RPC, which Arbitrum RPC node does not support.
+    const account = walletClient.account;
 
     if (!account) {
-        throw new Error('No account found in wallet');
+        throw new Error('No local account found in walletClient');
     }
 
     // Message to sign

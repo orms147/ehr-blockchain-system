@@ -504,6 +504,42 @@ export async function sponsorGrantConsent(
     return { txHash: hash, receipt };
 }
 
+export async function getGrantContext(patientAddress, granteeAddress) {
+    const patient = patientAddress.toLowerCase();
+    const grantee = granteeAddress.toLowerCase();
+
+    const [nonce, isDoctor, isVerifiedDoctor] = await Promise.all([
+        publicClient.readContract({
+            address: CONTRACTS.CONSENT_LEDGER,
+            abi: CONSENT_LEDGER_ABI,
+            functionName: 'nonces',
+            args: [patient],
+        }),
+        publicClient.readContract({
+            address: CONTRACTS.ACCESS_CONTROL,
+            abi: ACCESS_CONTROL_ABI,
+            functionName: 'isDoctor',
+            args: [grantee],
+        }),
+        publicClient.readContract({
+            address: CONTRACTS.ACCESS_CONTROL,
+            abi: ACCESS_CONTROL_ABI,
+            functionName: 'isVerifiedDoctor',
+            args: [grantee],
+        }),
+    ]);
+
+    const quota = await getQuotaStatus(patient);
+
+    return {
+        nonce: nonce.toString(),
+        isDoctor,
+        isVerifiedDoctor,
+        uploadsRemaining: quota.uploadsRemaining,
+        hasSelfWallet: quota.hasSelfWallet,
+    };
+}
+
 export async function archiveRequest(walletAddress, requestId) {
     const address = walletAddress.toLowerCase();
 
@@ -544,6 +580,7 @@ export default {
     sponsorUploadRecord,
     sponsorRevoke,
     sponsorGrantConsent,
+    getGrantContext,
     archiveRequest,
     getArchivedRequests,
     restoreRequest,

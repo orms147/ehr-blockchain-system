@@ -9,6 +9,10 @@ import LoadingSpinner from '../../components/LoadingSpinner';
 import orgService from '../../services/org.service';
 import verificationService from '../../services/verification.service';
 import useAuthStore from '../../store/authStore';
+import walletActionService from '../../services/walletAction.service';
+import { ACCESS_CONTROL_ABI } from '../../abi/contractABI';
+
+const ACCESS_CONTROL_ADDRESS = process.env.EXPO_PUBLIC_ACCESS_CONTROL_ADDRESS as `0x${string}`;
 
 type PendingItem = {
     id: string;
@@ -126,11 +130,42 @@ export default function OrgPendingVerificationsScreen() {
                 onPress: async () => {
                     setProcessingId(item.id);
                     try {
-                        await verificationService.approveVerification(item.id);
-                        Alert.alert('Thành công', 'Bác sĩ đã được xác thực.');
+                        // 1. Flip the off-chain request to approved and get the
+                        //    on-chain call args back from backend.
+                        const res: any = await verificationService.approveVerification(item.id);
+                        const contractCall = res?.contractCall;
+                        if (!contractCall?.args?.[0]) {
+                            Alert.alert('Thành công (off-chain)', 'Đã duyệt nhưng không có dữ liệu on-chain.');
+                            fetchData();
+                            return;
+                        }
+
+                        // 2. Submit verifyDoctor on-chain so ConsentLedger.canAccess
+                        //    returns true for this doctor on subsequent key-share requests.
+                        if (!ACCESS_CONTROL_ADDRESS) {
+                            Alert.alert('Thiếu cấu hình', 'EXPO_PUBLIC_ACCESS_CONTROL_ADDRESS chưa được đặt trong env.');
+                            return;
+                        }
+                        const { walletClient, account } = await walletActionService.getWalletContext();
+                        const [doctorAddr, credential] = contractCall.args;
+                        const txHash = await walletClient.writeContract({
+                            account,
+                            address: ACCESS_CONTROL_ADDRESS,
+                            abi: ACCESS_CONTROL_ABI,
+                            functionName: 'verifyDoctor',
+                            args: [doctorAddr, credential || 'VERIFIED'],
+                        });
+                        Alert.alert('Thành công', `Đã xác thực on-chain.\nTx: ${String(txHash).substring(0, 12)}...`);
                         fetchData();
-                    } catch {
-                        Alert.alert('Lỗi', 'Không thể xác thực bác sĩ.');
+                    } catch (e: any) {
+                        const msg = String(e?.message || '');
+                        if (msg.includes('NotAuthorized') || msg.includes('NotVerifiedOrg')) {
+                            Alert.alert('Không có quyền on-chain', 'Ví này không phải admin tổ chức đã được xác minh. Kiểm tra lại tổ chức của bạn.');
+                        } else if (msg.includes('insufficient funds')) {
+                            Alert.alert('Không đủ ETH', 'Ví của bạn không đủ ETH để trả phí giao dịch.');
+                        } else {
+                            Alert.alert('Lỗi', msg || 'Không thể xác thực bác sĩ.');
+                        }
                     } finally {
                         setProcessingId(null);
                     }

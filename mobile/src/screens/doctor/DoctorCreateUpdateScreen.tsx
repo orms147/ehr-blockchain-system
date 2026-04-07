@@ -1,20 +1,26 @@
 import React, { useMemo, useState } from 'react';
 import { Alert, Image, Pressable, ScrollView, TextInput, type KeyboardTypeOptions } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import * as ImagePicker from 'expo-image-picker';
 import {
     Activity,
     FilePlus2,
     HeartPulse,
     ImagePlus,
     Pill,
+    Plus,
     Stethoscope,
     TestTubeDiagonal,
     Thermometer,
     Trash2,
+    X,
     type LucideIcon,
 } from 'lucide-react-native';
 import { Button, Text, View, XStack, YStack } from 'tamagui';
 
+import Icd10Picker from '../../components/Icd10Picker';
+import type { Icd10Code } from '../../constants/icd10';
 import { encryptData, generateAESKey } from '../../services/crypto';
 import pendingUpdateService from '../../services/pendingUpdate.service';
 import useAuthStore from '../../store/authStore';
@@ -78,13 +84,24 @@ export default function DoctorCreateUpdateScreen({ navigation, route }: any) {
     const [title, setTitle] = useState('');
     const [description, setDescription] = useState('');
     const [recordType, setRecordType] = useState(RECORD_TYPES[0].key);
-    const [diagnosis, setDiagnosis] = useState('');
+    const [icd10Codes, setIcd10Codes] = useState<Icd10Code[]>([]);
+    const [icd10PickerOpen, setIcd10PickerOpen] = useState(false);
+    const [diagnosisNote, setDiagnosisNote] = useState('');
     const [medication, setMedication] = useState('');
     const [dosage, setDosage] = useState('');
     const [frequency, setFrequency] = useState('');
+    const [route2, setRoute2] = useState('');
+    const [quantity, setQuantity] = useState('');
+    const [duration, setDuration] = useState('');
+    const [instruction, setInstruction] = useState('');
     const [heartRate, setHeartRate] = useState('');
-    const [bloodPressure, setBloodPressure] = useState('');
+    const [systolic, setSystolic] = useState('');
+    const [diastolic, setDiastolic] = useState('');
     const [temperature, setTemperature] = useState('');
+    const [respRate, setRespRate] = useState('');
+    const [spo2, setSpo2] = useState('');
+    const [weight, setWeight] = useState('');
+    const [heightCm, setHeightCm] = useState('');
     const [notes, setNotes] = useState('');
     const [selectedImage, setSelectedImage] = useState<SelectedImage | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -101,20 +118,14 @@ export default function DoctorCreateUpdateScreen({ navigation, route }: any) {
     const pickImage = async () => {
         try {
             setIsPickingImage(true);
-            let imagePicker: typeof import('expo-image-picker') | null = null;
-            try {
-                imagePicker = await import('expo-image-picker');
-            } catch {
-                Alert.alert('Thiếu module', 'Cần build lại app với expo-image-picker.');
-                return;
-            }
+            const imagePicker = ImagePicker;
             const permission = await imagePicker.requestMediaLibraryPermissionsAsync();
             if (!permission.granted) {
                 Alert.alert('Thiếu quyền', 'Vui lòng cấp quyền thư viện ảnh.');
                 return;
             }
             const result = await imagePicker.launchImageLibraryAsync({
-                mediaTypes: imagePicker.MediaTypeOptions.Images,
+                mediaTypes: ['images'],
                 allowsEditing: true,
                 quality: 0.5,
                 base64: true,
@@ -147,7 +158,7 @@ export default function DoctorCreateUpdateScreen({ navigation, route }: any) {
             Alert.alert('Thiếu tiêu đề', 'Hãy nhập tiêu đề hồ sơ.');
             return;
         }
-        if (!description.trim() && !diagnosis.trim() && !notes.trim() && !medication.trim() && !selectedImage) {
+        if (!description.trim() && !diagnosisNote.trim() && icd10Codes.length === 0 && !notes.trim() && !medication.trim() && !selectedImage) {
             Alert.alert('Thiếu nội dung', 'Hãy nhập nội dung hoặc đính kèm ảnh.');
             return;
         }
@@ -158,8 +169,18 @@ export default function DoctorCreateUpdateScreen({ navigation, route }: any) {
         try {
             const observations: Record<string, string> = {};
             if (heartRate) observations.heartRate = `${heartRate} bpm`;
-            if (bloodPressure) observations.bloodPressure = bloodPressure;
-            if (temperature) observations.temperature = `${temperature} C`;
+            if (systolic && diastolic) observations.bloodPressure = `${systolic}/${diastolic} mmHg`;
+            else if (systolic) observations.bloodPressureSystolic = `${systolic} mmHg`;
+            if (temperature) observations.temperature = `${temperature} °C`;
+            if (respRate) observations.respiratoryRate = `${respRate} lần/phút`;
+            if (spo2) observations.spo2 = `${spo2} %`;
+            if (weight) observations.weight = `${weight} kg`;
+            if (heightCm) observations.height = `${heightCm} cm`;
+            if (weight && heightCm) {
+                const h = parseFloat(heightCm) / 100;
+                const w = parseFloat(weight);
+                if (h > 0 && w > 0) observations.bmi = (w / (h * h)).toFixed(1);
+            }
 
             const normalizedImage = selectedImage?.base64 ? normalizeBase64(selectedImage.base64) : null;
 
@@ -175,11 +196,18 @@ export default function DoctorCreateUpdateScreen({ navigation, route }: any) {
                 summary: description.trim(),
                 notes: notes.trim(),
                 observations: Object.keys(observations).length ? observations : undefined,
-                diagnoses: splitLines(diagnosis),
+                diagnoses: [
+                    ...icd10Codes.map((c) => `[${c.code}] ${c.name}`),
+                    ...splitLines(diagnosisNote),
+                ],
                 prescriptions: medication ? [{
                     medication: medication.trim(),
                     dosage: dosage.trim() || 'Theo chỉ định',
                     frequency: frequency.trim() || 'Theo hướng dẫn',
+                    route: route2.trim() || undefined,
+                    quantity: quantity.trim() || undefined,
+                    duration: duration.trim() || undefined,
+                    instruction: instruction.trim() || undefined,
                 }] : [],
                 ...(normalizedImage ? {
                     imageData: normalizedImage,
@@ -200,13 +228,36 @@ export default function DoctorCreateUpdateScreen({ navigation, route }: any) {
             const encryptedContent = await encryptData(payload, aesKey);
 
             // Submit pending update to backend
-            await pendingUpdateService.createUpdate(
+            const created: any = await pendingUpdateService.createUpdate(
                 parentCidHash,
                 patientAddress,
                 encryptedContent,
                 recordType,
                 title.trim(),
             );
+
+            // Persist AES key locally keyed by pendingUpdate.id so the claim step
+            // (DoctorOutgoingScreen) can retrieve it after patient approval.
+            // Without this the claim would use a placeholder key and nobody could
+            // decrypt the new version.
+            const pendingUpdateId = created?.pendingUpdate?.id || created?.id;
+            if (pendingUpdateId) {
+                try {
+                    const draftsStr = await AsyncStorage.getItem('doctor_update_drafts');
+                    const drafts = draftsStr ? JSON.parse(draftsStr) : {};
+                    drafts[pendingUpdateId] = {
+                        aesKey,
+                        parentCidHash,
+                        patientAddress,
+                        recordType,
+                        title: title.trim(),
+                        createdAt: new Date().toISOString(),
+                    };
+                    await AsyncStorage.setItem('doctor_update_drafts', JSON.stringify(drafts));
+                } catch (persistErr) {
+                    console.warn('Failed to persist update draft aesKey:', persistErr);
+                }
+            }
 
             Alert.alert(
                 'Đã gửi yêu cầu cập nhật',
@@ -308,7 +359,50 @@ export default function DoctorCreateUpdateScreen({ navigation, route }: any) {
                     <Text fontSize="$5" fontWeight="800" color="$color12" style={{ marginBottom: 14 }}>Nội dung chính</Text>
                     {renderInput('Tiêu đề', title, setTitle, { placeholder: 'Ví dụ: Kết quả xét nghiệm máu' })}
                     {renderInput('Mô tả ngắn', description, setDescription, { placeholder: 'Tóm tắt kết quả khám', multiline: true })}
-                    {renderInput('Chẩn đoán', diagnosis, setDiagnosis, { placeholder: 'Mỗi dòng một chẩn đoán', multiline: true })}
+
+                    <YStack style={{ marginBottom: 14 }}>
+                        <Text fontSize="$3" fontWeight="700" color="$color11" style={{ marginBottom: 6 }}>
+                            Chẩn đoán (ICD-10)
+                        </Text>
+                        {icd10Codes.length > 0 ? (
+                            <YStack style={{ gap: 8, marginBottom: 8 }}>
+                                {icd10Codes.map((item) => (
+                                    <XStack
+                                        key={item.code}
+                                        style={{
+                                            alignItems: 'center',
+                                            backgroundColor: EHR_PRIMARY_FIXED,
+                                            borderWidth: 1,
+                                            borderColor: EHR_OUTLINE_VARIANT,
+                                            borderRadius: 14,
+                                            paddingHorizontal: 12,
+                                            paddingVertical: 10,
+                                        }}
+                                    >
+                                        <View style={{ minWidth: 56, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6, backgroundColor: EHR_PRIMARY, marginRight: 10, alignItems: 'center' }}>
+                                            <Text fontSize="$2" fontWeight="800" style={{ color: '#fff' }}>{item.code}</Text>
+                                        </View>
+                                        <Text fontSize="$3" color="$color12" style={{ flex: 1 }}>{item.name}</Text>
+                                        <Pressable onPress={() => setIcd10Codes((prev) => prev.filter((c) => c.code !== item.code))}>
+                                            <X size={18} color={EHR_ERROR} />
+                                        </Pressable>
+                                    </XStack>
+                                ))}
+                            </YStack>
+                        ) : null}
+                        <Pressable onPress={() => setIcd10PickerOpen(true)}>
+                            <View style={{ borderRadius: 14, borderWidth: 1, borderStyle: 'dashed', borderColor: EHR_PRIMARY, backgroundColor: EHR_SURFACE_LOW, padding: 12 }}>
+                                <XStack style={{ alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                                    <Plus size={16} color={EHR_PRIMARY} />
+                                    <Text fontSize="$3" fontWeight="700" style={{ color: EHR_PRIMARY }}>
+                                        {icd10Codes.length > 0 ? 'Thêm mã ICD-10 khác' : 'Chọn mã ICD-10 từ danh mục'}
+                                    </Text>
+                                </XStack>
+                            </View>
+                        </Pressable>
+                    </YStack>
+
+                    {renderInput('Ghi chú chẩn đoán', diagnosisNote, setDiagnosisNote, { placeholder: 'Mô tả thêm nếu không có trong danh mục ICD-10', multiline: true })}
                     {renderInput('Ghi chú thêm', notes, setNotes, { placeholder: 'Chi tiết bổ sung, lịch tái khám...', multiline: true })}
                 </View>
 
@@ -347,21 +441,40 @@ export default function DoctorCreateUpdateScreen({ navigation, route }: any) {
                 </View>
 
                 <View style={{ backgroundColor: EHR_SURFACE_LOWEST, borderColor: EHR_OUTLINE_VARIANT, borderWidth: 1, borderRadius: 26, padding: 18, marginBottom: 16 }}>
-                    <Text fontSize="$5" fontWeight="800" color="$color12" style={{ marginBottom: 14 }}>Chỉ số cơ bản</Text>
-                    <XStack style={{ gap: 10, marginBottom: 8 }}>
-                        <View style={{ flex: 1 }}>{renderInput('Nhịp tim', heartRate, setHeartRate, { placeholder: '72', keyboardType: 'numeric' })}</View>
-                        <View style={{ flex: 1 }}>{renderInput('Huyết áp', bloodPressure, setBloodPressure, { placeholder: '120/80' })}</View>
+                    <Text fontSize="$5" fontWeight="800" color="$color12" style={{ marginBottom: 4 }}>Dấu hiệu sinh tồn</Text>
+                    <Text fontSize="$2" color="$color10" style={{ marginBottom: 12 }}>Theo chuẩn bệnh án điện tử (TT 46/2018/TT-BYT)</Text>
+                    <XStack style={{ gap: 10 }}>
+                        <View style={{ flex: 1 }}>{renderInput('Mạch (lần/phút)', heartRate, setHeartRate, { placeholder: '72', keyboardType: 'numeric' })}</View>
+                        <View style={{ flex: 1 }}>{renderInput('Nhịp thở (lần/phút)', respRate, setRespRate, { placeholder: '18', keyboardType: 'numeric' })}</View>
                     </XStack>
-                    {renderInput('Nhiệt độ', temperature, setTemperature, { placeholder: '36.8', keyboardType: 'decimal-pad' })}
+                    <XStack style={{ gap: 10 }}>
+                        <View style={{ flex: 1 }}>{renderInput('HA tâm thu', systolic, setSystolic, { placeholder: '120', keyboardType: 'numeric' })}</View>
+                        <View style={{ flex: 1 }}>{renderInput('HA tâm trương', diastolic, setDiastolic, { placeholder: '80', keyboardType: 'numeric' })}</View>
+                    </XStack>
+                    <XStack style={{ gap: 10 }}>
+                        <View style={{ flex: 1 }}>{renderInput('Nhiệt độ (°C)', temperature, setTemperature, { placeholder: '36.8', keyboardType: 'decimal-pad' })}</View>
+                        <View style={{ flex: 1 }}>{renderInput('SpO2 (%)', spo2, setSpo2, { placeholder: '98', keyboardType: 'numeric' })}</View>
+                    </XStack>
+                    <XStack style={{ gap: 10 }}>
+                        <View style={{ flex: 1 }}>{renderInput('Cân nặng (kg)', weight, setWeight, { placeholder: '60', keyboardType: 'decimal-pad' })}</View>
+                        <View style={{ flex: 1 }}>{renderInput('Chiều cao (cm)', heightCm, setHeightCm, { placeholder: '165', keyboardType: 'numeric' })}</View>
+                    </XStack>
                 </View>
 
                 <View style={{ backgroundColor: EHR_SURFACE_LOWEST, borderColor: EHR_OUTLINE_VARIANT, borderWidth: 1, borderRadius: 26, padding: 18, marginBottom: 16 }}>
-                    <Text fontSize="$5" fontWeight="800" color="$color12" style={{ marginBottom: 14 }}>Đơn thuốc / can thiệp</Text>
-                    {renderInput('Thuốc hoặc can thiệp', medication, setMedication, { placeholder: 'Ví dụ: Paracetamol 500mg' })}
+                    <Text fontSize="$5" fontWeight="800" color="$color12" style={{ marginBottom: 4 }}>Đơn thuốc</Text>
+                    <Text fontSize="$2" color="$color10" style={{ marginBottom: 12 }}>Theo chuẩn đơn thuốc điện tử (TT 04/2022/TT-BYT)</Text>
+                    {renderInput('Tên thuốc / hoạt chất', medication, setMedication, { placeholder: 'Ví dụ: Paracetamol 500mg' })}
                     <XStack style={{ gap: 10 }}>
-                        <View style={{ flex: 1 }}>{renderInput('Liều dùng', dosage, setDosage, { placeholder: '1 viên' })}</View>
-                        <View style={{ flex: 1 }}>{renderInput('Tần suất', frequency, setFrequency, { placeholder: '2 lần/ngày' })}</View>
+                        <View style={{ flex: 1 }}>{renderInput('Hàm lượng / Liều', dosage, setDosage, { placeholder: '1 viên' })}</View>
+                        <View style={{ flex: 1 }}>{renderInput('Đường dùng', route2, setRoute2, { placeholder: 'Uống / Tiêm / Bôi' })}</View>
                     </XStack>
+                    <XStack style={{ gap: 10 }}>
+                        <View style={{ flex: 1 }}>{renderInput('Số lần / ngày', frequency, setFrequency, { placeholder: '2 lần/ngày' })}</View>
+                        <View style={{ flex: 1 }}>{renderInput('Số ngày dùng', duration, setDuration, { placeholder: '5 ngày' })}</View>
+                    </XStack>
+                    {renderInput('Số lượng kê', quantity, setQuantity, { placeholder: '10 viên' })}
+                    {renderInput('Lời dặn bác sĩ', instruction, setInstruction, { placeholder: 'Uống sau ăn, tránh rượu bia...', multiline: true })}
                 </View>
 
                 {error ? (
@@ -391,6 +504,15 @@ export default function DoctorCreateUpdateScreen({ navigation, route }: any) {
                     <Text fontSize="$2" color="$color10">Bệnh nhân sẽ phê duyệt trước khi hồ sơ được lưu lên blockchain.</Text>
                 </XStack>
             </ScrollView>
+
+            <Icd10Picker
+                visible={icd10PickerOpen}
+                onClose={() => setIcd10PickerOpen(false)}
+                onSelect={(item) => {
+                    setIcd10Codes((prev) => (prev.some((c) => c.code === item.code) ? prev : [...prev, item]));
+                }}
+                selectedCodes={icd10Codes.map((c) => c.code)}
+            />
         </SafeAreaView>
     );
 }

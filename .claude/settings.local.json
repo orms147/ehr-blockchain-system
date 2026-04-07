@@ -46,7 +46,18 @@
       "Bash(bash /tmp/extract_events.sh)",
       "Bash(forge build:*)",
       "Bash(ls /c/University/DATN/EHR/frontend/.env*)",
-      "Bash(ls /c/University/DATN/EHR/mobile/.env*)"
+      "Bash(ls /c/University/DATN/EHR/mobile/.env*)",
+      "Bash(npx tsc:*)",
+      "Bash(grep -n \"getOrCreateEncryptionKeypair\\\\|SecureStore\\\\|encryptionKeypair\\\\|derivedFromSignature\" \"c:/University/DATN/EHR/mobile/src/services/\"*.js \"c:/University/DATN/EHR/mobile/src/services/\"*.ts)",
+      "Bash(grep -n \"expiresAt\\\\|expireAt\\\\|expiry\\\\|duration\\\\|shareKey\" \"c:/University/DATN/EHR/mobile/src/services/keyShare\"* \"c:/University/DATN/EHR/backend/src/routes/\"*key*)",
+      "Bash(node -e \"const fs=require\\('fs'\\);const d=JSON.parse\\(fs.readFileSync\\('C:/Users/admin/.claude/projects/c--University-DATN-EHR/391d0b03-8bd1-4043-bc64-e5c36e2812a4/tool-results/bmr158pig.txt','utf8'\\)\\);fs.writeFileSync\\('c:/tmp/ehr_report.md',d[0].text\\);console.log\\('bytes',d[0].text.length\\);\")",
+      "Bash(node -e \"const fs=require\\('fs'\\);const d=JSON.parse\\(fs.readFileSync\\('C:/Users/admin/.claude/projects/c--University-DATN-EHR/391d0b03-8bd1-4043-bc64-e5c36e2812a4/tool-results/bmr158pig.txt','utf8'\\)\\);fs.writeFileSync\\('c:/University/DATN/EHR/.ehr_report_tmp.md',d[0].text\\);console.log\\('bytes',d[0].text.length\\);\")",
+      "Bash(grep -rln \"ConsentLedger\\\\|CONSENT_LEDGER\\\\|0x[a-fA-F0-9]\\\\{40\\\\}\" mobile/src mobile/.env*)",
+      "Bash(grep -l \"nonces\\\\|CONSENT_LEDGER\\\\|publicClient\" mobile/src/lib/* mobile/src/services/*)",
+      "Bash(grep -n \"checkConsent\\\\|hasConsent\" c:/University/DATN/EHR/backend/src/routes/keyShare.routes.js c:/University/DATN/EHR/backend/src/services/*.js)",
+      "Bash(grep -r \"keyShare\\\\|encryptedPayload\\\\|senderPublicKey\" /c/University/DATN/EHR/frontend/src/services/*.js)",
+      "Bash(python -c \"f=open\\(r'c:\\\\University\\\\DATN\\\\EHR\\\\backend\\\\src\\\\routes\\\\keyShare.routes.js','rb'\\).read\\(\\); i=f.find\\(b'Access DENIED'\\); print\\(repr\\(f[i:i+400]\\)\\)\")",
+      "Bash(python)"
     ]
   }
 }

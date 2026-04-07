@@ -1,5 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { FlatList, Pressable, RefreshControl, StyleSheet } from 'react-native';
+import { useQuery } from '@tanstack/react-query';
+import consentService from '../services/consent.service';
+import accessLogService from '../services/accessLog.service';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { FilePlus2, Search, ChevronRight } from 'lucide-react-native';
 import { Text, View, XStack, YStack } from 'tamagui';
@@ -40,9 +43,30 @@ const SPRING = { damping: 18, stiffness: 120, mass: 0.8 };
 
 const FILTER_OPTIONS = [
     { key: 'all', label: 'Tất cả' },
-    { key: 'active', label: 'Hoạt động' },
     { key: 'shared', label: 'Đã chia sẻ' },
+    { key: 'activity', label: 'Hoạt động' },
 ] as const;
+
+const ACTION_LABELS: Record<string, { label: string; color: string }> = {
+    CREATE_RECORD: { label: 'Tạo hồ sơ', color: '#16A34A' },
+    UPDATE_RECORD: { label: 'Cập nhật hồ sơ', color: '#0284C7' },
+    SHARE_KEY: { label: 'Chia sẻ hồ sơ', color: '#7C3AED' },
+    REVOKE_CONSENT: { label: 'Thu hồi truy cập', color: '#DC2626' },
+    DECRYPT: { label: 'Giải mã hồ sơ', color: '#0F766E' },
+    READ: { label: 'Đọc hồ sơ', color: '#475569' },
+    REQUEST_ACCESS: { label: 'Yêu cầu truy cập', color: '#9333EA' },
+    APPROVE_REQUEST: { label: 'Phê duyệt yêu cầu', color: '#16A34A' },
+};
+
+const formatActivityDate = (s?: string) => {
+    if (!s) return '';
+    try {
+        return new Date(s).toLocaleString('vi-VN', {
+            day: '2-digit', month: '2-digit', year: 'numeric',
+            hour: '2-digit', minute: '2-digit',
+        });
+    } catch { return s; }
+};
 
 type FilterKey = (typeof FILTER_OPTIONS)[number]['key'];
 
@@ -62,11 +86,44 @@ export default function RecordsScreen({ navigation }: any) {
         ],
     }));
 
+    const { data: sentShares } = useQuery({
+        queryKey: ['keyShares', 'sent'],
+        queryFn: () => consentService.getMyGrantedConsents(),
+        // Always fetch so the "Đã chia sẻ" count is fresh; cheap.
+        staleTime: 30_000,
+    });
+
+    const sharedCidSet = useMemo(() => {
+        const s = new Set<string>();
+        (sentShares || []).forEach((ks: any) => {
+            // Only count active (not revoked/expired) shares
+            const status = String(ks?.status || '').toLowerCase();
+            if (status === 'revoked' || status === 'expired') return;
+            if (ks?.cidHash) s.add(String(ks.cidHash).toLowerCase());
+        });
+        return s;
+    }, [sentShares]);
+
+    const { data: activityLogs, isLoading: activityLoading } = useQuery({
+        queryKey: ['accessLogs', 'myActivity'],
+        queryFn: () => accessLogService.getAccessLogs(),
+        enabled: activeFilter === 'activity',
+        staleTime: 30_000,
+    });
+
     const filteredRecords = records.filter((r: any) => {
         if (activeFilter === 'all') return true;
-        if (activeFilter === 'shared') return r.sharedWith?.length > 0 || r.status === 'shared';
+        if (activeFilter === 'shared') {
+            const cid = String(r.cidHash || '').toLowerCase();
+            const parent = String(r.parentCidHash || '').toLowerCase();
+            // Match this version OR its parent (consent on parent cascades via includeUpdates)
+            return (cid && sharedCidSet.has(cid)) || (parent && sharedCidSet.has(parent));
+        }
+        if (activeFilter === 'activity') return false; // activity uses its own list
         return !r.archived;
     });
+
+    const isActivityView = activeFilter === 'activity';
 
     const handleRecordPress = (record: any) => {
         const serializableRecord = {
@@ -101,9 +158,41 @@ export default function RecordsScreen({ navigation }: any) {
                 />
             ) : (
                 <FlatList
-                    data={filteredRecords}
-                    keyExtractor={(item: any, idx) => item.cidHash || `record-${idx}`}
-                    renderItem={({ item }) => <RecordCard record={item} onPress={handleRecordPress} />}
+                    data={isActivityView ? (activityLogs || []) : filteredRecords}
+                    keyExtractor={(item: any, idx) =>
+                        isActivityView ? (item.id || `log-${idx}`) : (item.cidHash || `record-${idx}`)
+                    }
+                    renderItem={({ item }) => {
+                        if (isActivityView) {
+                            const meta = ACTION_LABELS[item.action] || { label: item.action || 'Hoạt động', color: '#475569' };
+                            return (
+                                <View style={{
+                                    backgroundColor: EHR_SURFACE_LOWEST,
+                                    borderRadius: 14,
+                                    padding: 14,
+                                    marginBottom: 10,
+                                    borderLeftWidth: 4,
+                                    borderLeftColor: meta.color,
+                                    borderWidth: 1,
+                                    borderColor: EHR_OUTLINE_VARIANT,
+                                }}>
+                                    <XStack style={{ justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                                        <Text style={{ fontSize: 14, fontWeight: '700', color: meta.color }}>{meta.label}</Text>
+                                        <Text style={{ fontSize: 11, color: EHR_ON_SURFACE_VARIANT }}>{formatActivityDate(item.createdAt)}</Text>
+                                    </XStack>
+                                    {item.cidHash ? (
+                                        <Text style={{ fontSize: 11, color: EHR_ON_SURFACE_VARIANT }} numberOfLines={1}>
+                                            CID: {String(item.cidHash).slice(0, 18)}…
+                                        </Text>
+                                    ) : null}
+                                    {item.consentVerified === false ? (
+                                        <Text style={{ fontSize: 11, color: '#DC2626', marginTop: 2 }}>Truy cập bị từ chối</Text>
+                                    ) : null}
+                                </View>
+                            );
+                        }
+                        return <RecordCard record={item} onPress={handleRecordPress} />;
+                    }}
                     contentContainerStyle={{ padding: 16, paddingBottom: 100 }}
                     refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={refresh} colors={[EHR_PRIMARY]} />}
                     ListHeaderComponent={

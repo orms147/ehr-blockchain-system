@@ -43,12 +43,14 @@ export const pendingUpdateService = {
     },
 
     // Doctor: Claim approved update (after on-chain tx)
-    async claim(id, cidHash, txHash, cid, aesKey) {
+    async claim(id, cidHash, txHash, cid, aesKey, encryptedPayloadForPatient, senderPublicKey) {
         return api.post(`/api/pending-updates/${id}/claim`, {
             cidHash,
             txHash,
             cid,
             aesKey,
+            encryptedPayloadForPatient: encryptedPayloadForPatient || null,
+            senderPublicKey: senderPublicKey || null,
         });
     },
 };

@@ -25,6 +25,14 @@ type ConsentItem = {
     active?: boolean;
     granteeAddress?: string;
     recipientAddress?: string;
+    expiresAt?: string | null;
+};
+
+const isExpired = (c: ConsentItem) => {
+    if (!c.expiresAt) return false;
+    try {
+        return new Date(c.expiresAt).getTime() < Date.now();
+    } catch { return false; }
 };
 
 const truncateAddr = (addr?: string) => (addr ? `${addr.substring(0, 10)}...${addr.slice(-6)}` : '???');
@@ -49,8 +57,11 @@ const ConsentRenderItem = React.memo(({
 }) => {
     const grantee = item.granteeAddress || item.recipientAddress;
     const consentId = item.id || item.cidHash || '';
-    const isActive = item.active !== false && item.status !== 'revoked';
+    const expired = isExpired(item);
+    const isRevoked = item.active === false || item.status === 'revoked';
+    const isActive = !isRevoked && !expired;
     const isRevoking = revokingId === consentId;
+    const statusLabel = isRevoked ? 'Đã thu hồi' : expired ? 'Đã hết hạn' : 'Đang hoạt động';
 
     return (
         <View
@@ -79,7 +90,7 @@ const ConsentRenderItem = React.memo(({
 
                 <View style={{ backgroundColor: isActive ? EHR_PRIMARY_FIXED : EHR_SURFACE_LOW, borderRadius: 10, paddingVertical: 4, paddingHorizontal: 8 }}>
                     <Text fontSize="$2" fontWeight="700" style={{ color: isActive ? EHR_PRIMARY : EHR_ON_SURFACE_VARIANT }}>
-                        {isActive ? 'Đang hoạt động' : 'Đã thu hồi'}
+                        {statusLabel}
                     </Text>
                 </View>
             </XStack>
@@ -188,7 +199,7 @@ export default function AccessLogScreen() {
                         <XStack style={{ alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
                             <Text fontSize="$3" color="$color10">{consents.length} quyền truy cập</Text>
                             <Text fontSize="$3" fontWeight="700" style={{ color: EHR_PRIMARY }}>
-                                {consents.filter((c) => c.active !== false && c.status !== 'revoked').length} đang hoạt động
+                                {consents.filter((c) => c.active !== false && c.status !== 'revoked' && !isExpired(c)).length} đang hoạt động
                             </Text>
                         </XStack>
                     }

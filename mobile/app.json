@@ -33,7 +33,13 @@
                                  "expo-secure-store",
                                  "expo-font",
                                  "expo-web-browser",
-                                 "expo-router"
+                                 "expo-router",
+                                 [
+                                     "expo-camera",
+                                     {
+                                         "cameraPermission": "Cho phép $(PRODUCT_NAME) dùng camera để quét mã QR địa chỉ."
+                                     }
+                                 ]
                              ]
              }
 }

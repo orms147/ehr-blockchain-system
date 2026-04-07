@@ -1,7 +1,9 @@
-import React, { useEffect } from 'react';
-import { ScrollView, ActivityIndicator, Pressable, StyleSheet } from 'react-native';
+import React, { useEffect, useState, useCallback } from 'react';
+import { ScrollView, ActivityIndicator, Pressable, StyleSheet, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { FileText, Bell, ChevronRight, FilePlus2, Activity, Share2, Wallet } from 'lucide-react-native';
+import { FileText, Bell, ChevronRight, FilePlus2, Activity, Share2, Wallet, Zap } from 'lucide-react-native';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import api from '../services/api';
 import { YStack, XStack, Text, View } from 'tamagui';
 import Animated, {
     useSharedValue,
@@ -138,8 +140,31 @@ const truncateAddr = (addr?: string) =>
 
 export default function DashboardScreen({ navigation }: any) {
     const { user } = useAuthStore();
+    const queryClient = useQueryClient();
     const { records, isLoading: recordsLoading } = useRecords();
     const { requests, isLoading: requestsLoading } = useRequests();
+    const { data: quota, refetch: refetchQuota } = useQuery({
+        queryKey: ['relayer', 'quota'],
+        queryFn: () => api.get('/api/relayer/quota'),
+        staleTime: 30_000,
+    });
+    const [isRefreshing, setIsRefreshing] = React.useState(false);
+    const handleRefresh = React.useCallback(async () => {
+        setIsRefreshing(true);
+        try {
+            await Promise.all([
+                refetchQuota(),
+                queryClient.invalidateQueries({ queryKey: ['records'] }),
+                queryClient.invalidateQueries({ queryKey: ['requests'] }),
+            ]);
+        } finally {
+            setIsRefreshing(false);
+        }
+    }, [refetchQuota, queryClient]);
+    const uploadsRemaining = quota?.uploadsRemaining ?? null;
+    const uploadsLimit = quota?.limits?.uploadsPerMonth ?? 100;
+    const revokesRemaining = quota?.revokesRemaining ?? null;
+    const revokesLimit = quota?.limits?.revokesPerMonth ?? 20;
 
     const recentRecords = (records || []).slice(0, 3);
     const pendingCount = requests.length;
@@ -179,7 +204,18 @@ export default function DashboardScreen({ navigation }: any) {
 
     return (
         <SafeAreaView style={{ flex: 1, backgroundColor: EHR_SURFACE }} edges={['top']}>
-            <ScrollView contentContainerStyle={s.scrollContent} showsVerticalScrollIndicator={false}>
+            <ScrollView
+                contentContainerStyle={s.scrollContent}
+                showsVerticalScrollIndicator={false}
+                refreshControl={
+                    <RefreshControl
+                        refreshing={isRefreshing}
+                        onRefresh={handleRefresh}
+                        colors={[EHR_PRIMARY]}
+                        tintColor={EHR_PRIMARY}
+                    />
+                }
+            >
                 {/* ── Header: greeting + wallet badge ── */}
                 <Animated.View style={headerStyle}>
                     <XStack style={s.headerRow}>
@@ -254,6 +290,43 @@ export default function DashboardScreen({ navigation }: any) {
                         </XStack>
                     </View>
                 </MetricCard3D>
+
+                {/* ── Quota: free on-chain operations ── */}
+                <View style={{
+                    marginTop: 12,
+                    marginBottom: 20,
+                    padding: 16,
+                    borderRadius: 16,
+                    backgroundColor: EHR_SURFACE_CONTAINER,
+                    borderWidth: 1,
+                    borderColor: EHR_OUTLINE_VARIANT,
+                }}>
+                    <XStack style={{ alignItems: 'center', marginBottom: 10 }}>
+                        <Zap size={16} color={EHR_PRIMARY} />
+                        <Text style={{ marginLeft: 6, fontSize: 13, fontWeight: '600', color: EHR_ON_SURFACE }}>
+                            Lượt giao dịch on-chain miễn phí (tháng này)
+                        </Text>
+                    </XStack>
+                    <XStack style={{ gap: 12 }}>
+                        <View style={{ flex: 1 }}>
+                            <Text style={{ fontSize: 11, color: EHR_ON_SURFACE_VARIANT }}>Tạo / cập nhật hồ sơ</Text>
+                            <Text style={{ fontSize: 18, fontWeight: '700', color: EHR_PRIMARY, marginTop: 2 }}>
+                                {uploadsRemaining ?? '—'}<Text style={{ fontSize: 12, color: EHR_ON_SURFACE_VARIANT, fontWeight: '400' }}> / {uploadsLimit}</Text>
+                            </Text>
+                        </View>
+                        <View style={{ flex: 1 }}>
+                            <Text style={{ fontSize: 11, color: EHR_ON_SURFACE_VARIANT }}>Thu hồi truy cập</Text>
+                            <Text style={{ fontSize: 18, fontWeight: '700', color: EHR_SECONDARY, marginTop: 2 }}>
+                                {revokesRemaining ?? '—'}<Text style={{ fontSize: 12, color: EHR_ON_SURFACE_VARIANT, fontWeight: '400' }}> / {revokesLimit}</Text>
+                            </Text>
+                        </View>
+                    </XStack>
+                    {quota?.message ? (
+                        <Text style={{ fontSize: 11, color: EHR_ON_SURFACE_VARIANT, marginTop: 8 }}>
+                            {quota.message}
+                        </Text>
+                    ) : null}
+                </View>
 
                 {/* ── Create Record CTA ── */}
                 <AnimatedCTA onPress={handleCreateRecord} delay={320}>

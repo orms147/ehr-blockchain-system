@@ -276,11 +276,11 @@ async function hydrateRecordFromChain(cidHash, options = {}, visited = new Set()
     });
 }
 
-async function handleRecordAdded(log) {
-    const ownerAddress = normalizeAddress(log.args.owner);
-    const cidHash = normalizeHash(log.args.cidHash);
-    const parentCidHash = toOptionalHash(log.args.parentCidHash);
-    const recordTypeHash = toOptionalHash(log.args.recordTypeHash);
+async function handleRecordAdded(event) {
+    const ownerAddress = normalizeAddress(event.args.owner);
+    const cidHash = normalizeHash(event.args.cidHash);
+    const parentCidHash = toOptionalHash(event.args.parentCidHash);
+    const recordTypeHash = toOptionalHash(event.args.recordTypeHash);
 
     if (!ownerAddress || !cidHash) {
         return;
@@ -290,8 +290,8 @@ async function handleRecordAdded(log) {
         fallbackOwner: ownerAddress,
         fallbackParentCidHash: parentCidHash,
         fallbackRecordTypeHash: recordTypeHash,
-        fallbackTimestamp: log.args.timestamp,
-        txHash: log.transactionHash,
+        fallbackTimestamp: event.args.timestamp,
+        txHash: event.transactionHash,
     });
 
     if (!record) {
@@ -318,10 +318,10 @@ async function handleRecordAdded(log) {
     }
 }
 
-async function handleRecordUpdated(log) {
-    const oldCidHash = normalizeHash(log.args.oldCidHash);
-    const newCidHash = normalizeHash(log.args.newCidHash);
-    const ownerAddress = normalizeAddress(log.args.owner);
+async function handleRecordUpdated(event) {
+    const oldCidHash = normalizeHash(event.args.oldCidHash);
+    const newCidHash = normalizeHash(event.args.newCidHash);
+    const ownerAddress = normalizeAddress(event.args.owner);
 
     if (!oldCidHash || !newCidHash || !ownerAddress) {
         return;
@@ -335,7 +335,7 @@ async function handleRecordUpdated(log) {
         fallbackOwner: ownerAddress,
         fallbackParentCidHash: previousRecord?.parentCidHash,
         fallbackRecordTypeHash: previousRecord?.recordTypeHash,
-        txHash: log.transactionHash,
+        txHash: event.transactionHash,
         title: previousRecord?.title,
         description: previousRecord?.description,
         recordType: previousRecord?.recordType,
@@ -346,7 +346,7 @@ async function handleRecordUpdated(log) {
             where: { id: previousRecord.id },
             data: {
                 syncStatus: 'replaced',
-                txHash: normalizeHash(log.transactionHash) ?? previousRecord.txHash,
+                txHash: normalizeHash(event.transactionHash) ?? previousRecord.txHash,
                 failedAt: null,
                 syncError: null,
             },
@@ -360,7 +360,7 @@ async function handleRecordUpdated(log) {
         oldCidHash,
         cidHash: nextRecord?.cidHash ?? newCidHash,
         ownerAddress,
-        txHash: normalizeHash(log.transactionHash),
+        txHash: normalizeHash(event.transactionHash),
     });
 
     const io = getIO();
@@ -374,10 +374,10 @@ async function handleRecordUpdated(log) {
     }
 }
 
-async function handleOwnershipTransferred(log) {
-    const previousOwner = normalizeAddress(log.args.previousOwner);
-    const newOwner = normalizeAddress(log.args.newOwner);
-    const cidHash = normalizeHash(log.args.cidHash);
+async function handleOwnershipTransferred(event) {
+    const previousOwner = normalizeAddress(event.args.previousOwner);
+    const newOwner = normalizeAddress(event.args.newOwner);
+    const cidHash = normalizeHash(event.args.cidHash);
 
     if (!newOwner || !cidHash) {
         return;
@@ -395,7 +395,7 @@ async function handleOwnershipTransferred(log) {
             data: {
                 ownerAddress: newOwner,
                 syncStatus: 'confirmed',
-                txHash: normalizeHash(log.transactionHash) ?? existing.txHash,
+                txHash: normalizeHash(event.transactionHash) ?? existing.txHash,
                 submittedAt: existing.submittedAt ?? existing.confirmedAt ?? new Date(),
                 confirmedAt: existing.confirmedAt ?? new Date(),
                 failedAt: null,
@@ -405,7 +405,7 @@ async function handleOwnershipTransferred(log) {
     } else {
         await hydrateRecordFromChain(cidHash, {
             fallbackOwner: newOwner,
-            txHash: log.transactionHash,
+            txHash: event.transactionHash,
         });
     }
 
@@ -433,11 +433,11 @@ const EVENT_HANDLERS = {
     OwnershipTransferred: handleOwnershipTransferred,
 };
 
-async function processLog(eventName, log) {
+async function processLog(eventName, eventLog) {
     try {
         const handler = EVENT_HANDLERS[eventName];
         if (handler) {
-            await handler(log);
+            await handler(eventLog);
         }
     } catch (error) {
         log.error(`Error processing ${eventName}`, { error: error.message });
@@ -497,8 +497,8 @@ async function catchupLogs() {
                         toBlock: chunkTo,
                     });
 
-                    for (const log of logs) {
-                        await processLog(eventName, log);
+                    for (const eventLog of logs) {
+                        await processLog(eventName, eventLog);
                     }
                 } catch (error) {
                     log.error(`Error fetching ${eventName} logs`, { error: error.message });

@@ -60,6 +60,8 @@ const createRequestSchema = z.object({
     cidHash: z.string().regex(/^0x[a-fA-F0-9]{64}$/),
     requestType: z.number().min(0).max(2),
     durationDays: z.number().min(1).max(365).default(7),
+    // Optional fractional hours (allows test chips < 1 day). Takes precedence over durationDays.
+    durationHours: z.number().positive().max(365 * 24).optional(),
     txHash: z.string().regex(/^0x[a-fA-F0-9]{64}$/).optional(),
     onChainReqId: z.string().regex(/^0x[a-fA-F0-9]{64}$/).optional().nullable(),
 });
@@ -254,12 +256,12 @@ router.get('/:requestId', authenticate, async (req, res, next) => {
 // POST /api/requests/create - Create a new access request (Doctor calls this AFTER on-chain tx)
 router.post('/create', authenticate, requireDoctorRole, async (req, res, next) => {
     try {
-        const { patientAddress, cidHash, requestType, durationDays, txHash, onChainReqId } = createRequestSchema.parse(req.body);
+        const { patientAddress, cidHash, requestType, durationDays, durationHours, txHash, onChainReqId } = createRequestSchema.parse(req.body);
         const doctorAddress = req.user.walletAddress.toLowerCase();
 
-        // Calculate deadline
-        const deadline = new Date();
-        deadline.setDate(deadline.getDate() + durationDays);
+        // Calculate deadline. Prefer durationHours when present (allows < 1 day for test chips).
+        const effectiveHours = (durationHours != null) ? durationHours : durationDays * 24;
+        const deadline = new Date(Date.now() + effectiveHours * 3600 * 1000);
 
         // Use on-chain reqId if provided, otherwise generate fallback ID
         const requestId = onChainReqId || keccak256(
