@@ -30,6 +30,22 @@ export const CONSENT_PERMIT_TYPES = {
     ],
 };
 
+// EIP-712 Types - MUST match contract DELEGATION_PERMIT_TYPEHASH:
+//   DelegationPermit(address patient,address delegatee,uint40 duration,bool allowSubDelegate,uint256 deadline,uint256 nonce)
+// Note: the contract accepts uint40 for `duration` but viem/EIP-712 signs with
+// uint40 too — we stringify as BigInt below. The nonce field is shared with
+// ConsentPermit (same `nonces[patient]` storage slot in the contract).
+export const DELEGATION_PERMIT_TYPES = {
+    DelegationPermit: [
+        { name: 'patient', type: 'address' },
+        { name: 'delegatee', type: 'address' },
+        { name: 'duration', type: 'uint40' },
+        { name: 'allowSubDelegate', type: 'bool' },
+        { name: 'deadline', type: 'uint256' },
+        { name: 'nonce', type: 'uint256' },
+    ],
+};
+
 /**
  * Sign a grant consent message using EIP-712
  * @param {object} walletClient - Viem WalletClient with signer
@@ -84,6 +100,55 @@ export async function signGrantConsent(walletClient, params) {
 }
 
 /**
+ * Sign a DelegationPermit for patient -> doctor authority grant.
+ * Backend relays this via ConsentLedger.delegateAuthorityBySig.
+ *
+ * @param {object} walletClient - Viem WalletClient with local account
+ * @param {object} params
+ * @param {string} params.patient           - patient wallet address
+ * @param {string} params.delegatee         - doctor wallet address
+ * @param {number} params.duration          - authority duration in SECONDS (uint40)
+ * @param {boolean} params.allowSubDelegate - doctor may sub-delegate further
+ * @param {number} params.deadline          - EIP-712 sig deadline (unix seconds)
+ * @param {number|string|bigint} params.nonce - patient's current nonce from getNonce()
+ * @returns {Promise<string>} EIP-712 signature (0x...)
+ */
+export async function signDelegationPermit(walletClient, params) {
+    const {
+        patient,
+        delegatee,
+        duration,
+        allowSubDelegate,
+        deadline,
+        nonce,
+    } = params;
+
+    const account = walletClient.account;
+    if (!account) {
+        throw new Error('No local account found in walletClient');
+    }
+
+    const message = {
+        patient: patient.toLowerCase(),
+        delegatee: delegatee.toLowerCase(),
+        duration: BigInt(duration),
+        allowSubDelegate: Boolean(allowSubDelegate),
+        deadline: BigInt(deadline),
+        nonce: BigInt(nonce),
+    };
+
+    const signature = await walletClient.signTypedData({
+        account,
+        domain: EIP712_DOMAIN,
+        types: DELEGATION_PERMIT_TYPES,
+        primaryType: 'DelegationPermit',
+        message,
+    });
+
+    return signature;
+}
+
+/**
  * Compute cidHash from CID string
  */
 export function computeCidHash(cid) {
@@ -107,9 +172,11 @@ export function getDeadline(hours = 1) {
 
 export default {
     signGrantConsent,
+    signDelegationPermit,
     computeCidHash,
     computeEncKeyHash,
     getDeadline,
     EIP712_DOMAIN,
     CONSENT_PERMIT_TYPES,
+    DELEGATION_PERMIT_TYPES,
 };

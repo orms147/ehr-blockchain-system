@@ -420,7 +420,7 @@ export default function DoctorDashboardScreen() {
                             </View>
                         )}
 
-                        {/* Delegation shortcut */}
+                        {/* Delegation shortcut (legacy per-record A → B) */}
                         <Pressable
                             onPress={() => navigation.navigate('DoctorDelegatableRecords')}
                             style={{
@@ -429,7 +429,7 @@ export default function DoctorDashboardScreen() {
                                 borderColor: '#c4b5fd',
                                 borderRadius: 16,
                                 padding: 14,
-                                marginBottom: 16,
+                                marginBottom: 12,
                                 flexDirection: 'row',
                                 alignItems: 'center',
                             }}
@@ -440,6 +440,29 @@ export default function DoctorDashboardScreen() {
                             <YStack flex={1}>
                                 <Text fontSize={14} fontWeight="700" color="#4c1d95">Hồ sơ ủy quyền được</Text>
                                 <Text fontSize={12} color="#6d28d9">Chia sẻ lại cho bác sĩ khác (A → B)</Text>
+                            </YStack>
+                        </Pressable>
+
+                        {/* CHAIN topology: patients who delegated authority to me */}
+                        <Pressable
+                            onPress={() => navigation.navigate('DoctorDelegatedPatients')}
+                            style={{
+                                backgroundColor: '#e0f2fe',
+                                borderWidth: 1,
+                                borderColor: '#7dd3fc',
+                                borderRadius: 16,
+                                padding: 14,
+                                marginBottom: 16,
+                                flexDirection: 'row',
+                                alignItems: 'center',
+                            }}
+                        >
+                            <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: '#0284c7', alignItems: 'center', justifyContent: 'center', marginRight: 12 }}>
+                                <Users size={20} color="white" />
+                            </View>
+                            <YStack flex={1}>
+                                <Text fontSize={14} fontWeight="700" color="#075985">Bệnh nhân uỷ quyền</Text>
+                                <Text fontSize={12} color="#0369a1">Chia sẻ hồ sơ thay bệnh nhân với đồng nghiệp</Text>
                             </YStack>
                         </Pressable>
 

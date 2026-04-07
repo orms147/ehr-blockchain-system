@@ -481,10 +481,14 @@ export async function sponsorGrantConsent(
 // Relay a delegation grant via ConsentLedger.delegateAuthorityBySig.
 // Patient signs EIP-712 DelegationPermit off-chain; backend submits with sponsor gas.
 // Counts against the same 100/month pool as other patient actions.
+//
+// NOTE: the contract expects `duration` in SECONDS (uint40), not an absolute
+// expiresAt timestamp. Contract will compute actual expiry as block.timestamp + duration.
+// Contract enforces MIN_DURATION (1 day) and MAX_DURATION (5 years).
 export async function sponsorDelegateAuthority({
     patientAddress,
     delegateeAddress,
-    expiresAt,
+    duration,
     allowSubDelegate,
     deadline,
     signature,
@@ -506,7 +510,7 @@ export async function sponsorDelegateAuthority({
             args: [
                 patient,
                 delegatee,
-                BigInt(expiresAt),
+                Number(duration), // uint40 duration in seconds
                 Boolean(allowSubDelegate),
                 BigInt(deadline),
                 signature,
@@ -529,6 +533,9 @@ export async function sponsorDelegateAuthority({
     // Write DB cache row eagerly so the patient's UI sees it before the
     // DelegationGranted event catches up. Event sync will re-upsert later
     // (idempotent on @@unique(patientAddress, delegateeAddress)).
+    // Approximate expiresAt = now + duration; event sync will correct to the
+    // exact chain timestamp if there's drift.
+    const approxExpiresAt = new Date(Date.now() + Number(duration) * 1000);
     try {
         await prisma.delegation.upsert({
             where: {
@@ -541,7 +548,7 @@ export async function sponsorDelegateAuthority({
                 chainDepth: 1,
                 parentDelegator: null,
                 allowSubDelegate: Boolean(allowSubDelegate),
-                expiresAt: new Date(Number(expiresAt) * 1000),
+                expiresAt: approxExpiresAt,
                 scopeNote,
                 grantTxHash: hash,
                 grantBlockNumber: receipt?.blockNumber ?? null,
@@ -558,7 +565,7 @@ export async function sponsorDelegateAuthority({
                 parentDelegator: null,
                 epoch: 0n,
                 allowSubDelegate: Boolean(allowSubDelegate),
-                expiresAt: new Date(Number(expiresAt) * 1000),
+                expiresAt: approxExpiresAt,
                 scopeNote,
                 grantTxHash: hash,
                 grantBlockNumber: receipt?.blockNumber ?? null,

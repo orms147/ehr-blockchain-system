@@ -22,6 +22,7 @@ import DoctorRequestAccessScreen from '../screens/doctor/DoctorRequestAccessScre
 import DoctorExpiredRecordsScreen from '../screens/doctor/DoctorExpiredRecordsScreen';
 import DoctorCreateUpdateScreen from '../screens/doctor/DoctorCreateUpdateScreen';
 import DoctorDelegatableRecordsScreen from '../screens/doctor/DoctorDelegatableRecordsScreen';
+import DoctorDelegatedPatientsScreen from '../screens/doctor/DoctorDelegatedPatientsScreen';
 
 import OrgDashboardScreen from '../screens/org/OrgDashboardScreen';
 import OrgMembersScreen from '../screens/org/OrgMembersScreen';
@@ -217,6 +218,11 @@ function MainStackNavigator() {
                 name="DoctorDelegatableRecords"
                 component={DoctorDelegatableRecordsScreen}
                 options={{ title: 'H\u1ED3 s\u01A1 \u1EE7y quy\u1EC1n' }}
+            />
+            <Stack.Screen
+                name="DoctorDelegatedPatients"
+                component={DoctorDelegatedPatientsScreen}
+                options={{ title: 'B\u1EC7nh nh\u00E2n \u1EE7y quy\u1EC1n' }}
             />
             <Stack.Screen
                 name="EditProfile"

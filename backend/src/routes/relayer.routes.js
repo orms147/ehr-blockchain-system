@@ -186,9 +186,12 @@ router.get('/grant-context', authenticate, async (req, res, next) => {
 });
 
 // Validation schema for delegation authority grant (CHAIN topology root grant)
+// NOTE: Contract takes `duration` (seconds, uint40), not absolute expiresAt.
+//   MIN_DURATION = 1 day = 86400
+//   MAX_DURATION = 5 years = 157_680_000
 const delegateAuthoritySchema = z.object({
     delegateeAddress: z.string().regex(/^0x[a-fA-F0-9]{40}$/),
-    expiresAt: z.number().int().positive(), // unix seconds
+    duration: z.number().int().min(86400).max(157_680_000), // seconds, 1d - 5y
     allowSubDelegate: z.boolean().default(false),
     deadline: z.number().int().positive(),   // EIP-712 sig deadline (unix seconds)
     signature: z.string().regex(/^0x[a-fA-F0-9]+$/),
@@ -207,7 +210,7 @@ router.post('/delegate-authority', authenticate, requirePatientRole, async (req,
         const result = await relayerService.sponsorDelegateAuthority({
             patientAddress: req.user.walletAddress,
             delegateeAddress: data.delegateeAddress,
-            expiresAt: data.expiresAt,
+            duration: data.duration,
             allowSubDelegate: data.allowSubDelegate,
             deadline: data.deadline,
             signature: data.signature,

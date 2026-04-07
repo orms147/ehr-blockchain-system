@@ -416,6 +416,55 @@ router.get('/my', authenticate, async (req, res, next) => {
     }
 });
 
+// GET /api/records/delegated/:patientAddress
+// Returns the given patient's records, but only if the caller currently holds
+// an active delegation from that patient. Used by the doctor UI to pick which
+// record to share with another doctor via grantUsingDelegation.
+router.get('/delegated/:patientAddress', authenticate, async (req, res, next) => {
+    try {
+        const patientAddress = normalizeAddress(req.params.patientAddress);
+        const delegateeAddress = normalizeAddress(req.user.walletAddress);
+
+        const delegation = await prisma.delegation.findUnique({
+            where: {
+                patientAddress_delegateeAddress: { patientAddress, delegateeAddress },
+            },
+        });
+
+        const isActive = !!(
+            delegation &&
+            delegation.status === 'active' &&
+            (!delegation.expiresAt || delegation.expiresAt > new Date())
+        );
+
+        if (!isActive) {
+            return res.status(403).json({
+                code: 'NO_ACTIVE_DELEGATION',
+                error: 'Bạn không có uỷ quyền hoạt động từ bệnh nhân này.',
+            });
+        }
+
+        const records = await prisma.recordMetadata.findMany({
+            where: {
+                syncStatus: RECORD_SYNC_STATUS.CONFIRMED,
+                ownerAddress: patientAddress,
+            },
+            orderBy: { createdAt: 'desc' },
+        });
+
+        res.json({
+            delegation: {
+                ...delegation,
+                epoch: delegation.epoch != null ? delegation.epoch.toString() : null,
+                grantBlockNumber: delegation.grantBlockNumber != null ? delegation.grantBlockNumber.toString() : null,
+            },
+            records,
+        });
+    } catch (error) {
+        next(error);
+    }
+});
+
 // GET /api/records/chain/:cidHash - Get record chain (parent, children, siblings)
 router.get('/chain/:cidHash', authenticate, async (req, res, next) => {
     try {

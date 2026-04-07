@@ -46,7 +46,13 @@ export const recordService = {
 
     async getRecordAccess(cidHash) {
         return api.get(`/api/records/${cidHash}/access`);
-    }
+    },
+
+    // Doctor with active delegation: list records of a delegated patient.
+    // Returns { delegation, records }.
+    async getDelegatedPatientRecords(patientAddress) {
+        return api.get(`/api/records/delegated/${patientAddress}`);
+    },
 };
 
 export default recordService;
