@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import {
     User, LogOut, Shield, Droplets, ChevronRight,
-    Edit3, Calendar, Settings, Info, Wallet, Copy, UserCheck, QrCode,
+    Edit3, Calendar, Settings, Info, Wallet, Copy, UserCheck, QrCode, Siren,
 } from 'lucide-react-native';
 import { YStack, XStack, Text, Button, View } from 'tamagui';
 import Animated, {
@@ -44,7 +44,6 @@ export default function ProfileScreen() {
     const { user, logout, token } = useAuthStore();
     const [profile, setProfile] = useState<any>(null);
     const [isLoading, setIsLoading] = useState(true);
-    const [isMockMode, setIsMockMode] = useState(false);
     const [addressModalOpen, setAddressModalOpen] = useState(false);
 
     const enter = useSharedValue(0);
@@ -85,7 +84,6 @@ export default function ProfileScreen() {
     useEffect(() => {
         const fetchProfile = async () => {
             if (!token) { setIsLoading(false); return; }
-            if (token === 'mock_jwt_token') { setIsMockMode(true); setIsLoading(false); return; }
             try {
                 const data = await profileService.getMyProfile();
                 setProfile(data);
@@ -156,13 +154,6 @@ export default function ProfileScreen() {
     return (
         <SafeAreaView style={{ flex: 1, backgroundColor: EHR_SURFACE }} edges={['right', 'left']}>
             <ScrollView contentContainerStyle={s.scrollContent} showsVerticalScrollIndicator={false}>
-                {isMockMode ? (
-                    <View style={s.mockBanner}>
-                        <Info size={14} color={EHR_PRIMARY} />
-                        <Text style={s.mockText}>Chế độ Demo — dữ liệu bên dưới là mẫu.</Text>
-                    </View>
-                ) : null}
-
                 <RoleSwitcher />
                 <View style={{ height: 16 }} />
 
@@ -249,6 +240,7 @@ export default function ProfileScreen() {
                         <MenuItem icon={Edit3} label="Chỉnh sửa hồ sơ" onPress={() => navigation.navigate('EditProfile')} />
                         <MenuItem icon={Shield} label="Quản lý bảo mật" onPress={() => navigation.navigate('Settings')} />
                         <MenuItem icon={UserCheck} label="Ủy quyền" onPress={() => navigation.navigate('Delegation')} />
+                        <MenuItem icon={Siren} label="Quyền khẩn cấp" onPress={() => navigation.navigate('EmergencyAccessLog')} />
                         <MenuItem icon={Info} label="Về ứng dụng" onPress={() => Alert.alert('EHR Chain', 'Hệ thống lưu trữ hồ sơ bệnh án phi tập trung.\nPhiên bản: 1.0.0-beta\nMạng: Arbitrum Sepolia')} />
                         <MenuItem label="Đăng xuất" onPress={handleLogout} destructive />
                     </View>
@@ -268,18 +260,6 @@ export default function ProfileScreen() {
 
 const s = StyleSheet.create({
     scrollContent: { padding: 20, paddingBottom: 100 },
-    mockBanner: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: EHR_PRIMARY_FIXED,
-        borderColor: EHR_OUTLINE_VARIANT,
-        borderWidth: 1,
-        borderRadius: 14,
-        padding: 12,
-        marginBottom: 16,
-        gap: 8,
-    },
-    mockText: { flex: 1, fontSize: 12, color: EHR_PRIMARY },
     // Avatar
     avatarSection: { alignItems: 'center', marginBottom: 24 },
     avatarCircle: {

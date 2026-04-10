@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { FlatList, RefreshControl, Alert, Pressable, StyleSheet } from 'react-native';
+import { ActivityIndicator, FlatList, RefreshControl, Alert, Pressable, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
-import { FileText, Users, Clock3, Loader2, CheckCircle, Clock } from 'lucide-react-native';
+import { FileText, Users, Clock3, Loader2, CheckCircle, Clock, Siren, AlertTriangle } from 'lucide-react-native';
 import { YStack, XStack, Text, View, Button } from 'tamagui';
 import { parseGwei } from 'viem';
 import Animated, {
@@ -23,6 +23,7 @@ import AnimatedSection from '../../components/AnimatedSection';
 import keyShareService from '../../services/keyShare.service';
 import requestService from '../../services/request.service';
 import walletActionService from '../../services/walletAction.service';
+import consentService from '../../services/consent.service';
 import useAuthStore from '../../store/authStore';
 import {
     EHR_ON_PRIMARY,
@@ -59,6 +60,15 @@ const EHR_SYSTEM_ABI = [
         outputs: [],
         stateMutability: 'nonpayable',
     },
+    {
+        type: 'function',
+        name: 'confirmAccessRequest',
+        inputs: [
+            { name: 'reqId', type: 'bytes32' },
+        ],
+        outputs: [],
+        stateMutability: 'nonpayable',
+    },
 ] as const;
 
 type SharedRecord = {
@@ -70,6 +80,7 @@ type SharedRecord = {
     parentCidHash?: string;
     senderAddress?: string;
     versionCount?: number;
+    includeUpdates?: boolean;
     record?: { ownerAddress?: string; title?: string; recordType?: string };
 };
 
@@ -83,9 +94,19 @@ type PendingClaim = {
 
 export default function DoctorDashboardScreen() {
     const navigation = useNavigation<any>();
-    const { token } = useAuthStore();
+    const { token, user } = useAuthStore();
     const queryClient = useQueryClient();
     const [claimingId, setClaimingId] = useState<string | null>(null);
+    const [isVerifiedDoctor, setIsVerifiedDoctor] = useState<boolean | null>(null); // null = loading
+
+    // Check doctor verification once on mount
+    useEffect(() => {
+        const myAddr = (user?.walletAddress || user?.address || '').toLowerCase();
+        if (!myAddr || !token) return;
+        consentService.fetchGrantContext(myAddr)
+            .then((ctx: any) => setIsVerifiedDoctor(ctx?.isVerifiedDoctor === true))
+            .catch(() => setIsVerifiedDoctor(null)); // fail-open on network error
+    }, [token, user]);
 
     const headerEnter = useSharedValue(0);
     useEffect(() => {
@@ -205,17 +226,54 @@ export default function DoctorDashboardScreen() {
         setClaimingId(claim.requestId);
         try {
             const { walletClient } = await walletActionService.getWalletContext();
-            const txHash = await walletClient.writeContract({
-                address: EHR_SYSTEM_ADDRESS,
-                abi: EHR_SYSTEM_ABI,
-                functionName: 'confirmAccessRequestWithSignature',
-                args: [claim.requestId as `0x${string}`, BigInt(claim.signatureDeadline), claim.signature as `0x${string}`],
+            const gasOpts = {
                 gas: BigInt(300000),
                 maxFeePerGas: parseGwei('1.0'),
                 maxPriorityFeePerGas: parseGwei('0.1'),
+            };
+
+            // TWO-STEP on-chain approval required by EHRSystemSecure:
+            //   Step A: patient approval (via EIP-712 signature)
+            //   Step B: doctor approval (via msg.sender)
+            //   MIN_APPROVAL_DELAY = 15s between the two.
+            //
+            // Edge cases:
+            //   - If step A was done in a previous attempt, it reverts → catch & skip to B.
+            //   - If request is already Completed, both revert → outer catch handles it.
+
+            // STEP A: Submit patient's EIP-712 approval → Pending → PatientApproved
+            let patientApprovalDone = false;
+            try {
+                await walletClient.writeContract({
+                    address: EHR_SYSTEM_ADDRESS,
+                    abi: EHR_SYSTEM_ABI,
+                    functionName: 'confirmAccessRequestWithSignature',
+                    args: [claim.requestId as `0x${string}`, BigInt(claim.signatureDeadline), claim.signature as `0x${string}`],
+                    ...gasOpts,
+                });
+                patientApprovalDone = true;
+            } catch (stepAErr: any) {
+                // Already PatientApproved from previous attempt → skip to step B.
+                console.log('Step A skipped (likely already approved):', stepAErr?.message?.slice(0, 80));
+            }
+
+            // Wait MIN_APPROVAL_DELAY (15s) only if step A just ran (new first approval).
+            // If step A was skipped (already approved before), the 15s has already elapsed.
+            if (patientApprovalDone) {
+                await new Promise((resolve) => setTimeout(resolve, 17000));
+            }
+
+            // STEP B: Doctor's own approval → PatientApproved → Completed → consent minted!
+            const txHash = await walletClient.writeContract({
+                address: EHR_SYSTEM_ADDRESS,
+                abi: EHR_SYSTEM_ABI,
+                functionName: 'confirmAccessRequest',
+                args: [claim.requestId as `0x${string}`],
+                ...gasOpts,
             });
+
             await requestService.markClaimed(claim.requestId, txHash);
-            Alert.alert('Đã nhận quyền truy cập!', 'Hồ sơ sẽ xuất hiện trong danh sách bên dưới.');
+            Alert.alert('Đã nhận quyền truy cập!', 'Consent đã được mint on-chain. Hồ sơ sẽ xuất hiện trong danh sách bên dưới.');
             invalidateAll();
         } catch (err: any) {
             const msg = String(err?.message || '');
@@ -257,14 +315,40 @@ export default function DoctorDashboardScreen() {
             });
             if (!ok) return;
         }
+        // GATE: Block unverified doctors from viewing shared records entirely.
+        // canAccess on-chain (FIX audit #3) rejects unverified doctors, so letting
+        // them proceed would only show confusing decryption errors. Check once at
+        // mount (isVerifiedDoctor state) and block here with a clear message.
+        if (isVerifiedDoctor === false) {
+            Alert.alert(
+                'Bác sĩ chưa xác minh',
+                'Tài khoản bác sĩ của bạn chưa được tổ chức y tế xác minh on-chain.\n\n' +
+                'Bạn không thể xem hồ sơ được chia sẻ cho đến khi được xác minh. ' +
+                'Liên hệ tổ chức y tế của bạn để được duyệt.\n\n' +
+                'Sau khi xác minh, tất cả hồ sơ đã được chia sẻ sẽ tự động mở khóa — không cần bệnh nhân chia sẻ lại.',
+            );
+            return;
+        }
+
+        // 'awaiting_claim' means the patient signed approval but the doctor hasn't
+        // submitted the on-chain confirmAccessRequestWithSignature yet. They must
+        // go through the PendingClaim / "Nhận truy cập" flow first.
+        if (record?.status === 'awaiting_claim') {
+            Alert.alert(
+                'Cần xác nhận on-chain',
+                'Bệnh nhân đã duyệt, nhưng bạn chưa nhận quyền trên blockchain. Hãy bấm "Nhận truy cập" ở mục "Chờ nhận truy cập" phía trên trước.',
+            );
+            return;
+        }
+
         // Mark key share as claimed the first time doctor opens it, so next visit shows "Xem hồ sơ".
         if (record?.status === 'pending' && record?.id) {
             try {
                 await keyShareService.claimKey(record.id);
                 queryClient.invalidateQueries({ queryKey: ['doctor', 'sharedRecords'] });
-            } catch (e) {
-                // Non-fatal — the claim can be retried next view, still allow navigating.
-                console.warn('claimKey failed:', (e as any)?.message || e);
+            } catch (e: any) {
+                // Non-fatal — let doctor navigate, RecordDetail will show its own error.
+                console.warn('claimKey failed:', e?.message || e);
             }
         }
         const displayDate = record?.createdAt ? new Date(record.createdAt).toLocaleDateString('vi-VN') : '';
@@ -284,6 +368,15 @@ export default function DoctorDashboardScreen() {
     const handleCreateUpdate = (record: SharedRecord) => {
         const patientAddress = record?.record?.ownerAddress || record?.senderAddress || '';
         if (!record?.cidHash || !patientAddress) { Alert.alert('Lỗi', 'Thiếu thông tin hồ sơ hoặc bệnh nhân.'); return; }
+        // Read-only share: patient explicitly marked this record as Chỉ đọc.
+        // Block any attempt to start an update flow even if the button somehow renders.
+        if (record?.includeUpdates === false) {
+            Alert.alert(
+                'Hồ sơ chỉ đọc',
+                'Bệnh nhân đã chia sẻ hồ sơ này ở chế độ "Chỉ đọc". Bạn không có quyền tạo phiên bản cập nhật.'
+            );
+            return;
+        }
         navigation.navigate('DoctorCreateUpdate', { parentCidHash: record.cidHash, patientAddress });
     };
 
@@ -343,6 +436,30 @@ export default function DoctorDashboardScreen() {
                                 <Text style={s.statLabel}>Chờ xem</Text>
                             </View>
                         </XStack>
+
+                        {/* Unverified doctor warning banner */}
+                        {isVerifiedDoctor === false ? (
+                            <View style={{
+                                backgroundColor: '#fef2f2',
+                                borderColor: '#fca5a5',
+                                borderWidth: 1,
+                                borderRadius: 14,
+                                padding: 12,
+                                marginBottom: 16,
+                                flexDirection: 'row',
+                                alignItems: 'flex-start',
+                            }}>
+                                <AlertTriangle size={18} color="#B91C1C" style={{ marginTop: 2 }} />
+                                <YStack style={{ flex: 1, marginLeft: 8 }}>
+                                    <Text fontSize={13} fontWeight="800" style={{ color: '#7F1D1D' }}>
+                                        Bác sĩ chưa xác minh
+                                    </Text>
+                                    <Text fontSize={12} style={{ color: '#991B1B', marginTop: 4 }}>
+                                        Tài khoản chưa được tổ chức y tế xác minh on-chain. Bạn có thể nhận yêu cầu truy cập nhưng KHÔNG thể xem hồ sơ cho đến khi được xác minh.
+                                    </Text>
+                                </YStack>
+                            </View>
+                        ) : null}
 
                         {/* Pending Claims */}
                         {pendingClaims.length > 0 && (
@@ -405,12 +522,12 @@ export default function DoctorDashboardScreen() {
                                                     disabled={isClaiming}
                                                 >
                                                     {isClaiming ? (
-                                                        <Loader2 size={16} color={EHR_PRIMARY} />
+                                                        <ActivityIndicator size="small" color={EHR_PRIMARY} />
                                                     ) : (
                                                         <CheckCircle size={16} color={EHR_PRIMARY} />
                                                     )}
                                                     <Text style={s.claimBtnText}>
-                                                        {isClaiming ? 'Đang xử lý...' : 'Nhận truy cập'}
+                                                        {isClaiming ? 'Đang xác nhận on-chain (~17s)...' : 'Nhận truy cập'}
                                                     </Text>
                                                 </Pressable>
                                             </LinearGradient>
@@ -452,7 +569,7 @@ export default function DoctorDashboardScreen() {
                                 borderColor: '#7dd3fc',
                                 borderRadius: 16,
                                 padding: 14,
-                                marginBottom: 16,
+                                marginBottom: 12,
                                 flexDirection: 'row',
                                 alignItems: 'center',
                             }}
@@ -465,6 +582,52 @@ export default function DoctorDashboardScreen() {
                                 <Text fontSize={12} color="#0369a1">Chia sẻ hồ sơ thay bệnh nhân với đồng nghiệp</Text>
                             </YStack>
                         </Pressable>
+
+                        {/* Emergency access shortcuts */}
+                        <XStack style={{ gap: 8, marginBottom: 16 }}>
+                            <Pressable
+                                onPress={() => navigation.navigate('DoctorEmergencyRequest')}
+                                style={{
+                                    flex: 1,
+                                    backgroundColor: '#fef2f2',
+                                    borderWidth: 1,
+                                    borderColor: '#fca5a5',
+                                    borderRadius: 16,
+                                    padding: 12,
+                                    flexDirection: 'row',
+                                    alignItems: 'center',
+                                }}
+                            >
+                                <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: '#dc2626', alignItems: 'center', justifyContent: 'center', marginRight: 10 }}>
+                                    <Siren size={18} color="white" />
+                                </View>
+                                <YStack flex={1}>
+                                    <Text fontSize={13} fontWeight="800" color="#7f1d1d">Yêu cầu khẩn cấp</Text>
+                                    <Text fontSize={11} color="#991b1b">Quyền 24h</Text>
+                                </YStack>
+                            </Pressable>
+                            <Pressable
+                                onPress={() => navigation.navigate('DoctorActiveEmergencies')}
+                                style={{
+                                    flex: 1,
+                                    backgroundColor: '#fff7ed',
+                                    borderWidth: 1,
+                                    borderColor: '#fdba74',
+                                    borderRadius: 16,
+                                    padding: 12,
+                                    flexDirection: 'row',
+                                    alignItems: 'center',
+                                }}
+                            >
+                                <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: '#ea580c', alignItems: 'center', justifyContent: 'center', marginRight: 10 }}>
+                                    <AlertTriangle size={18} color="white" />
+                                </View>
+                                <YStack flex={1}>
+                                    <Text fontSize={13} fontWeight="800" color="#7c2d12">Quyền của tôi</Text>
+                                    <Text fontSize={11} color="#9a3412">Đang hoạt động</Text>
+                                </YStack>
+                            </Pressable>
+                        </XStack>
 
                         {/* Shared records header */}
                         <Text style={s.sectionTitle}>Hồ sơ đã nhận ({sharedRecords.length})</Text>

@@ -52,7 +52,7 @@ export async function delegateOnChain({
 
 /**
  * Grant on-chain consent via backend relayer (EIP-712 gasless).
- * Returns { txHash, isVerifiedDoctor, uploadsRemaining } so UI can surface warnings.
+ * Returns { txHash, isVerifiedDoctor, signaturesRemaining } so UI can surface warnings.
  *
  * @param {object} params
  * @param {string} params.granteeAddress
@@ -112,7 +112,7 @@ export async function grantConsentOnChain({
         cidHash,
         isVerifiedDoctor: ctx.isVerifiedDoctor,
         isDoctor: ctx.isDoctor,
-        uploadsRemaining: Math.max(0, (ctx.uploadsRemaining ?? 0) - 1),
+        signaturesRemaining: Math.max(0, (ctx.signaturesRemaining ?? 0) - 1),
     };
 }
 

@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 import { Pressable, StyleSheet } from 'react-native';
-import { FileText, Eye, Clock, FilePlus2, ShieldCheck } from 'lucide-react-native';
+import { FileText, Eye, Clock, FilePlus2, ShieldCheck, Lock } from 'lucide-react-native';
 import { XStack, YStack, Text, Button, View } from 'tamagui';
 import Animated, {
     useSharedValue,
@@ -40,6 +40,10 @@ export default function SharedRecordCard({ record, onView, onCreateUpdate }: Sha
     const isExpiredByTime = !!record?.expiresAt && new Date(record.expiresAt).getTime() < Date.now();
     const isExpired = statusLower === 'expired' || isExpiredByTime;
     const isInactive = record?.active === false || isRevoked || isExpired;
+    // Read-only share: patient explicitly granted "Chỉ đọc". Hide all
+    // update affordances. `includeUpdates === undefined` means legacy data
+    // from before the field was added, default to allowed (true).
+    const isReadOnly = record?.includeUpdates === false;
     const truncateAddr = (addr: string) => (addr ? `${addr.substring(0, 8)}...${addr.slice(-4)}` : '???');
 
     const mountProgress = useSharedValue(0);
@@ -172,7 +176,7 @@ export default function SharedRecordCard({ record, onView, onCreateUpdate }: Sha
                                 </Text>
                             </Button>
 
-                            {!isInactive && onCreateUpdate ? (
+                            {!isInactive && !isReadOnly && onCreateUpdate ? (
                                 <Button
                                     size="$3"
                                     variant="outlined"
@@ -186,6 +190,12 @@ export default function SharedRecordCard({ record, onView, onCreateUpdate }: Sha
                                         Cập nhật
                                     </Text>
                                 </Button>
+                            ) : null}
+                            {!isInactive && isReadOnly ? (
+                                <XStack style={s.readOnlyBadge}>
+                                    <Lock size={12} color={EHR_ON_SURFACE_VARIANT} />
+                                    <Text style={s.readOnlyText}>Chỉ đọc</Text>
+                                </XStack>
                             ) : null}
                         </XStack>
                     </View>
@@ -300,6 +310,22 @@ const s = StyleSheet.create({
     },
     expiryText: {
         fontSize: 11,
+        color: EHR_ON_SURFACE_VARIANT,
+    },
+    readOnlyBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: EHR_OUTLINE_VARIANT,
+        backgroundColor: EHR_SURFACE_LOW,
+    },
+    readOnlyText: {
+        fontSize: 12,
+        fontWeight: '700',
         color: EHR_ON_SURFACE_VARIANT,
     },
 });

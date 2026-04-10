@@ -1,5 +1,6 @@
 import React from 'react';
 import { DefaultTheme, NavigationContainer } from '@react-navigation/native';
+import { navigationRef } from '../lib/navigationRef';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator, type BottomTabNavigationOptions } from '@react-navigation/bottom-tabs';
 import { Home, FileText, Bell, User, Stethoscope, Send, Building2, Users, Landmark, Clock, Shield, Award, Plus } from 'lucide-react-native';
@@ -23,6 +24,9 @@ import DoctorExpiredRecordsScreen from '../screens/doctor/DoctorExpiredRecordsSc
 import DoctorCreateUpdateScreen from '../screens/doctor/DoctorCreateUpdateScreen';
 import DoctorDelegatableRecordsScreen from '../screens/doctor/DoctorDelegatableRecordsScreen';
 import DoctorDelegatedPatientsScreen from '../screens/doctor/DoctorDelegatedPatientsScreen';
+import DoctorEmergencyRequestScreen from '../screens/doctor/DoctorEmergencyRequestScreen';
+import DoctorActiveEmergenciesScreen from '../screens/doctor/DoctorActiveEmergenciesScreen';
+import EmergencyAccessLogScreen from '../screens/EmergencyAccessLogScreen';
 
 import OrgDashboardScreen from '../screens/org/OrgDashboardScreen';
 import OrgMembersScreen from '../screens/org/OrgMembersScreen';
@@ -229,6 +233,21 @@ function MainStackNavigator() {
                 component={EditProfileScreen}
                 options={{ title: 'Ch\u1EC9nh s\u1EEDa h\u1ED3 s\u01A1' }}
             />
+            <Stack.Screen
+                name="DoctorEmergencyRequest"
+                component={DoctorEmergencyRequestScreen}
+                options={{ headerShown: false }}
+            />
+            <Stack.Screen
+                name="DoctorActiveEmergencies"
+                component={DoctorActiveEmergenciesScreen}
+                options={{ headerShown: false }}
+            />
+            <Stack.Screen
+                name="EmergencyAccessLog"
+                component={EmergencyAccessLogScreen}
+                options={{ headerShown: false }}
+            />
         </Stack.Navigator>
     );
 }
@@ -241,7 +260,7 @@ export default function AppNavigator() {
     }
 
     return (
-        <NavigationContainer theme={navigationTheme}>
+        <NavigationContainer ref={navigationRef} theme={navigationTheme}>
             <Stack.Navigator screenOptions={{ headerShown: false }}>
                 {!isAuthenticated ? (
                     <>

@@ -178,6 +178,11 @@ model KeyShare {
   // RecordDelegation: If true, recipient can re-share this record to others
   allowDelegate    Boolean  @default(false)
 
+  // Mirrors on-chain Consent.includeUpdates. When false the recipient is granted
+  // read-only access to this exact version and must NOT create updates / new
+  // versions on top of it. UI hides "Cập nhật" actions when this is false.
+  includeUpdates   Boolean  @default(true)
+
   status    String    @default("pending") // pending, claimed, revoked
   createdAt DateTime  @default(now())
   claimedAt DateTime?

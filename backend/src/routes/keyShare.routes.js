@@ -5,6 +5,7 @@ import { authenticate } from '../middleware/auth.js';
 import { checkConsent, publicClient, CONTRACT_ADDRESSES } from '../config/blockchain.js';
 import { ACCESS_CONTROL_ABI } from '../config/contractABI.js';
 import { emitToUser } from '../services/socket.service.js';
+import { sendPushToWallet } from '../services/push.service.js';
 import { createLogger } from '../utils/logger.js';
 
 const log = createLogger('KeyShareRoutes');
@@ -18,12 +19,15 @@ const createKeyShareSchema = z.object({
     senderPublicKey: z.string().min(1).optional(), // NaCl public key for decryption
     expiresAt: z.string().datetime().optional().nullable(),
     allowDelegate: z.boolean().optional().default(false), // NEW: For RecordDelegation
+    // Mirrors the on-chain Consent.includeUpdates flag. Default true for backward
+    // compatibility with older clients that don't send the field.
+    includeUpdates: z.boolean().optional().default(true),
 });
 
 // POST /api/key-share - Share encrypted key with recipient
 router.post('/', authenticate, async (req, res, next) => {
     try {
-        const { cidHash, recipientAddress, encryptedPayload, senderPublicKey, expiresAt, allowDelegate } =
+        const { cidHash, recipientAddress, encryptedPayload, senderPublicKey, expiresAt, allowDelegate, includeUpdates } =
             createKeyShareSchema.parse(req.body);
 
         const cidHashLower = cidHash.toLowerCase();
@@ -211,6 +215,7 @@ router.post('/', authenticate, async (req, res, next) => {
                         encryptedPayload,
                         senderPublicKey,
                         allowDelegate: finalAllowDelegate,
+                        includeUpdates,
                         status: nextStatus,
                         claimedAt: nextStatus === 'claimed' ? (existing.claimedAt || new Date()) : null,
                         expiresAt: finalExpiresAt ? new Date(finalExpiresAt) : null,
@@ -227,6 +232,7 @@ router.post('/', authenticate, async (req, res, next) => {
                     encryptedPayload,
                     senderPublicKey,
                     allowDelegate: finalAllowDelegate,
+                    includeUpdates,
                     status: isSelfShare ? 'claimed' : 'pending',
                     claimedAt: isSelfShare ? new Date() : null,
                     expiresAt: finalExpiresAt ? new Date(finalExpiresAt) : null,
@@ -259,6 +265,18 @@ router.post('/', authenticate, async (req, res, next) => {
             senderAddress: senderAddress,
             recordTitle: record.title || 'Há»“ sÆ¡ má»›i',
         });
+
+        // Push notification (fire and forget; mobile setupNotificationListeners
+        // routes data.screen → RecordDetail on tap).
+        sendPushToWallet(recipientLower, {
+            title: 'Hồ sơ mới được chia sẻ',
+            body: `Bạn vừa nhận quyền truy cập một hồ sơ y tế.`,
+            data: {
+                screen: 'RecordDetail',
+                params: { record: { cidHash: cidHashLower, title: record.title || 'Hồ sơ được chia sẻ' } },
+                kind: 'record_shared',
+            },
+        }).catch((err) => log.warn('push send failed', { error: err?.message }));
 
     } catch (error) {
         next(error);
@@ -822,14 +840,66 @@ router.post('/:id/claim', authenticate, async (req, res, next) => {
         // CHAIN has since revoked. Epoch bumps make downstream consents dead
         // without touching this cached row. Ask canAccess() which walks the
         // full delegation chain including parent-epoch and patient-epoch mismatches.
+        //
+        // IMPORTANT: canAccess returns false for UNVERIFIED doctors (FIX audit #3).
+        // In that case the consent IS valid — the doctor simply needs to get verified.
+        // We must NOT revoke the KeyShare row, otherwise the patient would have to
+        // re-share after the doctor is verified. Instead, return a specific error
+        // code so the mobile UI can show a targeted message.
         const ownerAddress = keyShare.record?.ownerAddress?.toLowerCase();
         if (ownerAddress) {
-            const hasAccess = await checkConsent(
-                ownerAddress,
-                keyShare.recipientAddress.toLowerCase(),
-                keyShare.cidHash.toLowerCase(),
-            );
+            const recipientLower = keyShare.recipientAddress.toLowerCase();
+            const cidHashLower = keyShare.cidHash.toLowerCase();
+            const hasAccess = await checkConsent(ownerAddress, recipientLower, cidHashLower);
+
             if (!hasAccess) {
+                // Diagnose WHY canAccess failed so we don't wrongly revoke KeyShare.
+                // Read the raw consent struct + doctor verification status.
+                let consentActive = false;
+                let doctorNotVerified = false;
+                try {
+                    const [consent, isDoc, isVerified] = await Promise.all([
+                        publicClient.readContract({
+                            address: CONTRACT_ADDRESSES.ConsentLedger,
+                            abi: CONSENT_LEDGER_ABI,
+                            functionName: 'getConsent',
+                            args: [ownerAddress, recipientLower, cidHashLower],
+                        }),
+                        publicClient.readContract({
+                            address: CONTRACT_ADDRESSES.AccessControl,
+                            abi: ACCESS_CONTROL_ABI,
+                            functionName: 'isDoctor',
+                            args: [recipientLower],
+                        }),
+                        publicClient.readContract({
+                            address: CONTRACT_ADDRESSES.AccessControl,
+                            abi: ACCESS_CONTROL_ABI,
+                            functionName: 'isVerifiedDoctor',
+                            args: [recipientLower],
+                        }),
+                    ]);
+                    consentActive = consent?.active === true;
+                    doctorNotVerified = isDoc === true && isVerified === false;
+                } catch (err) {
+                    log.warn('Diagnostic read failed, falling back to generic deny', { error: err?.message });
+                }
+
+                // Case A: consent exists and is active, but doctor is not verified.
+                // Do NOT revoke KeyShare — it will automatically work once verified.
+                if (consentActive && doctorNotVerified) {
+                    log.info('Claim blocked: doctor not verified (FIX #3)', {
+                        keyShareId: keyShare.id,
+                        recipient: recipientLower,
+                    });
+                    return res.status(403).json({
+                        code: 'DOCTOR_NOT_VERIFIED',
+                        error: 'Tài khoản bác sĩ của bạn chưa được tổ chức y tế xác minh on-chain. Khi được xác minh, bạn sẽ tự động truy cập được hồ sơ này mà không cần bệnh nhân chia sẻ lại.',
+                        message: 'Doctor not verified on-chain. Access will unlock automatically after verification.',
+                    });
+                }
+
+                // Case B: consent truly doesn't exist, expired, or delegation chain broken.
+                // Safe to revoke KeyShare row.
                 await prisma.keyShare.update({
                     where: { id: keyShare.id },
                     data: { status: 'revoked' },
@@ -837,13 +907,14 @@ router.post('/:id/claim', authenticate, async (req, res, next) => {
                 log.warn('Claim blocked: on-chain consent missing (possibly cascade-revoked)', {
                     keyShareId: keyShare.id,
                     owner: ownerAddress,
-                    recipient: keyShare.recipientAddress,
-                    cidHash: keyShare.cidHash,
+                    recipient: recipientLower,
+                    cidHash: cidHashLower,
+                    consentActive,
                 });
                 return res.status(403).json({
                     code: 'ONCHAIN_CONSENT_MISSING',
-                    error: 'Quyền truy cập không còn hợp lệ trên blockchain (có thể bị bệnh nhân hoặc bác sĩ cấp trên thu hồi).',
-                    message: 'On-chain consent revoked or delegation chain broken.',
+                    error: 'Quyền truy cập không còn hợp lệ trên blockchain (có thể bị bệnh nhân hoặc bác sĩ cấp trên thu hồi, hoặc đã hết hạn).',
+                    message: 'On-chain consent revoked, expired, or delegation chain broken.',
                 });
             }
         }

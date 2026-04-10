@@ -14,6 +14,7 @@ import LoadingSpinner from './src/components/LoadingSpinner';
 import walletActionService from './src/services/walletAction.service';
 import QueryProvider from './src/providers/QueryProvider';
 import { initSentry, Sentry } from './src/lib/sentry';
+import { setupNotificationListeners } from './src/lib/notifications';
 
 initSentry();
 
@@ -49,6 +50,10 @@ function App() {
     walletActionService.initializeWeb3Auth().catch((error) => {
       console.warn('[Web3Auth] init warning:', error?.message || error);
     });
+
+    // Wire notification tap → deeplink. Returns cleanup fn for unmount.
+    const cleanup = setupNotificationListeners();
+    return cleanup;
   }, [loadToken]);
 
   return (

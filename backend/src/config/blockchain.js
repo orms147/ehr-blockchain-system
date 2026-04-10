@@ -17,6 +17,30 @@ export const CONSENT_LEDGER_ABI = [
         ],
         outputs: [{ type: 'bool' }],
     },
+    {
+        name: 'getConsent',
+        type: 'function',
+        stateMutability: 'view',
+        inputs: [
+            { name: 'patient', type: 'address' },
+            { name: 'grantee', type: 'address' },
+            { name: 'rootCidHash', type: 'bytes32' },
+        ],
+        outputs: [{
+            type: 'tuple',
+            components: [
+                { name: 'patient', type: 'address' },
+                { name: 'grantee', type: 'address' },
+                { name: 'rootCidHash', type: 'bytes32' },
+                { name: 'encKeyHash', type: 'bytes32' },
+                { name: 'issuedAt', type: 'uint40' },
+                { name: 'expireAt', type: 'uint40' },
+                { name: 'active', type: 'bool' },
+                { name: 'includeUpdates', type: 'bool' },
+                { name: 'allowDelegate', type: 'bool' },
+            ],
+        }],
+    },
 ];
 
 export const ACCESS_CONTROL_ABI = [

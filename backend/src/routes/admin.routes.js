@@ -9,6 +9,8 @@ import { arbitrumSepolia } from 'viem/chains';
 import { ACCESS_CONTROL_ABI } from '../config/contractABI.js';
 import { createLogger } from '../utils/logger.js';
 import { ipfsService } from '../services/ipfs.service.js';
+import { emitToUser } from '../services/socket.service.js';
+import { sendPushToWallet } from '../services/push.service.js';
 
 const log = createLogger('AdminRoutes');
 const router = Router();
@@ -127,7 +129,7 @@ router.post('/org-applications/:id/reject', authenticate, isMinistry, async (req
             return res.status(400).json({ code: 'ORG_APP_ALREADY_PROCESSED', error: `Application already ${application.status.toLowerCase()}`, message: `Application already ${application.status.toLowerCase()}` });
         }
 
-        await prisma.orgApplication.update({
+        const updated = await prisma.orgApplication.update({
             where: { id: req.params.id },
             data: {
                 status: 'REJECTED',
@@ -137,7 +139,18 @@ router.post('/org-applications/:id/reject', authenticate, isMinistry, async (req
             },
         });
 
-        // TODO: Emit real-time notification to applicant
+        const applicantAddr = updated.applicantAddress?.toLowerCase();
+        if (applicantAddr) {
+            emitToUser(applicantAddr, 'org:rejected', {
+                applicationId: updated.id,
+                reason,
+            });
+            sendPushToWallet(applicantAddr, {
+                title: 'Đơn đăng ký tổ chức bị từ chối',
+                body: reason,
+                data: { kind: 'org_rejected' },
+            }).catch((err) => log.warn('push send failed', { error: err?.message }));
+        }
 
         res.json({
             success: true,
@@ -289,6 +302,19 @@ router.post('/confirm-org-creation', authenticate, isMinistry, async (req, res, 
             message: 'Organization synchronized successfully',
             organization: org,
         });
+
+        // Notify the org admin (applicant) in realtime + push so they know
+        // their application landed on-chain. Mobile/web both subscribe via socket.
+        emitToUser(normalizedPrimaryAdmin, 'org:approved', {
+            orgId: chainOrgId.toString(),
+            name,
+            txHash,
+        });
+        sendPushToWallet(normalizedPrimaryAdmin, {
+            title: 'Tổ chức đã được duyệt',
+            body: `${name} đã được Bộ Y tế xác minh trên blockchain.`,
+            data: { kind: 'org_approved', screen: 'OrgDashboard' },
+        }).catch((err) => log.warn('push send failed', { error: err?.message }));
 
     } catch (error) {
         log.error('Org sync error', { error: error.message });

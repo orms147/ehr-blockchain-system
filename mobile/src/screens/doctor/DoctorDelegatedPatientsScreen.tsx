@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import {
+    ActivityIndicator,
     Alert,
     FlatList,
     KeyboardAvoidingView,
@@ -13,6 +14,7 @@ import {
     TextInput,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
     ChevronRight,
@@ -30,6 +32,11 @@ import EmptyState from '../../components/EmptyState';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import recordService from '../../services/record.service';
 import delegationService from '../../services/delegation.service';
+import authService from '../../services/auth.service';
+import keyShareService from '../../services/keyShare.service';
+import walletActionService from '../../services/walletAction.service';
+import { encryptForRecipient, getOrCreateEncryptionKeypair } from '../../services/nacl-crypto';
+import { computeEncKeyHash } from '../../utils/eip712';
 import {
     useDelegatedToMe,
     useSubDelegate,
@@ -118,23 +125,84 @@ function ShareRecordModal({
 
         setSubmitting(true);
         try {
-            // For records minted via grantUsingDelegation, we don't re-share the
-            // off-chain encrypted payload here — the new grantee will receive a
-            // separate key-share flow (out of scope for this first cut). The
-            // on-chain consent is what this screen establishes.
-            const zeroHash = `0x${'0'.repeat(64)}`;
+            // STEP 1: Verify the delegating doctor has the local AES key for this
+            // record. Without it we cannot mint a usable consent — the new grantee
+            // would receive an on-chain entry with no off-chain payload to decrypt.
+            // The doctor obtains this key via a normal patient → doctor share flow
+            // BEFORE attempting to re-share via delegation.
+            const localStr = await AsyncStorage.getItem('ehr_local_records');
+            const localRecords = localStr ? JSON.parse(localStr) : {};
+            const local = localRecords[record.cidHash];
+            if (!local?.cid || !local?.aesKey) {
+                Alert.alert(
+                    'Chưa có khoá giải mã',
+                    'Bạn chưa có khoá giải mã hồ sơ này. Hãy yêu cầu bệnh nhân chia sẻ khoá hồ sơ trước khi có thể uỷ quyền cho bác sĩ khác.',
+                );
+                setSubmitting(false);
+                return;
+            }
+
+            // STEP 2: Fetch the new grantee's NaCl public key.
+            let recipientPubKey: string | null = null;
+            try {
+                const k = await authService.getEncryptionKey(grantee);
+                recipientPubKey = k?.encryptionPublicKey || null;
+            } catch {}
+            if (!recipientPubKey) {
+                Alert.alert(
+                    'Người nhận chưa đăng ký',
+                    'Địa chỉ này chưa đăng nhập vào hệ thống EHR hoặc chưa tạo khoá mã hoá. Yêu cầu họ đăng nhập app trước.',
+                );
+                setSubmitting(false);
+                return;
+            }
+
+            // STEP 3: Mint the on-chain consent with the REAL encKeyHash so the
+            // grantee can verify the key they receive off-chain matches what
+            // the patient committed to in ConsentLedger.
+            const encKeyHash = computeEncKeyHash(local.aesKey);
             const result = await delegationService.grantUsingDelegation({
                 patientAddress,
                 newGrantee: grantee,
                 rootCidHash: record.cidHash,
-                encKeyHash: zeroHash,
+                encKeyHash,
                 expireAtSeconds,
                 includeUpdates,
                 allowDelegate: false,
             });
+
+            // STEP 4: Create the off-chain KeyShare row so the new grantee can
+            // actually decrypt. NaCl-encrypt {cid, aesKey} for them using our own
+            // NaCl secret key derived from wallet signature.
+            try {
+                const { walletClient, address: myAddress } = await walletActionService.getWalletContext();
+                const myKeypair = await getOrCreateEncryptionKeypair(walletClient, myAddress);
+                const payload = JSON.stringify({ cid: local.cid, aesKey: local.aesKey });
+                const encryptedPayload = encryptForRecipient(payload, recipientPubKey, myKeypair.secretKey);
+                await keyShareService.shareKey({
+                    cidHash: record.cidHash,
+                    recipientAddress: grantee,
+                    encryptedPayload,
+                    senderPublicKey: myKeypair.publicKey,
+                    expiresAt: expireAtSeconds > 0 ? new Date(expireAtSeconds * 1000).toISOString() : null,
+                    allowDelegate: false,
+                    includeUpdates,
+                });
+            } catch (keyShareErr: any) {
+                // On-chain consent already minted at this point — surface the
+                // off-chain failure clearly so the user knows to retry the share.
+                Alert.alert(
+                    'Cảnh báo',
+                    `Đã cấp quyền on-chain (tx: ${result.txHash.slice(0, 14)}...) nhưng KHÔNG tạo được bản mã hoá khoá cho bác sĩ mới. Họ sẽ thấy consent nhưng KHÔNG giải mã được. Lỗi: ${keyShareErr?.message || keyShareErr}`,
+                );
+                reset();
+                onDone();
+                return;
+            }
+
             Alert.alert(
-                'Đã cấp quyền on-chain',
-                `Bác sĩ ${truncateAddr(grantee)} đã có consent cho hồ sơ này.\n\nTx: ${result.txHash.slice(0, 14)}...`,
+                'Cấp quyền thành công',
+                `Bác sĩ ${truncateAddr(grantee)} đã có quyền truy cập hồ sơ này (${d} ngày).\n\nTx: ${result.txHash.slice(0, 14)}...`,
             );
             reset();
             onDone();
@@ -251,10 +319,14 @@ function ShareRecordModal({
                                 borderRadius: 14,
                                 paddingVertical: 14,
                                 alignItems: 'center',
+                                justifyContent: 'center',
+                                flexDirection: 'row',
+                                gap: 8,
                                 marginTop: 20,
                                 marginBottom: 8,
                             }}
                         >
+                            {submitting ? <ActivityIndicator size="small" color={EHR_SURFACE_LOWEST} /> : null}
                             <Text fontSize="$4" fontWeight="700" color={EHR_SURFACE_LOWEST}>
                                 {submitting ? 'Đang xử lý...' : 'Ký & Cấp on-chain'}
                             </Text>

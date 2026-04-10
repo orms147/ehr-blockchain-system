@@ -1,5 +1,5 @@
 ﻿import React, { useState } from 'react';
-import { Alert, KeyboardAvoidingView, Platform, ScrollView, Pressable } from 'react-native';
+import { ActivityIndicator, Alert, KeyboardAvoidingView, Platform, ScrollView, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Send, User, FileText, AlertCircle, CheckCircle, QrCode } from 'lucide-react-native';
 import { YStack, XStack, Text, Button, Input, TextArea, View } from 'tamagui';
@@ -54,9 +54,14 @@ import {
     EHR_SURFACE_LOW,
 } from '../../constants/uiColors';
 
+// Must match EHRSystemSecure.RequestType enum:
+//   0 = DirectAccess:      includeUpdates=true, allowDelegate=false
+//   1 = FullDelegation:    bulk delegate ALL patient records
+//   2 = RecordDelegation:  includeUpdates=true, allowDelegate=true (per-record)
 const REQUEST_TYPES = [
-    { value: 0, label: 'Chỉ xem', description: 'Xem hồ sơ mà không chỉnh sửa' },
-    { value: 1, label: 'Toàn quyền', description: 'Xem và cập nhật hồ sơ' },
+    { value: 0, label: 'Đọc & cập nhật', description: 'Xem hồ sơ + xem bản cập nhật mới. Không chia sẻ lại.' },
+    { value: 2, label: 'Đọc & ủy quyền lại', description: 'Xem hồ sơ + có thể chia sẻ cho bác sĩ khác.' },
+    { value: 1, label: 'Ủy quyền toàn bộ', description: 'Quyền truy cập mọi hồ sơ. Dùng cho người giám hộ.' },
 ];
 
 export default function DoctorRequestAccessScreen() {
@@ -68,9 +73,9 @@ export default function DoctorRequestAccessScreen() {
     const [isSuccess, setIsSuccess] = useState(false);
     const [scannerOpen, setScannerOpen] = useState(false);
     const [cidScannerOpen, setCidScannerOpen] = useState(false);
-    // Duration is now stored as HOURS (fractional allowed for test chips < 1h).
-    // On-chain enforced minimum is 1 hour because consentDurationHours is uint40 hours.
-    const [durationHours, setDurationHours] = useState<number>(7 * 24);
+    // Duration is stored as HOURS (fractional for test chips < 1h). 0 = contract default
+    // (30 days for DirectAccess, 365 days for FullDelegation).
+    const [durationHours, setDurationHours] = useState<number>(0);
     const [customDurationOpen, setCustomDurationOpen] = useState(false);
     const [customDurationValue, setCustomDurationValue] = useState('');
     const [customDurationUnit, setCustomDurationUnit] = useState<'minutes' | 'hours' | 'days'>('days');
@@ -239,7 +244,7 @@ export default function DoctorRequestAccessScreen() {
 
                     <YStack style={{ marginBottom: 16 }}>
                         <Text fontSize="$3" fontWeight="700" color="$color11" style={{ marginBottom: 8 }}>
-                            CID Hash (tuỳ chọn)
+                            CID Hash {selectedType === 1 ? '(không dùng cho ủy quyền toàn bộ)' : '(tuỳ chọn)'}
                         </Text>
                         <XStack background="$background" borderColor="$borderColor" style={{ borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, alignItems: 'center' }}>
                             <FileText size={16} color="#64748B" />
@@ -300,10 +305,11 @@ export default function DoctorRequestAccessScreen() {
                         </Text>
                         <XStack style={{ flexWrap: 'wrap', gap: 8 }}>
                             {[
+                                { label: 'Mặc định', hours: 0 },
                                 { label: '5 phút (test)', hours: 5 / 60 },
                                 { label: '10 phút (test)', hours: 10 / 60 },
                                 { label: '1 giờ', hours: 1 },
-                                { label: '1 ngày', hours: 24 },
+                                { label: '24 giờ', hours: 24 },
                                 { label: '7 ngày', hours: 7 * 24 },
                                 { label: '30 ngày', hours: 30 * 24 },
                             ].map((opt) => {
@@ -404,9 +410,14 @@ export default function DoctorRequestAccessScreen() {
                                     />
                                 </XStack>
                                 <Text fontSize="$2" color="$color10">
-                                    Lưu ý: smart contract làm tròn lên 1 giờ tối thiểu. Các lựa chọn dưới 1 giờ chỉ phục vụ test UI.
+                                    Smart contract làm tròn lên 1 giờ tối thiểu. Các lựa chọn dưới 1 giờ chỉ phục vụ test UI.
                                 </Text>
                             </YStack>
+                        ) : null}
+                        {durationHours === 0 ? (
+                            <Text fontSize="$2" color="$color10" style={{ marginTop: 8 }}>
+                                "Mặc định" = {selectedType === 1 ? '365 ngày (ủy quyền toàn bộ)' : '30 ngày (truy cập hồ sơ)'}. Bệnh nhân có thể thu hồi bất kỳ lúc nào.
+                            </Text>
                         ) : null}
                     </YStack>
 
@@ -437,9 +448,9 @@ export default function DoctorRequestAccessScreen() {
                                 opacity: isSubmitting ? 0.7 : 1,
                             }}
                         >
-                            {isSubmitting ? null : <Send size={18} color="#FFFFFF" />}
+                            {isSubmitting ? <ActivityIndicator size="small" color="#FFFFFF" /> : <Send size={18} color="#FFFFFF" />}
                             <Text style={{ color: '#FFFFFF', fontWeight: '700', fontSize: 16 }}>
-                                {isSubmitting ? 'Đang gửi...' : 'Gửi yêu cầu truy cập'}
+                                {isSubmitting ? 'Đang gửi yêu cầu...' : 'Gửi yêu cầu truy cập'}
                             </Text>
                         </View>
                     </Pressable>

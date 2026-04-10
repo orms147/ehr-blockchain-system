@@ -402,6 +402,11 @@ router.post('/approve-with-sig', authenticate, requirePatientRole, async (req, r
         if (encryptedKeyPayload && cidHash) {
             // Create or update KeyShare so Doctor can retrieve encrypted key AFTER on-chain claim
             // Use upsert to handle case where KeyShare already exists
+            // expiresAt: null means "no DB-level expiry" — the on-chain Consent
+            // (with its own expireAt) is the source of truth. Previous code used the
+            // EIP-712 signature `deadline` (typically 1 hour) which caused KeyShare
+            // rows to expire prematurely, blocking doctors from decrypting even
+            // though their on-chain consent was still active for 30+ days.
             await prisma.keyShare.upsert({
                 where: {
                     cidHash_senderAddress_recipientAddress: {
@@ -414,7 +419,7 @@ router.post('/approve-with-sig', authenticate, requirePatientRole, async (req, r
                     encryptedPayload: encryptedKeyPayload,
                     senderPublicKey: senderPublicKey || null,
                     status: 'awaiting_claim',
-                    expiresAt: new Date(Number(deadline) * 1000),
+                    expiresAt: null,
                     allowDelegate: request.requestType === 2,
                 },
                 create: {
@@ -424,7 +429,7 @@ router.post('/approve-with-sig', authenticate, requirePatientRole, async (req, r
                     encryptedPayload: encryptedKeyPayload,
                     senderPublicKey: senderPublicKey || null,
                     status: 'awaiting_claim',
-                    expiresAt: new Date(Number(deadline) * 1000),
+                    expiresAt: null,
                     allowDelegate: request.requestType === 2,
                 },
             });

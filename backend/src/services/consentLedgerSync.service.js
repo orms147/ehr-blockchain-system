@@ -16,6 +16,7 @@ import { createPublicClient, http, parseAbi, parseAbiItem } from 'viem';
 import { arbitrumSepolia } from 'viem/chains';
 import prisma from '../config/database.js';
 import { emitToUser, getIO } from './socket.service.js';
+import { sendPushToWallet } from './push.service.js';
 import { createLogger } from '../utils/logger.js';
 
 const log = createLogger('ConsentSync');
@@ -348,6 +349,15 @@ async function handleDelegationRevoked(event) {
 
     emitToUser(patient, 'delegationUpdated', { action: 'revoked', patient, delegatee });
     emitToUser(delegatee, 'delegationUpdated', { action: 'revoked_me', patient, delegatee });
+
+    // Push the delegatee so they know their authority is gone immediately,
+    // even if the app isn't open. Cascade descendants get a separate emit but
+    // we skip pushing them to avoid notification floods on long chains.
+    sendPushToWallet(delegatee, {
+        title: 'Quyền uỷ quyền đã bị thu hồi',
+        body: `Bệnh nhân đã thu hồi quyền uỷ quyền truy cập hồ sơ.`,
+        data: { kind: 'delegation_revoked', patient },
+    }).catch((err) => log.warn('push send failed', { error: err?.message }));
 }
 
 async function handleAccessGrantedViaDelegation(event) {

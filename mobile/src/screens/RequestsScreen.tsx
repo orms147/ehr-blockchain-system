@@ -10,6 +10,9 @@ import useRequests from '../hooks/useRequests';
 import requestService from '../services/request.service';
 import pendingUpdateService from '../services/pendingUpdate.service';
 import authService from '../services/auth.service';
+import consentService from '../services/consent.service';
+import keyShareService from '../services/keyShare.service';
+import recordService from '../services/record.service';
 import { getOrCreateEncryptionKeypair, encryptForRecipient } from '../services/nacl-crypto';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import walletActionService from '../services/walletAction.service';
@@ -320,6 +323,33 @@ export default function RequestsScreen() {
         const reqId = request.requestId || request.id;
         if (!reqId) { Alert.alert('Lỗi', 'Thiếu mã yêu cầu'); return; }
         if (approvingId) return; // prevent double tap
+
+        // Pre-check: doctor verification status (same as RecordDetailScreen share flow).
+        // If doctor is unverified, warn patient that the record will only be
+        // readable AFTER the doctor gets verified by an organization on-chain.
+        const doctorAddr = (request.requesterAddress || '').toLowerCase();
+        if (doctorAddr) {
+            try {
+                const ctx = await consentService.fetchGrantContext(doctorAddr);
+                if (ctx?.isDoctor && !ctx?.isVerifiedDoctor) {
+                    const confirmed = await new Promise<boolean>((resolve) => {
+                        Alert.alert(
+                            'Bác sĩ chưa xác minh',
+                            'Bác sĩ này chưa được tổ chức y tế xác minh on-chain. Hồ sơ bạn cấp quyền sẽ CHỈ ĐỌC ĐƯỢC sau khi họ được xác minh.\n\nBạn có muốn tiếp tục?',
+                            [
+                                { text: 'Huỷ', style: 'cancel', onPress: () => resolve(false) },
+                                { text: 'Vẫn duyệt', style: 'destructive', onPress: () => resolve(true) },
+                            ],
+                            { cancelable: true, onDismiss: () => resolve(false) }
+                        );
+                    });
+                    if (!confirmed) return;
+                }
+            } catch {
+                // If check fails, continue with approval — on-chain is the final gate
+            }
+        }
+
         setApprovingId(reqId);
         try {
             const { walletClient, address } = await walletActionService.getWalletContext();
@@ -357,6 +387,47 @@ export default function RequestsScreen() {
                 request.cidHash || undefined,
                 senderPublicKey || undefined
             );
+
+            // CASCADE: share keys for ALL other versions in the record chain
+            // (parent + children) so doctor can view the full history — same as
+            // RecordDetailScreen.performShare cascade logic.
+            try {
+                const localRecordsStr2 = await AsyncStorage.getItem('ehr_local_records');
+                const localRecords2 = localRecordsStr2 ? JSON.parse(localRecordsStr2) : {};
+                const myKeypair2 = await getOrCreateEncryptionKeypair(
+                    (await walletActionService.getWalletContext()).walletClient, address
+                );
+                const docKeyRes2 = await authService.getEncryptionKey(request.requesterAddress);
+                const doctorPubKey2 = docKeyRes2?.encryptionPublicKey;
+
+                if (doctorPubKey2 && request.cidHash) {
+                    const chainRes: any = await recordService.getChainCids(request.cidHash);
+                    const allVersions = (chainRes?.records || []).filter(
+                        (v: any) => v?.cidHash && v.cidHash !== request.cidHash
+                    );
+
+                    for (const v of allVersions) {
+                        const vLocal = localRecords2[v.cidHash];
+                        if (!vLocal?.cid || !vLocal?.aesKey) continue;
+                        const vPayload = JSON.stringify({ cid: vLocal.cid, aesKey: vLocal.aesKey });
+                        const vEncrypted = encryptForRecipient(vPayload, doctorPubKey2, myKeypair2.secretKey);
+                        try {
+                            await keyShareService.shareKey({
+                                cidHash: v.cidHash,
+                                recipientAddress: request.requesterAddress || '',
+                                encryptedPayload: vEncrypted,
+                                senderPublicKey: myKeypair2.publicKey,
+                                expiresAt: null,
+                            });
+                        } catch (e) {
+                            console.warn('Cascade keyShare failed for version', v.cidHash, e);
+                        }
+                    }
+                }
+            } catch (cascadeErr) {
+                // Non-fatal — main approval succeeded, cascade is best-effort
+                console.warn('Cascade keyShare error:', cascadeErr);
+            }
 
             Alert.alert('Thành công', 'Đã phê duyệt và cấp quyền truy cập.');
             refresh();

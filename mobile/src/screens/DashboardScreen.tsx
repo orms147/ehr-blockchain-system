@@ -161,10 +161,8 @@ export default function DashboardScreen({ navigation }: any) {
             setIsRefreshing(false);
         }
     }, [refetchQuota, queryClient]);
-    const uploadsRemaining = quota?.uploadsRemaining ?? null;
-    const uploadsLimit = quota?.limits?.uploadsPerMonth ?? 100;
-    const revokesRemaining = quota?.revokesRemaining ?? null;
-    const revokesLimit = quota?.limits?.revokesPerMonth ?? 20;
+    const signaturesRemaining = quota?.signaturesRemaining ?? null;
+    const signaturesLimit = quota?.signaturesLimit ?? 100;
 
     const recentRecords = (records || []).slice(0, 3);
     const pendingCount = requests.length;
@@ -307,20 +305,13 @@ export default function DashboardScreen({ navigation }: any) {
                             Lượt giao dịch on-chain miễn phí (tháng này)
                         </Text>
                     </XStack>
-                    <XStack style={{ gap: 12 }}>
-                        <View style={{ flex: 1 }}>
-                            <Text style={{ fontSize: 11, color: EHR_ON_SURFACE_VARIANT }}>Tạo / cập nhật hồ sơ</Text>
-                            <Text style={{ fontSize: 18, fontWeight: '700', color: EHR_PRIMARY, marginTop: 2 }}>
-                                {uploadsRemaining ?? '—'}<Text style={{ fontSize: 12, color: EHR_ON_SURFACE_VARIANT, fontWeight: '400' }}> / {uploadsLimit}</Text>
-                            </Text>
-                        </View>
-                        <View style={{ flex: 1 }}>
-                            <Text style={{ fontSize: 11, color: EHR_ON_SURFACE_VARIANT }}>Thu hồi truy cập</Text>
-                            <Text style={{ fontSize: 18, fontWeight: '700', color: EHR_SECONDARY, marginTop: 2 }}>
-                                {revokesRemaining ?? '—'}<Text style={{ fontSize: 12, color: EHR_ON_SURFACE_VARIANT, fontWeight: '400' }}> / {revokesLimit}</Text>
-                            </Text>
-                        </View>
-                    </XStack>
+                    <View>
+                        <Text style={{ fontSize: 11, color: EHR_ON_SURFACE_VARIANT }}>Chữ ký còn lại tháng này</Text>
+                        <Text style={{ fontSize: 28, fontWeight: '800', color: EHR_PRIMARY, marginTop: 2 }}>
+                            {signaturesRemaining ?? '—'}
+                            <Text style={{ fontSize: 14, color: EHR_ON_SURFACE_VARIANT, fontWeight: '400' }}> / {signaturesLimit}</Text>
+                        </Text>
+                    </View>
                     {quota?.message ? (
                         <Text style={{ fontSize: 11, color: EHR_ON_SURFACE_VARIANT, marginTop: 8 }}>
                             {quota.message}

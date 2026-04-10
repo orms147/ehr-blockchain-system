@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { Alert, Image, Pressable, ScrollView, TextInput, type KeyboardTypeOptions } from 'react-native';
+import { ActivityIndicator, Alert, Image, Pressable, ScrollView, TextInput, type KeyboardTypeOptions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
@@ -888,7 +888,7 @@ export default function CreateRecordScreen({ navigation, route: navRoute }: any)
                     onPress={handleSubmit}
                 >
                     <XStack style={{ alignItems: 'center', gap: 10 }}>
-                        <FilePlus2 size={18} color={EHR_ON_PRIMARY} />
+                        {isSubmitting ? <ActivityIndicator size="small" color={EHR_ON_PRIMARY} /> : <FilePlus2 size={18} color={EHR_ON_PRIMARY} />}
                         <Text color={EHR_ON_PRIMARY} fontWeight="800">{isSubmitting ? (isUpdateMode ? 'Đang cập nhật...' : 'Đang tạo hồ sơ...') : (isUpdateMode ? 'Cập nhật hồ sơ' : 'Tạo hồ sơ mới')}</Text>
                     </XStack>
                 </Button>

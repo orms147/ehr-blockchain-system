@@ -4,6 +4,8 @@ import { z } from 'zod';
 import { authenticate } from '../middleware/auth.js';
 import { requireOnChainRoles } from '../middleware/onChainRole.js';
 import prisma from '../config/database.js';
+import { publicClient, CONTRACT_ADDRESSES } from '../config/blockchain.js';
+import { ACCESS_CONTROL_ABI } from '../config/contractABI.js';
 
 const router = Router();
 const requireDoctorRole = requireOnChainRoles('doctor');
@@ -118,10 +120,27 @@ router.post('/revoke/:id', authenticate, async (req, res, next) => {
             return res.status(404).json({ error: 'Không tìm thấy quyền truy cập khẩn cấp' });
         }
 
-        // Only patient or org admin can revoke
+        // Only patient OR an active org admin can revoke. Org admins can override
+        // emergency access for governance reasons (e.g. doctor abusing the privilege).
+        // The on-chain canAccess walk is the source of truth for permissions; here
+        // we only check the AccessControl flag because the emergency table is purely
+        // off-chain for this DATN scope.
         if (emergency.patientAddress !== userAddress) {
-            // TODO: Check if user is org admin
-            return res.status(403).json({ error: 'Không có quyền thu hồi' });
+            let isOrgAdmin = false;
+            try {
+                isOrgAdmin = await publicClient.readContract({
+                    address: CONTRACT_ADDRESSES.AccessControl,
+                    abi: ACCESS_CONTROL_ABI,
+                    functionName: 'isActiveOrgAdmin',
+                    args: [userAddress],
+                });
+            } catch (err) {
+                // If chain read fails, fall back to deny — fail closed
+                console.warn('isActiveOrgAdmin check failed', err?.message || err);
+            }
+            if (!isOrgAdmin) {
+                return res.status(403).json({ error: 'Không có quyền thu hồi' });
+            }
         }
 
         await prisma.emergencyAccess.update({
