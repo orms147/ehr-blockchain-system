@@ -13,19 +13,44 @@ const CONSENT_LEDGER_ADDRESS = process.env.EXPO_PUBLIC_CONSENT_LEDGER_ADDRESS;
  * so we cannot use the relayer (which would make relayer the sender).
  * Caller must have allowDelegate=true on a prior consent for rootCidHash.
  */
+/**
+ * Doctor A re-shares a record to Doctor B via per-record delegation.
+ * Calls ConsentLedger.grantUsingRecordDelegation (msg.sender = doctor A).
+ *
+ * SECURITY (defense-in-depth): clamp expireAt to sender's own consent expiry
+ * so B cannot outlive A. Contract also enforces this (FIX audit #8), but we
+ * cap client-side too so the user sees the correct duration in the UI.
+ *
+ * @param {object} params
+ * @param {string} params.patientAddress
+ * @param {string} params.granteeAddress
+ * @param {string} params.rootCidHash
+ * @param {string} params.aesKey
+ * @param {number} [params.expiresAtMs]
+ * @param {number} [params.senderConsentExpireAtSec]
+ */
 export async function delegateOnChain({
     patientAddress,
     granteeAddress,
     rootCidHash,
     aesKey,
     expiresAtMs,
+    senderConsentExpireAtSec = 0,
 }) {
     if (!CONSENT_LEDGER_ADDRESS) {
         throw new Error('Thiếu EXPO_PUBLIC_CONSENT_LEDGER_ADDRESS trong env.');
     }
     const { walletClient, account } = await walletActionService.getWalletContext();
     const encKeyHash = keccak256(toBytes(aesKey));
-    const expireAt = expiresAtMs ? Math.floor(expiresAtMs / 1000) : 0;
+    let expireAt = expiresAtMs ? Math.floor(expiresAtMs / 1000) : 0;
+
+    // Defense-in-depth: cap to sender's own consent expiry.
+    // Contract enforces this too (FIX audit #8) but capping here gives correct UX.
+    if (senderConsentExpireAtSec > 0) {
+        if (expireAt === 0 || expireAt > senderConsentExpireAtSec) {
+            expireAt = senderConsentExpireAtSec;
+        }
+    }
 
     const publicClient = createPublicClient({
         chain: arbitrumSepolia,
@@ -47,7 +72,7 @@ export async function delegateOnChain({
     });
 
     await publicClient.waitForTransactionReceipt({ hash });
-    return { txHash: hash, encKeyHash };
+    return { txHash: hash, encKeyHash, clampedExpireAt: expireAt };
 }
 
 /**

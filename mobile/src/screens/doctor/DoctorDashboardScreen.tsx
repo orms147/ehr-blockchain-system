@@ -361,6 +361,9 @@ export default function DoctorDashboardScreen() {
                 date: displayDate,
                 createdAt: record?.createdAt ? new Date(record.createdAt).toISOString() : null,
                 createdByDisplay: patientAddress ? `BN. ${patientAddress.substring(0, 8)}...${patientAddress.slice(-4)}` : 'Bệnh nhân',
+                ownerAddress: patientAddress,
+                allowDelegate: (record as any)?.allowDelegate ?? false,
+                includeUpdates: (record as any)?.includeUpdates ?? true,
             },
         });
     };

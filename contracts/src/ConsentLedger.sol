@@ -541,12 +541,23 @@ contract ConsentLedger is EIP712, ReentrancyGuard, IConsentLedger {
         }
         if (!senderConsent.allowDelegate) revert Unauthorized();
 
+        // FIX (audit #8): Cap new consent expiry to sender's own expiry.
+        // A delegated doctor must NOT grant access that outlives their own.
+        // Same pattern as grantUsingDelegation (bulk delegation path).
+        uint40 finalExpiry = expireAt;
+        if (senderConsent.expireAt != FOREVER) {
+            if (finalExpiry == 0 || finalExpiry > senderConsent.expireAt) {
+                finalExpiry = senderConsent.expireAt;
+            }
+        }
+        if (finalExpiry != 0 && finalExpiry <= uint40(block.timestamp)) revert InvalidExpire();
+
         _grantConsent(
             patient,
             newGrantee,
             rootCidHash,
             encKeyHash,
-            expireAt,
+            finalExpiry,
             false,
             false
         );

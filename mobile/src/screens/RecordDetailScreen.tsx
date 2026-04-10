@@ -13,9 +13,10 @@ import { getOrCreateEncryptionKeypair, decryptFromSender, encryptForRecipient } 
 import { importAESKey, decryptData } from '../services/crypto';
 import ipfsService from '../services/ipfs.service';
 import keyShareService from '../services/keyShare.service';
-import consentService from '../services/consent.service';
+import consentService, { delegateOnChain } from '../services/consent.service';
 import walletActionService from '../services/walletAction.service';
 import authService from '../services/auth.service';
+import { computeCidHash } from '../utils/eip712';
 import {
     EHR_ERROR,
     EHR_ERROR_CONTAINER,
@@ -279,16 +280,72 @@ function classifyDecryptError(error: any): string {
             console.warn('Could not resolve chain root, using current version', e);
         }
 
-        // 1. ON-CHAIN CONSENT — patient signs EIP-712, relayer submits grantBySig.
-        // cid/aesKey here become rootCidHash/encKeyHash — always the chain root.
-        const grantResult = await consentService.grantConsentOnChain({
-            granteeAddress: address,
-            cid: rootCid,
-            aesKey: rootAesKey,
-            expiresAtMs,
-            includeUpdates: shareType !== 'read-only',
-            allowDelegate: shareType === 'read-delegate',
-        });
+        // 1. ON-CHAIN CONSENT
+        // Two paths depending on who is sharing:
+        //   A. PATIENT (owner) → grantBySig via relayer (EIP-712, gasless)
+        //   B. DOCTOR (delegated, allowDelegate=true) → grantUsingRecordDelegation
+        //      (direct call, doctor pays gas, msg.sender must be the doctor)
+        let grantResult: any;
+        if (iAmOwner) {
+            // Path A: patient signs EIP-712, relayer submits grantBySig
+            grantResult = await consentService.grantConsentOnChain({
+                granteeAddress: address,
+                cid: rootCid,
+                aesKey: rootAesKey,
+                expiresAtMs,
+                includeUpdates: shareType !== 'read-only',
+                allowDelegate: shareType === 'read-delegate',
+            });
+        } else {
+            // Path B: doctor re-shares via per-record delegation.
+            // Contract: grantUsingRecordDelegation(patient, newGrantee, rootCidHash, encKeyHash, expireAt)
+            // Requires sender to have consent with allowDelegate=true for this rootCidHash.
+            // FIX audit #8: new consent MUST NOT outlive sender's own consent.
+            const patientAddr = (record as any)?.ownerAddress || ownerAddrLc;
+            if (!patientAddr) {
+                Alert.alert('Lỗi', 'Không xác định được địa chỉ bệnh nhân (owner) của hồ sơ này.');
+                return;
+            }
+            const rootCidHash = computeCidHash(rootCid);
+
+            // Read sender's own consent expiry to clamp the new grant.
+            // If the record being viewed has an expiresAt from KeyShare, use that.
+            // Otherwise read on-chain getConsent for exact expiry.
+            let senderExpireSec = 0;
+            try {
+                const myKeyShare = await keyShareService.getKeyForRecord(record.cidHash);
+                if (myKeyShare?.expiresAt) {
+                    senderExpireSec = Math.floor(new Date(myKeyShare.expiresAt).getTime() / 1000);
+                }
+            } catch {}
+
+            // Warn doctor if their own access is shorter than requested duration.
+            if (senderExpireSec > 0 && expiresAtMs) {
+                const requestedExpireSec = Math.floor(expiresAtMs / 1000);
+                if (requestedExpireSec > senderExpireSec) {
+                    const remainingH = Math.max(0, Math.floor((senderExpireSec * 1000 - Date.now()) / 3600000));
+                    Alert.alert(
+                        'Thời hạn bị giới hạn',
+                        `Bạn chỉ còn ~${remainingH} giờ truy cập. Thời hạn chia sẻ cho bác sĩ mới sẽ bị giới hạn bằng thời hạn của bạn.`,
+                    );
+                }
+            }
+
+            const delegateResult = await delegateOnChain({
+                patientAddress: patientAddr,
+                granteeAddress: address,
+                rootCidHash,
+                aesKey: rootAesKey,
+                expiresAtMs,
+                senderConsentExpireAtSec: senderExpireSec,
+            });
+            grantResult = {
+                txHash: delegateResult.txHash,
+                signaturesRemaining: '—',
+                isDoctor: true,
+                isVerifiedDoctor: true,
+            };
+        }
 
         // 2. Off-chain encrypted payload (blind mailbox)
         const { walletClient, address: myAddress } = await walletActionService.getWalletContext();

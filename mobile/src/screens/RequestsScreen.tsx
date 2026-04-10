@@ -95,8 +95,9 @@ const formatDate = (dateStr?: string) => {
 
 const getRequestTypeLabel = (reqType?: number) => {
     switch (reqType) {
-        case 0: return 'Chỉ xem';
-        case 1: return 'Toàn quyền';
+        case 0: return 'Đọc & cập nhật';
+        case 1: return 'Ủy quyền toàn bộ';
+        case 2: return 'Đọc & ủy quyền lại';
         case 2: return 'Khẩn cấp';
         default: return 'Không rõ';
     }
