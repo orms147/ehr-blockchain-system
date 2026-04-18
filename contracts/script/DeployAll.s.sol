@@ -66,6 +66,10 @@ contract DeployAll is Script {
         // FIX (audit #3): wire AccessControl so canAccess() can cascade-revoke
         // consents granted to doctors whose verification was later revoked.
         consentLedger.setAccessControl(address(accessControl));
+        // Root-walk refactor: wire RecordRegistry so canAccess() can walk any
+        // cidHash to its canonical root and apply consent there. Enables
+        // "grant once at V2 → covers V1/V2/V3" semantic on-chain.
+        consentLedger.setRecordRegistry(address(recordRegistry));
         console.log("ConsentLedger configured");
 
 

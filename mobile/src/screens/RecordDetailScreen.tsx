@@ -4,7 +4,8 @@ import QRCode from 'react-native-qrcode-svg';
 import recordService from '../services/record.service';
 import { ActivityIndicator, Alert, Image, Modal, Pressable, ScrollView, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { QrCode, Lock, Clock, FileText, User, Share2, Unlock, X, FilePlus2 } from 'lucide-react-native';
+import { QrCode, Lock, Clock, FileText, User, Share2, Unlock, X, FilePlus2, Copy } from 'lucide-react-native';
+import * as Clipboard from 'expo-clipboard';
 import useAuthStore from '../store/authStore';
 import { YStack, XStack, Text, Button, View } from 'tamagui';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -17,6 +18,8 @@ import consentService, { delegateOnChain } from '../services/consent.service';
 import walletActionService from '../services/walletAction.service';
 import authService from '../services/auth.service';
 import { computeCidHash } from '../utils/eip712';
+import { createPublicClient, http } from 'viem';
+import { arbitrumSepolia } from 'viem/chains';
 import {
     EHR_ERROR,
     EHR_ERROR_CONTAINER,
@@ -31,6 +34,7 @@ import {
     EHR_SURFACE_LOW,
     EHR_SURFACE_LOWEST,
 } from '../constants/uiColors';
+import { formatExpiry } from '../utils/dateFormatting';
 
 type RouteRecord = {
     cidHash?: string;
@@ -139,10 +143,18 @@ export default function RecordDetailScreen({ route, navigation }: any) {
 
     const decryptedImage = useMemo(() => extractImageFromPayload(decryptedData), [decryptedData]);
 
+    const [ancestorKeyWarning, setAncestorKeyWarning] = useState(false);
+
     const decodeSharedKeyPayload = async (cidHash?: string) => {
         const sharedKey = await keyShareService.getKeyForRecord(cidHash);
         if (!sharedKey) {
             throw new Error('Không tìm thấy key giải mã. Có thể hồ sơ này chưa được chia sẻ key cho bạn.');
+        }
+
+        // If backend returned a key from an ancestor version (different cidHash),
+        // the decrypted content will be from that ancestor, not this version.
+        if (sharedKey.isAncestorKey) {
+            setAncestorKeyWarning(true);
         }
 
         if (sharedKey.status === 'pending' && sharedKey.id) {
@@ -212,8 +224,11 @@ function classifyDecryptError(error: any): string {
     if (code === 'KEY_SHARE_NOT_FOUND' || raw.includes('no key share found')) {
         return 'Bạn chưa được chia sẻ key cho hồ sơ này.';
     }
+    if (code === 'KEY_NOT_SHARED_FOR_VERSION') {
+        return 'Bệnh nhân chưa chia sẻ khoá giải mã cho đúng phiên bản này. Hãy yêu cầu bệnh nhân chia sẻ lại.';
+    }
     if (code === 'KEY_SHARE_REVOKED' || raw.includes('revoked')) {
-        return 'Quyền truy cập hồ sơ này đã bị thu hồi.';
+        return 'Bệnh nhân đã thu hồi quyền truy cập hồ sơ này. Vui lòng yêu cầu lại nếu cần.';
     }
     if (code === 'KEY_SHARE_EXPIRED' || raw.includes('expired')) {
         return 'Quyền truy cập đã hết hạn. Vui lòng yêu cầu gia hạn.';
@@ -307,6 +322,28 @@ function classifyDecryptError(error: any): string {
                 return;
             }
             const rootCidHash = computeCidHash(rootCid);
+
+            // Option B: check if grantee already has access → warn about overwrite
+            try {
+                const pc = createPublicClient({ chain: arbitrumSepolia, transport: http('https://sepolia-rollup.arbitrum.io/rpc') });
+                const CONSENT_ADDR = process.env.EXPO_PUBLIC_CONSENT_LEDGER_ADDRESS as `0x${string}`;
+                const alreadyHas = await pc.readContract({
+                    address: CONSENT_ADDR,
+                    abi: [{ name: 'canAccess', type: 'function', stateMutability: 'view',
+                        inputs: [{ name: 'p', type: 'address' }, { name: 'g', type: 'address' }, { name: 'c', type: 'bytes32' }],
+                        outputs: [{ type: 'bool' }] }],
+                    functionName: 'canAccess',
+                    args: [patientAddr as `0x${string}`, address as `0x${string}`, rootCidHash],
+                });
+                if (alreadyHas) {
+                    Alert.alert(
+                        'Bác sĩ đã có quyền',
+                        'Bác sĩ này đã có quyền truy cập. Chia sẻ sẽ GHI ĐÈ quyền cũ. Để thay đổi, bệnh nhân nên thu hồi quyền cũ trước.',
+                        [{ text: 'Đã hiểu' }],
+                    );
+                    return;
+                }
+            } catch { /* proceed if check fails */ }
 
             // Read sender's own consent expiry to clamp the new grant.
             // If the record being viewed has an expiresAt from KeyShare, use that.
@@ -500,6 +537,64 @@ function classifyDecryptError(error: any): string {
                 }
             }
 
+            // Pre-check 3 (Option B): if doctor already has access, block downgrade.
+            // On-chain consent is a single entry per (patient, doctor, root). Re-sharing
+            // with lower permissions overwrites BUT old KeyShare rows for other versions
+            // survive — creating inconsistency. Require revoke first.
+            if (iAmOwner && ctx?.isDoctor) {
+                try {
+                    const existingKeyShare = await keyShareService.getKeyForRecord(record.cidHash);
+                    if (existingKeyShare && existingKeyShare.encryptedPayload) {
+                        const oldDelegate = existingKeyShare.allowDelegate === true;
+                        const oldInclude = existingKeyShare.includeUpdates !== false;
+                        const newDelegate = shareType === 'read-delegate';
+                        const newInclude = shareType !== 'read-only';
+
+                        // Flag downgrade: old has more permission flags than new
+                        if ((oldDelegate && !newDelegate) || (oldInclude && !newInclude)) {
+                            await new Promise<void>((resolve) => {
+                                Alert.alert(
+                                    'Bác sĩ đã có quyền cao hơn',
+                                    `Bác sĩ này đã có quyền "${oldDelegate ? 'Ủy quyền lại' : oldInclude ? 'Đọc & cập nhật' : 'Chỉ đọc'}".\n\n` +
+                                    'Để giới hạn quyền, hãy THU HỒI quyền cũ trong "Nhật ký truy cập" trước, rồi chia sẻ lại với quyền mới.',
+                                    [{ text: 'Đã hiểu', onPress: () => resolve() }],
+                                    { cancelable: true, onDismiss: () => resolve() }
+                                );
+                            });
+                            setIsSharing(false);
+                            return;
+                        }
+
+                        // Duration downgrade: old expires later than new.
+                        // Null expiresAt means forever (matches contract FOREVER sentinel).
+                        // Only block if old consent is still ACTIVE — expired consent has no
+                        // quyền left to "downgrade".
+                        const oldExpiryMs = existingKeyShare.expiresAt
+                            ? new Date(existingKeyShare.expiresAt).getTime()
+                            : Number.POSITIVE_INFINITY;
+                        const newExpiryMs = shareExpiryHours
+                            ? Date.now() + shareExpiryHours * 3600 * 1000
+                            : Number.POSITIVE_INFINITY;
+                        const oldStillActive = oldExpiryMs > Date.now();
+                        if (oldStillActive && newExpiryMs < oldExpiryMs) {
+                            await new Promise<void>((resolve) => {
+                                Alert.alert(
+                                    'Bác sĩ đã có quyền dài hạn hơn',
+                                    `Quyền hiện tại hết hạn: ${formatExpiry(existingKeyShare.expiresAt)}.\n\n` +
+                                    'Để rút ngắn thời hạn, hãy THU HỒI quyền cũ trong "Nhật ký truy cập" trước, rồi chia sẻ lại với thời hạn mới.',
+                                    [{ text: 'Đã hiểu', onPress: () => resolve() }],
+                                    { cancelable: true, onDismiss: () => resolve() }
+                                );
+                            });
+                            setIsSharing(false);
+                            return;
+                        }
+                    }
+                } catch {
+                    // No existing access or check failed → proceed normally
+                }
+            }
+
             await performShare(address);
         } catch (err: any) {
             const raw = String(err?.data?.message || err?.data?.error || err?.message || '').toLowerCase();
@@ -620,6 +715,24 @@ function classifyDecryptError(error: any): string {
                     </XStack>
                 </View>
 
+                {/* Access info badges (read-only, expiry) for shared records */}
+                {!iAmOwner ? (
+                    <XStack style={{ flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
+                        {(record as any)?.includeUpdates === false ? (
+                            <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#FEF3C7', borderColor: '#F59E0B', borderWidth: 1, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4, gap: 4 }}>
+                                <Lock size={12} color="#D97706" />
+                                <Text style={{ fontSize: 11, fontWeight: '700', color: '#92400E' }}>Chỉ đọc</Text>
+                            </View>
+                        ) : null}
+                        {(record as any)?.allowDelegate ? (
+                            <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: EHR_PRIMARY_FIXED, borderColor: EHR_PRIMARY, borderWidth: 1, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4, gap: 4 }}>
+                                <Share2 size={12} color={EHR_PRIMARY} />
+                                <Text style={{ fontSize: 11, fontWeight: '700', color: EHR_PRIMARY }}>Chia sẻ lại được</Text>
+                            </View>
+                        ) : null}
+                    </XStack>
+                ) : null}
+
                 {!decryptedData ? (
                     <View style={{ borderWidth: 1, borderColor: decryptError ? EHR_ERROR : EHR_OUTLINE_VARIANT, borderRadius: 20, padding: 14, marginBottom: 18, backgroundColor: decryptError ? EHR_ERROR_CONTAINER : EHR_SURFACE_LOWEST }}>
                         <XStack style={{ alignItems: 'center', marginBottom: 8 }}>
@@ -640,6 +753,15 @@ function classifyDecryptError(error: any): string {
                             <Unlock size={20} color={EHR_PRIMARY} style={{ marginRight: 8 }} />
                             <Text fontSize="$5" fontWeight="700" style={{ color: EHR_PRIMARY }}>Nội dung đã giải mã</Text>
                         </XStack>
+
+                        {ancestorKeyWarning ? (
+                            <View style={{ backgroundColor: '#FEF3C7', borderColor: '#F59E0B', borderWidth: 1, borderRadius: 10, padding: 10, marginBottom: 12, flexDirection: 'row', alignItems: 'flex-start' }}>
+                                <Clock size={14} color="#D97706" style={{ marginTop: 2, marginRight: 8 }} />
+                                <Text style={{ flex: 1, fontSize: 12, color: '#92400E' }}>
+                                    Nội dung hiển thị là của phiên bản trước đó. Khoá giải mã cho phiên bản này chưa được chia sẻ — hãy yêu cầu bệnh nhân chia sẻ lại.
+                                </Text>
+                            </View>
+                        ) : null}
 
                         {decryptedImage ? (
                             <YStack style={{ marginBottom: 12 }}>
@@ -825,7 +947,7 @@ function classifyDecryptError(error: any): string {
                                 borderRadius: 999,
                             }}>
                                 <Text fontSize={11} fontWeight="700" style={{ color: EHR_PRIMARY }}>
-                                    v{chain.version || 1}
+                                    v{chain?.version || 1}
                                 </Text>
                             </View>
                         </XStack>
@@ -1238,16 +1360,34 @@ function classifyDecryptError(error: any): string {
                                 </View>
                             ) : null}
                             <View style={{ backgroundColor: EHR_PRIMARY_FIXED, borderRadius: 14, padding: 14 }}>
-                                <Text
-                                    fontSize="$2"
-                                    style={{ color: EHR_PRIMARY, fontFamily: 'monospace', lineHeight: 22 }}
-                                    selectable
-                                >
-                                    {record.cidHash || 'Không có CID'}
-                                </Text>
+                                <XStack style={{ alignItems: 'flex-start', gap: 10 }}>
+                                    <Text
+                                        fontSize="$2"
+                                        style={{ color: EHR_PRIMARY, fontFamily: 'monospace', lineHeight: 22, flex: 1 }}
+                                        selectable
+                                    >
+                                        {record.cidHash || 'Không có CID'}
+                                    </Text>
+                                    {record.cidHash ? (
+                                        <Pressable
+                                            onPress={async () => {
+                                                await Clipboard.setStringAsync(record.cidHash!);
+                                                Alert.alert('Đã sao chép', 'CID Hash đã được sao chép vào clipboard.');
+                                            }}
+                                            hitSlop={10}
+                                            style={{
+                                                padding: 6,
+                                                borderRadius: 8,
+                                                backgroundColor: '#FFFFFF',
+                                            }}
+                                        >
+                                            <Copy size={16} color={EHR_PRIMARY} />
+                                        </Pressable>
+                                    ) : null}
+                                </XStack>
                             </View>
                             <Text fontSize="$2" color="$color10" style={{ marginTop: 10 }}>
-                                Nhấn giữ để sao chép mã hoặc dùng QR phía trên.
+                                Bấm biểu tượng sao chép hoặc dùng QR phía trên.
                             </Text>
                         </View>
                     </Pressable>

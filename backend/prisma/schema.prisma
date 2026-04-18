@@ -226,23 +226,33 @@ model AccessRequest {
   signature          String?  @db.Text                  // Patient's EIP-712 signature (for Doctor to claim)
   signatureDeadline  BigInt?                            // Deadline for signature validity
   createdAt          DateTime @default(now())
-  deadline           DateTime                           // When request expires
+  deadline           DateTime                           // When request expires (patient approval window)
+  // Consent lifetime in hours (passed to contract at request time).
+  // Separate from `deadline` which is the approval window. Used by
+  // approve-with-sig to compute KeyShare.expiresAt = now + N hours so the
+  // UI can display an accurate countdown without querying on-chain state.
+  consentDurationHours Int?
 
   @@index([patientAddress, status])
   @@index([requesterAddress, status])
   @@index([requestId, status])
 }
 
-// Consent tracking (mirrors on-chain consents)
+// Consent tracking (mirrors on-chain consents).
+// cidHash is ALWAYS the canonical root of the record chain — the contract
+// walks input → root at grant time so this field is stable across versions.
+// anchorCidHash records which version was originally granted, used to enforce
+// "Chỉ đọc 1 version" (includeUpdates=false) on-chain.
 model Consent {
   id             String   @id @default(uuid())
   patientAddress String   @db.VarChar(42)
   granteeAddress String   @db.VarChar(42)
-  cidHash        String   @db.VarChar(66)
+  cidHash        String   @db.VarChar(66)  // root cidHash
+  anchorCidHash  String?  @db.VarChar(66)  // original input cidHash (may equal cidHash)
   grantedAt      DateTime @default(now())
   expiresAt      DateTime
   status         String   @default("active")  // active, revoked, expired
-  
+
   @@unique([patientAddress, granteeAddress, cidHash])
   @@index([patientAddress])
   @@index([granteeAddress])

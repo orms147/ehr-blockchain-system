@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { DefaultTheme, NavigationContainer } from '@react-navigation/native';
 import { navigationRef } from '../lib/navigationRef';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -37,6 +37,7 @@ import SettingsScreen from '../screens/SettingsScreen';
 import EditProfileScreen from '../screens/EditProfileScreen';
 import RoleSelectionScreen from '../screens/RoleSelectionScreen';
 import useAuthStore from '../store/authStore';
+import { healLocalRecordCache } from '../services/localRecordHealer.service';
 import {
     EHR_ON_SURFACE,
     EHR_ON_SURFACE_VARIANT,
@@ -254,6 +255,14 @@ function MainStackNavigator() {
 
 export default function AppNavigator() {
     const { isAuthenticated, isLoading, needsRoleSelection, needsRoleRegistration } = useAuthStore();
+
+    // Run the root-walk migration healer once after login. Idempotent — subsequent
+    // calls noop via AsyncStorage flag.
+    useEffect(() => {
+        if (isAuthenticated) {
+            healLocalRecordCache();
+        }
+    }, [isAuthenticated]);
 
     if (isLoading) {
         return <LoadingSpinner message={'\u0110ang kh\u00F4i ph\u1EE5c phi\u00EAn \u0111\u0103ng nh\u1EADp...'} />;

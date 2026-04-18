@@ -48,6 +48,7 @@ import {
     EHR_TERTIARY,
     EHR_TERTIARY_FIXED,
 } from '../../constants/uiColors';
+import { formatDate, formatExpiry, getExpiryUrgency } from '../../utils/dateFormatting';
 
 const RECORD_REGISTRY_ADDRESS = process.env.EXPO_PUBLIC_RECORD_REGISTRY_ADDRESS as `0x${string}`;
 
@@ -73,6 +74,7 @@ type RequestItem = {
     createdAt?: string;
     cidHash?: string;
     status?: string;
+    deadline?: string;
 };
 
 type PendingUpdateItem = {
@@ -106,13 +108,6 @@ const getStatusConfig = (status?: string) => {
 
 const truncateAddr = (addr?: string) => (addr ? `${addr.substring(0, 8)}...${addr.slice(-4)}` : '???');
 
-const formatDate = (dateStr?: string) => {
-    if (!dateStr) return '';
-    try {
-        const d = new Date(dateStr);
-        return d.toLocaleDateString('vi-VN', { day: '2-digit', month: 'short', year: 'numeric' });
-    } catch { return ''; }
-};
 
 /* ── Animated card wrapper ── */
 function AnimatedCardWrapper({ index, children }: { index: number; children: React.ReactNode }) {
@@ -165,6 +160,19 @@ const OutgoingRequestCard = React.memo(({ item, index }: { item: RequestItem; in
                         </Text>
                     </XStack>
                 ) : null}
+                {item.deadline && item.status === 'pending' ? (() => {
+                    const urgency = getExpiryUrgency(item.deadline);
+                    const urgent = urgency === 'urgent' || urgency === 'soon';
+                    const color = urgency === 'expired' ? EHR_ERROR : urgent ? '#B45309' : EHR_ON_SURFACE_VARIANT;
+                    return (
+                        <XStack style={{ alignItems: 'center', gap: 4, marginTop: 6 }}>
+                            <Clock size={10} color={color} />
+                            <Text style={{ fontSize: 11, color, fontWeight: urgent ? '700' : '500' }}>
+                                BN duyệt trước: {formatExpiry(item.deadline)}
+                            </Text>
+                        </XStack>
+                    );
+                })() : null}
             </View>
         </AnimatedCardWrapper>
     );
@@ -386,6 +394,11 @@ export default function DoctorOutgoingScreen() {
                         const addr = String(r.walletAddress || '').toLowerCase();
                         if (!addr || addr === myAddress.toLowerCase() || addr === String(update.patientAddress).toLowerCase()) continue;
                         if (!r.encryptionPublicKey) continue;
+                        // BUG-F fix: skip recipients whose parent consent has
+                        // includeUpdates=false — they cannot pass canAccess for the
+                        // new version, so creating a KeyShare row for them only
+                        // produces dead storage that backend 403s at claim time.
+                        if (r.includeUpdates === false) continue;
                         try {
                             const enc = encryptForRecipient(payloadJson, r.encryptionPublicKey, myKeypair.secretKey);
                             await keyShareService.shareKey({

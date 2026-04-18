@@ -23,6 +23,7 @@ import {
     EHR_SURFACE_LOWEST,
     EHR_TERTIARY,
 } from '../constants/uiColors';
+import { formatDate as formatDateShared } from '../utils/dateFormatting';
 
 interface RecordCardProps {
     record: any;
@@ -100,16 +101,9 @@ export default function RecordCard({ record, onPress }: RecordCardProps) {
 
     const formatDate = (dateStr?: string) => {
         if (!dateStr) return '';
-        // If the string is already in dd/mm/yyyy form, return as-is.
+        // If already in dd/mm/yyyy form, pass through unchanged (legacy data).
         if (/^\d{1,2}\/\d{1,2}\/\d{2,4}$/.test(dateStr)) return dateStr;
-        try {
-            const d = new Date(dateStr);
-            if (Number.isNaN(d.getTime())) return '';
-            const day = d.getDate().toString().padStart(2, '0');
-            const month = (d.getMonth() + 1).toString().padStart(2, '0');
-            const year = d.getFullYear();
-            return `${day}/${month}/${year}`;
-        } catch { return ''; }
+        return formatDateShared(dateStr);
     };
 
     return (

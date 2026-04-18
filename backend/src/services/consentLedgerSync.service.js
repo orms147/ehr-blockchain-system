@@ -8,6 +8,8 @@
 // revokes and parent-chain invalidation.
 //
 // Events handled:
+//   - ConsentGranted(patient, grantee, rootCidHash, expireAt, allowDelegate)
+//   - ConsentRevoked(patient, grantee, rootCidHash, timestamp)
 //   - DelegationGranted(patient, delegatee, expiresAt, allowSubDelegate)
 //   - DelegationRevoked(patient, delegatee)
 //   - AccessGrantedViaDelegation(patient, newGrantee, byDelegatee, rootCidHash)
@@ -28,6 +30,15 @@ const REORG_SAFETY_BLOCKS = 5;
 const CONTRACT_NAME = 'ConsentLedger';
 
 const EVENTS = {
+    ConsentGranted: parseAbiItem(
+        'event ConsentGranted(address indexed patient, address indexed grantee, bytes32 indexed rootCidHash, bytes32 anchorCidHash, uint40 expireAt, bool allowDelegate)'
+    ),
+    ConsentRevoked: parseAbiItem(
+        'event ConsentRevoked(address indexed patient, address indexed grantee, bytes32 indexed rootCidHash, uint40 timestamp)'
+    ),
+    EmergencyGranted: parseAbiItem(
+        'event EmergencyGranted(address indexed patient, address indexed grantee, bytes32 indexed rootCidHash, bytes32 anchorCidHash, uint40 expireAt)'
+    ),
     DelegationGranted: parseAbiItem(
         'event DelegationGranted(address indexed patient, address indexed delegatee, uint40 expiresAt, bool allowSubDelegate)'
     ),
@@ -412,7 +423,172 @@ async function handleAccessGrantedViaDelegation(event) {
     });
 }
 
+// Walk the record tree rooted at rootCidHash and return every cidHash belonging
+// to that tree. Patient on-chain consent is keyed by root, so a single revoke
+// kills access to every descendant version — we mirror that in DB.
+async function collectDescendantCidHashes(rootCidHash) {
+    const result = new Set([rootCidHash]);
+    const frontier = [rootCidHash];
+    const HARD_CAP = 200;
+    while (frontier.length > 0 && result.size < HARD_CAP) {
+        const batch = frontier.splice(0, frontier.length);
+        const children = await prisma.recordMetadata.findMany({
+            where: { parentCidHash: { in: batch } },
+            select: { cidHash: true },
+        });
+        for (const child of children) {
+            const hash = child.cidHash?.toLowerCase();
+            if (!hash || result.has(hash)) continue;
+            result.add(hash);
+            frontier.push(hash);
+        }
+    }
+    return Array.from(result);
+}
+
+// ConsentGranted. On-chain is the source of truth; we just cache into the
+// Consent mirror table so admin/UI surfaces can list without re-scanning chain.
+async function handleConsentGranted(event) {
+    const patient = normalizeAddress(event.args.patient);
+    const grantee = normalizeAddress(event.args.grantee);
+    const rootCidHash = normalizeHash(event.args.rootCidHash);
+    const anchorCidHash = normalizeHash(event.args.anchorCidHash);
+    const expireAtSec = event.args.expireAt;
+    if (!patient || !grantee || !rootCidHash) return;
+
+    await ensureUserRecord(patient);
+    await ensureUserRecord(grantee);
+
+    // Contract stores expireAt=type(uint40).max as the "forever" sentinel when
+    // caller passes 0. Map that back to null so DB semantics stay consistent
+    // with how mobile writes KeyShare rows.
+    const FOREVER = (1n << 40n) - 1n;
+    const isForever = BigInt(expireAtSec) >= FOREVER;
+    const expiresAtDate = isForever ? null : new Date(Number(expireAtSec) * 1000);
+
+    try {
+        await prisma.consent.upsert({
+            where: {
+                patientAddress_granteeAddress_cidHash: {
+                    patientAddress: patient,
+                    granteeAddress: grantee,
+                    cidHash: rootCidHash,
+                },
+            },
+            update: {
+                status: 'active',
+                expiresAt: expiresAtDate ?? new Date(Number(FOREVER) * 1000),
+                anchorCidHash: anchorCidHash || rootCidHash,
+            },
+            create: {
+                patientAddress: patient,
+                granteeAddress: grantee,
+                cidHash: rootCidHash,
+                status: 'active',
+                expiresAt: expiresAtDate ?? new Date(Number(FOREVER) * 1000),
+                anchorCidHash: anchorCidHash || rootCidHash,
+            },
+        });
+    } catch (err) {
+        log.warn('Consent upsert failed', { patient, grantee, rootCidHash, error: err?.message });
+    }
+
+    log.info('ConsentGranted', { patient, grantee, rootCidHash, expireAtSec: String(expireAtSec) });
+
+    emitToUser(patient, 'consentUpdated', { action: 'granted', patient, grantee, rootCidHash });
+    emitToUser(grantee, 'consentUpdated', { action: 'granted_to_me', patient, grantee, rootCidHash });
+}
+
+// ConsentRevoked. On-chain canAccess will now refuse; we flip every KeyShare row
+// whose cidHash is in the record tree rooted at rootCidHash so the patient's
+// "Nhật ký truy cập" and the doctor's dashboard stop showing stale active rows.
+async function handleConsentRevoked(event) {
+    const patient = normalizeAddress(event.args.patient);
+    const grantee = normalizeAddress(event.args.grantee);
+    const rootCidHash = normalizeHash(event.args.rootCidHash);
+    if (!patient || !grantee || !rootCidHash) return;
+
+    const cidHashes = await collectDescendantCidHashes(rootCidHash);
+
+    const updateResult = await prisma.keyShare.updateMany({
+        where: {
+            senderAddress: patient,
+            recipientAddress: grantee,
+            cidHash: { in: cidHashes },
+            status: { not: 'revoked' },
+        },
+        data: {
+            status: 'revoked',
+            encryptedPayload: '',
+        },
+    });
+
+    try {
+        await prisma.consent.updateMany({
+            where: {
+                patientAddress: patient,
+                granteeAddress: grantee,
+                cidHash: rootCidHash,
+            },
+            data: { status: 'revoked' },
+        });
+    } catch (err) {
+        log.warn('Consent status flip failed', { patient, grantee, rootCidHash, error: err?.message });
+    }
+
+    log.info('ConsentRevoked', {
+        patient,
+        grantee,
+        rootCidHash,
+        keySharesRevoked: updateResult.count,
+        versionCount: cidHashes.length,
+    });
+
+    emitToUser(patient, 'consentUpdated', { action: 'revoked', patient, grantee, rootCidHash });
+    emitToUser(grantee, 'consentUpdated', { action: 'revoked_me', patient, grantee, rootCidHash });
+
+    sendPushToWallet(grantee, {
+        title: 'Quyền truy cập đã bị thu hồi',
+        body: 'Bệnh nhân đã thu hồi quyền xem hồ sơ của bạn.',
+        data: { kind: 'consent_revoked', patient, rootCidHash },
+    }).catch((err) => log.warn('push send failed', { error: err?.message }));
+}
+
+// EmergencyGranted — 24h emergency access, stored separately from normal consent
+// (BUG-D fix). We log it + emit socket for both parties so the UI can show a
+// banner, but we do NOT touch the Consent or KeyShare tables: on-chain is the
+// authority and canAccess OR-checks both storages.
+async function handleEmergencyGranted(event) {
+    const patient = normalizeAddress(event.args.patient);
+    const grantee = normalizeAddress(event.args.grantee);
+    const rootCidHash = normalizeHash(event.args.rootCidHash);
+    const anchorCidHash = normalizeHash(event.args.anchorCidHash);
+    const expireAtSec = event.args.expireAt;
+    if (!patient || !grantee || !rootCidHash) return;
+
+    await ensureUserRecord(patient);
+    await ensureUserRecord(grantee);
+
+    log.info('EmergencyGranted', {
+        patient, grantee, rootCidHash,
+        anchorCidHash,
+        expireAtSec: String(expireAtSec),
+    });
+
+    emitToUser(patient, 'consentUpdated', { action: 'emergencyGranted', patient, grantee, rootCidHash });
+    emitToUser(grantee, 'consentUpdated', { action: 'emergencyGrantedToMe', patient, grantee, rootCidHash });
+
+    sendPushToWallet(patient, {
+        title: 'Truy cập khẩn cấp đã được cấp',
+        body: 'Một bác sĩ vừa kích hoạt quyền truy cập khẩn cấp vào hồ sơ của bạn.',
+        data: { kind: 'emergency_granted', grantee, rootCidHash },
+    }).catch((err) => log.warn('push send failed', { error: err?.message }));
+}
+
 const EVENT_HANDLERS = {
+    ConsentGranted: handleConsentGranted,
+    ConsentRevoked: handleConsentRevoked,
+    EmergencyGranted: handleEmergencyGranted,
     DelegationGranted: handleDelegationGranted,
     DelegationRevoked: handleDelegationRevoked,
     AccessGrantedViaDelegation: handleAccessGrantedViaDelegation,

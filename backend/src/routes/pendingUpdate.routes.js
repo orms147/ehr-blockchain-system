@@ -96,6 +96,22 @@ router.post('/', authenticate, requireDoctorRole, async (req, res, next) => {
             });
         }
 
+        // Check if another doctor already has a pending/approved update for same parent
+        const existingPending = await prisma.pendingUpdate.findFirst({
+            where: {
+                parentCidHash: parentCidHash.toLowerCase(),
+                status: { in: ['pending', 'approved'] },
+            }
+        });
+
+        if (existingPending) {
+            return res.status(409).json({
+                code: 'PENDING_UPDATE_CONFLICT',
+                error: 'Đã có bác sĩ khác đang chờ cập nhật hồ sơ này. Vui lòng đợi hoặc liên hệ bệnh nhân.',
+                message: 'Đã có bác sĩ khác đang chờ cập nhật hồ sơ này.',
+            });
+        }
+
         // Calculate content hash for integrity
         const contentHash = calculateContentHash(encryptedContent);
 
@@ -257,6 +273,35 @@ router.post('/:id/approve', authenticate, requirePatientRole, async (req, res, n
             return res.status(400).json({ code: 'PENDING_UPDATE_EXPIRED', error: 'Yêu cầu đã hết hạn', message: 'Yêu cầu đã hết hạn' });
         }
 
+        // Re-check: parent already has confirmed children (patient may have updated since PendingUpdate was created)
+        const existingChild = await prisma.recordMetadata.findFirst({
+            where: { parentCidHash: update.parentCidHash.toLowerCase(), syncStatus: 'confirmed' },
+        });
+        if (existingChild) {
+            return res.status(400).json({
+                code: 'PARENT_ALREADY_UPDATED',
+                error: 'Hồ sơ gốc đã có bản cập nhật mới. Yêu cầu không còn hợp lệ.',
+                message: 'Hồ sơ gốc đã có bản cập nhật mới. Yêu cầu không còn hợp lệ.',
+            });
+        }
+
+        // Re-check: doctor still has access (delegation may have been revoked)
+        const doctorStillHasAccess = await prisma.keyShare.findFirst({
+            where: {
+                cidHash: update.parentCidHash.toLowerCase(),
+                recipientAddress: update.doctorAddress,
+                status: { in: ['pending', 'claimed'] },
+                OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
+            },
+        });
+        if (!doctorStillHasAccess) {
+            return res.status(403).json({
+                code: 'DOCTOR_ACCESS_REVOKED',
+                error: 'Bác sĩ không còn quyền truy cập hồ sơ này. Yêu cầu bị từ chối.',
+                message: 'Bác sĩ không còn quyền truy cập hồ sơ này. Yêu cầu bị từ chối.',
+            });
+        }
+
         // Update status to approved
         const updated = await prisma.pendingUpdate.update({
             where: { id },
@@ -353,6 +398,17 @@ router.post('/:id/claim', authenticate, requireDoctorRole, async (req, res, next
                 message: update.status === 'pending'
                     ? 'Yêu cầu chưa được bệnh nhân phê duyệt'
                     : `Yêu cầu này đã ${update.status}`,
+            });
+        }
+
+        // Re-check: parent hasn't been updated since approval
+        const existingChild = await prisma.recordMetadata.findFirst({
+            where: { parentCidHash: update.parentCidHash.toLowerCase(), syncStatus: 'confirmed' },
+        });
+        if (existingChild) {
+            return res.status(400).json({
+                code: 'PARENT_ALREADY_UPDATED',
+                error: 'Hồ sơ gốc đã có bản cập nhật mới kể từ khi được phê duyệt. Không thể tiếp tục.',
             });
         }
 

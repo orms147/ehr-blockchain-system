@@ -128,4 +128,9 @@ interface IRecordRegistry {
     function getChildCount(bytes32 parentCidHash) external view returns (uint256);
     function recordExists(bytes32 cidHash) external view returns (bool);
     function getMaxChildrenLimit() external pure returns (uint8);
+
+    /// @notice Returns the parent cidHash of a record. Returns bytes32(0) when
+    /// the record is a root OR does not exist. Lightweight helper used by
+    /// ConsentLedger to walk the record tree during canAccess checks.
+    function parentOf(bytes32 cidHash) external view returns (bytes32);
 }

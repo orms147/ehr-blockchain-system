@@ -46,22 +46,10 @@ import {
     EHR_SURFACE_LOW,
     EHR_SURFACE_LOWEST,
 } from '../constants/uiColors';
+import { formatExpiry } from '../utils/dateFormatting';
 
 const truncateAddr = (addr?: string | null) =>
     addr ? `${addr.substring(0, 8)}...${addr.slice(-6)}` : '???';
-
-const formatDate = (s?: string | null) => {
-    if (!s) return '';
-    try {
-        return new Date(s).toLocaleDateString('vi-VN', {
-            day: '2-digit',
-            month: '2-digit',
-            year: 'numeric',
-        });
-    } catch {
-        return s;
-    }
-};
 
 const ADDRESS_RE = /^0x[a-fA-F0-9]{40}$/;
 
@@ -113,7 +101,7 @@ function DelegationCard({
                         </Text>
                     ) : null}
                     <Text fontSize="$1" color="$color9" marginTop="$1">
-                        Hết hạn: {formatDate(item.expiresAt)}
+                        Hết hạn: {formatExpiry(item.expiresAt)}
                     </Text>
                     {item.scopeNote ? (
                         <Text fontSize="$1" color="$color10" marginTop="$1" numberOfLines={2}>

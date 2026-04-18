@@ -11,6 +11,48 @@ import { createLogger } from '../utils/logger.js';
 const log = createLogger('KeyShareRoutes');
 const router = Router();
 
+/**
+ * Walk the full record chain (ancestors + all descendants) to collect every cidHash.
+ * Used for clean-slate DELETE before re-sharing.
+ */
+async function getChainCidHashes(startCidHash) {
+    const all = new Set();
+    // Walk up to root — root is the record with NO parentCidHash
+    let root = startCidHash.toLowerCase();
+    let cursor = root;
+    let depth = 0;
+    while (cursor && depth < 50) {
+        all.add(cursor.toLowerCase());
+        const rec = await prisma.recordMetadata.findUnique({
+            where: { cidHash: cursor.toLowerCase() },
+            select: { parentCidHash: true },
+        });
+        if (!rec?.parentCidHash) {
+            root = cursor.toLowerCase(); // THIS is the true root
+            break;
+        }
+        cursor = rec.parentCidHash;
+        root = cursor.toLowerCase();
+        depth++;
+    }
+    // Walk down from root (all children recursively, with depth guard)
+    const walkDown = async (cid, d) => {
+        if (d > 50) return; // infinite loop guard
+        all.add(cid.toLowerCase());
+        const children = await prisma.recordMetadata.findMany({
+            where: { parentCidHash: cid.toLowerCase() },
+            select: { cidHash: true },
+        });
+        for (const c of children) {
+            if (!all.has(c.cidHash.toLowerCase())) {
+                await walkDown(c.cidHash, d + 1);
+            }
+        }
+    };
+    await walkDown(root, 0);
+    return [...all];
+}
+
 // Validation schemas
 const createKeyShareSchema = z.object({
     cidHash: z.string().regex(/^0x[a-fA-F0-9]{64}$/),
@@ -157,11 +199,54 @@ router.post('/', authenticate, async (req, res, next) => {
         }
 
         // SECURITY: Only the Owner (Patient) can grant "Delegation Power" (allowDelegate=true).
-        // Doctors/Guardians/Creators sharing to others always grant "Read Only" (allowDelegate=false)
-        // UPDATE: Allow Creator to delegate too (fixes Patient as Creator creating share).
         const finalAllowDelegate = (isOwner || isCreator) ? (allowDelegate === true) : false;
 
-        // INHERITANCE ENFORCEMENT: Check parent expiry
+        // CLEAN SLATE: When owner/creator re-shares, DELETE all old KeyShare rows
+        // for this recipient across the ENTIRE record chain. This prevents stale
+        // rows (expired, revoked, wrong flags) from polluting the doctor's view.
+        // New rows will be created fresh by this request + cascade from mobile.
+        let isReShare = false;
+        if (isOwner || isCreator) {
+            try {
+                const chainCids = await getChainCidHashes(cidHashLower);
+                // Only delete STALE rows (created >60s ago). This prevents cascade
+                // calls (which fire within seconds of the main share) from deleting
+                // rows that the main share or earlier cascade steps just created.
+                const staleThreshold = new Date(Date.now() - 60000);
+                const staleCount = await prisma.keyShare.count({
+                    where: {
+                        recipientAddress: recipientLower,
+                        senderAddress: senderAddress,
+                        cidHash: { in: chainCids },
+                        createdAt: { lt: staleThreshold },
+                    },
+                });
+                if (staleCount > 0) {
+                    const deleted = await prisma.keyShare.deleteMany({
+                        where: {
+                            recipientAddress: recipientLower,
+                            senderAddress: senderAddress,
+                            cidHash: { in: chainCids },
+                            createdAt: { lt: staleThreshold },
+                        },
+                    });
+                    isReShare = true;
+                    log.info('Clean slate: deleted stale KeyShares for re-share', {
+                        recipient: recipientLower,
+                        chainSize: chainCids.length,
+                        deletedCount: deleted.count,
+                    });
+                }
+            } catch (err) {
+                log.warn('Clean slate failed (non-fatal, proceeding with upsert)', { error: err?.message });
+            }
+        }
+
+        // INHERITANCE ENFORCEMENT: Check parent expiry — child cannot outlive parent.
+        // BUT: skip clamping when parent's expiresAt is ALREADY EXPIRED. This prevents
+        // a stale expired parent from poisoning a fresh re-share. When patient re-shares
+        // V3 after V2 has expired, V3 should get the NEW expiry, not be clamped to V2's
+        // old expired date.
         let finalExpiresAt = expiresAt;
 
         if (record.parentCidHash) {
@@ -174,13 +259,15 @@ router.post('/', authenticate, async (req, res, next) => {
 
             if (parentKeyShare && parentKeyShare.expiresAt) {
                 const parentExpiry = new Date(parentKeyShare.expiresAt);
-                const requestedExpiry = finalExpiresAt ? new Date(finalExpiresAt) : null;
-
-                // If parent has expiry, child MUST have expiry <= parent
-                // (If parent is restricted, child cannot be 'Forever' (null) or longer)
-                if (!requestedExpiry || requestedExpiry > parentExpiry) {
-                    log.info('Clamping expiry to parent', { parentExpiry: parentExpiry.toISOString() });
-                    finalExpiresAt = parentExpiry.toISOString();
+                // Only clamp if parent is still ACTIVE (not expired)
+                if (parentExpiry.getTime() > Date.now()) {
+                    const requestedExpiry = finalExpiresAt ? new Date(finalExpiresAt) : null;
+                    if (!requestedExpiry || requestedExpiry > parentExpiry) {
+                        log.info('Clamping expiry to parent', { parentExpiry: parentExpiry.toISOString() });
+                        finalExpiresAt = parentExpiry.toISOString();
+                    }
+                } else {
+                    log.info('Skipping expired parent clamp', { parentExpiry: parentExpiry.toISOString(), cidHash: cidHashLower });
                 }
             }
         }
@@ -203,11 +290,11 @@ router.post('/', authenticate, async (req, res, next) => {
             const isSelfShare = senderAddress.toLowerCase() === recipientLower;
 
             if (existing) {
-                // Preserve 'claimed' if already claimed; otherwise reset to pending
-                // so the new payload must be re-acknowledged by the recipient.
-                const nextStatus = existing.status === 'claimed'
+                // Re-share (clean-slate DELETE ran) or self-share → auto-claim.
+                // Otherwise preserve existing 'claimed' status.
+                const nextStatus = (isSelfShare || isReShare || existing.status === 'claimed')
                     ? 'claimed'
-                    : (isSelfShare ? 'claimed' : 'pending');
+                    : 'pending';
 
                 return tx.keyShare.update({
                     where: { id: existing.id },
@@ -219,10 +306,13 @@ router.post('/', authenticate, async (req, res, next) => {
                         status: nextStatus,
                         claimedAt: nextStatus === 'claimed' ? (existing.claimedAt || new Date()) : null,
                         expiresAt: finalExpiresAt ? new Date(finalExpiresAt) : null,
-                        revokedAt: null,
                     }
                 });
             }
+
+            // For re-shares (clean slate DELETE ran above), auto-claim so doctor
+            // doesn't need to re-click "Nhận và xem". Patient explicitly re-granted.
+            const autoClaimStatus = isSelfShare || isReShare ? 'claimed' : 'pending';
 
             return tx.keyShare.create({
                 data: {
@@ -233,8 +323,8 @@ router.post('/', authenticate, async (req, res, next) => {
                     senderPublicKey,
                     allowDelegate: finalAllowDelegate,
                     includeUpdates,
-                    status: isSelfShare ? 'claimed' : 'pending',
-                    claimedAt: isSelfShare ? new Date() : null,
+                    status: autoClaimStatus,
+                    claimedAt: autoClaimStatus === 'claimed' ? new Date() : null,
                     expiresAt: finalExpiresAt ? new Date(finalExpiresAt) : null,
                 }
             });
@@ -360,8 +450,14 @@ router.get('/my', authenticate, async (req, res, next) => {
                 // UI helper for "Effective Expiry"
                 expiresAt: ks.inheritedExpiresAt || ks.expiresAt,
 
-                // SECURITY: Scrub keys if not active
-                encryptedPayload: isActive ? ks.encryptedPayload : null,
+                // SECURITY: Don't return encryptedPayload in the list endpoint —
+                // payload is served via GET /record/:cidHash which checks on-chain
+                // canAccess. EXCEPTION: self-share rows (sender == recipient) are
+                // the patient's own backup and safe to return — the patient is the
+                // owner and can always canAccess their own records.
+                encryptedPayload: (ks.senderAddress?.toLowerCase() === recipientAddress)
+                    ? ks.encryptedPayload
+                    : null,
                 senderPublicKey: isActive ? senderKey : null,
 
                 // Legacy fields for frontend compatibility
@@ -499,19 +595,54 @@ router.get('/delegatable', authenticate, async (req, res, next) => {
 // GET /api/key-share/sent - Get keys I've shared
 router.get('/sent', authenticate, async (req, res, next) => {
     try {
+        const me = req.user.walletAddress.toLowerCase();
         const keyShares = await prisma.keyShare.findMany({
             where: {
-                senderAddress: req.user.walletAddress.toLowerCase(),
+                senderAddress: me,
+                // Exclude self-share rows (sender == recipient). Those are recovery
+                // backups the patient creates for themselves and should not appear
+                // in "Nhật ký truy cập" which lists permissions granted to OTHERS.
+                NOT: { recipientAddress: me },
             },
             include: {
                 recipient: {
                     select: { walletAddress: true }
+                },
+                record: {
+                    select: { cidHash: true, parentCidHash: true }
                 }
             },
             orderBy: { createdAt: 'desc' }
         });
 
-        res.json(keyShares);
+        // Compute rootCidHash per row so the client can group versions of the
+        // same logical record under one UI row. On-chain consent is keyed by
+        // rootCidHash, so a single revoke covers every version in the group.
+        const byCid = new Map();
+        for (const ks of keyShares) {
+            const key = ks.cidHash?.toLowerCase();
+            if (key) byCid.set(key, ks);
+        }
+        const resolveRoot = (ks) => {
+            let cursor = ks;
+            let depth = 0;
+            while (
+                cursor?.record?.parentCidHash
+                && byCid.has(cursor.record.parentCidHash.toLowerCase())
+                && depth < 20
+            ) {
+                cursor = byCid.get(cursor.record.parentCidHash.toLowerCase());
+                depth += 1;
+            }
+            return cursor.cidHash;
+        };
+        const payload = keyShares.map((ks) => ({
+            ...ks,
+            parentCidHash: ks.record?.parentCidHash || null,
+            rootCidHash: resolveRoot(ks),
+        }));
+
+        res.json(payload);
     } catch (error) {
         next(error);
     }
@@ -567,10 +698,16 @@ router.get('/recipients/:cidHash', authenticate, async (req, res, next) => {
             }
         });
 
-        // 3. Filter out sensitive info, return public keys for re-encryption
+        // 3. Filter out sensitive info, return public keys for re-encryption.
+        // BUG-F fix: include `includeUpdates` so mobile auto-propagate can skip
+        // recipients whose consent doesn't cover the new version (they'd receive
+        // a KeyShare row they can never decrypt via canAccess — dead weight).
+        // `allowDelegate` is included for completeness (UI may surface it).
         const team = recipients.map(share => ({
             walletAddress: share.recipient.walletAddress,
-            encryptionPublicKey: share.recipient.encryptionPublicKey || share.senderPublicKey, // Fallback if user key missing
+            encryptionPublicKey: share.recipient.encryptionPublicKey || share.senderPublicKey,
+            includeUpdates: share.includeUpdates !== false,  // treat legacy missing field as true
+            allowDelegate: share.allowDelegate === true,
             role: 'member'
         }));
 
@@ -589,168 +726,82 @@ router.get('/record/:cidHash', authenticate, async (req, res, next) => {
         const cidHashLower = cidHash.toLowerCase();
         const requesterAddress = req.user.walletAddress.toLowerCase();
 
-        // Find key share where current user is recipient
-        let keyShare = await prisma.keyShare.findFirst({
+        // Strict direct lookup — ancestor/descendant fallback removed. Contract
+        // now walks chain internally in canAccess; if a KeyShare for this exact
+        // cidHash doesn't exist, it means the patient couldn't cascade-share
+        // this version's AES key (e.g. a doctor created the update and the
+        // doctor→patient self-share is missing). Returning an ancestor payload
+        // here caused silent cache poisoning — doctor would decrypt V1 content
+        // while thinking they were viewing V2. Explicit 404 makes the missing
+        // cascade visible.
+        const keyShare = await prisma.keyShare.findFirst({
             where: {
                 cidHash: cidHashLower,
                 recipientAddress: requesterAddress,
                 status: { notIn: ['revoked', 'awaiting_claim', 'rejected'] },
                 OR: [
                     { expiresAt: null },
-                    { expiresAt: { gt: new Date() } }
-                ]
+                    { expiresAt: { gt: new Date() } },
+                ],
             },
             include: {
-                sender: {
-                    select: { walletAddress: true, encryptionPublicKey: true }
-                },
-                record: {
-                    select: { ownerAddress: true, createdBy: true, parentCidHash: true }
-                }
-            }
+                sender: { select: { walletAddress: true, encryptionPublicKey: true } },
+                record: { select: { ownerAddress: true, createdBy: true, parentCidHash: true } },
+            },
         });
 
-        // ANCESTOR FALLBACK: If no keyShare for exact cidHash, walk parent chain.
-        // The on-chain consent (includeUpdates=true) covers the whole tree, so an
-        // ancestor keyShare is sufficient — but its encryptedPayload contains the
-        // ANCESTOR's CID/AES key, not this version's. We only return it if this
-        // record's actual encryption key happens to be the same (e.g. same patient
-        // re-uses keys) — otherwise we still return so the doctor can at least
-        // see SOMETHING and patient can re-share. Better than blanket 404.
         if (!keyShare) {
-            const thisRecord = await prisma.recordMetadata.findUnique({
-                where: { cidHash: cidHashLower },
-                select: { parentCidHash: true }
-            });
-            let cursor = thisRecord?.parentCidHash || null;
-            let depth = 0;
-            while (cursor && depth < 20 && !keyShare) {
-                keyShare = await prisma.keyShare.findFirst({
-                    where: {
-                        cidHash: cursor.toLowerCase(),
-                        recipientAddress: requesterAddress,
-                        status: { notIn: ['revoked', 'awaiting_claim', 'rejected'] },
-                        OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }]
-                    },
-                    include: {
-                        sender: { select: { walletAddress: true, encryptionPublicKey: true } },
-                        record: { select: { ownerAddress: true, createdBy: true, parentCidHash: true } }
-                    }
-                });
-                if (!keyShare) {
-                    const parent = await prisma.recordMetadata.findUnique({
-                        where: { cidHash: cursor.toLowerCase() },
-                        select: { parentCidHash: true }
-                    });
-                    cursor = parent?.parentCidHash || null;
-                    depth++;
-                }
-            }
-        }
-
-        if (!keyShare) {
-            // Check if user is Creator/Owner to give better error details
             const record = await prisma.recordMetadata.findUnique({
                 where: { cidHash: cidHashLower },
-                select: { createdBy: true, ownerAddress: true }
+                select: { createdBy: true, ownerAddress: true },
             });
-
             if (record) {
                 const isCreator = record.createdBy?.toLowerCase() === requesterAddress;
                 const isOwner = record.ownerAddress?.toLowerCase() === requesterAddress;
-
                 if (isCreator) {
                     return res.status(404).json({
                         error: 'Khoá giải mã cục bộ đã mất',
                         message: 'Bạn là người tạo hồ sơ nhưng khoá AES chỉ được lưu trên thiết bị ban đầu. Hãy mở lại hồ sơ trên thiết bị cũ hoặc liên hệ quản trị viên để phục hồi.',
-                        code: 'CREATOR_KEY_LOST'
+                        code: 'CREATOR_KEY_LOST',
                     });
                 }
                 if (isOwner) {
                     return res.status(404).json({
                         error: 'Chưa có khoá chia sẻ cho hồ sơ này',
                         message: 'Đây có thể là bản cập nhật do bác sĩ khác tạo và họ chưa chia sẻ khoá cho bạn.',
-                        code: 'OWNER_KEY_MISSING'
+                        code: 'OWNER_KEY_MISSING',
                     });
                 }
             }
-            return res.status(404).json({ code: 'KEY_SHARE_NOT_FOUND', error: 'No key share found for this record', message: 'No key share found for this record' });
+            return res.status(404).json({
+                code: 'KEY_NOT_SHARED_FOR_VERSION',
+                error: 'Chưa có khoá cho phiên bản này',
+                message: 'Bệnh nhân chưa chia sẻ khoá giải mã cho đúng phiên bản này. Hãy yêu cầu bệnh nhân chia sẻ lại.',
+            });
         }
 
-        // CRITICAL: Check on-chain consent before returning key
-        // Skip check only if requester is owner or creator (they always have access)
+        // Permission check — contract canAccess now walks record chain to the
+        // canonical root and enforces includeUpdates on-chain. A single call
+        // is sufficient; backend no longer walks anything.
         const isOwner = keyShare.record?.ownerAddress?.toLowerCase() === requesterAddress;
         const isCreator = keyShare.record?.createdBy?.toLowerCase() === requesterAddress;
 
         if (!isOwner && !isCreator) {
             const ownerAddress = keyShare.record?.ownerAddress;
             if (ownerAddress) {
-                // 1. Check strict consent for this specific version
-                let hasOnChainConsent = await checkConsent(ownerAddress, requesterAddress, cidHashLower);
-                if (hasOnChainConsent) log.debug('Strict consent GRANT', { cidHash: cidHashLower });
-                else log.debug('Strict consent DENY', { cidHash: cidHashLower });
-
-                // 1b. If ancestor fallback matched a different keyShare row, also check
-                // consent directly on that matched ancestor's cidHash. This covers the
-                // case where the doctor opens a version (e.g. v3) that has no keyShare
-                // row of its own but inherits from an ancestor (v1) whose on-chain
-                // consent has includeUpdates=true.
-                if (!hasOnChainConsent && keyShare.cidHash?.toLowerCase() !== cidHashLower) {
-                    const matchedConsent = await checkConsent(ownerAddress, requesterAddress, keyShare.cidHash.toLowerCase());
-                    if (matchedConsent) {
-                        log.debug('Matched ancestor consent GRANT', { ancestor: keyShare.cidHash });
-                        hasOnChainConsent = true;
-                    }
-                }
-
-                // 2. INHERITANCE: If strict consent fails, walk up from the REQUESTED
-                // cidHash (not the matched keyShare's parent) to find any ancestor
-                // with consent. "Revoke Root kills Tree" logic.
-                if (!hasOnChainConsent) {
-                    log.debug('Checking ancestors', { cidHash: cidHashLower });
-
-                    // Start traversal from the requested record's own parent chain
-                    const requestedRecord = await prisma.recordMetadata.findUnique({
-                        where: { cidHash: cidHashLower },
-                        select: { parentCidHash: true }
-                    });
-                    let currentCid = requestedRecord?.parentCidHash;
-                    let depth = 0;
-
-                    while (currentCid && depth < 20) {
-                        const hasAncestorConsent = await checkConsent(ownerAddress, requesterAddress, currentCid.toLowerCase());
-                        if (hasAncestorConsent) {
-                            log.debug('Inherited consent found', { ancestor: currentCid });
-                            hasOnChainConsent = true;
-                            break;
-                        }
-
-                        log.debug('Ancestor consent false', { ancestor: currentCid });
-
-                        // Get next parent
-                        const parentRecord = await prisma.recordMetadata.findUnique({
-                            where: { cidHash: currentCid },
-                            select: { parentCidHash: true }
-                        });
-
-                        if (!parentRecord) break;
-                        currentCid = parentRecord.parentCidHash;
-                        depth++;
-                    }
-                }
-
+                const hasOnChainConsent = await checkConsent(ownerAddress, requesterAddress, cidHashLower);
                 if (!hasOnChainConsent) {
                     let notVerifiedDoctor = false;
                     try {
                         const [isDoc, isVerifiedDoc] = await Promise.all([
                             publicClient.readContract({
-                                address: CONTRACT_ADDRESSES.ACCESS_CONTROL,
+                                address: CONTRACT_ADDRESSES.AccessControl,
                                 abi: ACCESS_CONTROL_ABI,
                                 functionName: 'isDoctor',
                                 args: [requesterAddress],
                             }),
                             publicClient.readContract({
-                                address: CONTRACT_ADDRESSES.ACCESS_CONTROL,
+                                address: CONTRACT_ADDRESSES.AccessControl,
                                 abi: ACCESS_CONTROL_ABI,
                                 functionName: 'isVerifiedDoctor',
                                 args: [requesterAddress],
@@ -769,15 +820,15 @@ router.get('/record/:cidHash', authenticate, async (req, res, next) => {
 
                     if (notVerifiedDoctor) {
                         return res.status(403).json({
-                            error: 'Bac si chua duoc xac minh',
-                            message: 'Tai khoan bac si cua ban chua duoc to chuc y te xac minh on-chain. Vui long lien he quan tri vien to chuc de duoc duyet truoc khi truy cap ho so.',
+                            error: 'Bác sĩ chưa được xác minh',
+                            message: 'Tài khoản bác sĩ của bạn chưa được tổ chức y tế xác minh on-chain. Vui lòng liên hệ quản trị viên tổ chức để được duyệt trước khi truy cập hồ sơ.',
                             code: 'DOCTOR_NOT_VERIFIED',
                         });
                     }
 
                     return res.status(403).json({
-                        error: 'Quyen truy cap da bi thu hoi',
-                        message: 'Chu so huu da thu hoi quyen truy cap ho so nay (hoac ho so goc)',
+                        error: 'Quyền truy cập đã bị thu hồi',
+                        message: 'Chủ sở hữu đã thu hồi quyền truy cập hồ sơ này.',
                         consentRevoked: true,
                         code: 'CONSENT_REVOKED',
                     });
@@ -818,7 +869,11 @@ router.post('/:id/claim', authenticate, async (req, res, next) => {
         }
 
         if (keyShare.status === 'revoked') {
-            return res.status(400).json({ code: 'KEY_SHARE_REVOKED', error: 'Key share has been revoked', message: 'Key share has been revoked' });
+            return res.status(403).json({
+                code: 'KEY_SHARE_REVOKED',
+                error: 'Bệnh nhân đã thu hồi quyền truy cập',
+                message: 'Bệnh nhân đã thu hồi quyền truy cập hồ sơ này. Vui lòng yêu cầu lại nếu cần.',
+            });
         }
 
         if (keyShare.expiresAt && keyShare.expiresAt < new Date()) {
@@ -846,25 +901,28 @@ router.post('/:id/claim', authenticate, async (req, res, next) => {
         // We must NOT revoke the KeyShare row, otherwise the patient would have to
         // re-share after the doctor is verified. Instead, return a specific error
         // code so the mobile UI can show a targeted message.
-        const ownerAddress = keyShare.record?.ownerAddress?.toLowerCase();
+        // SAFETY: record relation MUST exist for consent verification.
+        // If missing (DB inconsistency), deny claim rather than skip check.
+        if (!keyShare.record) {
+            log.error('KeyShare record relation missing — cannot verify consent', { keyShareId: keyShare.id });
+            return res.status(500).json({ code: 'INTERNAL_ERROR', error: 'Dữ liệu hồ sơ không đồng bộ. Vui lòng thử lại.' });
+        }
+
+        // Revalidate on-chain consent at claim time. Contract's canAccess now
+        // walks the record chain to canonical root and enforces includeUpdates
+        // on-chain — a single call is the source of truth. No backend walk.
+        const ownerAddress = keyShare.record.ownerAddress?.toLowerCase();
         if (ownerAddress) {
             const recipientLower = keyShare.recipientAddress.toLowerCase();
             const cidHashLower = keyShare.cidHash.toLowerCase();
+
             const hasAccess = await checkConsent(ownerAddress, recipientLower, cidHashLower);
 
             if (!hasAccess) {
-                // Diagnose WHY canAccess failed so we don't wrongly revoke KeyShare.
-                // Read the raw consent struct + doctor verification status.
-                let consentActive = false;
+                // Check if doctor not verified (FIX #3) — don't revoke KeyShare
                 let doctorNotVerified = false;
                 try {
-                    const [consent, isDoc, isVerified] = await Promise.all([
-                        publicClient.readContract({
-                            address: CONTRACT_ADDRESSES.ConsentLedger,
-                            abi: CONSENT_LEDGER_ABI,
-                            functionName: 'getConsent',
-                            args: [ownerAddress, recipientLower, cidHashLower],
-                        }),
+                    const [isDoc, isVerified] = await Promise.all([
                         publicClient.readContract({
                             address: CONTRACT_ADDRESSES.AccessControl,
                             abi: ACCESS_CONTROL_ABI,
@@ -878,43 +936,26 @@ router.post('/:id/claim', authenticate, async (req, res, next) => {
                             args: [recipientLower],
                         }),
                     ]);
-                    consentActive = consent?.active === true;
                     doctorNotVerified = isDoc === true && isVerified === false;
                 } catch (err) {
-                    log.warn('Diagnostic read failed, falling back to generic deny', { error: err?.message });
+                    log.warn('Verify check failed', { error: err?.message });
                 }
 
-                // Case A: consent exists and is active, but doctor is not verified.
-                // Do NOT revoke KeyShare — it will automatically work once verified.
-                if (consentActive && doctorNotVerified) {
-                    log.info('Claim blocked: doctor not verified (FIX #3)', {
-                        keyShareId: keyShare.id,
-                        recipient: recipientLower,
-                    });
+                if (doctorNotVerified) {
                     return res.status(403).json({
                         code: 'DOCTOR_NOT_VERIFIED',
-                        error: 'Tài khoản bác sĩ của bạn chưa được tổ chức y tế xác minh on-chain. Khi được xác minh, bạn sẽ tự động truy cập được hồ sơ này mà không cần bệnh nhân chia sẻ lại.',
-                        message: 'Doctor not verified on-chain. Access will unlock automatically after verification.',
+                        error: 'Tài khoản bác sĩ của bạn chưa được tổ chức y tế xác minh on-chain. Khi được xác minh, bạn sẽ tự động truy cập được hồ sơ này.',
                     });
                 }
 
-                // Case B: consent truly doesn't exist, expired, or delegation chain broken.
-                // Safe to revoke KeyShare row.
+                // Truly no consent anywhere in chain → safe to revoke
                 await prisma.keyShare.update({
                     where: { id: keyShare.id },
                     data: { status: 'revoked' },
                 });
-                log.warn('Claim blocked: on-chain consent missing (possibly cascade-revoked)', {
-                    keyShareId: keyShare.id,
-                    owner: ownerAddress,
-                    recipient: recipientLower,
-                    cidHash: cidHashLower,
-                    consentActive,
-                });
                 return res.status(403).json({
                     code: 'ONCHAIN_CONSENT_MISSING',
                     error: 'Quyền truy cập không còn hợp lệ trên blockchain (có thể bị bệnh nhân hoặc bác sĩ cấp trên thu hồi, hoặc đã hết hạn).',
-                    message: 'On-chain consent revoked, expired, or delegation chain broken.',
                 });
             }
         }

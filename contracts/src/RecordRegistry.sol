@@ -304,6 +304,12 @@ contract RecordRegistry is IRecordRegistry {
         return _records[cidHash];
     }
 
+    /// @notice Returns parentCidHash for a record. bytes32(0) for roots or
+    /// non-existent records (safe for walk loops that stop on zero).
+    function parentOf(bytes32 cidHash) external view override returns (bytes32) {
+        return _records[cidHash].parentCidHash;
+    }
+
     function getOwnerRecords(address owner) external view override returns (bytes32[] memory) {
         return _ownerRecords[owner];
     }

@@ -138,7 +138,7 @@
         "internalType": "address"
       },
       {
-        "name": "cidHash",
+        "name": "queryCidHash",
         "type": "bytes32",
         "internalType": "bytes32"
       }
@@ -358,7 +358,7 @@
         "internalType": "address"
       },
       {
-        "name": "rootCidHash",
+        "name": "inputCidHash",
         "type": "bytes32",
         "internalType": "bytes32"
       }
@@ -381,6 +381,11 @@
           },
           {
             "name": "rootCidHash",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "anchorCidHash",
             "type": "bytes32",
             "internalType": "bytes32"
           },
@@ -590,6 +595,34 @@
   },
   {
     "type": "function",
+    "name": "grantEmergencyInternal",
+    "inputs": [
+      {
+        "name": "patient",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "grantee",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "inputCidHash",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "expireAt",
+        "type": "uint40",
+        "internalType": "uint40"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "grantInternal",
     "inputs": [
       {
@@ -646,7 +679,7 @@
         "internalType": "address"
       },
       {
-        "name": "rootCidHash",
+        "name": "inputCidHash",
         "type": "bytes32",
         "internalType": "bytes32"
       },
@@ -689,7 +722,7 @@
         "internalType": "address"
       },
       {
-        "name": "rootCidHash",
+        "name": "inputCidHash",
         "type": "bytes32",
         "internalType": "bytes32"
       },
@@ -728,6 +761,38 @@
   },
   {
     "type": "function",
+    "name": "recordDelegationSource",
+    "inputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "recordRegistry",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "contract IRecordRegistry"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "revoke",
     "inputs": [
       {
@@ -736,7 +801,7 @@
         "internalType": "address"
       },
       {
-        "name": "rootCidHash",
+        "name": "inputCidHash",
         "type": "bytes32",
         "internalType": "bytes32"
       }
@@ -772,7 +837,7 @@
         "internalType": "address"
       },
       {
-        "name": "rootCidHash",
+        "name": "inputCidHash",
         "type": "bytes32",
         "internalType": "bytes32"
       }
@@ -804,6 +869,19 @@
     "inputs": [
       {
         "name": "ac",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "setRecordRegistry",
+    "inputs": [
+      {
+        "name": "registry",
         "type": "address",
         "internalType": "address"
       }
@@ -912,6 +990,12 @@
         "internalType": "bytes32"
       },
       {
+        "name": "anchorCidHash",
+        "type": "bytes32",
+        "indexed": false,
+        "internalType": "bytes32"
+      },
+      {
         "name": "expireAt",
         "type": "uint40",
         "indexed": false,
@@ -1011,6 +1095,43 @@
     "type": "event",
     "name": "EIP712DomainChanged",
     "inputs": [],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "EmergencyGranted",
+    "inputs": [
+      {
+        "name": "patient",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "grantee",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "rootCidHash",
+        "type": "bytes32",
+        "indexed": true,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "anchorCidHash",
+        "type": "bytes32",
+        "indexed": false,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "expireAt",
+        "type": "uint40",
+        "indexed": false,
+        "internalType": "uint40"
+      }
+    ],
     "anonymous": false
   },
   {

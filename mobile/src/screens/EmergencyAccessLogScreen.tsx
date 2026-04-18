@@ -26,6 +26,7 @@ import {
     EHR_SURFACE_LOW,
     EHR_SURFACE_LOWEST,
 } from '../constants/uiColors';
+import { formatDateTime as formatDateTimeShared, formatExpiry } from '../utils/dateFormatting';
 
 type EmergencyItem = {
     id: string;
@@ -43,20 +44,7 @@ type EmergencyItem = {
 const truncateAddr = (addr?: string | null) =>
     addr ? `${addr.substring(0, 8)}...${addr.slice(-6)}` : '???';
 
-const formatDateTime = (s?: string | null) => {
-    if (!s) return '';
-    try {
-        return new Date(s).toLocaleString('vi-VN', {
-            day: '2-digit',
-            month: '2-digit',
-            year: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit',
-        });
-    } catch {
-        return s;
-    }
-};
+const formatDateTime = (s?: string | null) => formatDateTimeShared(s);
 
 const remainingHours = (expiresAt?: string) => {
     if (!expiresAt) return 0;
@@ -226,7 +214,7 @@ export default function EmergencyAccessLogScreen({ navigation }: any) {
                                     </Text>
                                 ) : (
                                     <Text fontSize="$2" color="$color9" style={{ marginTop: 4 }}>
-                                        Hết hạn: {formatDateTime(item.expiresAt)}
+                                        Hết hạn: {formatExpiry(item.expiresAt)}
                                     </Text>
                                 )}
 

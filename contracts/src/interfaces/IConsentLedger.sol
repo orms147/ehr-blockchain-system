@@ -10,7 +10,8 @@ interface IConsentLedger {
     struct Consent {
         address patient;
         address grantee;
-        bytes32 rootCidHash;    // Only hash stored
+        bytes32 rootCidHash;    // Canonical record-tree root (walked via RecordRegistry at grant time)
+        bytes32 anchorCidHash;  // Original cidHash input to grant — used to enforce "read-only exact version"
         bytes32 encKeyHash;
         uint40 issuedAt;
         uint40 expireAt;
@@ -26,11 +27,22 @@ interface IConsentLedger {
         bool active;
     }
 
+    /// @notice Emergency consent lives in a SEPARATE storage slot from normal
+    /// consent. Fixes BUG-D where an emergency 24h grant would overwrite an
+    /// existing 30-day consent. canAccess OR-checks both: patient keeps the
+    /// long-term consent untouched even if the same doctor triggers emergency.
+    struct EmergencyConsent {
+        uint40 issuedAt;
+        uint40 expireAt;
+        bool active;
+    }
+
     // Events
     event ConsentGranted(
         address indexed patient,
         address indexed grantee,
         bytes32 indexed rootCidHash,
+        bytes32 anchorCidHash,
         uint40 expireAt,
         bool allowDelegate
     );
@@ -60,7 +72,18 @@ interface IConsentLedger {
         address indexed byDelegatee,
         bytes32 rootCidHash
     );
-    
+
+    /// @notice Emergency access granted (separate from ConsentGranted — this
+    /// does NOT touch the normal consent storage so the regular consent
+    /// survives the emergency window).
+    event EmergencyGranted(
+        address indexed patient,
+        address indexed grantee,
+        bytes32 indexed rootCidHash,
+        bytes32 anchorCidHash,
+        uint40 expireAt
+    );
+
     event AuthorizedContract(address indexed contractAddress, bool allowed);
     event SponsorAuthorized(address indexed sponsor, bool allowed);
  
@@ -97,6 +120,22 @@ interface IConsentLedger {
         uint40 expireAt,
         bool includeUpdates,
         bool allowDelegate
+    ) external;
+
+    /**
+     * @notice Grant emergency access (separate storage from normal consent).
+     *         Called by DoctorUpdate.grantEmergencyAccess after witness validation.
+     *         A normal consent at the same (patient, grantee, root) is NOT overwritten.
+     * @param patient Patient address
+     * @param grantee Doctor invoking emergency
+     * @param inputCidHash any cidHash in the target record chain (walked to root)
+     * @param expireAt Emergency window end (must be > now)
+     */
+    function grantEmergencyInternal(
+        address patient,
+        address grantee,
+        bytes32 inputCidHash,
+        uint40 expireAt
     ) external;
 
     /**

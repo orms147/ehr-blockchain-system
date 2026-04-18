@@ -61,7 +61,11 @@ const createRequestSchema = z.object({
     requestType: z.number().min(0).max(2),
     durationDays: z.number().min(1).max(365).default(7),
     // Optional fractional hours (allows test chips < 1 day). Takes precedence over durationDays.
+    // Semantics: how long the CONSENT will last after patient approves.
     durationHours: z.number().positive().max(365 * 24).optional(),
+    // Separate: how long the REQUEST itself is valid (patient has X hours to approve).
+    // Defaults to 24h to match mobile's hardcoded validForHours on-chain.
+    validForHours: z.number().positive().max(365 * 24).optional(),
     txHash: z.string().regex(/^0x[a-fA-F0-9]{64}$/).optional(),
     onChainReqId: z.string().regex(/^0x[a-fA-F0-9]{64}$/).optional().nullable(),
 });
@@ -105,9 +109,40 @@ router.get('/incoming', authenticate, requirePatientRole, async (req, res, next)
         // Filter out archived requests
         const filteredRequests = requests.filter(r => !archivedIds.has(r.requestId));
 
+        // Attach record metadata (title, type) so patient can see WHICH record
+        // a doctor is asking about. AccessRequest has no Prisma relation to
+        // RecordMetadata, so we join manually. Skip zero-hash (FullDelegation).
+        const ZERO_HASH = '0x' + '0'.repeat(64);
+        const cidHashes = [...new Set(
+            filteredRequests
+                .map(r => r.cidHash?.toLowerCase())
+                .filter(h => h && h !== ZERO_HASH)
+        )];
+        let metaByCid = new Map();
+        if (cidHashes.length > 0) {
+            const metas = await prisma.recordMetadata.findMany({
+                where: { cidHash: { in: cidHashes } },
+                select: { cidHash: true, title: true, recordType: true, description: true, parentCidHash: true, createdAt: true },
+            });
+            metaByCid = new Map(metas.map(m => [m.cidHash.toLowerCase(), m]));
+        }
+
+        const enriched = filteredRequests.map((r) => {
+            const base = serializeRequest(r);
+            const meta = r.cidHash ? metaByCid.get(r.cidHash.toLowerCase()) : null;
+            return {
+                ...base,
+                recordTitle: meta?.title || null,
+                recordType: meta?.recordType || null,
+                recordDescription: meta?.description || null,
+                recordCreatedAt: meta?.createdAt || null,
+                parentCidHash: meta?.parentCidHash || null,
+            };
+        });
+
         res.json({
-            count: filteredRequests.length,
-            requests: filteredRequests.map(serializeRequest),
+            count: enriched.length,
+            requests: enriched,
         });
     } catch (error) {
         next(error);
@@ -256,12 +291,21 @@ router.get('/:requestId', authenticate, async (req, res, next) => {
 // POST /api/requests/create - Create a new access request (Doctor calls this AFTER on-chain tx)
 router.post('/create', authenticate, requireDoctorRole, async (req, res, next) => {
     try {
-        const { patientAddress, cidHash, requestType, durationDays, durationHours, txHash, onChainReqId } = createRequestSchema.parse(req.body);
+        const { patientAddress, cidHash, requestType, durationDays, durationHours, validForHours, txHash, onChainReqId } = createRequestSchema.parse(req.body);
         const doctorAddress = req.user.walletAddress.toLowerCase();
 
-        // Calculate deadline. Prefer durationHours when present (allows < 1 day for test chips).
-        const effectiveHours = (durationHours != null) ? durationHours : durationDays * 24;
-        const deadline = new Date(Date.now() + effectiveHours * 3600 * 1000);
+        // `deadline` = request expiry (patient has X hours to approve).
+        // Prefer validForHours from client; fallback to 24h to match on-chain default.
+        // NOT the consent duration — that lives on-chain and starts counting at approval time.
+        const requestValidHours = validForHours ?? 24;
+        const deadline = new Date(Date.now() + requestValidHours * 3600 * 1000);
+
+        // Persist the CONSENT duration separately so approve-with-sig can compute
+        // KeyShare.expiresAt accurately (without querying on-chain state). Falls
+        // back to durationDays * 24 to support old clients that only send days.
+        const consentDurationHours = durationHours != null
+            ? Math.max(1, Math.ceil(durationHours))
+            : durationDays * 24;
 
         // Use on-chain reqId if provided, otherwise generate fallback ID
         const requestId = onChainReqId || keccak256(
@@ -282,6 +326,7 @@ router.post('/create', authenticate, requireDoctorRole, async (req, res, next) =
                 status: 'pending',
                 deadline: deadline,
                 txHash: txHash || null,
+                consentDurationHours: consentDurationHours,
             },
         });
 
@@ -397,16 +442,17 @@ router.post('/approve-with-sig', authenticate, requirePatientRole, async (req, r
             },
         });
 
+        // Compute KeyShare.expiresAt = now + consentDurationHours (if present).
+        // Mirrors the on-chain consent expiry so the mobile UI can render an
+        // accurate countdown without querying contract state. Legacy rows
+        // without consentDurationHours fall back to null ("Vĩnh viễn").
+        const keyShareExpiresAt = request.consentDurationHours
+            ? new Date(Date.now() + request.consentDurationHours * 3600 * 1000)
+            : null;
+
         // If encrypted key payload provided, create KeyShare entry for Doctor
         // Status 'awaiting_claim' means Doctor must claim on-chain before accessing
         if (encryptedKeyPayload && cidHash) {
-            // Create or update KeyShare so Doctor can retrieve encrypted key AFTER on-chain claim
-            // Use upsert to handle case where KeyShare already exists
-            // expiresAt: null means "no DB-level expiry" — the on-chain Consent
-            // (with its own expireAt) is the source of truth. Previous code used the
-            // EIP-712 signature `deadline` (typically 1 hour) which caused KeyShare
-            // rows to expire prematurely, blocking doctors from decrypting even
-            // though their on-chain consent was still active for 30+ days.
             await prisma.keyShare.upsert({
                 where: {
                     cidHash_senderAddress_recipientAddress: {
@@ -419,7 +465,7 @@ router.post('/approve-with-sig', authenticate, requirePatientRole, async (req, r
                     encryptedPayload: encryptedKeyPayload,
                     senderPublicKey: senderPublicKey || null,
                     status: 'awaiting_claim',
-                    expiresAt: null,
+                    expiresAt: keyShareExpiresAt,
                     allowDelegate: request.requestType === 2,
                     // Contract hardcodes includeUpdates=true for both DirectAccess
                     // and RecordDelegation. Must explicitly set here to override any
@@ -434,7 +480,7 @@ router.post('/approve-with-sig', authenticate, requirePatientRole, async (req, r
                     encryptedPayload: encryptedKeyPayload,
                     senderPublicKey: senderPublicKey || null,
                     status: 'awaiting_claim',
-                    expiresAt: null,
+                    expiresAt: keyShareExpiresAt,
                     allowDelegate: request.requestType === 2,
                     includeUpdates: true,
                 },
@@ -487,6 +533,31 @@ router.post('/mark-claimed', authenticate, requireDoctorRole, async (req, res, n
                 status: 'pending',
             },
         });
+
+        // Detect: patient revoked consent AFTER approval but BEFORE doctor claimed.
+        // The ConsentRevoked event handler already flipped the KeyShare row to
+        // 'revoked' + cleared payload, so updateMany above matched 0 rows. Flag
+        // this to mobile so it can show a targeted message instead of generic
+        // "activation failed".
+        if (updatedKeyShare.count === 0) {
+            const revokedShare = await prisma.keyShare.findFirst({
+                where: {
+                    recipientAddress: doctorAddress,
+                    cidHash: request.cidHash,
+                    status: 'revoked',
+                },
+                select: { id: true },
+            });
+            if (revokedShare) {
+                return res.json({
+                    success: true,
+                    message: 'Bệnh nhân đã thu hồi quyền truy cập sau khi phê duyệt. Bạn cần yêu cầu lại.',
+                    keyShareActivated: false,
+                    code: 'REVOKED_AFTER_APPROVAL',
+                });
+            }
+        }
+
         res.json({
             success: true,
             message: 'Request marked as claimed.',
@@ -555,7 +626,9 @@ router.post('/grant-as-delegate', authenticate, async (req, res, next) => {
                     encryptedPayload: encryptedKeyPayload,
                     senderPublicKey: senderPublicKey || null,
                     status: 'pending', // Directly pending (active), no claim needed
-                    expiresAt: request.deadline,
+                    // null = let on-chain consent expireAt be source of truth. `request.deadline`
+                    // is now the REQUEST expiry (24h window to approve), not consent duration.
+                    expiresAt: null,
                 },
                 create: {
                     senderAddress: request.patientAddress, // "On behalf of" patient
@@ -564,7 +637,7 @@ router.post('/grant-as-delegate', authenticate, async (req, res, next) => {
                     encryptedPayload: encryptedKeyPayload,
                     senderPublicKey: senderPublicKey || null,
                     status: 'pending',
-                    expiresAt: request.deadline,
+                    expiresAt: null,
                 },
             });
         }

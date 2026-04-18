@@ -29,6 +29,13 @@ const REQUEST_ACCESS_ABI = [
         stateMutability: 'nonpayable',
     },
     {
+        type: 'function',
+        name: 'confirmAccessRequest',
+        inputs: [{ name: 'reqId', type: 'bytes32' }],
+        outputs: [],
+        stateMutability: 'nonpayable',
+    },
+    {
         type: 'event',
         name: 'AccessRequested',
         inputs: [
@@ -92,11 +99,55 @@ export default function DoctorRequestAccessScreen() {
             return;
         }
 
+        // Prevent self-request
+        const { address: myAddr } = await walletActionService.getWalletContext();
+        if (patientAddress.trim().toLowerCase() === myAddr?.toLowerCase()) {
+            Alert.alert('Không thể tự yêu cầu', 'Bạn không thể yêu cầu truy cập hồ sơ của chính mình.');
+            return;
+        }
+
+        // Check if target address is registered as patient on-chain
+        try {
+            const targetAddr = patientAddress.trim().toLowerCase();
+            const isPatient = await publicClient.readContract({
+                address: (process.env.EXPO_PUBLIC_ACCESS_CONTROL_ADDRESS || '') as `0x${string}`,
+                abi: [{ name: 'isPatient', type: 'function', stateMutability: 'view',
+                    inputs: [{ name: 'account', type: 'address' }],
+                    outputs: [{ type: 'bool' }] }],
+                functionName: 'isPatient',
+                args: [targetAddr as `0x${string}`],
+            });
+            if (!isPatient) {
+                Alert.alert(
+                    'Không phải bệnh nhân',
+                    'Địa chỉ này chưa đăng ký vai trò bệnh nhân trong hệ thống. Chỉ có thể yêu cầu truy cập hồ sơ của bệnh nhân đã đăng ký.',
+                );
+                return;
+            }
+        } catch {
+            // If check fails, proceed — contract will catch it
+        }
+
+        // CID Hash requirements — match contract EHRSystemSecure.requestAccess:
+        //   DirectAccess (0) + RecordDelegation (2): rootCidHash MUST be non-zero
+        //   FullDelegation (1):                      rootCidHash MUST be bytes32(0)
+        const trimmedCid = cidHash.trim();
+        if (selectedType !== 1) {
+            if (!trimmedCid) {
+                Alert.alert('Thiếu CID hồ sơ', 'Loại yêu cầu này cần CID của một hồ sơ cụ thể. Vui lòng nhập hoặc quét CID trên màn hình bệnh nhân.');
+                return;
+            }
+            if (!/^0x[a-fA-F0-9]{64}$/.test(trimmedCid)) {
+                Alert.alert('CID không hợp lệ', 'CID Hash phải bắt đầu bằng 0x và có đúng 64 ký tự hex.');
+                return;
+            }
+        }
+
         setIsSubmitting(true);
         try {
-            const normalizedCidHash = (cidHash.trim() || `0x${'0'.repeat(64)}`) as `0x${string}`;
-            const targetPatient = patientAddress.trim().toLowerCase() as `0x${string}`;
             const zeroHash = `0x${'0'.repeat(64)}` as `0x${string}`;
+            const normalizedCidHash = (selectedType === 1 ? zeroHash : trimmedCid) as `0x${string}`;
+            const targetPatient = patientAddress.trim().toLowerCase() as `0x${string}`;
 
             // 1. ON-CHAIN: doctor calls EHRSystemSecure.requestAccess directly (no relayer for now).
             //    Backend was previously only writing to DB — that left chain empty and made
@@ -132,9 +183,38 @@ export default function DoctorRequestAccessScreen() {
                 eventName: 'AccessRequested',
                 logs: receipt.logs,
             });
-            const onChainReqId = (events[0] as any)?.args?.reqId as string | undefined;
+            let onChainReqId = (events[0] as any)?.args?.reqId as string | undefined;
+
+            // Fallback 1: extract from raw log topics
             if (!onChainReqId) {
-                throw new Error('Không đọc được reqId từ tx log. Hồ sơ vẫn đã được tạo on-chain — hãy thử lại.');
+                for (const l of receipt.logs) {
+                    if (l.topics && l.topics.length >= 2) {
+                        onChainReqId = l.topics[1] as string;
+                        break;
+                    }
+                }
+            }
+
+            // Fallback 2: some Arbitrum RPC nodes return empty logs in receipt.
+            // Re-fetch receipt after a short delay.
+            if (!onChainReqId) {
+                await new Promise((r) => setTimeout(r, 3000));
+                try {
+                    const retryReceipt = await publicClient.getTransactionReceipt({ hash: txHash });
+                    for (const l of (retryReceipt.logs || [])) {
+                        if (l.topics && l.topics.length >= 2) {
+                            onChainReqId = l.topics[1] as string;
+                            break;
+                        }
+                    }
+                } catch {}
+            }
+
+            // Fallback 3: use txHash as unique ID for backend tracking.
+            // Backend just needs a unique requestId — txHash works.
+            if (!onChainReqId) {
+                console.warn('[Request] Could not extract reqId from logs, using txHash as fallback');
+                onChainReqId = txHash;
             }
 
             // 3. Notify backend to mirror the on-chain request for UI/notifications.
@@ -146,9 +226,38 @@ export default function DoctorRequestAccessScreen() {
                 // and falls back to durationDays for old clients.
                 durationDays: Math.max(1, Math.ceil(durationHours / 24)),
                 durationHours,
+                // Separate: how long PATIENT has to approve (not consent duration).
+                // Matches the on-chain validForHours param above so DB deadline == on-chain expiry.
+                validForHours: Number(validForHours),
                 txHash,
                 onChainReqId,
             });
+
+            // 4. AUTO-APPROVE as requester (background, after MIN_APPROVAL_DELAY).
+            // This pre-confirms the doctor's side so that at CLAIM time, only the
+            // patient signature needs to be submitted → instant, no 17s wait.
+            // Fire-and-forget: if it fails (e.g. app closed), handleClaim in
+            // DoctorDashboard falls back to the 2-step flow automatically.
+            if (onChainReqId) {
+                setTimeout(async () => {
+                    try {
+                        const { walletClient: wc } = await walletActionService.getWalletContext();
+                        await wc.writeContract({
+                            address: EHR_SYSTEM_ADDRESS,
+                            abi: REQUEST_ACCESS_ABI,
+                            functionName: 'confirmAccessRequest',
+                            args: [onChainReqId as `0x${string}`],
+                            gas: BigInt(200000),
+                            maxFeePerGas: parseGwei('1.0'),
+                            maxPriorityFeePerGas: parseGwei('0.1'),
+                        });
+                        console.log('[Request] Auto-approved as requester:', onChainReqId.slice(0, 14));
+                    } catch (e: any) {
+                        // Non-fatal: DoctorDashboard handleClaim handles this case
+                        console.warn('[Request] Auto-approve failed (will retry at claim):', e?.message?.slice(0, 60));
+                    }
+                }, 17000);
+            }
 
             setIsSuccess(true);
             setPatientAddress('');
@@ -244,28 +353,39 @@ export default function DoctorRequestAccessScreen() {
 
                     <YStack style={{ marginBottom: 16 }}>
                         <Text fontSize="$3" fontWeight="700" color="$color11" style={{ marginBottom: 8 }}>
-                            CID Hash {selectedType === 1 ? '(không dùng cho ủy quyền toàn bộ)' : '(tuỳ chọn)'}
+                            CID Hash {selectedType === 1 ? '(không áp dụng cho Uỷ quyền toàn bộ)' : <Text style={{ color: '#DC2626' }}> *</Text>}
                         </Text>
-                        <XStack background="$background" borderColor="$borderColor" style={{ borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, alignItems: 'center' }}>
+                        <XStack
+                            background="$background"
+                            borderColor="$borderColor"
+                            style={{ borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, alignItems: 'center', opacity: selectedType === 1 ? 0.5 : 1 }}
+                            pointerEvents={selectedType === 1 ? 'none' : 'auto'}
+                        >
                             <FileText size={16} color="#64748B" />
                             <Input
                                 flex={1}
                                 unstyled
                                 fontSize="$4"
                                 color="$color12"
-                                placeholder="Nhập CID nếu yêu cầu"
-                                value={cidHash}
+                                placeholder={selectedType === 1 ? 'Không cần nhập cho uỷ quyền toàn bộ' : 'Nhập hoặc quét CID hồ sơ'}
+                                value={selectedType === 1 ? '' : cidHash}
                                 onChangeText={setCidHash}
                                 autoCapitalize="none"
                                 autoCorrect={false}
                                 style={{ paddingVertical: 12, paddingHorizontal: 12 }}
                             />
-                            <Pressable onPress={() => setCidScannerOpen(true)} style={{ padding: 6 }}>
+                            <Pressable
+                                onPress={selectedType === 1 ? undefined : () => setCidScannerOpen(true)}
+                                style={{ padding: 6 }}
+                                disabled={selectedType === 1}
+                            >
                                 <QrCode size={20} color="#55624D" />
                             </Pressable>
                         </XStack>
                         <Text fontSize="$2" color="$color10" style={{ marginTop: 6, marginLeft: 4 }}>
-                            Mẹo: bấm QR để quét mã CID hồ sơ trên màn hình bệnh nhân.
+                            {selectedType === 1
+                                ? 'Uỷ quyền toàn bộ áp dụng cho mọi hồ sơ — không chọn CID cụ thể.'
+                                : 'Mẹo: bấm QR để quét mã CID hồ sơ trên màn hình bệnh nhân.'}
                         </Text>
                     </YStack>
 

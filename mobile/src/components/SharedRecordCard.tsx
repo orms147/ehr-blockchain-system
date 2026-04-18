@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 import { Pressable, StyleSheet } from 'react-native';
-import { FileText, Eye, Clock, FilePlus2, ShieldCheck, Lock } from 'lucide-react-native';
+import { FileText, Eye, Clock, FilePlus2, ShieldCheck, Lock, XCircle } from 'lucide-react-native';
 import { XStack, YStack, Text, Button, View } from 'tamagui';
 import Animated, {
     useSharedValue,
@@ -23,6 +23,7 @@ import {
     EHR_SURFACE_LOWEST,
     EHR_TERTIARY,
 } from '../constants/uiColors';
+import { formatDate, formatExpiry, getExpiryUrgency } from '../utils/dateFormatting';
 
 interface SharedRecordCardProps {
     record: any;
@@ -82,14 +83,6 @@ export default function SharedRecordCard({ record, onView, onCreateUpdate }: Sha
         ],
     }));
 
-    const formatDate = (dateStr?: string) => {
-        if (!dateStr) return '';
-        try {
-            const d = new Date(dateStr);
-            return d.toLocaleDateString('vi-VN', { day: '2-digit', month: 'short', year: 'numeric' });
-        } catch { return ''; }
-    };
-
     const iconColors = [
         { bg: `${EHR_PRIMARY}15`, color: EHR_PRIMARY },
         { bg: `${EHR_SECONDARY}15`, color: EHR_SECONDARY },
@@ -101,7 +94,7 @@ export default function SharedRecordCard({ record, onView, onCreateUpdate }: Sha
 
     return (
         <Animated.View style={mountStyle}>
-            <Pressable onPress={() => onView?.(record)} onPressIn={handlePressIn} onPressOut={handlePressOut}>
+            <Pressable onPress={isInactive ? undefined : () => onView?.(record)} onPressIn={isInactive ? undefined : handlePressIn} onPressOut={isInactive ? undefined : handlePressOut} disabled={isInactive}>
                 <Animated.View style={pressStyle}>
                     <View style={[s.card, isInactive && s.cardInactive]}>
                         {/* Top row: icon + info + status */}
@@ -141,40 +134,54 @@ export default function SharedRecordCard({ record, onView, onCreateUpdate }: Sha
                         </XStack>
 
                         {/* Meta row: time + version + expiry */}
-                        {(record?.versionCount > 1 || record?.expiresAt) && (
-                            <XStack style={s.metaRow}>
-                                {record?.versionCount > 1 ? (
-                                    <View style={s.versionBadge}>
-                                        <Text style={s.versionText}>v{record.versionCount}</Text>
-                                    </View>
-                                ) : null}
-                                {record?.expiresAt ? (
-                                    <XStack style={s.expiryBadge}>
-                                        <Clock size={10} color={EHR_ON_SURFACE_VARIANT} />
-                                        <Text style={s.expiryText}>
-                                            HH: {new Date(record.expiresAt).toLocaleDateString('vi-VN')}
+                        <XStack style={s.metaRow}>
+                            {record?.versionCount > 1 ? (
+                                <View style={s.versionBadge}>
+                                    <Text style={s.versionText}>v{record.versionCount}</Text>
+                                </View>
+                            ) : null}
+                            {(() => {
+                                const urgency = getExpiryUrgency(record?.expiresAt);
+                                const isUrgent = urgency === 'urgent' || urgency === 'soon';
+                                return (
+                                    <XStack style={[s.expiryBadge, isUrgent && { backgroundColor: '#FEF2F2', borderColor: '#FCA5A5', borderWidth: 1 }]}>
+                                        <Clock size={10} color={isUrgent ? '#DC2626' : EHR_ON_SURFACE_VARIANT} />
+                                        <Text style={[s.expiryText, isUrgent && { color: '#DC2626', fontWeight: '700' }]}>
+                                            Hết hạn: {formatExpiry(record?.expiresAt)}
                                         </Text>
                                     </XStack>
-                                ) : null}
-                            </XStack>
-                        )}
+                                );
+                            })()}
+                        </XStack>
 
-                        {/* Action buttons */}
+                        {/* Action buttons / status text */}
                         <XStack style={{ gap: 10, marginTop: 14 }}>
-                            <Button
-                                flex={1}
-                                size="$3"
-                                background={isInactive ? EHR_SURFACE_LOW : EHR_PRIMARY}
-                                pressStyle={{ background: isInactive ? EHR_SURFACE_LOW : EHR_PRIMARY_CONTAINER }}
-                                icon={<Eye size={15} color={isInactive ? EHR_ON_SURFACE_VARIANT : EHR_ON_PRIMARY} />}
-                                onPress={isInactive ? undefined : () => onView?.(record)}
-                                disabled={isInactive}
-                                style={{ borderRadius: 12, opacity: isInactive ? 0.6 : 1 }}
-                            >
-                                <Text color={isInactive ? EHR_ON_SURFACE_VARIANT : EHR_ON_PRIMARY} fontWeight="700" fontSize="$3">
-                                    {isRevoked ? 'Đã thu hồi' : isExpired ? 'Hết hạn' : isPending ? 'Nhận và xem' : 'Xem hồ sơ'}
-                                </Text>
-                            </Button>
+                            {isInactive ? (
+                                <View style={{
+                                    flex: 1, borderRadius: 12, paddingVertical: 10,
+                                    backgroundColor: EHR_SURFACE_LOW, alignItems: 'center',
+                                    flexDirection: 'row', justifyContent: 'center', gap: 6,
+                                }}>
+                                    <XCircle size={14} color={EHR_ON_SURFACE_VARIANT} />
+                                    <Text color={EHR_ON_SURFACE_VARIANT} fontWeight="700" fontSize="$3">
+                                        {isRevoked ? 'Đã thu hồi' : 'Hết hạn'}
+                                    </Text>
+                                </View>
+                            ) : (
+                                <Button
+                                    flex={1}
+                                    size="$3"
+                                    background={EHR_PRIMARY}
+                                    pressStyle={{ background: EHR_PRIMARY_CONTAINER }}
+                                    icon={<Eye size={15} color={EHR_ON_PRIMARY} />}
+                                    onPress={() => onView?.(record)}
+                                    style={{ borderRadius: 12 }}
+                                >
+                                    <Text color={EHR_ON_PRIMARY} fontWeight="700" fontSize="$3">
+                                        {isPending ? 'Nhận và xem' : 'Xem hồ sơ'}
+                                    </Text>
+                                </Button>
+                            )}
 
                             {!isInactive && !isReadOnly && onCreateUpdate ? (
                                 <Button

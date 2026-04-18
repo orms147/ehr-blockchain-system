@@ -698,7 +698,6 @@ router.delete('/:cidHash/access/:address', authenticate, async (req, res, next) 
             data: {
                 status: 'revoked',
                 encryptedPayload: '',
-                revokedAt: new Date(),
                 expiresAt: new Date(),
             },
         });

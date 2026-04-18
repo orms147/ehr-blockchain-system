@@ -174,14 +174,16 @@ contract DoctorUpdate is ReentrancyGuard {
         if (expireAt256 > type(uint40).max) revert InvalidAccessDuration();
         uint40 expireAt = uint40(expireAt256);
 
-        consentLedger.grantInternal(
+        // BUG-D fix: write emergency into a separate storage via
+        // grantEmergencyInternal. This preserves any existing long-term consent
+        // for (patient, doctor, root) so the 24h emergency window doesn't wipe
+        // a patient's previously-granted 30-day (or longer) consent when the
+        // emergency expires.
+        consentLedger.grantEmergencyInternal(
             patient,
             msg.sender,
             cidHash,
-            encKeyHash,
-            expireAt,
-            true,
-            false
+            expireAt
         );
 
         emit EmergencyAccessGranted(

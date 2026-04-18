@@ -28,8 +28,12 @@ import {
 } from 'lucide-react-native';
 import { Text, View, XStack, YStack } from 'tamagui';
 
+import { createPublicClient, http } from 'viem';
+import { arbitrumSepolia } from 'viem/chains';
+
 import EmptyState from '../../components/EmptyState';
 import LoadingSpinner from '../../components/LoadingSpinner';
+import api from '../../services/api';
 import recordService from '../../services/record.service';
 import delegationService from '../../services/delegation.service';
 import authService from '../../services/auth.service';
@@ -55,6 +59,7 @@ import {
     EHR_SURFACE_LOW,
     EHR_SURFACE_LOWEST,
 } from '../../constants/uiColors';
+import { formatDate as formatDateShared, formatExpiry } from '../../utils/dateFormatting';
 
 type PatientRecord = {
     id: string;
@@ -70,18 +75,7 @@ const ADDRESS_RE = /^0x[a-fA-F0-9]{40}$/;
 const truncateAddr = (addr?: string | null) =>
     addr ? `${addr.substring(0, 8)}...${addr.slice(-6)}` : '???';
 
-const formatDate = (s?: string | null) => {
-    if (!s) return '';
-    try {
-        return new Date(s).toLocaleDateString('vi-VN', {
-            day: '2-digit',
-            month: '2-digit',
-            year: 'numeric',
-        });
-    } catch {
-        return s;
-    }
-};
+const formatDate = (s?: string | null) => formatDateShared(s);
 
 // ============ RECORD PICKER + SHARE MODAL ============
 
@@ -155,6 +149,59 @@ function ShareRecordModal({
                 );
                 setSubmitting(false);
                 return;
+            }
+
+            // STEP 2B: Check if grantee is an unverified doctor.
+            // canAccess (FIX #3) will reject unverified doctors, so warn upfront.
+            try {
+                const ctx = await authService.getEncryptionKey(grantee); // already fetched above
+                // Need role check — use grant-context endpoint
+                const roleCtx: any = await api.get(`/api/relayer/grant-context?grantee=${grantee}`);
+                if (roleCtx?.isDoctor && !roleCtx?.isVerifiedDoctor) {
+                    const confirmed = await new Promise<boolean>((resolve) => {
+                        Alert.alert(
+                            'Bác sĩ chưa xác minh',
+                            'Bác sĩ này chưa được tổ chức y tế xác minh on-chain. Hồ sơ sẽ CHỈ ĐỌC ĐƯỢC sau khi họ được xác minh.\n\nBạn có muốn tiếp tục?',
+                            [
+                                { text: 'Huỷ', style: 'cancel', onPress: () => resolve(false) },
+                                { text: 'Vẫn chia sẻ', style: 'destructive', onPress: () => resolve(true) },
+                            ],
+                            { cancelable: true, onDismiss: () => resolve(false) }
+                        );
+                    });
+                    if (!confirmed) {
+                        setSubmitting(false);
+                        return;
+                    }
+                }
+            } catch {
+                // If check fails, continue — on-chain is final gate
+            }
+
+            // STEP 2C (Option B): Check if grantee already has on-chain consent.
+            // If yes, re-sharing would OVERWRITE — warn doctor A.
+            try {
+                const pc = createPublicClient({ chain: arbitrumSepolia, transport: http('https://sepolia-rollup.arbitrum.io/rpc') });
+                const CONSENT_ADDR = process.env.EXPO_PUBLIC_CONSENT_LEDGER_ADDRESS as `0x${string}`;
+                const alreadyHas = await pc.readContract({
+                    address: CONSENT_ADDR,
+                    abi: [{ name: 'canAccess', type: 'function', stateMutability: 'view',
+                        inputs: [{ name: 'p', type: 'address' }, { name: 'g', type: 'address' }, { name: 'c', type: 'bytes32' }],
+                        outputs: [{ type: 'bool' }] }],
+                    functionName: 'canAccess',
+                    args: [patientAddress as `0x${string}`, grantee as `0x${string}`, record.cidHash as `0x${string}`],
+                });
+                if (alreadyHas) {
+                    Alert.alert(
+                        'Bác sĩ đã có quyền',
+                        'Bác sĩ này đã có quyền truy cập hồ sơ này (do bệnh nhân hoặc bác sĩ khác cấp). Chia sẻ sẽ GHI ĐÈ quyền cũ.\n\nĐể thay đổi quyền, bệnh nhân nên thu hồi quyền cũ trước.',
+                        [{ text: 'Đã hiểu' }],
+                    );
+                    setSubmitting(false);
+                    return;
+                }
+            } catch {
+                // canAccess check failed → proceed (on-chain is final gate)
             }
 
             // STEP 3: Mint the on-chain consent with the REAL encKeyHash so the
@@ -397,7 +444,7 @@ function PatientRecordsDrawer({
                             {patient ? truncateAddr(patient.patientAddress) : ''}
                         </Text>
                         <Text fontSize="$1" color={EHR_ON_SURFACE_VARIANT}>
-                            Hết hạn: {patient ? formatDate(patient.expiresAt) : ''}
+                            Hết hạn: {patient ? formatExpiry(patient.expiresAt) : ''}
                             {patient?.allowSubDelegate ? ' • cho phép uỷ quyền tiếp' : ''}
                         </Text>
                     </YStack>
@@ -469,6 +516,7 @@ function PatientRecordsDrawer({
                     <SubDelegateModal
                         visible={subOpen}
                         patientAddress={patient.patientAddress}
+                        parentExpiresAt={patient.expiresAt}
                         onClose={() => setSubOpen(false)}
                     />
                 ) : null}
@@ -482,20 +530,38 @@ function PatientRecordsDrawer({
 function SubDelegateModal({
     visible,
     patientAddress,
+    parentExpiresAt,
     onClose,
 }: {
     visible: boolean;
     patientAddress: string;
+    parentExpiresAt: string;
     onClose: () => void;
 }) {
     const subDelegateMutation = useSubDelegate();
     const [subDelegatee, setSubDelegatee] = useState('');
     const [days, setDays] = useState('30');
+    const [useFullRemaining, setUseFullRemaining] = useState(false);
     const [allowFurther, setAllowFurther] = useState(false);
+
+    // Compute remaining time of parent delegation
+    const parentExpiryMs = parentExpiresAt ? new Date(parentExpiresAt).getTime() : 0;
+    const remainingMs = Math.max(0, parentExpiryMs - Date.now());
+    const remainingDays = Math.floor(remainingMs / (24 * 3600 * 1000));
+    const remainingHours = Math.floor((remainingMs % (24 * 3600 * 1000)) / (3600 * 1000));
+    const remainingLabel = remainingDays > 0
+        ? `${remainingDays} ngày ${remainingHours}h`
+        : `${remainingHours} giờ ${Math.floor((remainingMs % 3600000) / 60000)} phút`;
+
+    // Contract MIN_DURATION = 1 day. If remaining < 1 day, contract will still
+    // accept duration=1day but cap to parent expiry (so actual = remaining).
+    // We always pass at least 1 day to avoid InvalidDuration revert.
+    const remainingTooShort = remainingMs < 3600 * 1000; // < 1 hour
 
     const reset = () => {
         setSubDelegatee('');
         setDays('30');
+        setUseFullRemaining(false);
         setAllowFurther(false);
     };
 
@@ -505,11 +571,28 @@ function SubDelegateModal({
             Alert.alert('Địa chỉ không hợp lệ', 'Nhập địa chỉ ví bác sĩ 0x...');
             return;
         }
-        const d = parseInt(days, 10);
-        if (!Number.isFinite(d) || d < 1 || d > 1825) {
-            Alert.alert('Thời hạn không hợp lệ', '1 - 1825 ngày.');
-            return;
+
+        // Determine duration in days to send to contract.
+        // Contract requires duration >= MIN_DURATION (1 day) but caps to parent expiry.
+        // So for "full remaining", just pass a large value — contract will cap.
+        let d: number;
+        if (useFullRemaining) {
+            d = Math.max(1, remainingDays + 1); // +1 to ensure contract caps to parent, not our estimate
+        } else {
+            d = parseInt(days, 10);
+            if (!Number.isFinite(d) || d < 1 || d > 1825) {
+                Alert.alert('Thời hạn không hợp lệ', '1 - 1825 ngày.');
+                return;
+            }
         }
+
+        if (remainingTooShort) {
+            Alert.alert(
+                'Thời hạn quá ngắn',
+                `Uỷ quyền của bạn chỉ còn ${remainingLabel}. Bác sĩ nhận có thể không kịp sử dụng quyền này.`,
+            );
+        }
+
         try {
             const result = await subDelegateMutation.mutateAsync({
                 patientAddress,
@@ -519,7 +602,7 @@ function SubDelegateModal({
             });
             Alert.alert(
                 'Đã uỷ quyền tiếp',
-                `Bác sĩ ${truncateAddr(addr)} nhận được uỷ quyền tiếp.\n\nTx: ${result.txHash.slice(0, 14)}...`,
+                `Bác sĩ ${truncateAddr(addr)} nhận được uỷ quyền tiếp.\n\nThời hạn sẽ bị cắt về thời hạn của bạn nếu lớn hơn.\nTx: ${result.txHash.slice(0, 14)}...`,
             );
             reset();
             onClose();
@@ -562,17 +645,60 @@ function SubDelegateModal({
                             autoCorrect={false}
                         />
 
-                        <Text style={[styles.label, { marginTop: 16 }]}>Thời hạn (ngày)</Text>
-                        <TextInput
-                            style={styles.input}
-                            placeholder="30"
-                            placeholderTextColor={EHR_ON_SURFACE_VARIANT}
-                            value={days}
-                            onChangeText={setDays}
-                            keyboardType="number-pad"
-                        />
-                        <Text fontSize="$1" color={EHR_ON_SURFACE_VARIANT} marginTop={4}>
-                            Sẽ bị cắt về thời hạn uỷ quyền gốc của bạn nếu lớn hơn.
+                        <Text style={[styles.label, { marginTop: 16 }]}>Thời hạn</Text>
+
+                        {/* Duration chips */}
+                        <XStack style={{ flexWrap: 'wrap', gap: 8, marginBottom: 8 }}>
+                            {/* "Full remaining" chip */}
+                            <Pressable onPress={() => { setUseFullRemaining(true); }}>
+                                <View style={{
+                                    paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20,
+                                    borderWidth: 1.5,
+                                    borderColor: useFullRemaining ? EHR_PRIMARY : EHR_OUTLINE_VARIANT,
+                                    backgroundColor: useFullRemaining ? EHR_PRIMARY_FIXED : EHR_SURFACE_LOW,
+                                }}>
+                                    <Text fontSize={13} fontWeight={useFullRemaining ? '800' : '500'}
+                                        style={{ color: useFullRemaining ? EHR_PRIMARY : EHR_ON_SURFACE_VARIANT }}>
+                                        Toàn bộ ({remainingLabel})
+                                    </Text>
+                                </View>
+                            </Pressable>
+                            {/* Preset chips */}
+                            {[7, 30, 90].map((preset) => {
+                                const active = !useFullRemaining && days === String(preset);
+                                return (
+                                    <Pressable key={preset} onPress={() => { setUseFullRemaining(false); setDays(String(preset)); }}>
+                                        <View style={{
+                                            paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20,
+                                            borderWidth: 1.5,
+                                            borderColor: active ? EHR_PRIMARY : EHR_OUTLINE_VARIANT,
+                                            backgroundColor: active ? EHR_PRIMARY_FIXED : EHR_SURFACE_LOW,
+                                        }}>
+                                            <Text fontSize={13} fontWeight={active ? '800' : '500'}
+                                                style={{ color: active ? EHR_PRIMARY : EHR_ON_SURFACE_VARIANT }}>
+                                                {preset} ngày
+                                            </Text>
+                                        </View>
+                                    </Pressable>
+                                );
+                            })}
+                        </XStack>
+
+                        {/* Custom input — only when not using full remaining */}
+                        {!useFullRemaining ? (
+                            <TextInput
+                                style={styles.input}
+                                placeholder="Nhập số ngày"
+                                placeholderTextColor={EHR_ON_SURFACE_VARIANT}
+                                value={days}
+                                onChangeText={(t) => { setDays(t.replace(/[^0-9]/g, '')); }}
+                                keyboardType="number-pad"
+                            />
+                        ) : null}
+
+                        <Text fontSize={11} color={EHR_ON_SURFACE_VARIANT} style={{ marginTop: 6 }}>
+                            Contract tự động cắt về thời hạn uỷ quyền gốc của bạn nếu lớn hơn.
+                            {remainingTooShort ? '\n⚠️ Thời hạn còn lại dưới 1 giờ — bác sĩ nhận có thể không kịp sử dụng.' : ''}
                         </Text>
 
                         <XStack
@@ -589,7 +715,7 @@ function SubDelegateModal({
                                 <Text fontSize="$3" fontWeight="600" color={EHR_ON_SURFACE}>
                                     Cho phép uỷ quyền tiếp tầng 3
                                 </Text>
-                                <Text fontSize="$1" color={EHR_ON_SURFACE_VARIANT} marginTop={2}>
+                                <Text fontSize={11} color={EHR_ON_SURFACE_VARIANT} style={{ marginTop: 2 }}>
                                     Bác sĩ nhận có thể tạo uỷ quyền tiếp xuống dưới.
                                 </Text>
                             </YStack>
@@ -666,7 +792,7 @@ export default function DoctorDelegatedPatientsScreen() {
                             </Text>
                         ) : null}
                         <Text fontSize="$1" color={EHR_ON_SURFACE_VARIANT} marginTop="$1">
-                            Hết hạn: {formatDate(item.expiresAt)}
+                            Hết hạn: {formatExpiry(item.expiresAt)}
                         </Text>
                         {item.scopeNote ? (
                             <Text fontSize="$1" color={EHR_ON_SURFACE_VARIANT} marginTop="$1" numberOfLines={2}>

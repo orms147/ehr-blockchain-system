@@ -20,7 +20,9 @@ import RoleSwitcher from '../../components/RoleSwitcher';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import EmptyState from '../../components/EmptyState';
 import AnimatedSection from '../../components/AnimatedSection';
+import LiabilityConfirmModal from '../../components/LiabilityConfirmModal';
 import keyShareService from '../../services/keyShare.service';
+import recordService from '../../services/record.service';
 import requestService from '../../services/request.service';
 import walletActionService from '../../services/walletAction.service';
 import consentService from '../../services/consent.service';
@@ -75,12 +77,14 @@ type SharedRecord = {
     id?: string;
     cidHash?: string;
     createdAt?: string;
+    expiresAt?: string;
     status?: string;
     active?: boolean;
     parentCidHash?: string;
     senderAddress?: string;
     versionCount?: number;
     includeUpdates?: boolean;
+    allowDelegate?: boolean;
     record?: { ownerAddress?: string; title?: string; recordType?: string };
 };
 
@@ -97,16 +101,18 @@ export default function DoctorDashboardScreen() {
     const { token, user } = useAuthStore();
     const queryClient = useQueryClient();
     const [claimingId, setClaimingId] = useState<string | null>(null);
-    const [isVerifiedDoctor, setIsVerifiedDoctor] = useState<boolean | null>(null); // null = loading
+    const [isVerifiedDoctor, setIsVerifiedDoctor] = useState<boolean | null>(null);
+    const [liabilityModal, setLiabilityModal] = useState<{ type: 'claim' | 'view'; data: any } | null>(null);
 
-    // Check doctor verification once on mount
-    useEffect(() => {
+    // Check doctor verification — called on mount + every pull-to-refresh
+    const checkVerification = () => {
         const myAddr = (user?.walletAddress || user?.address || '').toLowerCase();
         if (!myAddr || !token) return;
         consentService.fetchGrantContext(myAddr)
             .then((ctx: any) => setIsVerifiedDoctor(ctx?.isVerifiedDoctor === true))
-            .catch(() => setIsVerifiedDoctor(null)); // fail-open on network error
-    }, [token, user]);
+            .catch(() => setIsVerifiedDoctor(null));
+    };
+    useEffect(() => { checkVerification(); }, [token, user]);
 
     const headerEnter = useSharedValue(0);
     useEffect(() => {
@@ -165,6 +171,8 @@ export default function DoctorDashboardScreen() {
         const s = String(r.status || '').toLowerCase();
         if (r.active === false) return true;
         if (s === 'revoked' || s === 'expired' || s === 'rejected') return true;
+        // Check time-based expiry (backend may return active=true but expiresAt < now)
+        if (r.expiresAt && new Date(r.expiresAt).getTime() < Date.now()) return true;
         return false;
     };
     const activeShared = allShared.filter((r) => !isInactive(r));
@@ -177,6 +185,7 @@ export default function DoctorDashboardScreen() {
     const handleRefresh = () => {
         sharedRecordsQuery.refetch();
         pendingClaimsQuery.refetch();
+        checkVerification(); // re-check on-chain verification status
     };
 
     // Used after successful claim — invalidates so lists auto-refresh.
@@ -205,22 +214,12 @@ export default function DoctorDashboardScreen() {
             Alert.alert('Phê duyệt đã hết hạn', 'Bệnh nhân đã ký hơn 24 giờ trước. Vui lòng yêu cầu bệnh nhân phê duyệt lại.');
             return;
         }
-        // Liability confirmation: doctor must acknowledge responsibility before viewing
+        // Liability confirmation via modal with checkbox
         const accepted = await new Promise<boolean>((resolve) => {
-            Alert.alert(
-                'Xác nhận trách nhiệm truy cập',
-                `Bạn sắp truy cập hồ sơ y tế của BN ${truncateAddr(claim.patientAddress)}.\n\n` +
-                'Bằng việc tiếp tục, bạn xác nhận:\n' +
-                '• Truy cập chỉ phục vụ mục đích y tế hợp pháp\n' +
-                '• Không tiết lộ thông tin cho bên thứ ba trái phép\n' +
-                '• Mọi hành động truy cập đều được ghi log on-chain và có thể bị kiểm toán\n' +
-                '• Bạn chịu trách nhiệm pháp lý nếu sử dụng sai mục đích',
-                [
-                    { text: 'Huỷ', style: 'cancel', onPress: () => resolve(false) },
-                    { text: 'Tôi đồng ý và chịu trách nhiệm', style: 'destructive', onPress: () => resolve(true) },
-                ],
-                { cancelable: true, onDismiss: () => resolve(false) }
-            );
+            setLiabilityModal({
+                type: 'claim',
+                data: { resolve, patientLabel: truncateAddr(claim.patientAddress) },
+            });
         });
         if (!accepted) return;
         setClaimingId(claim.requestId);
@@ -232,48 +231,66 @@ export default function DoctorDashboardScreen() {
                 maxPriorityFeePerGas: parseGwei('0.1'),
             };
 
-            // TWO-STEP on-chain approval required by EHRSystemSecure:
-            //   Step A: patient approval (via EIP-712 signature)
-            //   Step B: doctor approval (via msg.sender)
-            //   MIN_APPROVAL_DELAY = 15s between the two.
+            // TWO-STEP on-chain approval (EHRSystemSecure):
+            //   Step A: patient approval (EIP-712 signature)
+            //   Step B: doctor approval (msg.sender)
+            //   MIN_APPROVAL_DELAY = 15s between first and second approval.
             //
-            // Edge cases:
-            //   - If step A was done in a previous attempt, it reverts → catch & skip to B.
-            //   - If request is already Completed, both revert → outer catch handles it.
+            // OPTIMIZATION: DoctorRequestAccessScreen auto-approves as requester
+            // (Step B) 17s after requestAccess in the background. If that succeeded,
+            // the request is RequesterApproved → Step A completes it instantly.
+            // If auto-approve didn't fire, we fall back to the 2-step flow.
 
-            // STEP A: Submit patient's EIP-712 approval → Pending → PatientApproved
-            let patientApprovalDone = false;
-            try {
-                await walletClient.writeContract({
-                    address: EHR_SYSTEM_ADDRESS,
-                    abi: EHR_SYSTEM_ABI,
-                    functionName: 'confirmAccessRequestWithSignature',
-                    args: [claim.requestId as `0x${string}`, BigInt(claim.signatureDeadline), claim.signature as `0x${string}`],
-                    ...gasOpts,
-                });
-                patientApprovalDone = true;
-            } catch (stepAErr: any) {
-                // Already PatientApproved from previous attempt → skip to step B.
-                console.log('Step A skipped (likely already approved):', stepAErr?.message?.slice(0, 80));
-            }
-
-            // Wait MIN_APPROVAL_DELAY (15s) only if step A just ran (new first approval).
-            // If step A was skipped (already approved before), the 15s has already elapsed.
-            if (patientApprovalDone) {
-                await new Promise((resolve) => setTimeout(resolve, 17000));
-            }
-
-            // STEP B: Doctor's own approval → PatientApproved → Completed → consent minted!
-            const txHash = await walletClient.writeContract({
+            // Step A: submit patient's approval via signature
+            await walletClient.writeContract({
                 address: EHR_SYSTEM_ADDRESS,
                 abi: EHR_SYSTEM_ABI,
-                functionName: 'confirmAccessRequest',
-                args: [claim.requestId as `0x${string}`],
+                functionName: 'confirmAccessRequestWithSignature',
+                args: [claim.requestId as `0x${string}`, BigInt(claim.signatureDeadline), claim.signature as `0x${string}`],
                 ...gasOpts,
             });
 
-            await requestService.markClaimed(claim.requestId, txHash);
-            Alert.alert('Đã nhận quyền truy cập!', 'Consent đã được mint on-chain. Hồ sơ sẽ xuất hiện trong danh sách bên dưới.');
+            // Step B: try doctor's own approval immediately.
+            // - If auto-approve already ran → request was RequesterApproved → Step A
+            //   just completed it → Step B reverts (already completed) → catch & skip.
+            // - If auto-approve didn't run → request is PatientApproved → Step B
+            //   fails with TooSoon → wait 17s → retry.
+            let txHash: string = claim.requestId; // fallback for markClaimed
+            try {
+                txHash = await walletClient.writeContract({
+                    address: EHR_SYSTEM_ADDRESS,
+                    abi: EHR_SYSTEM_ABI,
+                    functionName: 'confirmAccessRequest',
+                    args: [claim.requestId as `0x${string}`],
+                    ...gasOpts,
+                });
+            } catch (stepBErr: any) {
+                const msg = String(stepBErr?.message || '');
+                if (msg.includes('TooSoon') || msg.includes('0x3d693ada')) {
+                    // Auto-approve didn't fire → need to wait MIN_APPROVAL_DELAY
+                    await new Promise((r) => setTimeout(r, 17000));
+                    txHash = await walletClient.writeContract({
+                        address: EHR_SYSTEM_ADDRESS,
+                        abi: EHR_SYSTEM_ABI,
+                        functionName: 'confirmAccessRequest',
+                        args: [claim.requestId as `0x${string}`],
+                        ...gasOpts,
+                    });
+                } else {
+                    // Already Completed or other state → skip (consent already minted)
+                    console.log('Step B skipped:', msg.slice(0, 60));
+                }
+            }
+
+            const claimResult: any = await requestService.markClaimed(claim.requestId, txHash);
+            if (claimResult?.code === 'REVOKED_AFTER_APPROVAL') {
+                Alert.alert(
+                    'Bệnh nhân đã thu hồi quyền',
+                    'Bệnh nhân đã phê duyệt nhưng sau đó thu hồi quyền truy cập trước khi bạn nhận. Vui lòng yêu cầu lại nếu cần xem hồ sơ.'
+                );
+            } else {
+                Alert.alert('Đã nhận quyền truy cập!', 'Consent đã được mint on-chain. Hồ sơ sẽ xuất hiện trong danh sách bên dưới.');
+            }
             invalidateAll();
         } catch (err: any) {
             const msg = String(err?.message || '');
@@ -302,16 +319,10 @@ export default function DoctorDashboardScreen() {
         if (record?.status === 'pending') {
             const patientAddr = record?.record?.ownerAddress || record?.senderAddress || '';
             const ok = await new Promise<boolean>((resolve) => {
-                Alert.alert(
-                    'Xác nhận trách nhiệm truy cập',
-                    `Bạn sắp lần đầu truy cập hồ sơ của BN ${truncateAddr(patientAddr)}.\n\n` +
-                    'Tôi xác nhận đây là truy cập y tế hợp pháp, sẽ không tiết lộ trái phép, và mọi hành động đều được ghi log on-chain.',
-                    [
-                        { text: 'Huỷ', style: 'cancel', onPress: () => resolve(false) },
-                        { text: 'Đồng ý và xem', style: 'destructive', onPress: () => resolve(true) },
-                    ],
-                    { cancelable: true, onDismiss: () => resolve(false) }
-                );
+                setLiabilityModal({
+                    type: 'view',
+                    data: { resolve, patientLabel: truncateAddr(patientAddr) },
+                });
             });
             if (!ok) return;
         }
@@ -368,11 +379,10 @@ export default function DoctorDashboardScreen() {
         });
     };
 
-    const handleCreateUpdate = (record: SharedRecord) => {
+    const handleCreateUpdate = async (record: SharedRecord) => {
         const patientAddress = record?.record?.ownerAddress || record?.senderAddress || '';
         if (!record?.cidHash || !patientAddress) { Alert.alert('Lỗi', 'Thiếu thông tin hồ sơ hoặc bệnh nhân.'); return; }
         // Read-only share: patient explicitly marked this record as Chỉ đọc.
-        // Block any attempt to start an update flow even if the button somehow renders.
         if (record?.includeUpdates === false) {
             Alert.alert(
                 'Hồ sơ chỉ đọc',
@@ -380,6 +390,45 @@ export default function DoctorDashboardScreen() {
             );
             return;
         }
+
+        // BRANCH GUARD: check if this version already has newer children.
+        // If doctor only has an older version (e.g. V2) but V3→V4 exist,
+        // updating V2 creates a BRANCH — dangerous in medical context because
+        // the new version won't account for data in V3/V4.
+        try {
+            const chainRes: any = await recordService.getRecordChain(record.cidHash);
+            const children = chainRes?.children || [];
+            if (children.length > 0) {
+                // Find the latest descendant
+                let latest = children[children.length - 1];
+                let depth = 0;
+                while (depth < 20) {
+                    const nextChain: any = await recordService.getRecordChain(latest.cidHash);
+                    const nextChildren = nextChain?.children || [];
+                    if (nextChildren.length === 0) break;
+                    latest = nextChildren[nextChildren.length - 1];
+                    depth++;
+                }
+
+                const proceed = await new Promise<boolean>((resolve) => {
+                    Alert.alert(
+                        'Có phiên bản mới hơn',
+                        `Hồ sơ này đã có phiên bản mới hơn (v${(latest.version || depth + 2)}).\n\n` +
+                        'Cập nhật từ phiên bản cũ sẽ tạo NHÁNH — phiên bản mới có thể không phản ánh đúng dữ liệu lâm sàng mới nhất.\n\n' +
+                        'Khuyến nghị: cập nhật từ phiên bản mới nhất.',
+                        [
+                            { text: 'Huỷ', style: 'cancel', onPress: () => resolve(false) },
+                            { text: 'Vẫn tạo nhánh', style: 'destructive', onPress: () => resolve(true) },
+                        ],
+                        { cancelable: true, onDismiss: () => resolve(false) }
+                    );
+                });
+                if (!proceed) return;
+            }
+        } catch {
+            // Chain check failed — continue without guard (non-fatal)
+        }
+
         navigation.navigate('DoctorCreateUpdate', { parentCidHash: record.cidHash, patientAddress });
     };
 
@@ -645,6 +694,18 @@ export default function DoctorDashboardScreen() {
                     />
                 }
                 showsVerticalScrollIndicator={false}
+            />
+            <LiabilityConfirmModal
+                visible={!!liabilityModal}
+                patientLabel={liabilityModal?.data?.patientLabel || ''}
+                onConfirm={() => {
+                    liabilityModal?.data?.resolve?.(true);
+                    setLiabilityModal(null);
+                }}
+                onCancel={() => {
+                    liabilityModal?.data?.resolve?.(false);
+                    setLiabilityModal(null);
+                }}
             />
         </SafeAreaView>
     );

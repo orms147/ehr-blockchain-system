@@ -8,6 +8,7 @@ import EmptyState from '../../components/EmptyState';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import useAuthStore from '../../store/authStore';
 import keyShareService from '../../services/keyShare.service';
+import { formatDate, formatExpiry } from '../../utils/dateFormatting';
 
 type ExpiredItem = {
     id?: string;
@@ -20,15 +21,6 @@ type ExpiredItem = {
 };
 
 const truncateAddr = (addr?: string) => (addr ? `${addr.substring(0, 8)}...${addr.slice(-4)}` : '???');
-
-const formatDate = (dateStr?: string) => {
-    if (!dateStr) return '';
-    try {
-        return new Date(dateStr).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' });
-    } catch {
-        return dateStr;
-    }
-};
 
 const ExpiredRecordItem = React.memo(({ item }: { item: ExpiredItem }) => {
     const ownerAddr = item.record?.ownerAddress || item.senderAddress;
@@ -67,7 +59,7 @@ const ExpiredRecordItem = React.memo(({ item }: { item: ExpiredItem }) => {
                 <Clock size={12} color="#94A3B8" style={{ marginRight: 4 }} />
                 <Text fontSize="$2" color="$color9">Chia sẻ: {formatDate(item.createdAt)}</Text>
                 {item.expiresAt ? (
-                    <Text fontSize="$2" style={{ color: '#b91c1c', marginLeft: 12 }}>Hết hạn: {formatDate(item.expiresAt)}</Text>
+                    <Text fontSize="$2" style={{ color: '#b91c1c', marginLeft: 12 }}>Hết hạn: {formatExpiry(item.expiresAt)}</Text>
                 ) : null}
             </XStack>
         </View>

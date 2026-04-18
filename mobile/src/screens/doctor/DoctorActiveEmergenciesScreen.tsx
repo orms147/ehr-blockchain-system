@@ -17,6 +17,7 @@ import {
     EHR_SURFACE_LOW,
     EHR_SURFACE_LOWEST,
 } from '../../constants/uiColors';
+import { formatDateTime as formatDateTimeShared, formatExpiry } from '../../utils/dateFormatting';
 
 type EmergencyItem = {
     id: string;
@@ -34,16 +35,7 @@ type EmergencyItem = {
 const truncateAddr = (addr?: string | null) =>
     addr ? `${addr.substring(0, 8)}...${addr.slice(-6)}` : '???';
 
-const formatDateTime = (s?: string | null) => {
-    if (!s) return '';
-    try {
-        return new Date(s).toLocaleString('vi-VN', {
-            day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit',
-        });
-    } catch {
-        return s;
-    }
-};
+const formatDateTime = (s?: string | null) => formatDateTimeShared(s);
 
 const remainingHours = (expiresAt?: string) => {
     if (!expiresAt) return 0;
@@ -145,7 +137,7 @@ export default function DoctorActiveEmergenciesScreen({ navigation }: any) {
 
                                 <XStack style={{ alignItems: 'center', marginTop: 8 }}>
                                     <Clock size={12} color={EHR_ON_SURFACE_VARIANT} style={{ marginRight: 6 }} />
-                                    <Text fontSize="$2" color="$color10">Hết hạn: {formatDateTime(item.expiresAt)}</Text>
+                                    <Text fontSize="$2" color="$color10">Hết hạn: {formatExpiry(item.expiresAt)}</Text>
                                 </XStack>
                             </View>
                         );

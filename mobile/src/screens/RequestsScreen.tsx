@@ -13,7 +13,7 @@ import authService from '../services/auth.service';
 import consentService from '../services/consent.service';
 import keyShareService from '../services/keyShare.service';
 import recordService from '../services/record.service';
-import { getOrCreateEncryptionKeypair, encryptForRecipient } from '../services/nacl-crypto';
+import { getOrCreateEncryptionKeypair, encryptForRecipient, decryptFromSender } from '../services/nacl-crypto';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import walletActionService from '../services/walletAction.service';
 import {
@@ -31,6 +31,7 @@ import {
     EHR_TERTIARY,
     EHR_TERTIARY_FIXED,
 } from '../constants/uiColors';
+import { formatDateTime, formatExpiry, getExpiryUrgency } from '../utils/dateFormatting';
 
 type RequestItem = {
     id?: string;
@@ -39,7 +40,11 @@ type RequestItem = {
     requestType?: number;
     createdAt?: string;
     deadline?: string;
-    recordTitle?: string;
+    recordTitle?: string | null;
+    recordType?: string | null;
+    recordDescription?: string | null;
+    recordCreatedAt?: string | null;
+    parentCidHash?: string | null;
     cidHash?: string;
     status?: 'pending' | 'approved' | 'rejected' | 'signed' | string;
     signatureDeadline?: string | null;
@@ -82,16 +87,7 @@ type PendingUpdateItem = {
 
 type FilterKey = 'all' | 'pending' | 'approved' | 'rejected';
 
-const formatDate = (dateStr?: string) => {
-    if (!dateStr) return '';
-    try {
-        return new Date(dateStr).toLocaleDateString('vi-VN', {
-            day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit',
-        });
-    } catch {
-        return dateStr;
-    }
-};
+const formatDate = (dateStr?: string) => formatDateTime(dateStr);
 
 const getRequestTypeLabel = (reqType?: number) => {
     switch (reqType) {
@@ -101,6 +97,20 @@ const getRequestTypeLabel = (reqType?: number) => {
         case 2: return 'Khẩn cấp';
         default: return 'Không rõ';
     }
+};
+
+// Map internal recordType codes to Vietnamese labels for patient-facing UI.
+// Codes come from CreateRecordScreen.tsx / DoctorCreateUpdateScreen.tsx typeOptions.
+const RECORD_TYPE_LABELS: Record<string, string> = {
+    checkup: 'Khám tổng quát',
+    lab_result: 'Xét nghiệm',
+    prescription: 'Đơn thuốc',
+    diagnosis: 'Chẩn đoán',
+    local_record: 'Hồ sơ tự tạo',
+};
+const getRecordTypeLabel = (code?: string | null) => {
+    if (!code) return null;
+    return RECORD_TYPE_LABELS[code.toLowerCase()] || code;
 };
 
 const getStatusLabel = (status?: string) => {
@@ -162,12 +172,56 @@ const RequestRenderItem = React.memo(({
                             {truncateAddr(item.requesterAddress)}
                         </Text>
                     </XStack>
-                    {item.recordTitle ? <Text fontSize="$3" style={{ color: EHR_PRIMARY }}>Hồ sơ: {item.recordTitle}</Text> : null}
                 </YStack>
                 <View style={{ backgroundColor: statusStyle.bg, borderRadius: 10, paddingVertical: 4, paddingHorizontal: 8 }}>
                     <Text style={{ color: statusStyle.text, fontSize: 12, fontWeight: '700' }}>{getStatusLabel(normalizedStatus)}</Text>
                 </View>
             </XStack>
+
+            {/* Record identification panel — patient needs to know WHICH record is being asked for. */}
+            {item.requestType === 1 ? (
+                <View style={{ backgroundColor: EHR_SECONDARY_CONTAINER, borderRadius: 10, padding: 10, marginBottom: 10 }}>
+                    <Text fontSize="$2" fontWeight="700" style={{ color: EHR_SECONDARY, marginBottom: 2 }}>
+                        Uỷ quyền toàn bộ
+                    </Text>
+                    <Text fontSize="$2" color="$color11">
+                        Áp dụng cho TẤT CẢ hồ sơ của bạn — không gắn với một hồ sơ cụ thể.
+                    </Text>
+                </View>
+            ) : (
+                <View style={{ backgroundColor: EHR_PRIMARY_FIXED, borderRadius: 10, padding: 10, marginBottom: 10 }}>
+                    <XStack style={{ alignItems: 'center', marginBottom: item.recordDescription ? 6 : 2 }}>
+                        <FilePlus2 size={14} color={EHR_PRIMARY} style={{ marginRight: 6 }} />
+                        <Text fontSize="$3" fontWeight="700" style={{ color: EHR_PRIMARY, flex: 1 }} numberOfLines={1}>
+                            {item.recordTitle || 'Hồ sơ chưa rõ tên'}
+                        </Text>
+                    </XStack>
+                    {item.recordDescription ? (
+                        <Text fontSize="$2" color="$color11" style={{ marginBottom: 4, lineHeight: 18 }} numberOfLines={3}>
+                            {item.recordDescription}
+                        </Text>
+                    ) : null}
+                    <XStack style={{ flexWrap: 'wrap', gap: 6, marginTop: 4 }}>
+                        {item.recordType ? (
+                            <View style={{ backgroundColor: '#FFFFFF', borderRadius: 6, paddingVertical: 2, paddingHorizontal: 6 }}>
+                                <Text fontSize="$1" style={{ color: EHR_PRIMARY, fontWeight: '600' }}>
+                                    {getRecordTypeLabel(item.recordType)}
+                                </Text>
+                            </View>
+                        ) : null}
+                        {item.recordCreatedAt ? (
+                            <Text fontSize="$1" color="$color9">
+                                Ngày tạo: {formatDate(item.recordCreatedAt)}
+                            </Text>
+                        ) : null}
+                        {item.parentCidHash ? (
+                            <Text fontSize="$1" color="$color9">
+                                • Bản cập nhật
+                            </Text>
+                        ) : null}
+                    </XStack>
+                </View>
+            )}
 
             <XStack style={{ alignItems: 'center', marginBottom: isPending ? 12 : 0, flexWrap: 'wrap', gap: 6 }}>
                 <View style={{ backgroundColor: EHR_PRIMARY_FIXED, borderRadius: 8, paddingVertical: 4, paddingHorizontal: 8 }}>
@@ -186,6 +240,19 @@ const RequestRenderItem = React.memo(({
                     <Clock size={12} color={EHR_ON_SURFACE_VARIANT} style={{ marginRight: 4 }} />
                     <Text fontSize="$2" color="$color9">{formatDate(item.createdAt)}</Text>
                 </XStack>
+                {item.deadline && isPending ? (() => {
+                    const urgency = getExpiryUrgency(item.deadline);
+                    const urgent = urgency === 'urgent' || urgency === 'soon';
+                    const color = urgency === 'expired' ? EHR_ERROR : urgent ? '#B45309' : EHR_ON_SURFACE_VARIANT;
+                    return (
+                        <XStack style={{ alignItems: 'center' }}>
+                            <Clock size={12} color={color} style={{ marginRight: 4 }} />
+                            <Text fontSize="$2" style={{ color }} fontWeight={urgent ? '700' : '500'}>
+                                Duyệt trước: {formatExpiry(item.deadline)}
+                            </Text>
+                        </XStack>
+                    );
+                })() : null}
             </XStack>
 
             {/* Signed: show countdown for doctor to claim */}
@@ -351,6 +418,62 @@ export default function RequestsScreen() {
             }
         }
 
+        // BUG-E fix: Option B downgrade check at approve time.
+        // Contract overwrites `_consents[keccak256(P, doctor, root)]` — a second
+        // request with weaker permissions silently destroys the previous grant.
+        // Mirror the RecordDetailScreen guard so patient is warned before approving
+        // a request that lowers existing permissions. Skip for FullDelegation
+        // (type 1) which has no cidHash to look up.
+        if (request.cidHash && request.requestType !== 1 && doctorAddr) {
+            try {
+                const existing: any = await keyShareService.getKeyForRecord(request.cidHash);
+                // `existing` is the doctor's KeyShare row — only present when doctor
+                // already has access. status 'revoked'/'rejected' means previous consent
+                // is already dead; skip the downgrade guard.
+                const alreadyActive = existing?.status && existing.status !== 'revoked' && existing.status !== 'rejected';
+                if (alreadyActive) {
+                    const oldAllowDelegate = existing.allowDelegate === true;
+                    const oldIncludeUpdates = existing.includeUpdates !== false;
+                    // Request types: 0=DirectAccess, 2=RecordDelegation, 1=FullDelegation (skipped above)
+                    const newAllowDelegate = request.requestType === 2;
+                    const newIncludeUpdates = true; // contract hardcodes true for both 0 and 2
+
+                    // Duration comparison: null expiry = forever (Infinity)
+                    const oldExpiryMs = existing.expiresAt
+                        ? new Date(existing.expiresAt).getTime()
+                        : Number.POSITIVE_INFINITY;
+                    const newExpiryMs = request.consentDurationHours
+                        ? Date.now() + request.consentDurationHours * 3600 * 1000
+                        : Number.POSITIVE_INFINITY;
+                    const oldStillActive = oldExpiryMs > Date.now();
+
+                    const flagDowngrade = (oldAllowDelegate && !newAllowDelegate)
+                                       || (oldIncludeUpdates && !newIncludeUpdates);
+                    const durationDowngrade = oldStillActive && newExpiryMs < oldExpiryMs;
+
+                    if (flagDowngrade || durationDowngrade) {
+                        const reason = flagDowngrade
+                            ? `Quyền hiện tại: ${oldAllowDelegate ? '"Đọc & uỷ quyền lại"' : '"Đọc & cập nhật"'}. Yêu cầu mới sẽ giảm quyền.`
+                            : `Quyền hiện tại còn hạn dài hơn. Phê duyệt sẽ rút ngắn thời hạn.`;
+                        const confirmed = await new Promise<boolean>((resolve) => {
+                            Alert.alert(
+                                'Cảnh báo: yêu cầu mới GHI ĐÈ quyền cũ',
+                                `${reason}\n\nHệ thống chỉ lưu 1 consent cho mỗi bác sĩ/hồ sơ — phê duyệt yêu cầu này sẽ thay thế quyền đang có.\n\nNếu muốn giữ quyền cũ, hãy bấm "Từ chối".`,
+                                [
+                                    { text: 'Từ chối', style: 'cancel', onPress: () => resolve(false) },
+                                    { text: 'Vẫn phê duyệt', style: 'destructive', onPress: () => resolve(true) },
+                                ],
+                                { cancelable: true, onDismiss: () => resolve(false) }
+                            );
+                        });
+                        if (!confirmed) return;
+                    }
+                }
+            } catch {
+                // Check failed (no existing KeyShare, network error, etc.) — allow approval to proceed.
+            }
+        }
+
         setApprovingId(reqId);
         try {
             const { walletClient, address } = await walletActionService.getWalletContext();
@@ -366,6 +489,44 @@ export default function RequestsScreen() {
             let encryptedKeyPayload: string | null = null;
             let senderPublicKey: string | null = null;
 
+            // Helper: resolve {cid, aesKey} for a given cidHash.
+            // Order: AsyncStorage (fast path) → self-share backup on server (fallback).
+            // The self-share fallback handles versions the doctor created that the
+            // patient has never decrypted on this device — without it, cascade
+            // silently skips them and the doctor ends up with ancestor-fallback
+            // payloads that decrypt to the WRONG version's content.
+            const resolveLocalKey = async (
+                cidHash: string,
+                localMap: Record<string, any>,
+                myKeypair: { publicKey: string; secretKey: string }
+            ): Promise<{ cid: string; aesKey: string } | null> => {
+                const direct = localMap[cidHash];
+                if (direct?.cid && direct?.aesKey) return { cid: direct.cid, aesKey: direct.aesKey };
+                try {
+                    const selfShare: any = await keyShareService.getKeyForRecord(cidHash);
+                    if (!selfShare?.encryptedPayload || !selfShare?.senderPublicKey) return null;
+                    const decrypted = decryptFromSender(
+                        selfShare.encryptedPayload,
+                        selfShare.senderPublicKey,
+                        myKeypair.secretKey,
+                    );
+                    if (!decrypted) return null;
+                    const parsed = JSON.parse(decrypted);
+                    if (!parsed?.cid || !parsed?.aesKey) return null;
+                    // Cache so subsequent shares + decrypt calls are instant.
+                    localMap[cidHash] = {
+                        ...(localMap[cidHash] || {}),
+                        cid: parsed.cid,
+                        aesKey: parsed.aesKey,
+                    };
+                    await AsyncStorage.setItem('ehr_local_records', JSON.stringify(localMap));
+                    return { cid: parsed.cid, aesKey: parsed.aesKey };
+                } catch (err) {
+                    console.warn('Self-share fallback failed for', cidHash, err);
+                    return null;
+                }
+            };
+
             try {
                 const myKeypair = await getOrCreateEncryptionKeypair(walletClient, address);
                 senderPublicKey = myKeypair.publicKey;
@@ -373,9 +534,11 @@ export default function RequestsScreen() {
                 const doctorPubKey = docKeyRes?.encryptionPublicKey;
                 const localRecordsStr = await AsyncStorage.getItem('ehr_local_records');
                 const localRecords = localRecordsStr ? JSON.parse(localRecordsStr) : {};
-                const localRecord = localRecords[request.cidHash || ''];
-                if (localRecord && doctorPubKey) {
-                    const keyPayload = JSON.stringify({ cid: localRecord.cid, aesKey: localRecord.aesKey });
+                const resolved = request.cidHash
+                    ? await resolveLocalKey(request.cidHash, localRecords, myKeypair)
+                    : null;
+                if (resolved && doctorPubKey) {
+                    const keyPayload = JSON.stringify({ cid: resolved.cid, aesKey: resolved.aesKey });
                     encryptedKeyPayload = encryptForRecipient(keyPayload, doctorPubKey, myKeypair.secretKey);
                 }
             } catch (err) {
@@ -407,10 +570,19 @@ export default function RequestsScreen() {
                         (v: any) => v?.cidHash && v.cidHash !== request.cidHash
                     );
 
+                    // Compute KeyShare.expiresAt from consentDurationHours so the
+                    // cascade rows match the on-chain consent lifetime instead of
+                    // defaulting to null ("Vĩnh viễn").
+                    const cascadeExpiresAt = request.consentDurationHours
+                        ? new Date(Date.now() + request.consentDurationHours * 3600 * 1000).toISOString()
+                        : null;
                     for (const v of allVersions) {
-                        const vLocal = localRecords2[v.cidHash];
-                        if (!vLocal?.cid || !vLocal?.aesKey) continue;
-                        const vPayload = JSON.stringify({ cid: vLocal.cid, aesKey: vLocal.aesKey });
+                        // Same fallback as main flow: if patient doesn't have this
+                        // version's aesKey in AsyncStorage, pull it from their
+                        // self-share backup on the server before sharing to doctor.
+                        const vKey = await resolveLocalKey(v.cidHash, localRecords2, myKeypair2);
+                        if (!vKey) continue;
+                        const vPayload = JSON.stringify({ cid: vKey.cid, aesKey: vKey.aesKey });
                         const vEncrypted = encryptForRecipient(vPayload, doctorPubKey2, myKeypair2.secretKey);
                         try {
                             await keyShareService.shareKey({
@@ -418,7 +590,7 @@ export default function RequestsScreen() {
                                 recipientAddress: request.requesterAddress || '',
                                 encryptedPayload: vEncrypted,
                                 senderPublicKey: myKeypair2.publicKey,
-                                expiresAt: null,
+                                expiresAt: cascadeExpiresAt,
                             });
                         } catch (e) {
                             console.warn('Cascade keyShare failed for version', v.cidHash, e);

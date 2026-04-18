@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, StyleSheet } from 'react-native';
+import { ActivityIndicator, Alert, Modal, Pressable, ScrollView, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, {
@@ -18,6 +18,13 @@ import {
     HeartPulse,
     ShieldCheck,
     Stethoscope,
+    X,
+    FileText,
+    Lock,
+    Share2,
+    UserCheck,
+    Clock,
+    Shield,
 } from 'lucide-react-native';
 import { YStack, XStack, Text, View } from 'tamagui';
 import useAuthStore, { ROLE_CONFIG } from '../store/authStore';
@@ -70,6 +77,31 @@ const REGISTRATION_OPTIONS = [
         iconColor: EHR_SECONDARY,
     },
 ] as const;
+
+// Features shown in the consent modal PER role. Written in plain Vietnamese for
+// all age groups — no blockchain jargon. Each feature is a short benefit statement.
+const ROLE_FEATURES: Record<string, { title: string; features: { icon: any; text: string }[] }> = {
+    patient: {
+        title: 'Chức năng dành cho Bệnh nhân',
+        features: [
+            { icon: FileText, text: 'Tạo và lưu trữ hồ sơ sức khoẻ (khám bệnh, xét nghiệm, đơn thuốc) an toàn trên hệ thống.' },
+            { icon: Lock, text: 'Hồ sơ được mã hoá. Chỉ bạn mới có quyền xem — không ai khác, kể cả hệ thống.' },
+            { icon: Share2, text: 'Tự quyết định chia sẻ hồ sơ cho bác sĩ. Bạn chọn chia sẻ cho ai, bao lâu, và thu hồi bất cứ lúc nào.' },
+            { icon: Clock, text: 'Xem lịch sử ai đã truy cập hồ sơ của bạn và khi nào.' },
+            { icon: Shield, text: 'Mọi hành động được ghi lại minh bạch, không thể sửa đổi hay xoá.' },
+        ],
+    },
+    doctor: {
+        title: 'Chức năng dành cho Bác sĩ',
+        features: [
+            { icon: FileText, text: 'Gửi yêu cầu xem hồ sơ sức khoẻ của bệnh nhân. Bệnh nhân sẽ duyệt trước khi bạn xem được.' },
+            { icon: UserCheck, text: 'Cần được tổ chức y tế xác minh chứng chỉ hành nghề trước khi đọc hồ sơ.' },
+            { icon: Share2, text: 'Thêm kết quả khám, chẩn đoán, đơn thuốc vào hồ sơ bệnh nhân khi đã được cấp quyền truy cập.' },
+            { icon: Clock, text: 'Quyền truy cập có thời hạn. Sau khi hết hạn, bạn không còn xem được hồ sơ.' },
+            { icon: Shield, text: 'Mọi hành động đều được ghi nhận minh bạch và bệnh nhân có thể kiểm tra bất kỳ lúc nào.' },
+        ],
+    },
+};
 
 const SPRING_CONFIG = { damping: 18, stiffness: 120, mass: 0.8 };
 const CARD_STAGGER = 100;
@@ -172,6 +204,7 @@ export default function RoleSelectionScreen() {
         needsRoleRegistration,
         completeRoleSelection,
         refreshAuthSession,
+        logout,
     } = useAuthStore();
 
     const [busyRole, setBusyRole] = useState<string | null>(null);
@@ -277,12 +310,24 @@ export default function RoleSelectionScreen() {
         }
     };
 
+    const [consentVisible, setConsentVisible] = useState(false);
+    const [consentChecked, setConsentChecked] = useState(false);
+
     const handleContinue = () => {
         if (!selectedRole) return;
         if (registrationMode) {
-            handleRegisterRole(selectedRole as 'patient' | 'doctor');
+            // Show consent modal before registration
+            setConsentChecked(false);
+            setConsentVisible(true);
         } else {
             handleSelectRole(selectedRole);
+        }
+    };
+
+    const handleConsentConfirm = () => {
+        setConsentVisible(false);
+        if (selectedRole) {
+            handleRegisterRole(selectedRole as 'patient' | 'doctor');
         }
     };
 
@@ -475,9 +520,21 @@ export default function RoleSelectionScreen() {
                 {/* Header */}
                 <Animated.View style={[styles.header, headerAnimStyle]}>
                     <XStack style={styles.headerRow}>
-                        <View style={styles.backButton}>
+                        <Pressable
+                            style={styles.backButton}
+                            onPress={() => {
+                                Alert.alert(
+                                    'Huỷ đăng ký?',
+                                    'Bạn sẽ được đưa về màn hình đăng nhập.',
+                                    [
+                                        { text: 'Ở lại', style: 'cancel' },
+                                        { text: 'Quay lại', style: 'destructive', onPress: () => logout() },
+                                    ],
+                                );
+                            }}
+                        >
                             <ArrowLeft size={18} color={EHR_ON_SURFACE_VARIANT} />
-                        </View>
+                        </Pressable>
                         <XStack style={styles.brandWrap}>
                             <ShieldCheck size={18} color={EHR_PRIMARY} />
                             <Text style={styles.brandText}>Sổ sức khoẻ</Text>
@@ -539,6 +596,106 @@ export default function RoleSelectionScreen() {
                     </Text>
                 </Animated.View>
             </SafeAreaView>
+
+            {/* ── Consent Modal ── */}
+            <Modal visible={consentVisible} transparent animationType="fade" onRequestClose={() => setConsentVisible(false)}>
+                <Pressable
+                    style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', padding: 20 }}
+                    onPress={() => setConsentVisible(false)}
+                >
+                    <Pressable onPress={(e) => e.stopPropagation()}>
+                        <View style={{ backgroundColor: EHR_SURFACE_LOWEST, borderRadius: 24, padding: 20, maxHeight: '85%' }}>
+                            {/* Header */}
+                            <XStack style={{ justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                                <XStack style={{ alignItems: 'center', gap: 8 }}>
+                                    <ShieldCheck size={22} color={EHR_PRIMARY} />
+                                    <Text style={{ fontSize: 17, fontWeight: '800', color: EHR_ON_SURFACE }}>
+                                        Xác nhận đăng ký
+                                    </Text>
+                                </XStack>
+                                <Pressable onPress={() => setConsentVisible(false)} style={{ padding: 4 }}>
+                                    <X size={18} color={EHR_ON_SURFACE_VARIANT} />
+                                </Pressable>
+                            </XStack>
+
+                            <ScrollView style={{ maxHeight: 400 }} showsVerticalScrollIndicator={false}>
+                                {/* Role title */}
+                                <View style={{ backgroundColor: EHR_PRIMARY_FIXED, borderRadius: 12, padding: 12, marginBottom: 16 }}>
+                                    <Text style={{ fontSize: 15, fontWeight: '700', color: EHR_PRIMARY, textAlign: 'center' }}>
+                                        {selectedRole ? ROLE_FEATURES[selectedRole]?.title : ''}
+                                    </Text>
+                                </View>
+
+                                {/* Features list */}
+                                <YStack style={{ gap: 14, marginBottom: 20 }}>
+                                    {selectedRole && ROLE_FEATURES[selectedRole]?.features.map((feat, idx) => {
+                                        const IconComp = feat.icon;
+                                        return (
+                                            <XStack key={idx} style={{ gap: 12, alignItems: 'flex-start' }}>
+                                                <View style={{
+                                                    width: 32, height: 32, borderRadius: 10,
+                                                    backgroundColor: EHR_PRIMARY_FIXED,
+                                                    alignItems: 'center', justifyContent: 'center',
+                                                    marginTop: 2,
+                                                }}>
+                                                    <IconComp size={16} color={EHR_PRIMARY} />
+                                                </View>
+                                                <Text style={{ flex: 1, fontSize: 14, color: EHR_ON_SURFACE, lineHeight: 20 }}>
+                                                    {feat.text}
+                                                </Text>
+                                            </XStack>
+                                        );
+                                    })}
+                                </YStack>
+                            </ScrollView>
+
+                            {/* Checkbox */}
+                            <Pressable
+                                onPress={() => setConsentChecked(!consentChecked)}
+                                style={{
+                                    flexDirection: 'row', alignItems: 'center', gap: 10,
+                                    padding: 12, backgroundColor: EHR_SURFACE_LOW, borderRadius: 12,
+                                    borderWidth: 1, borderColor: EHR_OUTLINE_VARIANT, marginBottom: 16,
+                                }}
+                            >
+                                <View style={{
+                                    width: 22, height: 22, borderRadius: 6,
+                                    borderWidth: 2, borderColor: consentChecked ? EHR_PRIMARY : EHR_OUTLINE_VARIANT,
+                                    backgroundColor: consentChecked ? EHR_PRIMARY : 'transparent',
+                                    alignItems: 'center', justifyContent: 'center',
+                                }}>
+                                    {consentChecked ? <Text style={{ color: '#fff', fontSize: 12, fontWeight: '800' }}>✓</Text> : null}
+                                </View>
+                                <Text style={{ flex: 1, fontSize: 13, fontWeight: '600', color: EHR_ON_SURFACE }}>
+                                    Tôi đã đọc và hiểu các chức năng trên. Tôi đồng ý đăng ký.
+                                </Text>
+                            </Pressable>
+
+                            {/* Actions */}
+                            <XStack style={{ gap: 10 }}>
+                                <Pressable
+                                    onPress={() => setConsentVisible(false)}
+                                    style={{ flex: 1, paddingVertical: 14, borderRadius: 12, alignItems: 'center', backgroundColor: EHR_SURFACE_LOW }}
+                                >
+                                    <Text style={{ fontSize: 14, fontWeight: '700', color: EHR_ON_SURFACE_VARIANT }}>Quay lại</Text>
+                                </Pressable>
+                                <Pressable
+                                    onPress={consentChecked ? handleConsentConfirm : undefined}
+                                    disabled={!consentChecked}
+                                    style={{
+                                        flex: 1, paddingVertical: 14, borderRadius: 12, alignItems: 'center',
+                                        backgroundColor: EHR_PRIMARY, opacity: consentChecked ? 1 : 0.4,
+                                    }}
+                                >
+                                    <Text style={{ fontSize: 14, fontWeight: '700', color: EHR_ON_PRIMARY }}>
+                                        Đồng ý & Đăng ký
+                                    </Text>
+                                </Pressable>
+                            </XStack>
+                        </View>
+                    </Pressable>
+                </Pressable>
+            </Modal>
         </View>
     );
 }

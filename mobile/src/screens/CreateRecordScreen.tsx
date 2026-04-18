@@ -469,13 +469,36 @@ export default function CreateRecordScreen({ navigation, route: navRoute }: any)
                 ownerAddress: user?.walletAddress,
             };
 
+            // SELF-KEYSHARE: backup key to backend DB so patient can recover on
+            // reinstall/device change. NaCl keypair is deterministic (derived from
+            // wallet signature), so patient can always re-derive it to decrypt.
+            // Fire-and-forget — don't block the success flow.
+            try {
+                const { walletClient: selfWc, address: selfAddr } = await walletActionService.getWalletContext();
+                const selfKeypair = await getOrCreateEncryptionKeypair(selfWc, selfAddr);
+                const selfPayload = JSON.stringify({ cid, aesKey });
+                const selfEncrypted = encryptForRecipient(selfPayload, selfKeypair.publicKey, selfKeypair.secretKey);
+                await keyShareService.shareKey({
+                    cidHash,
+                    recipientAddress: selfAddr.toLowerCase(),
+                    encryptedPayload: selfEncrypted,
+                    senderPublicKey: selfKeypair.publicKey,
+                    expiresAt: null,
+                });
+            } catch (selfErr) {
+                console.warn('Self-KeyShare backup failed (non-fatal):', selfErr);
+            }
+
             // AUTO-SYNC: when creating a new version, propagate the new AES key to
             // every existing recipient of the chain so all doctors who previously had
             // access can immediately decrypt the new version without re-requesting.
             if (isUpdateMode && parentCidHash) {
                 try {
-                    const recipients: Array<{ walletAddress: string; encryptionPublicKey: string }> =
-                        await keyShareService.getRecordRecipients(parentCidHash);
+                    const recipients: Array<{
+                        walletAddress: string;
+                        encryptionPublicKey: string;
+                        includeUpdates?: boolean;
+                    }> = await keyShareService.getRecordRecipients(parentCidHash);
                     if (Array.isArray(recipients) && recipients.length > 0) {
                         const { walletClient, address: myAddress } = await walletActionService.getWalletContext();
                         const myKeypair = await getOrCreateEncryptionKeypair(walletClient, myAddress);
@@ -483,6 +506,11 @@ export default function CreateRecordScreen({ navigation, route: navRoute }: any)
                         for (const r of recipients) {
                             if (!r?.walletAddress || !r?.encryptionPublicKey) continue;
                             if (r.walletAddress.toLowerCase() === String(myAddress).toLowerCase()) continue;
+                            // BUG-F fix: recipients with includeUpdates=false (Chỉ đọc) on
+                            // the parent won't pass canAccess for the new version — sharing
+                            // creates a dead KeyShare row that backend rejects at claim time.
+                            // Skip them entirely.
+                            if (r.includeUpdates === false) continue;
                             try {
                                 const encryptedPayload = encryptForRecipient(payload, r.encryptionPublicKey, myKeypair.secretKey);
                                 await keyShareService.shareKey({

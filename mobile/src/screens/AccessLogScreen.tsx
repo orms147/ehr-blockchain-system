@@ -1,7 +1,7 @@
-﻿import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { FlatList, RefreshControl, Alert, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Shield, User, FileText, Clock, XCircle, Network, ArrowRight } from 'lucide-react-native';
+import { Shield, User, FileText, Clock, XCircle, Network, ArrowRight, Layers } from 'lucide-react-native';
 import { YStack, XStack, Text, Button, View } from 'tamagui';
 
 import EmptyState from '../components/EmptyState';
@@ -9,6 +9,7 @@ import LoadingSpinner from '../components/LoadingSpinner';
 import consentService from '../services/consent.service';
 import useAuthStore from '../store/authStore';
 import { useDelegationAccessLogs, type DelegationAccessLogRow } from '../hooks/queries/useDelegations';
+import { formatExpiry, formatDate, getExpiryUrgency } from '../utils/dateFormatting';
 import {
     EHR_ON_SURFACE_VARIANT,
     EHR_OUTLINE_VARIANT,
@@ -21,12 +22,27 @@ import {
 type ConsentItem = {
     id?: string;
     cidHash?: string;
+    rootCidHash?: string;
+    parentCidHash?: string | null;
     createdAt?: string;
     status?: string;
     active?: boolean;
     granteeAddress?: string;
     recipientAddress?: string;
     expiresAt?: string | null;
+};
+
+type GroupedConsent = {
+    groupKey: string;
+    grantee: string;
+    rootCidHash: string;
+    versionCount: number;
+    activeCount: number;
+    revokedCount: number;
+    latestExpiresAt?: string | null;
+    firstCreatedAt?: string;
+    status: 'active' | 'expired' | 'revoked';
+    revokeTarget: ConsentItem;
 };
 
 const isExpired = (c: ConsentItem) => {
@@ -36,33 +52,75 @@ const isExpired = (c: ConsentItem) => {
     } catch { return false; }
 };
 
+const isRevokedRow = (c: ConsentItem) => c.active === false || c.status === 'revoked';
+
 const truncateAddr = (addr?: string) => (addr ? `${addr.substring(0, 10)}...${addr.slice(-6)}` : '???');
 
-const formatDate = (dateStr?: string) => {
-    if (!dateStr) return '';
-    try {
-        return new Date(dateStr).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' });
-    } catch {
-        return dateStr;
-    }
-};
+function groupConsents(items: ConsentItem[]): GroupedConsent[] {
+    const map = new Map<string, GroupedConsent>();
+    for (const it of items) {
+        const grantee = (it.granteeAddress || it.recipientAddress || '').toLowerCase();
+        const root = (it.rootCidHash || it.cidHash || '').toLowerCase();
+        if (!grantee || !root) continue;
+        const groupKey = `${grantee}:${root}`;
+        const revoked = isRevokedRow(it);
+        const expired = !revoked && isExpired(it);
+        const active = !revoked && !expired;
 
-const ConsentRenderItem = React.memo(({
-    item,
-    revokingId,
+        const existing = map.get(groupKey);
+        if (!existing) {
+            map.set(groupKey, {
+                groupKey,
+                grantee,
+                rootCidHash: root,
+                versionCount: 1,
+                activeCount: active ? 1 : 0,
+                revokedCount: revoked ? 1 : 0,
+                latestExpiresAt: it.expiresAt || null,
+                firstCreatedAt: it.createdAt,
+                status: revoked ? 'revoked' : expired ? 'expired' : 'active',
+                revokeTarget: it,
+            });
+            continue;
+        }
+        existing.versionCount += 1;
+        if (active) existing.activeCount += 1;
+        if (revoked) existing.revokedCount += 1;
+        // Keep the latest expiresAt (root consent expiry)
+        if (it.expiresAt) {
+            if (!existing.latestExpiresAt || new Date(it.expiresAt).getTime() > new Date(existing.latestExpiresAt).getTime()) {
+                existing.latestExpiresAt = it.expiresAt;
+            }
+        }
+        // Keep the earliest createdAt
+        if (it.createdAt && (!existing.firstCreatedAt || new Date(it.createdAt).getTime() < new Date(existing.firstCreatedAt).getTime())) {
+            existing.firstCreatedAt = it.createdAt;
+        }
+        // Prefer row whose cidHash === rootCidHash as revokeTarget (patient revokes root)
+        if ((it.cidHash || '').toLowerCase() === root) {
+            existing.revokeTarget = it;
+        }
+        // Group status: active if any version active, otherwise expired wins over revoked.
+        if (active) existing.status = 'active';
+        else if (expired && existing.status !== 'active') existing.status = 'expired';
+    }
+    return Array.from(map.values());
+}
+
+const GroupRenderItem = React.memo(({
+    group,
+    revokingKeys,
     onRevoke,
 }: {
-    item: ConsentItem;
-    revokingId: string | null;
-    onRevoke: (c: ConsentItem) => void;
+    group: GroupedConsent;
+    revokingKeys: Set<string>;
+    onRevoke: (g: GroupedConsent) => void;
 }) => {
-    const grantee = item.granteeAddress || item.recipientAddress;
-    const consentId = item.id || item.cidHash || '';
-    const expired = isExpired(item);
-    const isRevoked = item.active === false || item.status === 'revoked';
-    const isActive = !isRevoked && !expired;
-    const isRevoking = revokingId === consentId;
-    const statusLabel = isRevoked ? 'Đã thu hồi' : expired ? 'Đã hết hạn' : 'Đang hoạt động';
+    const isActive = group.status === 'active';
+    const isRevoking = revokingKeys.has(group.groupKey);
+    const statusLabel = group.status === 'revoked' ? 'Đã thu hồi' : group.status === 'expired' ? 'Đã hết hạn' : 'Đang hoạt động';
+    const urgency = getExpiryUrgency(group.latestExpiresAt);
+    const expiryColor = urgency === 'urgent' ? '#DC2626' : urgency === 'soon' ? '#B45309' : EHR_ON_SURFACE_VARIANT;
 
     return (
         <View
@@ -79,14 +137,23 @@ const ConsentRenderItem = React.memo(({
                 <YStack style={{ flex: 1, paddingRight: 12 }}>
                     <XStack style={{ alignItems: 'center', marginBottom: 4 }}>
                         <User size={14} color={EHR_ON_SURFACE_VARIANT} style={{ marginRight: 6 }} />
-                        <Text fontSize="$4" fontWeight="700" color="$color12">{truncateAddr(grantee)}</Text>
+                        <Text fontSize="$4" fontWeight="700" color="$color12">{truncateAddr(group.grantee)}</Text>
                     </XStack>
-                    {item.cidHash ? (
-                        <XStack style={{ alignItems: 'center' }}>
-                            <FileText size={12} color={EHR_ON_SURFACE_VARIANT} style={{ marginRight: 6 }} />
-                            <Text fontSize="$2" color="$color10" numberOfLines={1}>{item.cidHash.substring(0, 20)}...</Text>
-                        </XStack>
-                    ) : null}
+                    <XStack style={{ alignItems: 'center', marginBottom: 2 }}>
+                        <Layers size={12} color={EHR_ON_SURFACE_VARIANT} style={{ marginRight: 6 }} />
+                        <Text fontSize="$2" color="$color10">
+                            {group.versionCount === 1
+                                ? '1 hồ sơ'
+                                : `Hồ sơ gốc + ${group.versionCount - 1} phiên bản`}
+                            {group.revokedCount > 0 ? ` (${group.revokedCount} đã thu hồi)` : ''}
+                        </Text>
+                    </XStack>
+                    <XStack style={{ alignItems: 'center' }}>
+                        <FileText size={12} color={EHR_ON_SURFACE_VARIANT} style={{ marginRight: 6 }} />
+                        <Text fontSize="$2" color="$color10" numberOfLines={1}>
+                            {group.rootCidHash.substring(0, 20)}...
+                        </Text>
+                    </XStack>
                 </YStack>
 
                 <View style={{ backgroundColor: isActive ? EHR_PRIMARY_FIXED : EHR_SURFACE_LOW, borderRadius: 10, paddingVertical: 4, paddingHorizontal: 8 }}>
@@ -96,12 +163,18 @@ const ConsentRenderItem = React.memo(({
                 </View>
             </XStack>
 
-            {item.createdAt ? (
-                <XStack style={{ alignItems: 'center', marginBottom: isActive ? 10 : 0 }}>
+            {group.firstCreatedAt ? (
+                <XStack style={{ alignItems: 'center', marginBottom: 4 }}>
                     <Clock size={12} color={EHR_ON_SURFACE_VARIANT} style={{ marginRight: 4 }} />
-                    <Text fontSize="$2" color="$color9">Cập nhật: {formatDate(item.createdAt)}</Text>
+                    <Text fontSize="$2" color="$color9">Chia sẻ: {formatDate(group.firstCreatedAt)}</Text>
                 </XStack>
             ) : null}
+            <XStack style={{ alignItems: 'center', marginBottom: isActive ? 10 : 0 }}>
+                <Clock size={12} color={expiryColor} style={{ marginRight: 4 }} />
+                <Text fontSize="$2" style={{ color: expiryColor }} fontWeight={urgency === 'urgent' ? '700' : '500'}>
+                    Hết hạn: {formatExpiry(group.latestExpiresAt)}
+                </Text>
+            </XStack>
 
             {isActive ? (
                 <Button
@@ -110,11 +183,17 @@ const ConsentRenderItem = React.memo(({
                     borderColor="$red6"
                     pressStyle={{ background: '$red3' }}
                     icon={<XCircle size={15} color="#DC2626" />}
-                    onPress={() => onRevoke(item)}
+                    onPress={() => onRevoke(group)}
                     disabled={isRevoking}
                     opacity={isRevoking ? 0.5 : 1}
                 >
-                    <Text color="$red10" fontWeight="500">{isRevoking ? 'Đang thu hồi...' : 'Thu hồi quyền'}</Text>
+                    <Text color="$red10" fontWeight="500">
+                        {isRevoking
+                            ? 'Đang thu hồi...'
+                            : group.versionCount > 1
+                                ? 'Thu hồi toàn bộ'
+                                : 'Thu hồi quyền'}
+                    </Text>
                 </Button>
             ) : null}
         </View>
@@ -210,7 +289,7 @@ export default function AccessLogScreen() {
     const [consents, setConsents] = useState<ConsentItem[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [isRefreshing, setIsRefreshing] = useState(false);
-    const [revokingId, setRevokingId] = useState<string | null>(null);
+    const [revokingKeys, setRevokingKeys] = useState<Set<string>>(new Set());
 
     // Tab 2: delegation audit log
     const delegationLogsQuery = useDelegationAccessLogs('patient', !!token);
@@ -241,28 +320,38 @@ export default function AccessLogScreen() {
         }
     }, [tab, fetchConsents, delegationLogsQuery]);
 
-    const handleRevoke = useCallback((consent: ConsentItem) => {
-        Alert.alert('Thu hồi quyền truy cập', 'Bạn có chắc muốn thu hồi quyền xem hồ sơ của địa chỉ này?', [
+    const handleRevoke = useCallback((group: GroupedConsent) => {
+        const title = group.versionCount > 1 ? 'Thu hồi toàn bộ phiên bản' : 'Thu hồi quyền truy cập';
+        const message = group.versionCount > 1
+            ? `Bạn có chắc muốn thu hồi quyền xem hồ sơ (gồm ${group.versionCount} phiên bản) của địa chỉ này?`
+            : 'Bạn có chắc muốn thu hồi quyền xem hồ sơ của địa chỉ này?';
+        Alert.alert(title, message, [
             { text: 'Huỷ', style: 'cancel' },
             {
                 text: 'Thu hồi',
                 style: 'destructive',
                 onPress: async () => {
-                    const id = consent.id || consent.cidHash || '';
-                    setRevokingId(id);
+                    const key = group.groupKey;
+                    setRevokingKeys((prev) => new Set(prev).add(key));
                     try {
-                        await consentService.revokeConsent(consent, consent.cidHash);
+                        await consentService.revokeConsent(group.revokeTarget, group.revokeTarget.cidHash);
                         Alert.alert('Thành công', 'Đã thu hồi quyền truy cập.');
                         fetchConsents();
                     } catch (e: any) {
                         Alert.alert('Lỗi', e?.message || 'Không thể thu hồi. Vui lòng thử lại.');
                     } finally {
-                        setRevokingId(null);
+                        setRevokingKeys((prev) => { const next = new Set(prev); next.delete(key); return next; });
                     }
                 },
             },
         ]);
     }, [fetchConsents]);
+
+    const groupedConsents = useMemo(() => groupConsents(consents), [consents]);
+    const activeGroupCount = useMemo(
+        () => groupedConsents.filter((g) => g.status === 'active').length,
+        [groupedConsents]
+    );
 
     const initialLoading = tab === 'direct' ? (isLoading && !isRefreshing) : delegationLogsQuery.isLoading;
     if (initialLoading) return <LoadingSpinner message="Đang tải nhật ký truy cập..." />;
@@ -281,7 +370,7 @@ export default function AccessLogScreen() {
             <TabSwitcher active={tab} onChange={setTab} />
 
             {tab === 'direct' ? (
-                consents.length === 0 ? (
+                groupedConsents.length === 0 ? (
                     <EmptyState
                         icon={Shield}
                         title="Chưa có quyền truy cập"
@@ -289,16 +378,16 @@ export default function AccessLogScreen() {
                     />
                 ) : (
                     <FlatList
-                        data={consents}
-                        keyExtractor={(item, idx) => item.id || item.cidHash || `consent-${idx}`}
-                        renderItem={({ item }) => <ConsentRenderItem item={item} revokingId={revokingId} onRevoke={handleRevoke} />}
+                        data={groupedConsents}
+                        keyExtractor={(g) => g.groupKey}
+                        renderItem={({ item }) => <GroupRenderItem group={item} revokingKeys={revokingKeys} onRevoke={handleRevoke} />}
                         contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 16 }}
                         refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} colors={[EHR_PRIMARY]} />}
                         ListHeaderComponent={
                             <XStack style={{ alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-                                <Text fontSize="$3" color="$color10">{consents.length} quyền truy cập</Text>
+                                <Text fontSize="$3" color="$color10">{groupedConsents.length} quyền truy cập</Text>
                                 <Text fontSize="$3" fontWeight="700" style={{ color: EHR_PRIMARY }}>
-                                    {consents.filter((c) => c.active !== false && c.status !== 'revoked' && !isExpired(c)).length} đang hoạt động
+                                    {activeGroupCount} đang hoạt động
                                 </Text>
                             </XStack>
                         }
@@ -330,8 +419,3 @@ export default function AccessLogScreen() {
         </SafeAreaView>
     );
 }
-
-
-
-
-

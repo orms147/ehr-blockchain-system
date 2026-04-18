@@ -2,12 +2,14 @@ import { BigInt } from "@graphprotocol/graph-ts";
 import {
   ConsentGranted,
   ConsentRevoked,
+  EmergencyGranted,
   DelegationGranted,
   DelegationRevoked,
   AccessGrantedViaDelegation,
 } from "../generated/ConsentLedger/ConsentLedger";
 import {
   ConsentEvent,
+  EmergencyEvent,
   DelegationEvent,
   DelegationAccessGrant,
 } from "../generated/schema";
@@ -23,6 +25,7 @@ export function handleConsentGranted(event: ConsentGranted): void {
   e.patient = event.params.patient;
   e.grantee = event.params.grantee;
   e.rootCidHash = event.params.rootCidHash;
+  e.anchorCidHash = event.params.anchorCidHash;
   e.expireAt = event.params.expireAt;
   e.allowDelegate = event.params.allowDelegate;
   e.timestamp = event.block.timestamp;
@@ -37,6 +40,19 @@ export function handleConsentRevoked(event: ConsentRevoked): void {
   e.patient = event.params.patient;
   e.grantee = event.params.grantee;
   e.rootCidHash = event.params.rootCidHash;
+  e.timestamp = event.block.timestamp;
+  e.txHash = event.transaction.hash;
+  e.save();
+}
+
+export function handleEmergencyGranted(event: EmergencyGranted): void {
+  let id = eventId(event.transaction.hash.toHexString(), event.logIndex);
+  let e = new EmergencyEvent(id);
+  e.patient = event.params.patient;
+  e.grantee = event.params.grantee;
+  e.rootCidHash = event.params.rootCidHash;
+  e.anchorCidHash = event.params.anchorCidHash;
+  e.expireAt = event.params.expireAt;
   e.timestamp = event.block.timestamp;
   e.txHash = event.transaction.hash;
   e.save();
