@@ -314,6 +314,48 @@ const useAuthStore = create((set, get) => ({
                 console.warn('[authStore] Session sync warning:', error?.message || error);
             }
 
+            // Verify Web3Auth session matches the restored JWT. On cold start
+            // the JWT survives in SecureStore but Web3Auth's in-memory private
+            // key state is empty (SDK v8.1.0 does not auto-restore session),
+            // leaving the user "half logged in" — backend trusts them, but
+            // nothing can be signed/decrypted. Detect this here and treat it
+            // as unauthenticated so the UI goes straight to LoginScreen
+            // without flashing dashboard → redirect.
+            try {
+                await walletActionService.ensureWeb3AuthReady();
+                if (!walletActionService.hasActiveSession()) {
+                    console.warn('[authStore] Web3Auth session not hydrated — treating as logged out.');
+                    api.clearToken();
+                    await clearPersistedAuth();
+                    set({
+                        token: null,
+                        user: null,
+                        isAuthenticated: false,
+                        isLoading: false,
+                        availableRoles: [],
+                        activeRole: 'patient',
+                        needsRoleSelection: false,
+                        needsRoleRegistration: false,
+                    });
+                    return;
+                }
+            } catch (web3authError) {
+                console.warn('[authStore] Web3Auth init failed during loadToken — treating as logged out:', web3authError?.message || web3authError);
+                api.clearToken();
+                await clearPersistedAuth();
+                set({
+                    token: null,
+                    user: null,
+                    isAuthenticated: false,
+                    isLoading: false,
+                    availableRoles: [],
+                    activeRole: 'patient',
+                    needsRoleSelection: false,
+                    needsRoleRegistration: false,
+                });
+                return;
+            }
+
             const walletAddress = normalizeWalletAddress(effectiveUser?.walletAddress);
             const { needsRoleRegistration, needsRoleSelection } = await resolveRoleRequirements(
                 effectiveRoles,

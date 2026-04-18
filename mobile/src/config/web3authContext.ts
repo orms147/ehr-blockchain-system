@@ -65,5 +65,5 @@ const web3auth = new Web3Auth(WebBrowser, SecureStore, {
   },
 });
 
-export { redirectUrl, clientId };
+export { redirectUrl, clientId, privateKeyProvider };
 export default web3auth;

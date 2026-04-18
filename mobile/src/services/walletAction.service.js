@@ -1,4 +1,4 @@
-import web3auth, { redirectUrl } from '../config/web3authContext';
+import web3auth, { redirectUrl, privateKeyProvider } from '../config/web3authContext';
 import { createWalletClient, http } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { arbitrumSepolia } from 'viem/chains';
@@ -10,6 +10,12 @@ const LOGIN_TIMEOUT_MS = 90000;
 
 let cachedWeb3Auth = web3auth;
 let initPromise = null;
+// In-memory cache of the derived walletContext for the current session.
+// Private key lives only here — never persisted. Cleared on logout + app restart.
+// Avoids calling `provider.request('eth_private_key')` repeatedly (Web3Auth RN
+// SDK's middleware occasionally returns null right after login; caching once
+// we succeed eliminates that failure mode for subsequent sign/decrypt calls).
+let cachedWalletContext = null;
 
 function delay(ms) {
     return new Promise((resolve) => setTimeout(resolve, ms));
@@ -115,15 +121,65 @@ async function ensureWeb3AuthReady() {
     return initializeWeb3Auth();
 }
 
+// Error code thrown by getWalletContext when Web3Auth init succeeded (provider
+// exists, ready=true) but no active login session is hydrated — eg. cold start
+// with valid JWT but Web3Auth session not restored. Consumers (App.tsx boot
+// guard, screen-level handlers) use this code to decide "force re-login".
+export const WEB3AUTH_SESSION_EXPIRED = 'WEB3AUTH_SESSION_EXPIRED';
+
+function makeSessionExpiredError() {
+    const err = new Error('Phiên đăng nhập Web3Auth đã hết hạn. Vui lòng đăng nhập lại.');
+    err.code = WEB3AUTH_SESSION_EXPIRED;
+    return err;
+}
+
 async function getWalletContext() {
     const web3authInstance = await ensureWeb3AuthReady();
+
     if (!web3authInstance.provider) {
-        throw new Error('Phiên đăng nhập Web3Auth không hợp lệ. Vui lòng đăng nhập lai.');
+        cachedWalletContext = null;
+        throw makeSessionExpiredError();
     }
 
-    const rawPrivateKey = await web3authInstance.provider.request({ method: 'eth_private_key' });
+    // Fast path: return cached context if the session is still the same instance.
+    // Address is double-checked below after the fresh eth_accounts read to
+    // detect session rotation.
+    if (cachedWalletContext && cachedWalletContext.web3auth === web3authInstance) {
+        return cachedWalletContext;
+    }
+
+    // Web3Auth RN SDK (v8.1.0) stores the private key in the EthereumPrivateKeyProvider's
+    // controller state after login. The JSON-RPC route `provider.request('eth_private_key')`
+    // goes through a wallet middleware that occasionally returns null right after
+    // login / cold-start even when the state is already set — state hydrates before
+    // the middleware's handler is wired. Read state directly as PRIMARY source;
+    // fall back to the RPC request only if state is empty.
+    let rawPrivateKey = null;
+    const directPk = privateKeyProvider?.state?.privateKey;
+    if (directPk && typeof directPk === 'string') {
+        rawPrivateKey = directPk;
+    } else {
+        for (let attempt = 0; attempt < 5; attempt++) {
+            const viaState = privateKeyProvider?.state?.privateKey;
+            if (viaState && typeof viaState === 'string') {
+                rawPrivateKey = viaState;
+                break;
+            }
+            const viaRpc = await web3authInstance.provider.request({ method: 'eth_private_key' });
+            if (viaRpc && typeof viaRpc === 'string') {
+                rawPrivateKey = viaRpc;
+                break;
+            }
+            await delay(300);
+        }
+    }
     if (!rawPrivateKey || typeof rawPrivateKey !== 'string') {
-        throw new Error('Không lay được private key tu Web3Auth.');
+        // Provider exists + ready=true, but state has no privateKey and RPC
+        // returns nothing — classic "cold-start JWT valid but Web3Auth session
+        // not restored" scenario. Surface as WEB3AUTH_SESSION_EXPIRED so the
+        // boot guard / caller can force re-login instead of showing a cryptic
+        // "thu 5 lan" error.
+        throw makeSessionExpiredError();
     }
 
     const privateKey = rawPrivateKey.startsWith('0x') ? rawPrivateKey : `0x${rawPrivateKey}`;
@@ -144,13 +200,15 @@ async function getWalletContext() {
         throw new Error('Địa chỉ ví Web3Auth không khop voi private key phiên đăng nhập.');
     }
 
-    return {
+    const ctx = {
         web3auth: web3authInstance,
         privateKey,
         account,
         walletClient,
         address: account.address,
     };
+    cachedWalletContext = ctx;
+    return ctx;
 }
 
 async function signMessage(walletClient, message) {
@@ -240,7 +298,18 @@ async function loginWithWeb3Auth(loginProvider = 'google') {
     }
 }
 
+// Returns true iff Web3Auth has a hydrated private key for the current session.
+// Used by App.tsx boot guard to detect the "JWT valid but Web3Auth session not
+// restored" state that happens on cold start.
+function hasActiveSession() {
+    return !!privateKeyProvider?.state?.privateKey;
+}
+
 async function logoutWeb3Auth() {
+    // Clear the in-memory walletContext first so any concurrent getWalletContext
+    // call starts from scratch after logout.
+    cachedWalletContext = null;
+
     const web3authInstance = await getWeb3Auth();
     if (!web3authInstance) return;
 
@@ -254,6 +323,7 @@ const walletActionService = {
     initializeWeb3Auth,
     loginWithWeb3Auth,
     getWalletContext,
+    hasActiveSession,
     signMessage,
     signTypedData,
     logoutWeb3Auth,

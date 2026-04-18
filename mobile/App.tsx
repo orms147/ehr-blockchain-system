@@ -11,7 +11,6 @@ import { tamaguiConfig } from './tamagui.config';
 import AppNavigator from './src/navigation/AppNavigator';
 import useAuthStore from './src/store/authStore';
 import LoadingSpinner from './src/components/LoadingSpinner';
-import walletActionService from './src/services/walletAction.service';
 import QueryProvider from './src/providers/QueryProvider';
 import { initSentry, Sentry } from './src/lib/sentry';
 import { setupNotificationListeners } from './src/lib/notifications';
@@ -44,12 +43,11 @@ function App() {
   const { loadToken, isLoading } = useAuthStore();
 
   useEffect(() => {
+    // loadToken verifies both JWT and Web3Auth session; if Web3Auth has no
+    // hydrated private key on cold start, it clears auth state so the UI
+    // lands directly on LoginScreen instead of flashing a dashboard then
+    // redirecting.
     loadToken();
-
-    // Warm up Web3Auth at app start to fail fast with actionable errors.
-    walletActionService.initializeWeb3Auth().catch((error) => {
-      console.warn('[Web3Auth] init warning:', error?.message || error);
-    });
 
     // Wire notification tap → deeplink. Returns cleanup fn for unmount.
     const cleanup = setupNotificationListeners();
