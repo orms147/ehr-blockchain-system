@@ -2,6 +2,7 @@
 .agent/
 .agents/
 .claude/
+CLAUDE.md
 
 #docs
 context/
