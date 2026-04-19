@@ -272,28 +272,18 @@ function classifyDecryptError(error: any): string {
 
         const expiresAtMs = shareExpiryHours ? Date.now() + shareExpiryHours * 3600 * 1000 : 0;
 
-        // CRITICAL: on-chain consent must be keyed on the ACTUAL CHAIN ROOT,
-        // not the version the patient is currently viewing. With includeUpdates=true
-        // the root consent covers every descendant version. If we hash the current
-        // version's CID the doctor only gets access to that one version and the
-        // backend's ancestor walk cannot find consent when they open older ones.
-        let rootCid = local.cid;
-        let rootAesKey = local.aesKey;
-        try {
-            const chainRes: any = await recordService.getChainCids(record.cidHash!);
-            const rootHash: string | undefined = chainRes?.rootCidHash;
-            if (rootHash && rootHash.toLowerCase() !== String(record.cidHash).toLowerCase()) {
-                const rootLocal = localRecords[rootHash];
-                if (rootLocal?.cid && rootLocal?.aesKey) {
-                    rootCid = rootLocal.cid;
-                    rootAesKey = rootLocal.aesKey;
-                } else {
-                    console.warn('Root local key missing, falling back to current version as consent key', rootHash);
-                }
-            }
-        } catch (e) {
-            console.warn('Could not resolve chain root, using current version', e);
-        }
+        // Pass the CURRENT version's cid as inputCidHash. Contract walks to
+        // the canonical root internally for storage keying (since the root-walk
+        // refactor), so storage location is identical whether we pass V(n) or
+        // root. What matters: `anchorCidHash` is set to the inputCidHash AS-IS,
+        // and for `includeUpdates=false` shares the contract enforces
+        //     queryCidHash == anchorCidHash
+        // — passing the root here made every read-only share broken because
+        // the anchor became V1 even when the patient shared V2. Always pass
+        // the exact version the patient is viewing; includeUpdates=true
+        // semantics still cover descendants regardless of anchor value.
+        const shareCid = local.cid;
+        const shareAesKey = local.aesKey;
 
         // 1. ON-CHAIN CONSENT
         // Two paths depending on who is sharing:
@@ -305,8 +295,8 @@ function classifyDecryptError(error: any): string {
             // Path A: patient signs EIP-712, relayer submits grantBySig
             grantResult = await consentService.grantConsentOnChain({
                 granteeAddress: address,
-                cid: rootCid,
-                aesKey: rootAesKey,
+                cid: shareCid,
+                aesKey: shareAesKey,
                 expiresAtMs,
                 includeUpdates: shareType !== 'read-only',
                 allowDelegate: shareType === 'read-delegate',
@@ -321,7 +311,7 @@ function classifyDecryptError(error: any): string {
                 Alert.alert('Lỗi', 'Không xác định được địa chỉ bệnh nhân (owner) của hồ sơ này.');
                 return;
             }
-            const rootCidHash = computeCidHash(rootCid);
+            const shareCidHash = computeCidHash(shareCid);
 
             // Option B: check if grantee already has access → warn about overwrite
             try {
@@ -333,7 +323,7 @@ function classifyDecryptError(error: any): string {
                         inputs: [{ name: 'p', type: 'address' }, { name: 'g', type: 'address' }, { name: 'c', type: 'bytes32' }],
                         outputs: [{ type: 'bool' }] }],
                     functionName: 'canAccess',
-                    args: [patientAddr as `0x${string}`, address as `0x${string}`, rootCidHash],
+                    args: [patientAddr as `0x${string}`, address as `0x${string}`, shareCidHash],
                 });
                 if (alreadyHas) {
                     Alert.alert(
@@ -371,8 +361,8 @@ function classifyDecryptError(error: any): string {
             const delegateResult = await delegateOnChain({
                 patientAddress: patientAddr,
                 granteeAddress: address,
-                rootCidHash,
-                aesKey: rootAesKey,
+                rootCidHash: shareCidHash,
+                aesKey: shareAesKey,
                 expiresAtMs,
                 senderConsentExpireAtSec: senderExpireSec,
             });
