@@ -7,16 +7,19 @@ pragma solidity ^0.8.24;
  * @dev Frontend MUST compute keccak256(bytes(cid)) off-chain
  */
 interface IConsentLedger {
+    /// @notice Consent covers the ENTIRE record chain (root + descendants).
+    /// 2026-04-19: removed anchorCidHash + includeUpdates. "Read-only exact
+    /// version" mode was dropped — real medical practice always needs episode
+    /// context (history + updates). Any cidHash in the chain passes canAccess
+    /// when consent at the root is active and not expired.
     struct Consent {
         address patient;
         address grantee;
         bytes32 rootCidHash;    // Canonical record-tree root (walked via RecordRegistry at grant time)
-        bytes32 anchorCidHash;  // Original cidHash input to grant — used to enforce "read-only exact version"
         bytes32 encKeyHash;
         uint40 issuedAt;
         uint40 expireAt;
         bool active;
-        bool includeUpdates;
         bool allowDelegate;
     }
 
@@ -42,7 +45,6 @@ interface IConsentLedger {
         address indexed patient,
         address indexed grantee,
         bytes32 indexed rootCidHash,
-        bytes32 anchorCidHash,
         uint40 expireAt,
         bool allowDelegate
     );
@@ -80,7 +82,6 @@ interface IConsentLedger {
         address indexed patient,
         address indexed grantee,
         bytes32 indexed rootCidHash,
-        bytes32 anchorCidHash,
         uint40 expireAt
     );
 
@@ -109,7 +110,6 @@ interface IConsentLedger {
      * @param rootCidHash keccak256(bytes(rootCID)) - computed OFF-CHAIN
      * @param encKeyHash Hash of encryption key
      * @param expireAt Expiration timestamp (0 = forever)
-     * @param includeUpdates Can access child records
      * @param allowDelegate Can delegate access to others
      */
     function grantInternal(
@@ -118,7 +118,6 @@ interface IConsentLedger {
         bytes32 rootCidHash,
         bytes32 encKeyHash,
         uint40 expireAt,
-        bool includeUpdates,
         bool allowDelegate
     ) external;
 
@@ -148,7 +147,6 @@ interface IConsentLedger {
         bytes32 rootCidHash,
         bytes32 encKeyHash,
         uint40 expireAt,
-        bool includeUpdates,
         bool allowDelegate,
         uint256 deadline,
         bytes calldata signature
@@ -218,7 +216,6 @@ interface IConsentLedger {
     /**
      * @notice Delegatee grants access to someone else
      * @param rootCidHash keccak256(bytes(rootCID)) - computed OFF-CHAIN
-     * @param includeUpdates Whether the new consent can traverse the update chain
      * @param allowDelegate Whether the new grantee may further sub-delegate this consent
      * @dev    Consent expiry is capped to the caller's active delegation expiry.
      */
@@ -228,7 +225,6 @@ interface IConsentLedger {
         bytes32 rootCidHash,
         bytes32 encKeyHash,
         uint40 expireAt,
-        bool includeUpdates,
         bool allowDelegate
     ) external;
 

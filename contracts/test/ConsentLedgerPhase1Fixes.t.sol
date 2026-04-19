@@ -84,35 +84,27 @@ contract ConsentLedgerPhase1FixesTest is TestHelpers {
     // BUG-A: grantUsingRecordDelegation inherits includeUpdates from sender
     // =================================================================
 
-    function test_BugA_DelegateeInheritsIncludeUpdates_True() public {
+    function test_ChainAccess_DelegateeSeesWholeChain() public {
         // Patient gives Doctor A full chain access with allowDelegate
-        consentLedger.grantInternal(patient, doctorA, V2, EK, 0, true, true);
+        consentLedger.grantInternal(patient, doctorA, V2, EK, 0, true);
 
         // A delegates to B via grantUsingRecordDelegation
         vm.prank(doctorA);
         consentLedger.grantUsingRecordDelegation(patient, doctorB, V2, EK, 0);
 
-        // BEFORE fix: B could only see V2. AFTER fix: B sees whole chain.
+        // Medical episode model: B sees the whole chain regardless of which
+        // version A used as inputCidHash when delegating.
         assertTrue(consentLedger.canAccess(patient, doctorB, V1), "B must see V1 (chain root)");
-        assertTrue(consentLedger.canAccess(patient, doctorB, V2), "B must see V2 (anchor)");
+        assertTrue(consentLedger.canAccess(patient, doctorB, V2), "B must see V2");
         assertTrue(consentLedger.canAccess(patient, doctorB, V3), "B must see V3 (newer chain version)");
     }
 
-    function test_BugA_DelegateeInheritsIncludeUpdates_False() public {
-        // Patient gives Doctor A a read-only consent on V2 but still with allowDelegate
-        consentLedger.grantInternal(patient, doctorA, V2, EK, 0, false, true);
+    // Removed 2026-04-19: test_BugA_DelegateeInheritsIncludeUpdates_False —
+    // the "includeUpdates=false restricts to anchor" semantic was dropped.
+    // A's consent always covers the chain; B's delegate does too.
 
-        vm.prank(doctorA);
-        consentLedger.grantUsingRecordDelegation(patient, doctorB, V2, EK, 0);
-
-        // A is "read-only V2" so B inherits the same restriction.
-        assertFalse(consentLedger.canAccess(patient, doctorB, V1), "B must NOT see V1 when sender is read-only");
-        assertTrue(consentLedger.canAccess(patient, doctorB, V2), "B must see V2 anchor");
-        assertFalse(consentLedger.canAccess(patient, doctorB, V3), "B must NOT see V3 when sender is read-only");
-    }
-
-    function test_BugA_OneHopOnly_BCannotReDelegate() public {
-        consentLedger.grantInternal(patient, doctorA, V2, EK, 0, true, true);
+    function test_OneHopOnly_BCannotReDelegate() public {
+        consentLedger.grantInternal(patient, doctorA, V2, EK, 0, true);
         vm.prank(doctorA);
         consentLedger.grantUsingRecordDelegation(patient, doctorB, V2, EK, 0);
 
@@ -133,7 +125,7 @@ contract ConsentLedgerPhase1FixesTest is TestHelpers {
     // =================================================================
 
     function test_BugC_RevokeA_CascadesToB() public {
-        consentLedger.grantInternal(patient, doctorA, V2, EK, 0, true, true);
+        consentLedger.grantInternal(patient, doctorA, V2, EK, 0, true);
 
         vm.prank(doctorA);
         consentLedger.grantUsingRecordDelegation(patient, doctorB, V2, EK, 0);
@@ -152,13 +144,13 @@ contract ConsentLedgerPhase1FixesTest is TestHelpers {
     }
 
     function test_BugC_A_ReRequestsWithoutAllowDelegate_BLosesAccess() public {
-        consentLedger.grantInternal(patient, doctorA, V2, EK, 0, true, true);
+        consentLedger.grantInternal(patient, doctorA, V2, EK, 0, true);
         vm.prank(doctorA);
         consentLedger.grantUsingRecordDelegation(patient, doctorB, V2, EK, 0);
         assertTrue(consentLedger.canAccess(patient, doctorB, V2));
 
         // Patient re-grants A with allowDelegate=false (downgrade)
-        consentLedger.grantInternal(patient, doctorA, V2, EK, 0, true, false);
+        consentLedger.grantInternal(patient, doctorA, V2, EK, 0, false);
 
         // A still has access (normal grant). But B's delegate-sourced consent
         // loses validity because source no longer allowDelegate.
@@ -169,7 +161,7 @@ contract ConsentLedgerPhase1FixesTest is TestHelpers {
     function test_BugC_A_ExpiresNaturally_BLosesAccess() public {
         // A has 1-day consent, can delegate
         uint40 aExpiry = uint40(block.timestamp + 1 days);
-        consentLedger.grantInternal(patient, doctorA, V2, EK, aExpiry, true, true);
+        consentLedger.grantInternal(patient, doctorA, V2, EK, aExpiry, true);
 
         vm.prank(doctorA);
         consentLedger.grantUsingRecordDelegation(patient, doctorB, V2, EK, aExpiry);
@@ -189,7 +181,7 @@ contract ConsentLedgerPhase1FixesTest is TestHelpers {
     function test_BugD_EmergencyDoesNotOverwriteNormalConsent() public {
         // Patient grants long-term 30-day consent
         uint40 longExpiry = uint40(block.timestamp + 30 days);
-        consentLedger.grantInternal(patient, doctorA, V1, EK, longExpiry, true, false);
+        consentLedger.grantInternal(patient, doctorA, V1, EK, longExpiry, false);
         assertTrue(consentLedger.canAccess(patient, doctorA, V1));
 
         // Doctor A triggers 24h emergency (via grantEmergencyInternal directly for test)

@@ -19,9 +19,11 @@ import {IRecordRegistry} from "src/interfaces/IRecordRegistry.sol";
 contract ConsentLedger is EIP712, ReentrancyGuard, IConsentLedger {
     using ECDSA for bytes32;
 
-    // EIP-712 TypeHash - now signs over bytes32 cidHash, not string
+    // EIP-712 TypeHash - now signs over bytes32 cidHash, not string.
+    // 2026-04-19: removed `bool includeUpdates` — consent now always covers
+    // the whole record chain. Mobile signers must omit the flag.
     bytes32 private constant CONSENT_PERMIT_TYPEHASH = keccak256(
-        "ConsentPermit(address patient,address grantee,bytes32 rootCidHash,bytes32 encKeyHash,uint256 expireAt,bool includeUpdates,bool allowDelegate,uint256 deadline,uint256 nonce)"
+        "ConsentPermit(address patient,address grantee,bytes32 rootCidHash,bytes32 encKeyHash,uint256 expireAt,bool allowDelegate,uint256 deadline,uint256 nonce)"
     );
 
     bytes32 private constant DELEGATION_PERMIT_TYPEHASH = keccak256(
@@ -159,8 +161,7 @@ contract ConsentLedger is EIP712, ReentrancyGuard, IConsentLedger {
 
     /// @notice Wire RecordRegistry reference (one-time, admin only).
     /// Enables canAccess() to walk a cidHash to its canonical record-tree root
-    /// so that a single consent granted at any version covers the entire chain
-    /// (subject to the includeUpdates flag).
+    /// so that a single consent granted at any version covers the entire chain.
     function setRecordRegistry(address registry) external onlyAdmin {
         if (registry == address(0)) revert Unauthorized();
         recordRegistry = IRecordRegistry(registry);
@@ -199,7 +200,6 @@ contract ConsentLedger is EIP712, ReentrancyGuard, IConsentLedger {
         bytes32 rootCidHash,
         bytes32 encKeyHash,
         uint40 expireAt,
-        bool includeUpdates,
         bool allowDelegate
     ) external override onlyAuthorized nonReentrant {
         if (rootCidHash == bytes32(0)) revert EmptyCID();
@@ -210,7 +210,6 @@ contract ConsentLedger is EIP712, ReentrancyGuard, IConsentLedger {
             rootCidHash,
             encKeyHash,
             expireAt,
-            includeUpdates,
             allowDelegate
         );
     }
@@ -248,7 +247,7 @@ contract ConsentLedger is EIP712, ReentrancyGuard, IConsentLedger {
             active: true
         });
 
-        emit EmergencyGranted(patient, grantee, root, inputCidHash, expireAt);
+        emit EmergencyGranted(patient, grantee, root, expireAt);
     }
 
     /**
@@ -262,25 +261,22 @@ contract ConsentLedger is EIP712, ReentrancyGuard, IConsentLedger {
         bytes32 rootCidHash,
         bytes32 encKeyHash,
         uint40 expireAt,
-        bool includeUpdates,
         bool allowDelegate,
         uint256 deadline,
         bytes calldata signature
     ) external override nonReentrant {
         if (block.timestamp > deadline) revert DeadlinePassed();
         if (rootCidHash == bytes32(0)) revert EmptyCID();
-        
+
         uint256 currentNonce = nonces[patient];
-        
-        // Struct hash now uses bytes32 cidHash directly (no keccak of string)
+
         bytes32 structHash = keccak256(abi.encode(
             CONSENT_PERMIT_TYPEHASH,
             patient,
             grantee,
-            rootCidHash,    // Already a hash
+            rootCidHash,
             encKeyHash,
             expireAt,
-            includeUpdates,
             allowDelegate,
             deadline,
             currentNonce
@@ -288,18 +284,17 @@ contract ConsentLedger is EIP712, ReentrancyGuard, IConsentLedger {
 
         bytes32 digest = _hashTypedDataV4(structHash);
         address signer = digest.recover(signature);
-        
+
         if (signer != patient) revert InvalidSignature();
-        
+
         nonces[patient] = currentNonce + 1;
-        
+
         _grantConsent(
             patient,
             grantee,
             rootCidHash,
             encKeyHash,
             expireAt,
-            includeUpdates,
             allowDelegate
         );
     }
@@ -310,7 +305,6 @@ contract ConsentLedger is EIP712, ReentrancyGuard, IConsentLedger {
         bytes32 inputCidHash,
         bytes32 encKeyHash,
         uint40 expireAt,
-        bool includeUpdates,
         bool allowDelegate
     ) internal {
         if (grantee == address(0)) revert Unauthorized();
@@ -318,7 +312,8 @@ contract ConsentLedger is EIP712, ReentrancyGuard, IConsentLedger {
         if (expireAt != 0 && expireAt <= block.timestamp) revert InvalidExpire();
 
         // Normalize storage to the record-tree root so a single consent covers
-        // every version in the chain (subject to includeUpdates).
+        // every version in the chain. (No more anchor/includeUpdates since
+        // 2026-04-19 — medical episode model.)
         bytes32 root = _walkToRoot(inputCidHash);
         bytes32 consentKey = keccak256(abi.encode(patient, grantee, root));
 
@@ -329,16 +324,14 @@ contract ConsentLedger is EIP712, ReentrancyGuard, IConsentLedger {
             patient: patient,
             grantee: grantee,
             rootCidHash: root,
-            anchorCidHash: inputCidHash,
             encKeyHash: encKeyHash,
             issuedAt: now40,
             expireAt: finalExpiry,
             active: true,
-            includeUpdates: includeUpdates,
             allowDelegate: allowDelegate
         });
 
-        emit ConsentGranted(patient, grantee, root, inputCidHash, finalExpiry, allowDelegate);
+        emit ConsentGranted(patient, grantee, root, finalExpiry, allowDelegate);
     }
 
     // ============ REVOKE (Hash-based) ============
@@ -565,7 +558,6 @@ contract ConsentLedger is EIP712, ReentrancyGuard, IConsentLedger {
      *         of authority. The granting delegator's current epoch is snapshotted so
      *         canAccess can cascade-revoke across multi-hop chains.
      * @param  inputCidHash   any cidHash in the target record chain (walked to root)
-     * @param  includeUpdates Whether the new consent traverses the update chain
      * @param  allowDelegate  Whether the new grantee may further sub-delegate this consent
      */
     function grantUsingDelegation(
@@ -574,7 +566,6 @@ contract ConsentLedger is EIP712, ReentrancyGuard, IConsentLedger {
         bytes32 inputCidHash,
         bytes32 encKeyHash,
         uint40 expireAt,
-        bool includeUpdates,
         bool allowDelegate
     ) external override nonReentrant {
         uint256 data = _delegations[patient][msg.sender];
@@ -600,7 +591,6 @@ contract ConsentLedger is EIP712, ReentrancyGuard, IConsentLedger {
             inputCidHash,
             encKeyHash,
             finalExpiry,
-            includeUpdates,
             allowDelegate
         );
 
@@ -658,7 +648,6 @@ contract ConsentLedger is EIP712, ReentrancyGuard, IConsentLedger {
             inputCidHash,
             encKeyHash,
             finalExpiry,
-            senderConsent.includeUpdates,  // BUG-A fix: inherit sender's chain coverage
             false                          // one-hop limit: newGrantee cannot re-delegate
         );
 
@@ -677,12 +666,9 @@ contract ConsentLedger is EIP712, ReentrancyGuard, IConsentLedger {
     /**
      * @notice Check if user can access a record version.
      * @dev Consent is stored at the canonical ROOT of the record chain. This
-     * function walks queryCidHash up the chain via RecordRegistry, looks up
-     * consent at the root, and enforces the includeUpdates flag on-chain.
-     *
-     * Semantics:
-     *   - includeUpdates=true  → any version in the chain is accessible
-     *   - includeUpdates=false → only the exact anchorCidHash originally granted
+     * function walks queryCidHash up the chain via RecordRegistry and looks up
+     * consent at the root. Any version in the chain passes when consent is
+     * active and not expired (medical episode model — 2026-04-19).
      *
      * When RecordRegistry is unwired (legacy deployments or unit tests), the
      * walk falls back to `current = queryCidHash` and consent is looked up at
@@ -726,12 +712,12 @@ contract ConsentLedger is EIP712, ReentrancyGuard, IConsentLedger {
 
     /// @dev Normal consent validation extracted so canAccess can OR it with the
     /// emergency consent path. Returns true iff the `(patient, grantee, root)`
-    /// consent is active, unexpired, includeUpdates/anchor semantics hold, any
-    /// bulk-delegation chain is still intact (audit #4), and any per-record
-    /// delegation source (BUG-C) is still allowed to delegate.
+    /// consent is active, unexpired, any bulk-delegation chain is still intact
+    /// (audit #4), and any per-record delegation source (BUG-C) is still
+    /// allowed to delegate.
     function _hasValidNormalConsent(
         bytes32 key,
-        bytes32 queryCidHash,
+        bytes32 /*queryCidHash*/,
         address patient,
         bytes32 root
     ) internal view returns (bool) {
@@ -739,10 +725,6 @@ contract ConsentLedger is EIP712, ReentrancyGuard, IConsentLedger {
 
         if (!c.active) return false;
         if (c.expireAt != FOREVER && block.timestamp > c.expireAt) return false;
-
-        // Enforce "read-only exact version" on-chain: if patient granted with
-        // includeUpdates=false, only the originally anchored cidHash is allowed.
-        if (!c.includeUpdates && queryCidHash != c.anchorCidHash) return false;
 
         // BUG-C fix: per-record delegation source check. When this consent was
         // minted by another doctor via grantUsingRecordDelegation, the source's

@@ -63,34 +63,32 @@ contract ConsentLedgerTest is TestHelpers {
             CID_HASH,
             ENC_KEY_HASH,
             expireAt,
-            true,  // includeUpdates
             false  // allowDelegate
         );
-        
+
         assertTrue(consentLedger.canAccess(patient1, doctor1, CID_HASH), "Doctor should have access");
-        
+
         IConsentLedger.Consent memory c = consentLedger.getConsent(patient1, doctor1, CID_HASH);
         assertEq(c.patient, patient1, "Patient should match");
         assertEq(c.grantee, doctor1, "Grantee should match");
         assertTrue(c.active, "Should be active");
-        assertTrue(c.includeUpdates, "Should include updates");
     }
-    
+
     function test_GrantInternal_RevertWhen_NotAuthorized() public {
         vm.expectRevert(IConsentLedger.Unauthorized.selector);
         vm.prank(attacker);
         consentLedger.grantInternal(
-            patient1, doctor1, CID_HASH, ENC_KEY_HASH, 
-            uint40(block.timestamp) + ONE_WEEK, true, false
+            patient1, doctor1, CID_HASH, ENC_KEY_HASH,
+            uint40(block.timestamp) + ONE_WEEK, false
         );
     }
-    
+
     function test_GrantInternal_RevertWhen_EmptyCID() public {
         vm.expectRevert(IConsentLedger.EmptyCID.selector);
         vm.prank(ministry);
         consentLedger.grantInternal(
             patient1, doctor1, bytes32(0), ENC_KEY_HASH,
-            uint40(block.timestamp) + ONE_WEEK, true, false
+            uint40(block.timestamp) + ONE_WEEK, false
         );
     }
     
@@ -99,7 +97,7 @@ contract ConsentLedgerTest is TestHelpers {
         consentLedger.grantInternal(
             patient1, doctor1, CID_HASH, ENC_KEY_HASH,
             0,  // expireAt = 0 means forever
-            true, false
+            false
         );
         
         IConsentLedger.Consent memory c = consentLedger.getConsent(patient1, doctor1, CID_HASH);
@@ -119,7 +117,7 @@ contract ConsentLedgerTest is TestHelpers {
         vm.prank(ministry);
         consentLedger.grantInternal(
             patient1, doctor1, CID_HASH, ENC_KEY_HASH,
-            expireAt, true, false
+            expireAt, false
         );
         
         assertTrue(consentLedger.canAccess(patient1, doctor1, CID_HASH), "Should have access before expiry");
@@ -141,7 +139,7 @@ contract ConsentLedgerTest is TestHelpers {
         vm.prank(ministry);
         consentLedger.grantInternal(
             patient1, doctor1, CID_HASH, ENC_KEY_HASH,
-            0, true, false
+            0, false
         );
         
         assertTrue(consentLedger.canAccess(patient1, doctor1, CID_HASH), "Should have access");
@@ -157,7 +155,7 @@ contract ConsentLedgerTest is TestHelpers {
         vm.prank(ministry);
         consentLedger.grantInternal(
             patient1, doctor1, CID_HASH, ENC_KEY_HASH,
-            0, true, false
+            0, false
         );
         
         vm.expectRevert(IConsentLedger.Unauthorized.selector);
@@ -196,7 +194,6 @@ contract ConsentLedgerTest is TestHelpers {
             CID_HASH,
             ENC_KEY_HASH,
             uint40(block.timestamp) + ONE_WEEK,
-            false,
             false
         );
 
@@ -209,7 +206,6 @@ contract ConsentLedgerTest is TestHelpers {
         consentLedger.grantUsingDelegation(
             patient1, doctor2, CID_HASH, ENC_KEY_HASH,
             uint40(block.timestamp) + ONE_WEEK,
-            false,
             false
         );
     }
@@ -232,7 +228,7 @@ contract ConsentLedgerTest is TestHelpers {
         vm.prank(ministry);
         consentLedger.grantInternal(
             patient1, doctor1, CID_HASH, ENC_KEY_HASH,
-            0, true, true  // allowDelegate = true
+            0, true  // allowDelegate = true
         );
         
         // Doctor1 delegates to doctor2
@@ -250,7 +246,7 @@ contract ConsentLedgerTest is TestHelpers {
         vm.prank(ministry);
         consentLedger.grantInternal(
             patient1, doctor1, CID_HASH, ENC_KEY_HASH,
-            0, true, false  // allowDelegate = false
+            0, false  // allowDelegate = false
         );
         
         vm.expectRevert(IConsentLedger.Unauthorized.selector);
@@ -268,30 +264,29 @@ contract ConsentLedgerTest is TestHelpers {
         uint256 deadline = block.timestamp + 1 hours;
         uint256 nonce = consentLedger.getNonce(patient1);
         
-        // Build EIP-712 signature
+        // Build EIP-712 signature — 2026-04-19: ConsentPermit no longer contains includeUpdates.
         bytes32 structHash = keccak256(abi.encode(
-            keccak256("ConsentPermit(address patient,address grantee,bytes32 rootCidHash,bytes32 encKeyHash,uint256 expireAt,bool includeUpdates,bool allowDelegate,uint256 deadline,uint256 nonce)"),
+            keccak256("ConsentPermit(address patient,address grantee,bytes32 rootCidHash,bytes32 encKeyHash,uint256 expireAt,bool allowDelegate,uint256 deadline,uint256 nonce)"),
             patient1,
             doctor1,
             CID_HASH,
             ENC_KEY_HASH,
             expireAt,
-            true,
             false,
             deadline,
             nonce
         ));
-        
+
         bytes32 domainSeparator = consentLedger.DOMAIN_SEPARATOR();
         bytes32 digest = keccak256(abi.encodePacked("\x19\x01", domainSeparator, structHash));
-        
+
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(patientPrivateKey, digest);
         bytes memory signature = abi.encodePacked(r, s, v);
-        
+
         // Execute
         consentLedger.grantBySig(
             patient1, doctor1, CID_HASH, ENC_KEY_HASH,
-            expireAt, true, false, deadline, signature
+            expireAt, false, deadline, signature
         );
         
         assertTrue(consentLedger.canAccess(patient1, doctor1, CID_HASH), "Should have access");
@@ -306,7 +301,7 @@ contract ConsentLedgerTest is TestHelpers {
         vm.expectRevert(IConsentLedger.DeadlinePassed.selector);
         consentLedger.grantBySig(
             patient1, doctor1, CID_HASH, ENC_KEY_HASH,
-            uint40(block.timestamp) + ONE_WEEK, true, false, deadline, fakeSignature
+            uint40(block.timestamp) + ONE_WEEK, false, deadline, fakeSignature
         );
     }
 
@@ -383,7 +378,6 @@ contract ConsentLedgerTest is TestHelpers {
             CID_HASH,
             ENC_KEY_HASH,
             uint40(block.timestamp) + 60 days,
-            false,
             false
         );
 
@@ -403,7 +397,7 @@ contract ConsentLedgerTest is TestHelpers {
         vm.prank(doctor1);
         consentLedger.grantUsingDelegation(
             patient1, doctor3, CID_HASH, ENC_KEY_HASH,
-            uint40(block.timestamp) + ONE_WEEK, false, false
+            uint40(block.timestamp) + ONE_WEEK, false
         );
 
         // doctor2 grants consent to doctor4 (via sub-delegation)
@@ -411,7 +405,7 @@ contract ConsentLedgerTest is TestHelpers {
         vm.prank(doctor2);
         consentLedger.grantUsingDelegation(
             patient1, doctor4, cid4, ENC_KEY_HASH,
-            uint40(block.timestamp) + ONE_WEEK, false, false
+            uint40(block.timestamp) + ONE_WEEK, false
         );
 
         assertTrue(consentLedger.canAccess(patient1, doctor3, CID_HASH), "doctor3 should have access before revoke");
@@ -443,7 +437,7 @@ contract ConsentLedgerTest is TestHelpers {
         vm.prank(doctor1);
         consentLedger.grantUsingDelegation(
             patient1, doctor3, CID_HASH, ENC_KEY_HASH,
-            uint40(block.timestamp) + ONE_WEEK, false, false
+            uint40(block.timestamp) + ONE_WEEK, false
         );
 
         // doctor2 grants to doctor4 (via sub-delegation)
@@ -451,7 +445,7 @@ contract ConsentLedgerTest is TestHelpers {
         vm.prank(doctor2);
         consentLedger.grantUsingDelegation(
             patient1, doctor4, cid4, ENC_KEY_HASH,
-            uint40(block.timestamp) + ONE_WEEK, false, false
+            uint40(block.timestamp) + ONE_WEEK, false
         );
 
         // doctor1 revokes doctor2's sub-delegation
@@ -486,7 +480,7 @@ contract ConsentLedgerTest is TestHelpers {
         vm.prank(doctor3);
         consentLedger.grantUsingDelegation(
             patient1, doctor4, cid4, ENC_KEY_HASH,
-            uint40(block.timestamp) + ONE_WEEK, false, false
+            uint40(block.timestamp) + ONE_WEEK, false
         );
 
         assertTrue(

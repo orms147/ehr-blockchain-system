@@ -279,8 +279,7 @@ contract EHRSystemSecure is IEHRSystem, Ownable, Pausable, ReentrancyGuard, EIP7
                 req.rootCidHash,    // bytes32, not string
                 req.encKeyHash,
                 expireAt,
-                true,
-                false
+                false              // DirectAccess: no re-share
             );
         } else if (req.reqType == RequestType.RecordDelegation) {
             consentLedger.grantInternal(
@@ -289,8 +288,7 @@ contract EHRSystemSecure is IEHRSystem, Ownable, Pausable, ReentrancyGuard, EIP7
                 req.rootCidHash,    // bytes32, not string
                 req.encKeyHash,
                 uint40(block.timestamp) + req.consentDuration,
-                true,
-                true
+                true               // RecordDelegation: allowDelegate (re-share)
             );
         } else {
             // FullDelegation

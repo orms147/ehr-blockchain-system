@@ -228,7 +228,6 @@ contract DoctorUpdate is ReentrancyGuard {
             cidHash,
             encKeyHash,
             expireAt,
-            true,
             false
         );
 

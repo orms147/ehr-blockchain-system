@@ -76,16 +76,15 @@ contract ConsentLedgerRootWalkTest is TestHelpers {
 
     function test_WalkToRoot_SetsStorageAtRoot() public {
         // Grant at V2 → storage must be at V1 (canonical root)
-        consentLedger.grantInternal(patient, doctor, V2, EK, 0, true, false);
+        consentLedger.grantInternal(patient, doctor, V2, EK, 0, false);
 
         IConsentLedger.Consent memory c = consentLedger.getConsent(patient, doctor, V1);
         assertEq(c.rootCidHash, V1, "rootCidHash must normalize to V1");
-        assertEq(c.anchorCidHash, V2, "anchorCidHash must preserve input V2");
         assertTrue(c.active);
     }
 
     function test_GetConsent_FindsByAnyChildCidHash() public {
-        consentLedger.grantInternal(patient, doctor, V2, EK, 0, true, false);
+        consentLedger.grantInternal(patient, doctor, V2, EK, 0, false);
 
         IConsentLedger.Consent memory viaV1 = consentLedger.getConsent(patient, doctor, V1);
         IConsentLedger.Consent memory viaV2 = consentLedger.getConsent(patient, doctor, V2);
@@ -96,10 +95,10 @@ contract ConsentLedgerRootWalkTest is TestHelpers {
         assertEq(viaV3.rootCidHash, V1);
     }
 
-    // ======== canAccess with includeUpdates=true ========
+    // ======== canAccess covers entire chain (medical episode model 2026-04-19) ========
 
-    function test_CanAccess_IncludeUpdatesTrue_CoversEntireChain() public {
-        consentLedger.grantInternal(patient, doctor, V2, EK, 0, true, false);
+    function test_CanAccess_CoversEntireChain() public {
+        consentLedger.grantInternal(patient, doctor, V2, EK, 0, false);
 
         assertTrue(consentLedger.canAccess(patient, doctor, V1), "V1 should be accessible");
         assertTrue(consentLedger.canAccess(patient, doctor, V2), "V2 should be accessible");
@@ -110,7 +109,7 @@ contract ConsentLedgerRootWalkTest is TestHelpers {
         vm.prank(patient);
         recordRegistry.addRecord(UNRELATED, bytes32(0), RT);
 
-        consentLedger.grantInternal(patient, doctor, V2, EK, 0, true, false);
+        consentLedger.grantInternal(patient, doctor, V2, EK, 0, false);
 
         assertFalse(
             consentLedger.canAccess(patient, doctor, UNRELATED),
@@ -118,39 +117,14 @@ contract ConsentLedgerRootWalkTest is TestHelpers {
         );
     }
 
-    // ======== canAccess with includeUpdates=false (Chỉ đọc enforcement) ========
-
-    function test_CanAccess_IncludeUpdatesFalse_OnlyAnchorAccessible() public {
-        // "Chỉ đọc" anchored on V2
-        consentLedger.grantInternal(patient, doctor, V2, EK, 0, false, false);
-
-        assertFalse(
-            consentLedger.canAccess(patient, doctor, V1),
-            "V1 must NOT be accessible when includeUpdates=false and anchor=V2"
-        );
-        assertTrue(
-            consentLedger.canAccess(patient, doctor, V2),
-            "V2 (anchor) must be accessible"
-        );
-        assertFalse(
-            consentLedger.canAccess(patient, doctor, V3),
-            "V3 must NOT be accessible when includeUpdates=false and anchor=V2"
-        );
-    }
-
-    function test_CanAccess_IncludeUpdatesFalse_AnchorIsRoot() public {
-        // Read-only at root V1 is the simplest case
-        consentLedger.grantInternal(patient, doctor, V1, EK, 0, false, false);
-
-        assertTrue(consentLedger.canAccess(patient, doctor, V1));
-        assertFalse(consentLedger.canAccess(patient, doctor, V2));
-        assertFalse(consentLedger.canAccess(patient, doctor, V3));
-    }
+    // Removed 2026-04-19: the "Chỉ đọc enforcement" tests (anchor vs query
+    // cidHash restriction with includeUpdates=false) no longer apply after the
+    // medical episode model change. Consent now always covers the whole chain.
 
     // ======== Revoke walks too ========
 
     function test_Revoke_FromAnyVersion_InvalidatesWholeChain() public {
-        consentLedger.grantInternal(patient, doctor, V2, EK, 0, true, false);
+        consentLedger.grantInternal(patient, doctor, V2, EK, 0, false);
         assertTrue(consentLedger.canAccess(patient, doctor, V3));
 
         // Patient revokes by passing V3 (descendant) — contract walks to root V1
@@ -176,7 +150,7 @@ contract ConsentLedgerRootWalkTest is TestHelpers {
             recordRegistry.addRecord(tail, prev, RT);
             prev = tail;
         }
-        consentLedger.grantInternal(patient, doctor, V1, EK, 0, true, false);
+        consentLedger.grantInternal(patient, doctor, V1, EK, 0, false);
         // canAccess on a very deep descendant must not revert
         bool ok = consentLedger.canAccess(patient, doctor, tail);
         // With the depth cap, the walk may stop before reaching V1. That's
@@ -192,7 +166,7 @@ contract ConsentLedgerRootWalkTest is TestHelpers {
         accessControl.registerAsDoctor();
         // NOT verified by org
 
-        consentLedger.grantInternal(patient, unverified, V2, EK, 0, true, false);
+        consentLedger.grantInternal(patient, unverified, V2, EK, 0, false);
 
         assertFalse(
             consentLedger.canAccess(patient, unverified, V1),
