@@ -699,15 +699,16 @@ router.get('/recipients/:cidHash', authenticate, async (req, res, next) => {
         });
 
         // 3. Filter out sensitive info, return public keys for re-encryption.
-        // BUG-F fix: include `includeUpdates` so mobile auto-propagate can skip
-        // recipients whose consent doesn't cover the new version (they'd receive
-        // a KeyShare row they can never decrypt via canAccess — dead weight).
-        // `allowDelegate` is included for completeness (UI may surface it).
+        // `includeUpdates` / `allowDelegate` feed mobile auto-propagate and the
+        // share-modal downgrade guard. `expiresAt` added 2026-04-19 so the guard
+        // can detect duration downgrades per grantee (without it the guard was
+        // forced to query self-KeyShare via /record/:cidHash and misfire).
         const team = recipients.map(share => ({
             walletAddress: share.recipient.walletAddress,
             encryptionPublicKey: share.recipient.encryptionPublicKey || share.senderPublicKey,
             includeUpdates: share.includeUpdates !== false,  // treat legacy missing field as true
             allowDelegate: share.allowDelegate === true,
+            expiresAt: share.expiresAt,
             role: 'member'
         }));
 
@@ -948,14 +949,26 @@ router.post('/:id/claim', authenticate, async (req, res, next) => {
                     });
                 }
 
-                // Truly no consent anywhere in chain → safe to revoke
-                await prisma.keyShare.update({
-                    where: { id: keyShare.id },
-                    data: { status: 'revoked' },
+                // canAccess=false but doctor IS verified. Could be: genuinely
+                // revoked on-chain, chain RPC transient fail, contract/subgraph
+                // desync, or anchorCidHash mismatch for a `includeUpdates=false`
+                // consent. We USED TO mark the KeyShare row `revoked` here, but
+                // that destroyed data for cases (b)-(d) — a single transient
+                // failure permanently killed a valid share.
+                //
+                // Trust the event sync worker: when patient actually revokes
+                // on-chain, `ConsentRevoked` flows through consentLedgerSync
+                // → KeyShare.status='revoked' via the proper pipeline. Here
+                // we just return an error; caller retries on next session.
+                log.warn('canAccess returned false for verified doctor — NOT auto-revoking', {
+                    keyShareId: keyShare.id,
+                    patient: ownerAddress,
+                    doctor: recipientLower,
+                    cidHash: cidHashLower,
                 });
                 return res.status(403).json({
                     code: 'ONCHAIN_CONSENT_MISSING',
-                    error: 'Quyền truy cập không còn hợp lệ trên blockchain (có thể bị bệnh nhân hoặc bác sĩ cấp trên thu hồi, hoặc đã hết hạn).',
+                    error: 'Quyền truy cập trên blockchain chưa sẵn sàng. Có thể do bị thu hồi, hết hạn, hoặc đang đồng bộ. Vui lòng thử lại sau vài giây.',
                 });
             }
         }

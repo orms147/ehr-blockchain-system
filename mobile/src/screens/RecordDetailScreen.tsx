@@ -537,16 +537,22 @@ function classifyDecryptError(error: any): string {
                 }
             }
 
-            // Pre-check 3 (Option B): if doctor already has access, block downgrade.
-            // On-chain consent is a single entry per (patient, doctor, root). Re-sharing
-            // with lower permissions overwrites BUT old KeyShare rows for other versions
-            // survive — creating inconsistency. Require revoke first.
+            // Pre-check 3 (Option B): if THIS doctor already has access, block
+            // permission/duration downgrade. Look up the recipient list for the
+            // record and match against `address` (the grantee). Previously this
+            // queried /api/key-share/record/:cidHash which filters by recipient
+            // = current user, and thus returned the patient's own self-KeyShare
+            // (expiresAt=null, includeUpdates=true) — guard would fire against
+            // EVERY new record for any doctor target.
             if (iAmOwner && ctx?.isDoctor) {
                 try {
-                    const existingKeyShare = await keyShareService.getKeyForRecord(record.cidHash);
-                    if (existingKeyShare && existingKeyShare.encryptedPayload) {
-                        const oldDelegate = existingKeyShare.allowDelegate === true;
-                        const oldInclude = existingKeyShare.includeUpdates !== false;
+                    const recipients = await keyShareService.getRecordRecipients(record.cidHash);
+                    const existing = Array.isArray(recipients)
+                        ? recipients.find((r: any) => r?.walletAddress?.toLowerCase() === address)
+                        : null;
+                    if (existing) {
+                        const oldDelegate = existing.allowDelegate === true;
+                        const oldInclude = existing.includeUpdates !== false;
                         const newDelegate = shareType === 'read-delegate';
                         const newInclude = shareType !== 'read-only';
 
@@ -569,8 +575,8 @@ function classifyDecryptError(error: any): string {
                         // Null expiresAt means forever (matches contract FOREVER sentinel).
                         // Only block if old consent is still ACTIVE — expired consent has no
                         // quyền left to "downgrade".
-                        const oldExpiryMs = existingKeyShare.expiresAt
-                            ? new Date(existingKeyShare.expiresAt).getTime()
+                        const oldExpiryMs = existing.expiresAt
+                            ? new Date(existing.expiresAt).getTime()
                             : Number.POSITIVE_INFINITY;
                         const newExpiryMs = shareExpiryHours
                             ? Date.now() + shareExpiryHours * 3600 * 1000
@@ -580,7 +586,7 @@ function classifyDecryptError(error: any): string {
                             await new Promise<void>((resolve) => {
                                 Alert.alert(
                                     'Bác sĩ đã có quyền dài hạn hơn',
-                                    `Quyền hiện tại hết hạn: ${formatExpiry(existingKeyShare.expiresAt)}.\n\n` +
+                                    `Quyền hiện tại hết hạn: ${formatExpiry(existing.expiresAt)}.\n\n` +
                                     'Để rút ngắn thời hạn, hãy THU HỒI quyền cũ trong "Nhật ký truy cập" trước, rồi chia sẻ lại với thời hạn mới.',
                                     [{ text: 'Đã hiểu', onPress: () => resolve() }],
                                     { cancelable: true, onDismiss: () => resolve() }
