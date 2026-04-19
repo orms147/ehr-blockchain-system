@@ -27,9 +27,16 @@ if (!patientArg || !doctorArg || !cidHashArg) {
     process.exit(1);
 }
 
-const patient = patientArg.toLowerCase();
-const doctor = doctorArg.toLowerCase();
-const cidHash = cidHashArg.toLowerCase();
+function normalize0x(s, label) {
+    let v = String(s || '').trim().toLowerCase();
+    if (v.startsWith('0x0x')) v = v.slice(2);
+    if (!v.startsWith('0x')) v = '0x' + v;
+    return v;
+}
+
+const patient = normalize0x(patientArg, 'patient');
+const doctor = normalize0x(doctorArg, 'doctor');
+const cidHash = normalize0x(cidHashArg, 'cidHash');
 
 const ABI = [
     {
