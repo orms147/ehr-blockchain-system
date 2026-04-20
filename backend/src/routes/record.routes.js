@@ -348,8 +348,32 @@ router.post('/save-only', authenticate, async (req, res, next) => {
         }
 
         if (encryptedPayload) {
-            const expiresAt = new Date();
-            expiresAt.setDate(expiresAt.getDate() + 7);
+            // Inherit doctor's expiry from the parent KeyShare so an update
+            // never extends their window beyond the original consent. If this
+            // is a NEW root (no parent) or the doctor has no prior KeyShare
+            // (e.g. patient-self path where creatorAddress == patientAddress),
+            // fall back to a 7-day default. If the parent KeyShare has null
+            // expiry (permanent — typical for the patient themselves) the
+            // new row also gets null so owners don't accidentally self-expire.
+            let inheritedExpiresAt = null;
+            let useFallback = true;
+            if (normalizedParentCidHash && creatorAddress !== patientAddress) {
+                const parentShare = await prisma.keyShare.findFirst({
+                    where: {
+                        cidHash: normalizedParentCidHash,
+                        recipientAddress: creatorAddress,
+                        status: { notIn: ['revoked', 'rejected'] },
+                    },
+                    select: { expiresAt: true },
+                });
+                if (parentShare) {
+                    inheritedExpiresAt = parentShare.expiresAt; // may be null (forever)
+                    useFallback = false;
+                }
+            }
+            const fallbackExpiresAt = new Date();
+            fallbackExpiresAt.setDate(fallbackExpiresAt.getDate() + 7);
+            const finalExpiresAt = useFallback ? fallbackExpiresAt : inheritedExpiresAt;
 
             await prisma.keyShare.upsert({
                 where: {
@@ -362,6 +386,7 @@ router.post('/save-only', authenticate, async (req, res, next) => {
                 update: {
                     encryptedPayload,
                     status: 'claimed',
+                    expiresAt: finalExpiresAt,
                 },
                 create: {
                     cidHash: normalizedCidHash,
@@ -370,7 +395,7 @@ router.post('/save-only', authenticate, async (req, res, next) => {
                     encryptedPayload,
                     senderPublicKey: senderPublicKey || null,
                     status: 'claimed',
-                    expiresAt,
+                    expiresAt: finalExpiresAt,
                 },
             });
         }
