@@ -228,15 +228,28 @@ export default function LoginScreen({ navigation }: any) {
         } catch (error: any) {
             const raw = String(error?.message || '').toLowerCase();
 
-            // User cancelled the Web3Auth modal — silent, not an error.
-            if (
+            // User abandoned the Web3Auth modal (closed it or left it open until
+            // the SDK's internal timeout fired). Treat as cancellation — not a
+            // real error, no red console.error, short friendly alert.
+            const isAbandoned =
                 raw.includes('dismiss') ||
                 raw.includes('user closed') ||
                 raw.includes('user cancel') ||
                 raw.includes('user denied') ||
                 raw.includes('cancelled') ||
-                raw.includes('canceled')
-            ) {
+                raw.includes('canceled') ||
+                raw.includes('quá thời gian') ||
+                raw.includes('timeout') ||
+                raw.includes('timed out');
+            if (isAbandoned) {
+                const isTimeout = raw.includes('quá thời gian') || raw.includes('timeout') || raw.includes('timed out');
+                if (isTimeout) {
+                    console.warn('[Login] Abandoned (timeout):', error?.message || error);
+                    Alert.alert(
+                        'Hết phiên đăng nhập',
+                        'Bạn chưa hoàn thành xác nhận trên trình duyệt. Hãy thử đăng nhập lại khi sẵn sàng.'
+                    );
+                }
                 return;
             }
 
