@@ -87,9 +87,17 @@ function splitLines(value: string): string[] {
     return value.split(/\r?\n|;/).map((s: string) => s.trim()).filter(Boolean);
 }
 
+const ZERO_BYTES32 = '0x0000000000000000000000000000000000000000000000000000000000000000';
+
 export default function DoctorCreateUpdateScreen({ navigation, route }: any) {
     const { user } = useAuthStore();
-    const { parentCidHash, patientAddress } = route.params || {};
+    const { parentCidHash: routeParentCidHash, patientAddress: routePatientAddress } = route.params || {};
+    // Create-new-root mode: no parentCidHash. Doctor may or may not know the
+    // patient address in advance — if not passed via route, show an input.
+    const isCreateNewRoot = !routeParentCidHash;
+    const [patientAddressInput, setPatientAddressInput] = useState<string>(routePatientAddress || '');
+    const patientAddress = (routePatientAddress || patientAddressInput || '').trim().toLowerCase();
+    const parentCidHash = routeParentCidHash || ZERO_BYTES32;
 
     const [title, setTitle] = useState('');
     const [description, setDescription] = useState('');
@@ -164,6 +172,10 @@ export default function DoctorCreateUpdateScreen({ navigation, route }: any) {
     };
 
     const handleSubmit = async () => {
+        if (!patientAddress || !/^0x[a-fA-F0-9]{40}$/.test(patientAddress)) {
+            Alert.alert('Thiếu địa chỉ bệnh nhân', 'Hãy nhập địa chỉ ví hợp lệ của bệnh nhân (0x...).');
+            return;
+        }
         if (!title.trim()) {
             Alert.alert('Thiếu tiêu đề', 'Hãy nhập tiêu đề hồ sơ.');
             return;
@@ -287,7 +299,7 @@ export default function DoctorCreateUpdateScreen({ navigation, route }: any) {
             const doctorEncryptedPayload = encryptForRecipient(payloadJson, myKeypair.publicKey, myKeypair.secretKey);
 
             // 4. Mirror to backend: RecordMetadata + KeyShare(patient) + KeyShare(doctor).
-            await recordService.saveOnly({
+            await (recordService.saveOnly as any)({
                 cidHash,
                 recordTypeHash,
                 ownerAddress: patientAddress,
@@ -324,9 +336,12 @@ export default function DoctorCreateUpdateScreen({ navigation, route }: any) {
             }
 
             // 6. Cascade key to everyone already on the parent chain so nobody
-            //    silently loses access after an update.
+            //    silently loses access after an update. Skip for new-root
+            //    records (no parent chain → nobody to inherit from).
             try {
-                const recipients: any = await keyShareService.getRecordRecipients(parentCidHash);
+                const recipients: any = isCreateNewRoot
+                    ? []
+                    : await keyShareService.getRecordRecipients(parentCidHash);
                 if (Array.isArray(recipients)) {
                     for (const r of recipients) {
                         const addr = String(r.walletAddress || '').toLowerCase();
@@ -350,8 +365,10 @@ export default function DoctorCreateUpdateScreen({ navigation, route }: any) {
             }
 
             Alert.alert(
-                'Đã cập nhật hồ sơ',
-                'Phiên bản mới đã được lưu lên blockchain. Bệnh nhân và các bác sĩ có quyền sẽ thấy ngay.',
+                isCreateNewRoot ? 'Đã tạo hồ sơ' : 'Đã cập nhật hồ sơ',
+                isCreateNewRoot
+                    ? 'Hồ sơ mới đã được lưu lên blockchain. Bệnh nhân sẽ thấy ngay.'
+                    : 'Phiên bản mới đã được lưu lên blockchain. Bệnh nhân và các bác sĩ có quyền sẽ thấy ngay.',
                 [{ text: 'OK', onPress: () => navigation.goBack() }]
             );
         } catch (submitError: any) {
@@ -409,13 +426,37 @@ export default function DoctorCreateUpdateScreen({ navigation, route }: any) {
                             <FilePlus2 size={26} color={EHR_PRIMARY} />
                         </View>
                         <YStack style={{ flex: 1 }}>
-                            <Text fontSize="$6" fontWeight="800" color="$color12">Cập nhật hồ sơ</Text>
-                            <Text fontSize="$3" color="$color10">Tạo bản cập nhật cho bệnh nhân {truncateAddr(patientAddress)}</Text>
+                            <Text fontSize="$6" fontWeight="800" color="$color12">
+                                {isCreateNewRoot ? 'Tạo hồ sơ mới' : 'Cập nhật hồ sơ'}
+                            </Text>
+                            <Text fontSize="$3" color="$color10">
+                                {isCreateNewRoot
+                                    ? (patientAddress ? `Ghi hồ sơ mới cho BN ${truncateAddr(patientAddress)}` : 'Ghi hồ sơ mới cho bệnh nhân')
+                                    : `Tạo phiên bản cập nhật cho BN ${truncateAddr(patientAddress)}`}
+                            </Text>
                         </YStack>
                     </XStack>
+                    {isCreateNewRoot && !routePatientAddress ? (
+                        <View style={{ backgroundColor: EHR_SURFACE_LOW, borderColor: EHR_OUTLINE_VARIANT, borderWidth: 1, borderRadius: 16, padding: 12, marginBottom: 8 }}>
+                            <Text fontSize="$2" style={{ color: EHR_ON_SURFACE_VARIANT, marginBottom: 6 }}>
+                                Địa chỉ ví bệnh nhân
+                            </Text>
+                            <TextInput
+                                value={patientAddressInput}
+                                onChangeText={setPatientAddressInput}
+                                placeholder="0x..."
+                                placeholderTextColor={EHR_ON_SURFACE_VARIANT}
+                                autoCapitalize="none"
+                                autoCorrect={false}
+                                style={{ fontFamily: 'monospace', fontSize: 13, color: EHR_ON_SURFACE, backgroundColor: EHR_SURFACE_LOWEST, borderColor: EHR_OUTLINE_VARIANT, borderWidth: 1, borderRadius: 10, padding: 10 }}
+                            />
+                        </View>
+                    ) : null}
                     <View style={{ backgroundColor: EHR_SURFACE_LOW, borderColor: EHR_OUTLINE_VARIANT, borderWidth: 1, borderRadius: 16, padding: 12 }}>
                         <Text fontSize="$2" style={{ color: EHR_ON_SURFACE_VARIANT }}>
-                            Nội dung sẽ được mã hoá và gửi cho bệnh nhân phê duyệt trước khi lưu lên blockchain.
+                            {isCreateNewRoot
+                                ? 'Hồ sơ mới sẽ được mã hoá đầu-cuối, lưu lên blockchain và trao khoá cho bệnh nhân + bạn.'
+                                : 'Phiên bản cập nhật sẽ được mã hoá, lưu lên blockchain và cascade khoá tới mọi người đang có quyền.'}
                         </Text>
                     </View>
                 </View>
@@ -584,7 +625,9 @@ export default function DoctorCreateUpdateScreen({ navigation, route }: any) {
                     <XStack style={{ alignItems: 'center', gap: 10 }}>
                         <FilePlus2 size={18} color={EHR_ON_PRIMARY} />
                         <Text color={EHR_ON_PRIMARY} fontWeight="800">
-                            {isSubmitting ? 'Đang gửi...' : 'Gửi yêu cầu cập nhật'}
+                            {isSubmitting
+                                ? (isCreateNewRoot ? 'Đang tạo...' : 'Đang cập nhật...')
+                                : (isCreateNewRoot ? 'Tạo hồ sơ' : 'Cập nhật')}
                         </Text>
                     </XStack>
                 </Button>

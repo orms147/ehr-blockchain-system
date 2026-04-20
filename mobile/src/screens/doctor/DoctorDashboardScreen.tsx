@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ActivityIndicator, FlatList, RefreshControl, Alert, Pressable, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
-import { FileText, Users, Clock3, Loader2, CheckCircle, Clock, Siren, AlertTriangle } from 'lucide-react-native';
+import { FileText, Users, Clock3, Loader2, CheckCircle, Clock, Siren, AlertTriangle, FilePlus2 } from 'lucide-react-native';
 import { YStack, XStack, Text, View, Button } from 'tamagui';
 import { parseGwei } from 'viem';
 import Animated, {
@@ -478,6 +478,35 @@ export default function DoctorDashboardScreen() {
                                 <Text style={s.statLabel}>Chờ xem</Text>
                             </View>
                         </XStack>
+
+                        {/* Create new record CTA — doctor writes a new chart entry
+                            for a patient without needing an existing parent record.
+                            Patient address is entered on the next screen. */}
+                        <Pressable
+                            onPress={() => navigation.navigate('DoctorCreateUpdate', {})}
+                            style={{
+                                backgroundColor: EHR_PRIMARY_FIXED,
+                                borderColor: EHR_PRIMARY,
+                                borderWidth: 1,
+                                borderRadius: 16,
+                                padding: 14,
+                                marginBottom: 16,
+                                flexDirection: 'row',
+                                alignItems: 'center',
+                            }}
+                        >
+                            <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: EHR_PRIMARY, alignItems: 'center', justifyContent: 'center', marginRight: 12 }}>
+                                <FilePlus2 size={20} color={EHR_ON_PRIMARY} />
+                            </View>
+                            <YStack style={{ flex: 1 }}>
+                                <Text fontSize={14} fontWeight="700" style={{ color: EHR_PRIMARY }}>
+                                    Tạo hồ sơ mới cho bệnh nhân
+                                </Text>
+                                <Text fontSize={12} style={{ color: EHR_ON_SURFACE_VARIANT, marginTop: 2 }}>
+                                    Ghi note khám, kê đơn, kết quả xét nghiệm trực tiếp vào hồ sơ bệnh nhân.
+                                </Text>
+                            </YStack>
+                        </Pressable>
 
                         {/* Unverified doctor warning banner */}
                         {isVerifiedDoctor === false ? (
