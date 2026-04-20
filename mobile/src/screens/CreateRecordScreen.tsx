@@ -497,20 +497,16 @@ export default function CreateRecordScreen({ navigation, route: navRoute }: any)
                     const recipients: Array<{
                         walletAddress: string;
                         encryptionPublicKey: string;
-                        includeUpdates?: boolean;
                     }> = await keyShareService.getRecordRecipients(parentCidHash);
                     if (Array.isArray(recipients) && recipients.length > 0) {
                         const { walletClient, address: myAddress } = await walletActionService.getWalletContext();
                         const myKeypair = await getOrCreateEncryptionKeypair(walletClient, myAddress);
                         const payload = JSON.stringify({ cid, aesKey });
+                        // 2026-04-19: consent covers whole chain unconditionally.
+                        // Every active recipient of the parent gets the new version key.
                         for (const r of recipients) {
                             if (!r?.walletAddress || !r?.encryptionPublicKey) continue;
                             if (r.walletAddress.toLowerCase() === String(myAddress).toLowerCase()) continue;
-                            // BUG-F fix: recipients with includeUpdates=false (Chỉ đọc) on
-                            // the parent won't pass canAccess for the new version — sharing
-                            // creates a dead KeyShare row that backend rejects at claim time.
-                            // Skip them entirely.
-                            if (r.includeUpdates === false) continue;
                             try {
                                 const encryptedPayload = encryptForRecipient(payload, r.encryptionPublicKey, myKeypair.secretKey);
                                 await keyShareService.shareKey({

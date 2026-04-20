@@ -178,11 +178,6 @@ model KeyShare {
   // RecordDelegation: If true, recipient can re-share this record to others
   allowDelegate    Boolean  @default(false)
 
-  // Mirrors on-chain Consent.includeUpdates. When false the recipient is granted
-  // read-only access to this exact version and must NOT create updates / new
-  // versions on top of it. UI hides "Cập nhật" actions when this is false.
-  includeUpdates   Boolean  @default(true)
-
   status    String    @default("pending") // pending, claimed, revoked
   createdAt DateTime  @default(now())
   claimedAt DateTime?
@@ -241,14 +236,12 @@ model AccessRequest {
 // Consent tracking (mirrors on-chain consents).
 // cidHash is ALWAYS the canonical root of the record chain — the contract
 // walks input → root at grant time so this field is stable across versions.
-// anchorCidHash records which version was originally granted, used to enforce
-// "Chỉ đọc 1 version" (includeUpdates=false) on-chain.
+// 2026-04-19: dropped anchorCidHash + includeUpdates (medical episode model).
 model Consent {
   id             String   @id @default(uuid())
   patientAddress String   @db.VarChar(42)
   granteeAddress String   @db.VarChar(42)
   cidHash        String   @db.VarChar(66)  // root cidHash
-  anchorCidHash  String?  @db.VarChar(66)  // original input cidHash (may equal cidHash)
   grantedAt      DateTime @default(now())
   expiresAt      DateTime
   status         String   @default("active")  // active, revoked, expired

@@ -433,10 +433,8 @@ export default function RequestsScreen() {
                 const alreadyActive = existing?.status && existing.status !== 'revoked' && existing.status !== 'rejected';
                 if (alreadyActive) {
                     const oldAllowDelegate = existing.allowDelegate === true;
-                    const oldIncludeUpdates = existing.includeUpdates !== false;
                     // Request types: 0=DirectAccess, 2=RecordDelegation, 1=FullDelegation (skipped above)
                     const newAllowDelegate = request.requestType === 2;
-                    const newIncludeUpdates = true; // contract hardcodes true for both 0 and 2
 
                     // Duration comparison: null expiry = forever (Infinity)
                     const oldExpiryMs = existing.expiresAt
@@ -447,8 +445,7 @@ export default function RequestsScreen() {
                         : Number.POSITIVE_INFINITY;
                     const oldStillActive = oldExpiryMs > Date.now();
 
-                    const flagDowngrade = (oldAllowDelegate && !newAllowDelegate)
-                                       || (oldIncludeUpdates && !newIncludeUpdates);
+                    const flagDowngrade = oldAllowDelegate && !newAllowDelegate;
                     const durationDowngrade = oldStillActive && newExpiryMs < oldExpiryMs;
 
                     if (flagDowngrade || durationDowngrade) {

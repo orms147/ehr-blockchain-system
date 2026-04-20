@@ -215,7 +215,8 @@ export async function revokeSubDelegation(patientAddress, subDelegatee) {
  * Doctor with active delegation uses it to grant a new consent to another doctor
  * on behalf of the patient. msg.sender = delegatee; no patient signature needed.
  *
- * Contract signature: grantUsingDelegation(patient, newGrantee, rootCidHash, encKeyHash, expireAt, includeUpdates, allowDelegate)
+ * Contract signature (2026-04-19, post-simplify):
+ *   grantUsingDelegation(patient, newGrantee, rootCidHash, encKeyHash, expireAt, allowDelegate)
  */
 export async function grantUsingDelegation({
     patientAddress,
@@ -223,7 +224,6 @@ export async function grantUsingDelegation({
     rootCidHash,
     encKeyHash,
     expireAtSeconds = 0,
-    includeUpdates = true,
     allowDelegate = false,
 }) {
     if (!CONSENT_LEDGER_ADDRESS) {
@@ -246,7 +246,6 @@ export async function grantUsingDelegation({
             rootCidHash,
             encKeyHash,
             Number(expireAtSeconds),
-            Boolean(includeUpdates),
             Boolean(allowDelegate),
         ],
     });

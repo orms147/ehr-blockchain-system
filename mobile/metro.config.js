@@ -1,8 +1,11 @@
 ﻿// @ts-check
-const { getDefaultConfig } = require('expo/metro-config');
+const { getSentryExpoConfig } = require('@sentry/react-native/metro');
 
+// getSentryExpoConfig wraps expo/metro-config with Sentry's symbolication
+// transformer so uploaded source maps resolve to original filenames/lines.
+// Equivalent to getDefaultConfig(__dirname) for all other purposes.
 /** @type {import('expo/metro-config').MetroConfig} */
-const config = getDefaultConfig(__dirname);
+const config = getSentryExpoConfig(__dirname);
 
 const resolvePolyfill = (moduleName) => {
   // Resolve package entrypoint, not Node core builtin id.

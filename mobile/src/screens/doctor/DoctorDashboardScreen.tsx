@@ -83,7 +83,6 @@ type SharedRecord = {
     parentCidHash?: string;
     senderAddress?: string;
     versionCount?: number;
-    includeUpdates?: boolean;
     allowDelegate?: boolean;
     record?: { ownerAddress?: string; title?: string; recordType?: string };
 };
@@ -374,7 +373,6 @@ export default function DoctorDashboardScreen() {
                 createdByDisplay: patientAddress ? `BN. ${patientAddress.substring(0, 8)}...${patientAddress.slice(-4)}` : 'Bệnh nhân',
                 ownerAddress: patientAddress,
                 allowDelegate: (record as any)?.allowDelegate ?? false,
-                includeUpdates: (record as any)?.includeUpdates ?? true,
             },
         });
     };
@@ -382,14 +380,6 @@ export default function DoctorDashboardScreen() {
     const handleCreateUpdate = async (record: SharedRecord) => {
         const patientAddress = record?.record?.ownerAddress || record?.senderAddress || '';
         if (!record?.cidHash || !patientAddress) { Alert.alert('Lỗi', 'Thiếu thông tin hồ sơ hoặc bệnh nhân.'); return; }
-        // Read-only share: patient explicitly marked this record as Chỉ đọc.
-        if (record?.includeUpdates === false) {
-            Alert.alert(
-                'Hồ sơ chỉ đọc',
-                'Bệnh nhân đã chia sẻ hồ sơ này ở chế độ "Chỉ đọc". Bạn không có quyền tạo phiên bản cập nhật.'
-            );
-            return;
-        }
 
         // BRANCH GUARD: check if this version already has newer children.
         // If doctor only has an older version (e.g. V2) but V3→V4 exist,

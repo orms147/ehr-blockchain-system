@@ -88,7 +88,6 @@ type ConsentEvent @entity(immutable: true) {
   patient: Bytes!
   grantee: Bytes!
   rootCidHash: Bytes!             # canonical record-tree root (walked on-chain)
-  anchorCidHash: Bytes            # original input cidHash (only on ConsentGranted)
   expireAt: BigInt
   allowDelegate: Boolean
   timestamp: BigInt!
@@ -104,7 +103,6 @@ type EmergencyEvent @entity(immutable: true) {
   patient: Bytes!
   grantee: Bytes!
   rootCidHash: Bytes!             # canonical root
-  anchorCidHash: Bytes!           # original input cidHash
   expireAt: BigInt!
   timestamp: BigInt!
   txHash: Bytes!

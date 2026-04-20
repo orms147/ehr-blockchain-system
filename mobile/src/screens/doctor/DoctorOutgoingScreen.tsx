@@ -390,15 +390,12 @@ export default function DoctorOutgoingScreen() {
             try {
                 const recipients: any = await keyShareService.getRecordRecipients(update.parentCidHash);
                 if (Array.isArray(recipients)) {
+                    // 2026-04-19: consent covers whole chain. Every active
+                    // recipient of the parent gets the new version's key.
                     for (const r of recipients) {
                         const addr = String(r.walletAddress || '').toLowerCase();
                         if (!addr || addr === myAddress.toLowerCase() || addr === String(update.patientAddress).toLowerCase()) continue;
                         if (!r.encryptionPublicKey) continue;
-                        // BUG-F fix: skip recipients whose parent consent has
-                        // includeUpdates=false — they cannot pass canAccess for the
-                        // new version, so creating a KeyShare row for them only
-                        // produces dead storage that backend 403s at claim time.
-                        if (r.includeUpdates === false) continue;
                         try {
                             const enc = encryptForRecipient(payloadJson, r.encryptionPublicKey, myKeypair.secretKey);
                             await keyShareService.shareKey({

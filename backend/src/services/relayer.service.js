@@ -445,7 +445,6 @@ export async function sponsorGrantConsent(
     cidHash,
     encKeyHash,
     expireAt,
-    includeUpdates,
     allowDelegate,
     deadline,
     signature
@@ -465,7 +464,6 @@ export async function sponsorGrantConsent(
             cidHash,
             encKeyHash,
             expireAt,
-            includeUpdates,
             allowDelegate,
             deadline,
             signature,

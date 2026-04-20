@@ -60,16 +60,13 @@ const createKeyShareSchema = z.object({
     encryptedPayload: z.string().min(1), // Contains encrypted {cid, aesKey}
     senderPublicKey: z.string().min(1).optional(), // NaCl public key for decryption
     expiresAt: z.string().datetime().optional().nullable(),
-    allowDelegate: z.boolean().optional().default(false), // NEW: For RecordDelegation
-    // Mirrors the on-chain Consent.includeUpdates flag. Default true for backward
-    // compatibility with older clients that don't send the field.
-    includeUpdates: z.boolean().optional().default(true),
+    allowDelegate: z.boolean().optional().default(false), // For RecordDelegation
 });
 
 // POST /api/key-share - Share encrypted key with recipient
 router.post('/', authenticate, async (req, res, next) => {
     try {
-        const { cidHash, recipientAddress, encryptedPayload, senderPublicKey, expiresAt, allowDelegate, includeUpdates } =
+        const { cidHash, recipientAddress, encryptedPayload, senderPublicKey, expiresAt, allowDelegate } =
             createKeyShareSchema.parse(req.body);
 
         const cidHashLower = cidHash.toLowerCase();
@@ -302,7 +299,6 @@ router.post('/', authenticate, async (req, res, next) => {
                         encryptedPayload,
                         senderPublicKey,
                         allowDelegate: finalAllowDelegate,
-                        includeUpdates,
                         status: nextStatus,
                         claimedAt: nextStatus === 'claimed' ? (existing.claimedAt || new Date()) : null,
                         expiresAt: finalExpiresAt ? new Date(finalExpiresAt) : null,
@@ -322,7 +318,6 @@ router.post('/', authenticate, async (req, res, next) => {
                     encryptedPayload,
                     senderPublicKey,
                     allowDelegate: finalAllowDelegate,
-                    includeUpdates,
                     status: autoClaimStatus,
                     claimedAt: autoClaimStatus === 'claimed' ? new Date() : null,
                     expiresAt: finalExpiresAt ? new Date(finalExpiresAt) : null,
@@ -698,15 +693,12 @@ router.get('/recipients/:cidHash', authenticate, async (req, res, next) => {
             }
         });
 
-        // 3. Filter out sensitive info, return public keys for re-encryption.
-        // `includeUpdates` / `allowDelegate` feed mobile auto-propagate and the
-        // share-modal downgrade guard. `expiresAt` added 2026-04-19 so the guard
-        // can detect duration downgrades per grantee (without it the guard was
-        // forced to query self-KeyShare via /record/:cidHash and misfire).
+        // Return public keys for re-encryption + flags the mobile share-modal
+        // downgrade guard reads. 2026-04-19: dropped `includeUpdates` — medical
+        // episode model means every consent covers the whole chain.
         const team = recipients.map(share => ({
             walletAddress: share.recipient.walletAddress,
             encryptionPublicKey: share.recipient.encryptionPublicKey || share.senderPublicKey,
-            includeUpdates: share.includeUpdates !== false,  // treat legacy missing field as true
             allowDelegate: share.allowDelegate === true,
             expiresAt: share.expiresAt,
             role: 'member'

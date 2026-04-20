@@ -39,6 +39,14 @@
                                      {
                                          "cameraPermission": "Cho phép $(PRODUCT_NAME) dùng camera để quét mã QR địa chỉ."
                                      }
+                                 ],
+                                 [
+                                     "@sentry/react-native/expo",
+                                     {
+                                         "url": "https://sentry.io/",
+                                         "organization": "hanoi-university-of-science-1o",
+                                         "project": "react-native"
+                                     }
                                  ]
                              ]
              }

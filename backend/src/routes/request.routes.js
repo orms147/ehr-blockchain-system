@@ -467,11 +467,6 @@ router.post('/approve-with-sig', authenticate, requirePatientRole, async (req, r
                     status: 'awaiting_claim',
                     expiresAt: keyShareExpiresAt,
                     allowDelegate: request.requestType === 2,
-                    // Contract hardcodes includeUpdates=true for both DirectAccess
-                    // and RecordDelegation. Must explicitly set here to override any
-                    // previous "Chỉ đọc" (includeUpdates=false) from a patient
-                    // direct share that used the same KeyShare row.
-                    includeUpdates: true,
                 },
                 create: {
                     senderAddress: patientAddress,
@@ -482,7 +477,6 @@ router.post('/approve-with-sig', authenticate, requirePatientRole, async (req, r
                     status: 'awaiting_claim',
                     expiresAt: keyShareExpiresAt,
                     allowDelegate: request.requestType === 2,
-                    includeUpdates: true,
                 },
             });
         }

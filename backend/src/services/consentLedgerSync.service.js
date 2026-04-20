@@ -31,13 +31,13 @@ const CONTRACT_NAME = 'ConsentLedger';
 
 const EVENTS = {
     ConsentGranted: parseAbiItem(
-        'event ConsentGranted(address indexed patient, address indexed grantee, bytes32 indexed rootCidHash, bytes32 anchorCidHash, uint40 expireAt, bool allowDelegate)'
+        'event ConsentGranted(address indexed patient, address indexed grantee, bytes32 indexed rootCidHash, uint40 expireAt, bool allowDelegate)'
     ),
     ConsentRevoked: parseAbiItem(
         'event ConsentRevoked(address indexed patient, address indexed grantee, bytes32 indexed rootCidHash, uint40 timestamp)'
     ),
     EmergencyGranted: parseAbiItem(
-        'event EmergencyGranted(address indexed patient, address indexed grantee, bytes32 indexed rootCidHash, bytes32 anchorCidHash, uint40 expireAt)'
+        'event EmergencyGranted(address indexed patient, address indexed grantee, bytes32 indexed rootCidHash, uint40 expireAt)'
     ),
     DelegationGranted: parseAbiItem(
         'event DelegationGranted(address indexed patient, address indexed delegatee, uint40 expiresAt, bool allowSubDelegate)'
@@ -452,7 +452,6 @@ async function handleConsentGranted(event) {
     const patient = normalizeAddress(event.args.patient);
     const grantee = normalizeAddress(event.args.grantee);
     const rootCidHash = normalizeHash(event.args.rootCidHash);
-    const anchorCidHash = normalizeHash(event.args.anchorCidHash);
     const expireAtSec = event.args.expireAt;
     if (!patient || !grantee || !rootCidHash) return;
 
@@ -478,7 +477,6 @@ async function handleConsentGranted(event) {
             update: {
                 status: 'active',
                 expiresAt: expiresAtDate ?? new Date(Number(FOREVER) * 1000),
-                anchorCidHash: anchorCidHash || rootCidHash,
             },
             create: {
                 patientAddress: patient,
@@ -486,7 +484,6 @@ async function handleConsentGranted(event) {
                 cidHash: rootCidHash,
                 status: 'active',
                 expiresAt: expiresAtDate ?? new Date(Number(FOREVER) * 1000),
-                anchorCidHash: anchorCidHash || rootCidHash,
             },
         });
     } catch (err) {
@@ -562,7 +559,6 @@ async function handleEmergencyGranted(event) {
     const patient = normalizeAddress(event.args.patient);
     const grantee = normalizeAddress(event.args.grantee);
     const rootCidHash = normalizeHash(event.args.rootCidHash);
-    const anchorCidHash = normalizeHash(event.args.anchorCidHash);
     const expireAtSec = event.args.expireAt;
     if (!patient || !grantee || !rootCidHash) return;
 
@@ -571,7 +567,6 @@ async function handleEmergencyGranted(event) {
 
     log.info('EmergencyGranted', {
         patient, grantee, rootCidHash,
-        anchorCidHash,
         expireAtSec: String(expireAtSec),
     });
 

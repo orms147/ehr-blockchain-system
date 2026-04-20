@@ -25,7 +25,6 @@ export function handleConsentGranted(event: ConsentGranted): void {
   e.patient = event.params.patient;
   e.grantee = event.params.grantee;
   e.rootCidHash = event.params.rootCidHash;
-  e.anchorCidHash = event.params.anchorCidHash;
   e.expireAt = event.params.expireAt;
   e.allowDelegate = event.params.allowDelegate;
   e.timestamp = event.block.timestamp;
@@ -51,7 +50,6 @@ export function handleEmergencyGranted(event: EmergencyGranted): void {
   e.patient = event.params.patient;
   e.grantee = event.params.grantee;
   e.rootCidHash = event.params.rootCidHash;
-  e.anchorCidHash = event.params.anchorCidHash;
   e.expireAt = event.params.expireAt;
   e.timestamp = event.block.timestamp;
   e.txHash = event.transaction.hash;

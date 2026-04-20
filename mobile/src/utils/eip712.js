@@ -15,7 +15,8 @@ export const EIP712_DOMAIN = {
     verifyingContract: CONSENT_LEDGER_ADDRESS,
 };
 
-// EIP-712 Types - MUST match contract CONSENT_PERMIT_TYPEHASH
+// EIP-712 Types - MUST match contract CONSENT_PERMIT_TYPEHASH.
+// 2026-04-19: dropped `includeUpdates` — medical episode model.
 export const CONSENT_PERMIT_TYPES = {
     ConsentPermit: [
         { name: 'patient', type: 'address' },
@@ -23,7 +24,6 @@ export const CONSENT_PERMIT_TYPES = {
         { name: 'rootCidHash', type: 'bytes32' },
         { name: 'encKeyHash', type: 'bytes32' },
         { name: 'expireAt', type: 'uint256' },
-        { name: 'includeUpdates', type: 'bool' },
         { name: 'allowDelegate', type: 'bool' },
         { name: 'deadline', type: 'uint256' },
         { name: 'nonce', type: 'uint256' },
@@ -59,7 +59,6 @@ export async function signGrantConsent(walletClient, params) {
         rootCidHash,
         encKeyHash,
         expireAt,
-        includeUpdates,
         allowDelegate,
         deadline,
         nonce,
@@ -81,7 +80,6 @@ export async function signGrantConsent(walletClient, params) {
         rootCidHash,
         encKeyHash,
         expireAt: BigInt(expireAt),
-        includeUpdates,
         allowDelegate,
         deadline: BigInt(deadline),
         nonce: BigInt(nonce),

@@ -9,9 +9,8 @@ export const keyShareService = {
      * @param {string} [params.senderPublicKey]
      * @param {string|null} [params.expiresAt]   ISO datetime string, or null for no expiry
      * @param {boolean} [params.allowDelegate]
-     * @param {boolean} [params.includeUpdates]
      */
-    async shareKey({ cidHash, recipientAddress, encryptedPayload, senderPublicKey, expiresAt = null, allowDelegate = false, includeUpdates = true }) {
+    async shareKey({ cidHash, recipientAddress, encryptedPayload, senderPublicKey, expiresAt = null, allowDelegate = false }) {
         return api.post('/api/key-share', {
             cidHash,
             recipientAddress,
@@ -19,7 +18,6 @@ export const keyShareService = {
             senderPublicKey,
             expiresAt,
             allowDelegate,
-            includeUpdates,
         });
     },
 

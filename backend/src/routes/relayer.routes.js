@@ -164,7 +164,6 @@ const grantSchema = z.object({
     cidHash: z.string().regex(/^0x[a-fA-F0-9]{64}$/),
     encKeyHash: z.string().regex(/^0x[a-fA-F0-9]{64}$/),
     expireAt: z.number().int().nonnegative(),
-    includeUpdates: z.boolean().default(false),
     allowDelegate: z.boolean().default(false),
     deadline: z.number().int().positive(),
     signature: z.string().regex(/^0x[a-fA-F0-9]+$/),
@@ -239,7 +238,6 @@ router.post('/grant', authenticate, requirePatientRole, async (req, res, next) =
             data.cidHash,
             data.encKeyHash,
             data.expireAt,
-            data.includeUpdates,
             data.allowDelegate,
             data.deadline,
             data.signature

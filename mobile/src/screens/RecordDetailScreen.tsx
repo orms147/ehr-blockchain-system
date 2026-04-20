@@ -137,8 +137,10 @@ export default function RecordDetailScreen({ route, navigation }: any) {
     const [customExpiryValue, setCustomExpiryValue] = useState('');
     const [customExpiryUnit, setCustomExpiryUnit] = useState<'hour' | 'day'>('day');
 
-    // Share type: read-only | read-update | read-delegate
-    type ShareType = 'read-only' | 'read-update' | 'read-delegate';
+    // Share type (2026-04-19 medical episode model): chain-wide only.
+    //   read-update    — sees whole chain, cannot re-share (default)
+    //   read-delegate  — sees whole chain + can re-share (allowDelegate=true)
+    type ShareType = 'read-update' | 'read-delegate';
     const [shareType, setShareType] = useState<ShareType>('read-update');
 
     const decryptedImage = useMemo(() => extractImageFromPayload(decryptedData), [decryptedData]);
@@ -272,16 +274,10 @@ function classifyDecryptError(error: any): string {
 
         const expiresAtMs = shareExpiryHours ? Date.now() + shareExpiryHours * 3600 * 1000 : 0;
 
-        // Pass the CURRENT version's cid as inputCidHash. Contract walks to
-        // the canonical root internally for storage keying (since the root-walk
-        // refactor), so storage location is identical whether we pass V(n) or
-        // root. What matters: `anchorCidHash` is set to the inputCidHash AS-IS,
-        // and for `includeUpdates=false` shares the contract enforces
-        //     queryCidHash == anchorCidHash
-        // — passing the root here made every read-only share broken because
-        // the anchor became V1 even when the patient shared V2. Always pass
-        // the exact version the patient is viewing; includeUpdates=true
-        // semantics still cover descendants regardless of anchor value.
+        // Pass the CURRENT version's cid as inputCidHash. Contract walks to the
+        // canonical root internally, so storage location is identical whether
+        // we pass V(n) or root. 2026-04-19: consent covers whole chain (no more
+        // includeUpdates / anchor), so the only flag left is allowDelegate.
         const shareCid = local.cid;
         const shareAesKey = local.aesKey;
 
@@ -298,7 +294,6 @@ function classifyDecryptError(error: any): string {
                 cid: shareCid,
                 aesKey: shareAesKey,
                 expiresAtMs,
-                includeUpdates: shareType !== 'read-only',
                 allowDelegate: shareType === 'read-delegate',
             });
         } else {
@@ -380,7 +375,6 @@ function classifyDecryptError(error: any): string {
         const payload = JSON.stringify({ cid: local.cid, aesKey: local.aesKey });
         const encryptedPayload = encryptForRecipient(payload, recipientPubKey, myKeypair.secretKey);
 
-        const includeUpdatesFlag = shareType !== 'read-only';
         const allowDelegateFlag = shareType === 'read-delegate';
 
         await keyShareService.shareKey({
@@ -390,56 +384,50 @@ function classifyDecryptError(error: any): string {
             senderPublicKey: myKeypair.publicKey,
             expiresAt: expiresAtMs ? new Date(expiresAtMs).toISOString() : null,
             allowDelegate: allowDelegateFlag,
-            includeUpdates: includeUpdatesFlag,
         });
 
-        // CASCADE: Also create keyShare entries for every other version in the chain
-        // for which the patient has local keys. The on-chain consent already covers the
-        // whole tree (includeUpdates=true), so we just need DB rows so backend lookup
-        // finds a key for whichever version the doctor opens.
-        // For "read-only" shares we INTENTIONALLY skip this loop — the doctor must
-        // only see the exact version that was shared, no other versions in the chain.
-        if (includeUpdatesFlag) {
+        // CASCADE: create KeyShare rows for every other version in the chain.
+        // 2026-04-19 medical episode model: on-chain consent covers the whole
+        // tree unconditionally, so every version needs an off-chain key-share
+        // row for the doctor to decrypt whichever one they open.
+        try {
+            // Full chain loop: fetch ALL versions in the tree (ancestors + descendants)
+            // via backend chain-cids endpoint, then create keyShare for each.
+            let versionsToShare: any[] = [];
             try {
-                // Full chain loop: fetch ALL versions in the tree (ancestors + descendants)
-                // via backend chain-cids endpoint, then create keyShare for each.
-                let versionsToShare: any[] = [];
-                try {
-                    const chainRes: any = await recordService.getChainCids(record.cidHash!);
-                    const all = chainRes?.records || [];
-                    versionsToShare = all.filter((v: any) => v?.cidHash && v.cidHash !== record.cidHash);
-                } catch (e) {
-                    console.warn('getChainCids failed, falling back to parent/children', e);
-                    if (chain?.parent?.cidHash && chain.parent.cidHash !== record.cidHash) {
-                        versionsToShare.push(chain.parent);
-                    }
-                    (chain?.children || []).forEach((c: any) => {
-                        if (c?.cidHash && c.cidHash !== record.cidHash) versionsToShare.push(c);
-                    });
-                }
-
-                for (const v of versionsToShare) {
-                    const vLocal = localRecords[v.cidHash];
-                    if (!vLocal?.cid || !vLocal?.aesKey) continue; // patient doesn't have key for this version
-                    const vPayload = JSON.stringify({ cid: vLocal.cid, aesKey: vLocal.aesKey });
-                    const vEncrypted = encryptForRecipient(vPayload, recipientPubKey, myKeypair.secretKey);
-                    try {
-                        await keyShareService.shareKey({
-                            cidHash: v.cidHash,
-                            recipientAddress: address,
-                            encryptedPayload: vEncrypted,
-                            senderPublicKey: myKeypair.publicKey,
-                            expiresAt: expiresAtMs ? new Date(expiresAtMs).toISOString() : null,
-                            allowDelegate: allowDelegateFlag,
-                            includeUpdates: includeUpdatesFlag,
-                        });
-                    } catch (e) {
-                        console.warn('Cascade keyShare failed for version', v.cidHash, e);
-                    }
-                }
+                const chainRes: any = await recordService.getChainCids(record.cidHash!);
+                const all = chainRes?.records || [];
+                versionsToShare = all.filter((v: any) => v?.cidHash && v.cidHash !== record.cidHash);
             } catch (e) {
-                console.warn('Cascade keyShare error', e);
+                console.warn('getChainCids failed, falling back to parent/children', e);
+                if (chain?.parent?.cidHash && chain.parent.cidHash !== record.cidHash) {
+                    versionsToShare.push(chain.parent);
+                }
+                (chain?.children || []).forEach((c: any) => {
+                    if (c?.cidHash && c.cidHash !== record.cidHash) versionsToShare.push(c);
+                });
             }
+
+            for (const v of versionsToShare) {
+                const vLocal = localRecords[v.cidHash];
+                if (!vLocal?.cid || !vLocal?.aesKey) continue; // patient doesn't have key for this version
+                const vPayload = JSON.stringify({ cid: vLocal.cid, aesKey: vLocal.aesKey });
+                const vEncrypted = encryptForRecipient(vPayload, recipientPubKey, myKeypair.secretKey);
+                try {
+                    await keyShareService.shareKey({
+                        cidHash: v.cidHash,
+                        recipientAddress: address,
+                        encryptedPayload: vEncrypted,
+                        senderPublicKey: myKeypair.publicKey,
+                        expiresAt: expiresAtMs ? new Date(expiresAtMs).toISOString() : null,
+                        allowDelegate: allowDelegateFlag,
+                    });
+                } catch (e) {
+                    console.warn('Cascade keyShare failed for version', v.cidHash, e);
+                }
+            }
+        } catch (e) {
+            console.warn('Cascade keyShare error', e);
         }
 
         setShowShareModal(false);
@@ -542,17 +530,15 @@ function classifyDecryptError(error: any): string {
                         : null;
                     if (existing) {
                         const oldDelegate = existing.allowDelegate === true;
-                        const oldInclude = existing.includeUpdates !== false;
                         const newDelegate = shareType === 'read-delegate';
-                        const newInclude = shareType !== 'read-only';
 
-                        // Flag downgrade: old has more permission flags than new
-                        if ((oldDelegate && !newDelegate) || (oldInclude && !newInclude)) {
+                        // Flag downgrade: grantee already has Delegate; new share drops it.
+                        if (oldDelegate && !newDelegate) {
                             await new Promise<void>((resolve) => {
                                 Alert.alert(
                                     'Bác sĩ đã có quyền cao hơn',
-                                    `Bác sĩ này đã có quyền "${oldDelegate ? 'Ủy quyền lại' : oldInclude ? 'Đọc & cập nhật' : 'Chỉ đọc'}".\n\n` +
-                                    'Để giới hạn quyền, hãy THU HỒI quyền cũ trong "Nhật ký truy cập" trước, rồi chia sẻ lại với quyền mới.',
+                                    'Bác sĩ này đã có quyền "Đọc & ủy quyền lại".\n\n' +
+                                    'Để giới hạn xuống "Đọc & cập nhật", hãy THU HỒI quyền cũ trong "Nhật ký truy cập" trước, rồi chia sẻ lại.',
                                     [{ text: 'Đã hiểu', onPress: () => resolve() }],
                                     { cancelable: true, onDismiss: () => resolve() }
                                 );
@@ -711,21 +697,13 @@ function classifyDecryptError(error: any): string {
                     </XStack>
                 </View>
 
-                {/* Access info badges (read-only, expiry) for shared records */}
-                {!iAmOwner ? (
+                {/* Access info badges for shared records (Delegate flag only since 2026-04-19) */}
+                {!iAmOwner && (record as any)?.allowDelegate ? (
                     <XStack style={{ flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
-                        {(record as any)?.includeUpdates === false ? (
-                            <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#FEF3C7', borderColor: '#F59E0B', borderWidth: 1, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4, gap: 4 }}>
-                                <Lock size={12} color="#D97706" />
-                                <Text style={{ fontSize: 11, fontWeight: '700', color: '#92400E' }}>Chỉ đọc</Text>
-                            </View>
-                        ) : null}
-                        {(record as any)?.allowDelegate ? (
-                            <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: EHR_PRIMARY_FIXED, borderColor: EHR_PRIMARY, borderWidth: 1, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4, gap: 4 }}>
-                                <Share2 size={12} color={EHR_PRIMARY} />
-                                <Text style={{ fontSize: 11, fontWeight: '700', color: EHR_PRIMARY }}>Chia sẻ lại được</Text>
-                            </View>
-                        ) : null}
+                        <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: EHR_PRIMARY_FIXED, borderColor: EHR_PRIMARY, borderWidth: 1, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4, gap: 4 }}>
+                            <Share2 size={12} color={EHR_PRIMARY} />
+                            <Text style={{ fontSize: 11, fontWeight: '700', color: EHR_PRIMARY }}>Chia sẻ lại được</Text>
+                        </View>
                     </XStack>
                 ) : null}
 
@@ -1135,9 +1113,8 @@ function classifyDecryptError(error: any): string {
                             </Text>
                             <YStack style={{ gap: 8, marginBottom: 16 }}>
                                 {([
-                                    { value: 'read-only', label: 'Chỉ đọc', sub: 'Bác sĩ chỉ xem được hồ sơ hiện tại' },
-                                    { value: 'read-update', label: 'Đọc & cập nhật', sub: 'Bác sĩ xem được cả phiên bản mới' },
-                                    { value: 'read-delegate', label: 'Đọc & ủy quyền lại', sub: 'Bác sĩ có thể chia sẻ lại cho bác sĩ khác' },
+                                    { value: 'read-update', label: 'Đọc & cập nhật', sub: 'Bác sĩ đọc toàn bộ hồ sơ bao gồm các phiên bản cập nhật' },
+                                    { value: 'read-delegate', label: 'Đọc & ủy quyền lại', sub: 'Bác sĩ đọc toàn bộ + có thể chia sẻ lại cho bác sĩ khác' },
                                 ] as { value: ShareType; label: string; sub: string }[]).map((opt) => {
                                     const active = shareType === opt.value;
                                     return (

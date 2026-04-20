@@ -94,13 +94,11 @@ function ShareRecordModal({
 }) {
     const [newGrantee, setNewGrantee] = useState('');
     const [days, setDays] = useState('30');
-    const [includeUpdates, setIncludeUpdates] = useState(true);
     const [submitting, setSubmitting] = useState(false);
 
     const reset = () => {
         setNewGrantee('');
         setDays('30');
-        setIncludeUpdates(true);
     };
 
     const handleSubmit = async () => {
@@ -214,7 +212,6 @@ function ShareRecordModal({
                 rootCidHash: record.cidHash,
                 encKeyHash,
                 expireAtSeconds,
-                includeUpdates,
                 allowDelegate: false,
             });
 
@@ -233,7 +230,6 @@ function ShareRecordModal({
                     senderPublicKey: myKeypair.publicKey,
                     expiresAt: expireAtSeconds > 0 ? new Date(expireAtSeconds * 1000).toISOString() : null,
                     allowDelegate: false,
-                    includeUpdates,
                 });
             } catch (keyShareErr: any) {
                 // On-chain consent already minted at this point — surface the
@@ -323,32 +319,6 @@ function ShareRecordModal({
                         <Text fontSize="$1" color={EHR_ON_SURFACE_VARIANT} marginTop={4}>
                             Sẽ bị cắt về thời hạn uỷ quyền gốc nếu lớn hơn.
                         </Text>
-
-                        <XStack
-                            style={{
-                                justifyContent: 'space-between',
-                                alignItems: 'center',
-                                marginTop: 16,
-                                padding: 12,
-                                backgroundColor: EHR_SURFACE_LOW,
-                                borderRadius: 12,
-                            }}
-                        >
-                            <YStack style={{ flex: 1, paddingRight: 12 }}>
-                                <Text fontSize="$3" fontWeight="600" color={EHR_ON_SURFACE}>
-                                    Bao gồm các bản cập nhật
-                                </Text>
-                                <Text fontSize="$1" color={EHR_ON_SURFACE_VARIANT} marginTop={2}>
-                                    Truy cập áp dụng cho toàn bộ chuỗi hồ sơ cập nhật của cid này.
-                                </Text>
-                            </YStack>
-                            <Switch
-                                value={includeUpdates}
-                                onValueChange={setIncludeUpdates}
-                                trackColor={{ false: EHR_OUTLINE_VARIANT, true: EHR_PRIMARY_CONTAINER }}
-                                thumbColor={includeUpdates ? EHR_PRIMARY : EHR_SURFACE_LOWEST}
-                            />
-                        </XStack>
 
                         <View style={styles.warnBox}>
                             <Info size={14} color={EHR_SECONDARY} style={{ marginRight: 6 }} />

@@ -84,7 +84,6 @@ export async function delegateOnChain({
  * @param {string} params.cid            - plaintext CID (will be hashed)
  * @param {string} params.aesKey         - AES key string (will be hashed for encKeyHash)
  * @param {number} params.expiresAtMs    - epoch ms when access expires; 0/null = no expiry
- * @param {boolean} [params.includeUpdates=true]
  * @param {boolean} [params.allowDelegate=false]
  */
 export async function grantConsentOnChain({
@@ -92,7 +91,6 @@ export async function grantConsentOnChain({
     cid,
     aesKey,
     expiresAtMs,
-    includeUpdates = true,
     allowDelegate = false,
 }) {
     const grantee = granteeAddress.toLowerCase();
@@ -114,7 +112,6 @@ export async function grantConsentOnChain({
         rootCidHash: cidHash,
         encKeyHash,
         expireAt,
-        includeUpdates,
         allowDelegate,
         deadline,
         nonce: ctx.nonce,
@@ -126,7 +123,6 @@ export async function grantConsentOnChain({
         cidHash,
         encKeyHash,
         expireAt,
-        includeUpdates,
         allowDelegate,
         deadline,
         signature,

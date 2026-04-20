@@ -1,1259 +1,1222 @@
 [
   {
-    "type": "constructor",
     "inputs": [
       {
+        "internalType": "address",
         "name": "admin_",
-        "type": "address",
-        "internalType": "address"
+        "type": "address"
       }
     ],
-    "stateMutability": "nonpayable"
+    "stateMutability": "nonpayable",
+    "type": "constructor"
   },
   {
-    "type": "function",
-    "name": "DOMAIN_SEPARATOR",
     "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "accessControl",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "address",
-        "internalType": "contract IAccessControl"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "admin",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "authorizeContract",
-    "inputs": [
-      {
-        "name": "contractAddress",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "allowed",
-        "type": "bool",
-        "internalType": "bool"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "authorizeSponsor",
-    "inputs": [
-      {
-        "name": "sponsorAddr",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "allowed",
-        "type": "bool",
-        "internalType": "bool"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "authorizedContracts",
-    "inputs": [
-      {
-        "name": "",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "",
-        "type": "bool",
-        "internalType": "bool"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "authorizedSponsors",
-    "inputs": [
-      {
-        "name": "",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "",
-        "type": "bool",
-        "internalType": "bool"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "canAccess",
-    "inputs": [
-      {
-        "name": "patient",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "grantee",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "queryCidHash",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "",
-        "type": "bool",
-        "internalType": "bool"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "consentDelegationSource",
-    "inputs": [
-      {
-        "name": "",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "consentDelegatorEpochAtGrant",
-    "inputs": [
-      {
-        "name": "",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint64",
-        "internalType": "uint64"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "delegateAuthorityBySig",
-    "inputs": [
-      {
-        "name": "patient",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "delegatee",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "duration",
-        "type": "uint40",
-        "internalType": "uint40"
-      },
-      {
-        "name": "allowSubDelegate",
-        "type": "bool",
-        "internalType": "bool"
-      },
-      {
-        "name": "deadline",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "signature",
-        "type": "bytes",
-        "internalType": "bytes"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "delegationEpoch",
-    "inputs": [
-      {
-        "name": "",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint64",
-        "internalType": "uint64"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "delegationParent",
-    "inputs": [
-      {
-        "name": "",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "delegationParentEpochAtCreate",
-    "inputs": [
-      {
-        "name": "",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint64",
-        "internalType": "uint64"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "eip712Domain",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "fields",
-        "type": "bytes1",
-        "internalType": "bytes1"
-      },
-      {
-        "name": "name",
-        "type": "string",
-        "internalType": "string"
-      },
-      {
-        "name": "version",
-        "type": "string",
-        "internalType": "string"
-      },
-      {
-        "name": "chainId",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "verifyingContract",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "salt",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      },
-      {
-        "name": "extensions",
-        "type": "uint256[]",
-        "internalType": "uint256[]"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "getConsent",
-    "inputs": [
-      {
-        "name": "patient",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "grantee",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "inputCidHash",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "",
-        "type": "tuple",
-        "internalType": "struct IConsentLedger.Consent",
-        "components": [
-          {
-            "name": "patient",
-            "type": "address",
-            "internalType": "address"
-          },
-          {
-            "name": "grantee",
-            "type": "address",
-            "internalType": "address"
-          },
-          {
-            "name": "rootCidHash",
-            "type": "bytes32",
-            "internalType": "bytes32"
-          },
-          {
-            "name": "anchorCidHash",
-            "type": "bytes32",
-            "internalType": "bytes32"
-          },
-          {
-            "name": "encKeyHash",
-            "type": "bytes32",
-            "internalType": "bytes32"
-          },
-          {
-            "name": "issuedAt",
-            "type": "uint40",
-            "internalType": "uint40"
-          },
-          {
-            "name": "expireAt",
-            "type": "uint40",
-            "internalType": "uint40"
-          },
-          {
-            "name": "active",
-            "type": "bool",
-            "internalType": "bool"
-          },
-          {
-            "name": "includeUpdates",
-            "type": "bool",
-            "internalType": "bool"
-          },
-          {
-            "name": "allowDelegate",
-            "type": "bool",
-            "internalType": "bool"
-          }
-        ]
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "getDelegation",
-    "inputs": [
-      {
-        "name": "patient",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "delegatee",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "",
-        "type": "tuple",
-        "internalType": "struct IConsentLedger.Delegation",
-        "components": [
-          {
-            "name": "delegatee",
-            "type": "address",
-            "internalType": "address"
-          },
-          {
-            "name": "expiresAt",
-            "type": "uint40",
-            "internalType": "uint40"
-          },
-          {
-            "name": "allowSubDelegate",
-            "type": "bool",
-            "internalType": "bool"
-          },
-          {
-            "name": "active",
-            "type": "bool",
-            "internalType": "bool"
-          }
-        ]
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "getNonce",
-    "inputs": [
-      {
-        "name": "patient",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "grantBySig",
-    "inputs": [
-      {
-        "name": "patient",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "grantee",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "rootCidHash",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      },
-      {
-        "name": "encKeyHash",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      },
-      {
-        "name": "expireAt",
-        "type": "uint40",
-        "internalType": "uint40"
-      },
-      {
-        "name": "includeUpdates",
-        "type": "bool",
-        "internalType": "bool"
-      },
-      {
-        "name": "allowDelegate",
-        "type": "bool",
-        "internalType": "bool"
-      },
-      {
-        "name": "deadline",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "signature",
-        "type": "bytes",
-        "internalType": "bytes"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "grantDelegation",
-    "inputs": [
-      {
-        "name": "delegatee",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "duration",
-        "type": "uint40",
-        "internalType": "uint40"
-      },
-      {
-        "name": "allowSubDelegate",
-        "type": "bool",
-        "internalType": "bool"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "grantDelegationInternal",
-    "inputs": [
-      {
-        "name": "patient",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "delegatee",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "duration",
-        "type": "uint40",
-        "internalType": "uint40"
-      },
-      {
-        "name": "allowSubDelegate",
-        "type": "bool",
-        "internalType": "bool"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "grantEmergencyInternal",
-    "inputs": [
-      {
-        "name": "patient",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "grantee",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "inputCidHash",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      },
-      {
-        "name": "expireAt",
-        "type": "uint40",
-        "internalType": "uint40"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "grantInternal",
-    "inputs": [
-      {
-        "name": "patient",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "grantee",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "rootCidHash",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      },
-      {
-        "name": "encKeyHash",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      },
-      {
-        "name": "expireAt",
-        "type": "uint40",
-        "internalType": "uint40"
-      },
-      {
-        "name": "includeUpdates",
-        "type": "bool",
-        "internalType": "bool"
-      },
-      {
-        "name": "allowDelegate",
-        "type": "bool",
-        "internalType": "bool"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "grantUsingDelegation",
-    "inputs": [
-      {
-        "name": "patient",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "newGrantee",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "inputCidHash",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      },
-      {
-        "name": "encKeyHash",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      },
-      {
-        "name": "expireAt",
-        "type": "uint40",
-        "internalType": "uint40"
-      },
-      {
-        "name": "includeUpdates",
-        "type": "bool",
-        "internalType": "bool"
-      },
-      {
-        "name": "allowDelegate",
-        "type": "bool",
-        "internalType": "bool"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "grantUsingRecordDelegation",
-    "inputs": [
-      {
-        "name": "patient",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "newGrantee",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "inputCidHash",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      },
-      {
-        "name": "encKeyHash",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      },
-      {
-        "name": "expireAt",
-        "type": "uint40",
-        "internalType": "uint40"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "nonces",
-    "inputs": [
-      {
-        "name": "",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "recordDelegationSource",
-    "inputs": [
-      {
-        "name": "",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "recordRegistry",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "address",
-        "internalType": "contract IRecordRegistry"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "revoke",
-    "inputs": [
-      {
-        "name": "grantee",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "inputCidHash",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "revokeDelegation",
-    "inputs": [
-      {
-        "name": "delegatee",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "revokeFor",
-    "inputs": [
-      {
-        "name": "patient",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "grantee",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "inputCidHash",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "revokeSubDelegation",
-    "inputs": [
-      {
-        "name": "patient",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "subDelegatee",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "setAccessControl",
-    "inputs": [
-      {
-        "name": "ac",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "setRecordRegistry",
-    "inputs": [
-      {
-        "name": "registry",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "subDelegate",
-    "inputs": [
-      {
-        "name": "patient",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "newDelegatee",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "duration",
-        "type": "uint40",
-        "internalType": "uint40"
-      },
-      {
-        "name": "allowSubDelegate",
-        "type": "bool",
-        "internalType": "bool"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "event",
-    "name": "AccessGrantedViaDelegation",
-    "inputs": [
-      {
-        "name": "patient",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
-      },
-      {
-        "name": "newGrantee",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
-      },
-      {
-        "name": "byDelegatee",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
-      },
-      {
-        "name": "rootCidHash",
-        "type": "bytes32",
-        "indexed": false,
-        "internalType": "bytes32"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
-    "name": "AuthorizedContract",
-    "inputs": [
-      {
-        "name": "contractAddress",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
-      },
-      {
-        "name": "allowed",
-        "type": "bool",
-        "indexed": false,
-        "internalType": "bool"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
-    "name": "ConsentGranted",
-    "inputs": [
-      {
-        "name": "patient",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
-      },
-      {
-        "name": "grantee",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
-      },
-      {
-        "name": "rootCidHash",
-        "type": "bytes32",
-        "indexed": true,
-        "internalType": "bytes32"
-      },
-      {
-        "name": "anchorCidHash",
-        "type": "bytes32",
-        "indexed": false,
-        "internalType": "bytes32"
-      },
-      {
-        "name": "expireAt",
-        "type": "uint40",
-        "indexed": false,
-        "internalType": "uint40"
-      },
-      {
-        "name": "allowDelegate",
-        "type": "bool",
-        "indexed": false,
-        "internalType": "bool"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
-    "name": "ConsentRevoked",
-    "inputs": [
-      {
-        "name": "patient",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
-      },
-      {
-        "name": "grantee",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
-      },
-      {
-        "name": "rootCidHash",
-        "type": "bytes32",
-        "indexed": true,
-        "internalType": "bytes32"
-      },
-      {
-        "name": "timestamp",
-        "type": "uint40",
-        "indexed": false,
-        "internalType": "uint40"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
-    "name": "DelegationGranted",
-    "inputs": [
-      {
-        "name": "patient",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
-      },
-      {
-        "name": "delegatee",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
-      },
-      {
-        "name": "expiresAt",
-        "type": "uint40",
-        "indexed": false,
-        "internalType": "uint40"
-      },
-      {
-        "name": "allowSubDelegate",
-        "type": "bool",
-        "indexed": false,
-        "internalType": "bool"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
-    "name": "DelegationRevoked",
-    "inputs": [
-      {
-        "name": "patient",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
-      },
-      {
-        "name": "delegatee",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
-    "name": "EIP712DomainChanged",
-    "inputs": [],
-    "anonymous": false
-  },
-  {
-    "type": "event",
-    "name": "EmergencyGranted",
-    "inputs": [
-      {
-        "name": "patient",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
-      },
-      {
-        "name": "grantee",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
-      },
-      {
-        "name": "rootCidHash",
-        "type": "bytes32",
-        "indexed": true,
-        "internalType": "bytes32"
-      },
-      {
-        "name": "anchorCidHash",
-        "type": "bytes32",
-        "indexed": false,
-        "internalType": "bytes32"
-      },
-      {
-        "name": "expireAt",
-        "type": "uint40",
-        "indexed": false,
-        "internalType": "uint40"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
-    "name": "SponsorAuthorized",
-    "inputs": [
-      {
-        "name": "sponsor",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
-      },
-      {
-        "name": "allowed",
-        "type": "bool",
-        "indexed": false,
-        "internalType": "bool"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "error",
     "name": "DeadlinePassed",
-    "inputs": []
+    "type": "error"
   },
   {
-    "type": "error",
+    "inputs": [],
     "name": "DelegationChainTooDeep",
-    "inputs": []
+    "type": "error"
   },
   {
-    "type": "error",
+    "inputs": [],
     "name": "ECDSAInvalidSignature",
-    "inputs": []
+    "type": "error"
   },
   {
-    "type": "error",
-    "name": "ECDSAInvalidSignatureLength",
     "inputs": [
       {
+        "internalType": "uint256",
         "name": "length",
-        "type": "uint256",
-        "internalType": "uint256"
+        "type": "uint256"
       }
-    ]
+    ],
+    "name": "ECDSAInvalidSignatureLength",
+    "type": "error"
   },
   {
-    "type": "error",
-    "name": "ECDSAInvalidSignatureS",
     "inputs": [
       {
+        "internalType": "bytes32",
         "name": "s",
-        "type": "bytes32",
-        "internalType": "bytes32"
+        "type": "bytes32"
       }
-    ]
+    ],
+    "name": "ECDSAInvalidSignatureS",
+    "type": "error"
   },
   {
-    "type": "error",
+    "inputs": [],
     "name": "EmptyCID",
-    "inputs": []
+    "type": "error"
   },
   {
-    "type": "error",
+    "inputs": [],
     "name": "InvalidDuration",
-    "inputs": []
+    "type": "error"
   },
   {
-    "type": "error",
+    "inputs": [],
     "name": "InvalidExpire",
-    "inputs": []
+    "type": "error"
   },
   {
-    "type": "error",
+    "inputs": [],
     "name": "InvalidNonce",
-    "inputs": []
+    "type": "error"
   },
   {
-    "type": "error",
+    "inputs": [],
     "name": "InvalidShortString",
-    "inputs": []
+    "type": "error"
   },
   {
-    "type": "error",
+    "inputs": [],
     "name": "InvalidSignature",
-    "inputs": []
+    "type": "error"
   },
   {
-    "type": "error",
+    "inputs": [],
     "name": "NoActiveDelegation",
-    "inputs": []
+    "type": "error"
   },
   {
-    "type": "error",
+    "inputs": [],
     "name": "NotSponsor",
-    "inputs": []
+    "type": "error"
   },
   {
-    "type": "error",
+    "inputs": [],
     "name": "ReentrancyGuardReentrantCall",
-    "inputs": []
+    "type": "error"
   },
   {
-    "type": "error",
-    "name": "StringTooLong",
     "inputs": [
       {
+        "internalType": "string",
         "name": "str",
-        "type": "string",
-        "internalType": "string"
+        "type": "string"
       }
-    ]
+    ],
+    "name": "StringTooLong",
+    "type": "error"
   },
   {
-    "type": "error",
+    "inputs": [],
     "name": "SubDelegateNotAllowed",
-    "inputs": []
+    "type": "error"
   },
   {
-    "type": "error",
+    "inputs": [],
     "name": "Unauthorized",
-    "inputs": []
+    "type": "error"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "patient",
+        "type": "address"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "newGrantee",
+        "type": "address"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "byDelegatee",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "bytes32",
+        "name": "rootCidHash",
+        "type": "bytes32"
+      }
+    ],
+    "name": "AccessGrantedViaDelegation",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "contractAddress",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "bool",
+        "name": "allowed",
+        "type": "bool"
+      }
+    ],
+    "name": "AuthorizedContract",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "patient",
+        "type": "address"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "grantee",
+        "type": "address"
+      },
+      {
+        "indexed": true,
+        "internalType": "bytes32",
+        "name": "rootCidHash",
+        "type": "bytes32"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint40",
+        "name": "expireAt",
+        "type": "uint40"
+      },
+      {
+        "indexed": false,
+        "internalType": "bool",
+        "name": "allowDelegate",
+        "type": "bool"
+      }
+    ],
+    "name": "ConsentGranted",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "patient",
+        "type": "address"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "grantee",
+        "type": "address"
+      },
+      {
+        "indexed": true,
+        "internalType": "bytes32",
+        "name": "rootCidHash",
+        "type": "bytes32"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint40",
+        "name": "timestamp",
+        "type": "uint40"
+      }
+    ],
+    "name": "ConsentRevoked",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "patient",
+        "type": "address"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "delegatee",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint40",
+        "name": "expiresAt",
+        "type": "uint40"
+      },
+      {
+        "indexed": false,
+        "internalType": "bool",
+        "name": "allowSubDelegate",
+        "type": "bool"
+      }
+    ],
+    "name": "DelegationGranted",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "patient",
+        "type": "address"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "delegatee",
+        "type": "address"
+      }
+    ],
+    "name": "DelegationRevoked",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [],
+    "name": "EIP712DomainChanged",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "patient",
+        "type": "address"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "grantee",
+        "type": "address"
+      },
+      {
+        "indexed": true,
+        "internalType": "bytes32",
+        "name": "rootCidHash",
+        "type": "bytes32"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint40",
+        "name": "expireAt",
+        "type": "uint40"
+      }
+    ],
+    "name": "EmergencyGranted",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "sponsor",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "bool",
+        "name": "allowed",
+        "type": "bool"
+      }
+    ],
+    "name": "SponsorAuthorized",
+    "type": "event"
+  },
+  {
+    "inputs": [],
+    "name": "DOMAIN_SEPARATOR",
+    "outputs": [
+      {
+        "internalType": "bytes32",
+        "name": "",
+        "type": "bytes32"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "accessControl",
+    "outputs": [
+      {
+        "internalType": "contract IAccessControl",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "admin",
+    "outputs": [
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "contractAddress",
+        "type": "address"
+      },
+      {
+        "internalType": "bool",
+        "name": "allowed",
+        "type": "bool"
+      }
+    ],
+    "name": "authorizeContract",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "sponsorAddr",
+        "type": "address"
+      },
+      {
+        "internalType": "bool",
+        "name": "allowed",
+        "type": "bool"
+      }
+    ],
+    "name": "authorizeSponsor",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "name": "authorizedContracts",
+    "outputs": [
+      {
+        "internalType": "bool",
+        "name": "",
+        "type": "bool"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "name": "authorizedSponsors",
+    "outputs": [
+      {
+        "internalType": "bool",
+        "name": "",
+        "type": "bool"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "patient",
+        "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "grantee",
+        "type": "address"
+      },
+      {
+        "internalType": "bytes32",
+        "name": "queryCidHash",
+        "type": "bytes32"
+      }
+    ],
+    "name": "canAccess",
+    "outputs": [
+      {
+        "internalType": "bool",
+        "name": "",
+        "type": "bool"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "bytes32",
+        "name": "",
+        "type": "bytes32"
+      }
+    ],
+    "name": "consentDelegationSource",
+    "outputs": [
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "bytes32",
+        "name": "",
+        "type": "bytes32"
+      }
+    ],
+    "name": "consentDelegatorEpochAtGrant",
+    "outputs": [
+      {
+        "internalType": "uint64",
+        "name": "",
+        "type": "uint64"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "patient",
+        "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "delegatee",
+        "type": "address"
+      },
+      {
+        "internalType": "uint40",
+        "name": "duration",
+        "type": "uint40"
+      },
+      {
+        "internalType": "bool",
+        "name": "allowSubDelegate",
+        "type": "bool"
+      },
+      {
+        "internalType": "uint256",
+        "name": "deadline",
+        "type": "uint256"
+      },
+      {
+        "internalType": "bytes",
+        "name": "signature",
+        "type": "bytes"
+      }
+    ],
+    "name": "delegateAuthorityBySig",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "name": "delegationEpoch",
+    "outputs": [
+      {
+        "internalType": "uint64",
+        "name": "",
+        "type": "uint64"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "name": "delegationParent",
+    "outputs": [
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "name": "delegationParentEpochAtCreate",
+    "outputs": [
+      {
+        "internalType": "uint64",
+        "name": "",
+        "type": "uint64"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "eip712Domain",
+    "outputs": [
+      {
+        "internalType": "bytes1",
+        "name": "fields",
+        "type": "bytes1"
+      },
+      {
+        "internalType": "string",
+        "name": "name",
+        "type": "string"
+      },
+      {
+        "internalType": "string",
+        "name": "version",
+        "type": "string"
+      },
+      {
+        "internalType": "uint256",
+        "name": "chainId",
+        "type": "uint256"
+      },
+      {
+        "internalType": "address",
+        "name": "verifyingContract",
+        "type": "address"
+      },
+      {
+        "internalType": "bytes32",
+        "name": "salt",
+        "type": "bytes32"
+      },
+      {
+        "internalType": "uint256[]",
+        "name": "extensions",
+        "type": "uint256[]"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "patient",
+        "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "grantee",
+        "type": "address"
+      },
+      {
+        "internalType": "bytes32",
+        "name": "inputCidHash",
+        "type": "bytes32"
+      }
+    ],
+    "name": "getConsent",
+    "outputs": [
+      {
+        "components": [
+          {
+            "internalType": "address",
+            "name": "patient",
+            "type": "address"
+          },
+          {
+            "internalType": "address",
+            "name": "grantee",
+            "type": "address"
+          },
+          {
+            "internalType": "bytes32",
+            "name": "rootCidHash",
+            "type": "bytes32"
+          },
+          {
+            "internalType": "bytes32",
+            "name": "encKeyHash",
+            "type": "bytes32"
+          },
+          {
+            "internalType": "uint40",
+            "name": "issuedAt",
+            "type": "uint40"
+          },
+          {
+            "internalType": "uint40",
+            "name": "expireAt",
+            "type": "uint40"
+          },
+          {
+            "internalType": "bool",
+            "name": "active",
+            "type": "bool"
+          },
+          {
+            "internalType": "bool",
+            "name": "allowDelegate",
+            "type": "bool"
+          }
+        ],
+        "internalType": "struct IConsentLedger.Consent",
+        "name": "",
+        "type": "tuple"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "patient",
+        "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "delegatee",
+        "type": "address"
+      }
+    ],
+    "name": "getDelegation",
+    "outputs": [
+      {
+        "components": [
+          {
+            "internalType": "address",
+            "name": "delegatee",
+            "type": "address"
+          },
+          {
+            "internalType": "uint40",
+            "name": "expiresAt",
+            "type": "uint40"
+          },
+          {
+            "internalType": "bool",
+            "name": "allowSubDelegate",
+            "type": "bool"
+          },
+          {
+            "internalType": "bool",
+            "name": "active",
+            "type": "bool"
+          }
+        ],
+        "internalType": "struct IConsentLedger.Delegation",
+        "name": "",
+        "type": "tuple"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "patient",
+        "type": "address"
+      }
+    ],
+    "name": "getNonce",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "patient",
+        "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "grantee",
+        "type": "address"
+      },
+      {
+        "internalType": "bytes32",
+        "name": "rootCidHash",
+        "type": "bytes32"
+      },
+      {
+        "internalType": "bytes32",
+        "name": "encKeyHash",
+        "type": "bytes32"
+      },
+      {
+        "internalType": "uint40",
+        "name": "expireAt",
+        "type": "uint40"
+      },
+      {
+        "internalType": "bool",
+        "name": "allowDelegate",
+        "type": "bool"
+      },
+      {
+        "internalType": "uint256",
+        "name": "deadline",
+        "type": "uint256"
+      },
+      {
+        "internalType": "bytes",
+        "name": "signature",
+        "type": "bytes"
+      }
+    ],
+    "name": "grantBySig",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "delegatee",
+        "type": "address"
+      },
+      {
+        "internalType": "uint40",
+        "name": "duration",
+        "type": "uint40"
+      },
+      {
+        "internalType": "bool",
+        "name": "allowSubDelegate",
+        "type": "bool"
+      }
+    ],
+    "name": "grantDelegation",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "patient",
+        "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "delegatee",
+        "type": "address"
+      },
+      {
+        "internalType": "uint40",
+        "name": "duration",
+        "type": "uint40"
+      },
+      {
+        "internalType": "bool",
+        "name": "allowSubDelegate",
+        "type": "bool"
+      }
+    ],
+    "name": "grantDelegationInternal",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "patient",
+        "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "grantee",
+        "type": "address"
+      },
+      {
+        "internalType": "bytes32",
+        "name": "inputCidHash",
+        "type": "bytes32"
+      },
+      {
+        "internalType": "uint40",
+        "name": "expireAt",
+        "type": "uint40"
+      }
+    ],
+    "name": "grantEmergencyInternal",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "patient",
+        "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "grantee",
+        "type": "address"
+      },
+      {
+        "internalType": "bytes32",
+        "name": "rootCidHash",
+        "type": "bytes32"
+      },
+      {
+        "internalType": "bytes32",
+        "name": "encKeyHash",
+        "type": "bytes32"
+      },
+      {
+        "internalType": "uint40",
+        "name": "expireAt",
+        "type": "uint40"
+      },
+      {
+        "internalType": "bool",
+        "name": "allowDelegate",
+        "type": "bool"
+      }
+    ],
+    "name": "grantInternal",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "patient",
+        "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "newGrantee",
+        "type": "address"
+      },
+      {
+        "internalType": "bytes32",
+        "name": "inputCidHash",
+        "type": "bytes32"
+      },
+      {
+        "internalType": "bytes32",
+        "name": "encKeyHash",
+        "type": "bytes32"
+      },
+      {
+        "internalType": "uint40",
+        "name": "expireAt",
+        "type": "uint40"
+      },
+      {
+        "internalType": "bool",
+        "name": "allowDelegate",
+        "type": "bool"
+      }
+    ],
+    "name": "grantUsingDelegation",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "patient",
+        "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "newGrantee",
+        "type": "address"
+      },
+      {
+        "internalType": "bytes32",
+        "name": "inputCidHash",
+        "type": "bytes32"
+      },
+      {
+        "internalType": "bytes32",
+        "name": "encKeyHash",
+        "type": "bytes32"
+      },
+      {
+        "internalType": "uint40",
+        "name": "expireAt",
+        "type": "uint40"
+      }
+    ],
+    "name": "grantUsingRecordDelegation",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "name": "nonces",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "bytes32",
+        "name": "",
+        "type": "bytes32"
+      }
+    ],
+    "name": "recordDelegationSource",
+    "outputs": [
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "recordRegistry",
+    "outputs": [
+      {
+        "internalType": "contract IRecordRegistry",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "grantee",
+        "type": "address"
+      },
+      {
+        "internalType": "bytes32",
+        "name": "inputCidHash",
+        "type": "bytes32"
+      }
+    ],
+    "name": "revoke",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "delegatee",
+        "type": "address"
+      }
+    ],
+    "name": "revokeDelegation",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "patient",
+        "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "grantee",
+        "type": "address"
+      },
+      {
+        "internalType": "bytes32",
+        "name": "inputCidHash",
+        "type": "bytes32"
+      }
+    ],
+    "name": "revokeFor",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "patient",
+        "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "subDelegatee",
+        "type": "address"
+      }
+    ],
+    "name": "revokeSubDelegation",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "ac",
+        "type": "address"
+      }
+    ],
+    "name": "setAccessControl",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "registry",
+        "type": "address"
+      }
+    ],
+    "name": "setRecordRegistry",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "patient",
+        "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "newDelegatee",
+        "type": "address"
+      },
+      {
+        "internalType": "uint40",
+        "name": "duration",
+        "type": "uint40"
+      },
+      {
+        "internalType": "bool",
+        "name": "allowSubDelegate",
+        "type": "bool"
+      }
+    ],
+    "name": "subDelegate",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
   }
 ]

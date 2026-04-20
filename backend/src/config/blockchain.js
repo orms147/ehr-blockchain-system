@@ -36,7 +36,6 @@ export const CONSENT_LEDGER_ABI = [
                 { name: 'issuedAt', type: 'uint40' },
                 { name: 'expireAt', type: 'uint40' },
                 { name: 'active', type: 'bool' },
-                { name: 'includeUpdates', type: 'bool' },
                 { name: 'allowDelegate', type: 'bool' },
             ],
         }],

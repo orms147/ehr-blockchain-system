@@ -41,10 +41,8 @@ export default function SharedRecordCard({ record, onView, onCreateUpdate }: Sha
     const isExpiredByTime = !!record?.expiresAt && new Date(record.expiresAt).getTime() < Date.now();
     const isExpired = statusLower === 'expired' || isExpiredByTime;
     const isInactive = record?.active === false || isRevoked || isExpired;
-    // Read-only share: patient explicitly granted "Chỉ đọc". Hide all
-    // update affordances. `includeUpdates === undefined` means legacy data
-    // from before the field was added, default to allowed (true).
-    const isReadOnly = record?.includeUpdates === false;
+    // 2026-04-19: "Chỉ đọc" mode removed (medical episode model).
+    // All active shares can create updates.
     const truncateAddr = (addr: string) => (addr ? `${addr.substring(0, 8)}...${addr.slice(-4)}` : '???');
 
     const mountProgress = useSharedValue(0);
@@ -183,7 +181,7 @@ export default function SharedRecordCard({ record, onView, onCreateUpdate }: Sha
                                 </Button>
                             )}
 
-                            {!isInactive && !isReadOnly && onCreateUpdate ? (
+                            {!isInactive && onCreateUpdate ? (
                                 <Button
                                     size="$3"
                                     variant="outlined"
@@ -197,12 +195,6 @@ export default function SharedRecordCard({ record, onView, onCreateUpdate }: Sha
                                         Cập nhật
                                     </Text>
                                 </Button>
-                            ) : null}
-                            {!isInactive && isReadOnly ? (
-                                <XStack style={s.readOnlyBadge}>
-                                    <Lock size={12} color={EHR_ON_SURFACE_VARIANT} />
-                                    <Text style={s.readOnlyText}>Chỉ đọc</Text>
-                                </XStack>
                             ) : null}
                         </XStack>
                     </View>

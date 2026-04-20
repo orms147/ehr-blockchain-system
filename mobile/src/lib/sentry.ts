@@ -27,12 +27,16 @@ export function initSentry() {
         return;
     }
 
-        SentryRN.init({
+    SentryRN.init({
         dsn,
         enableAutoSessionTracking: true,
         // Lower in prod to control quota; full traces in dev for debugging.
         tracesSampleRate: __DEV__ ? 1.0 : 0.2,
+        profilesSampleRate: __DEV__ ? 1.0 : 0.1,
+        enableNativeFramesTracking: true,
         environment: __DEV__ ? 'development' : 'production',
+        // Session Replay intentionally DISABLED. App renders patient EHR
+        // data; recording screens would leak medical PII to Sentry SaaS.
         // Don't leak request bodies / headers by default.
         sendDefaultPii: false,
         beforeSend(event) {
