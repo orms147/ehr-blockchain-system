@@ -1,9 +1,11 @@
 import { create } from 'zustand';
 import * as SecureStore from 'expo-secure-store';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import api from '../services/api';
 import walletActionService from '../services/walletAction.service';
 import { deriveRolesFromUser, resolveActiveRole, sanitizeRoles } from '../utils/authRoles';
 import { setSentryUser } from '../lib/sentry';
+import { queryClient } from '../lib/queryClient';
 import pushService from '../services/push.service';
 
 const ROLE_CONFIG = {
@@ -127,6 +129,24 @@ const useAuthStore = create((set, get) => ({
         await pushService.unregisterPushToken().catch(() => { });
 
         await clearPersistedAuth();
+
+        // Blow away caches that were tied to the previous user so the next
+        // login doesn't briefly flash stale data. Missing any of these has
+        // caused cross-account leaks (e.g. signing in as patient after
+        // a doctor session still showed the doctor's dashboard until the
+        // first refetch).
+        try {
+            queryClient.clear();
+        } catch (err) {
+            console.warn('Logout: queryClient.clear failed', err);
+        }
+        try {
+            // ehr_local_records holds decrypted cids + aes keys per cidHash.
+            // These are per-user secrets — must not persist across accounts.
+            await AsyncStorage.removeItem('ehr_local_records');
+        } catch (err) {
+            console.warn('Logout: clear ehr_local_records failed', err);
+        }
 
         setSentryUser(null);
 
