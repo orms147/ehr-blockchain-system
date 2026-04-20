@@ -94,9 +94,10 @@ function extractImageFromPayload(payload: any): DecryptedImage | null {
 
 export default function RecordDetailScreen({ route, navigation }: any) {
     const record: RouteRecord = route?.params?.record || {};
-    const { user } = useAuthStore();
+    const { user, activeRole } = useAuthStore();
     const me = String(user?.walletAddress || '').toLowerCase();
     const ownerAddrLc = String((record as any)?.ownerAddress || '').toLowerCase();
+    const iAmDoctor = activeRole === 'doctor';
     const creatorAddrLc = String((record as any)?.createdBy || '').toLowerCase();
     const iAmOwner = !!me && (me === ownerAddrLc || me === creatorAddrLc);
 
@@ -1007,15 +1008,25 @@ function classifyDecryptError(error: any): string {
                     </YStack>
                 ) : null}
 
-                {iAmOwner && (!chain?.children || chain.children.length === 0) ? (
+                {(iAmOwner || iAmDoctor) && (!chain?.children || chain.children.length === 0) ? (
                     <YStack style={{ marginBottom: 16 }}>
                         <Text fontSize="$5" fontWeight="700" color="$color12" style={{ marginBottom: 12 }}>Cập nhật hồ sơ</Text>
                         <Pressable
-                            onPress={() => navigation.navigate('CreateRecord', {
-                                parentCidHash: record.cidHash,
-                                initialTitle: record.title,
-                                initialRecordType: (record as any)?.type || (record as any)?.recordType,
-                            })}
+                            onPress={() => {
+                                if (iAmOwner) {
+                                    navigation.navigate('CreateRecord', {
+                                        parentCidHash: record.cidHash,
+                                        initialTitle: record.title,
+                                        initialRecordType: (record as any)?.type || (record as any)?.recordType,
+                                    });
+                                } else {
+                                    // Doctor path: patient is the record owner
+                                    navigation.navigate('DoctorCreateUpdate', {
+                                        parentCidHash: record.cidHash,
+                                        patientAddress: ownerAddrLc,
+                                    });
+                                }
+                            }}
                         >
                             <View style={{ backgroundColor: EHR_SURFACE_LOWEST, borderColor: EHR_OUTLINE_VARIANT, borderWidth: 1, borderRadius: 20, padding: 14 }}>
                                 <XStack style={{ alignItems: 'center' }}>
@@ -1024,7 +1035,11 @@ function classifyDecryptError(error: any): string {
                                     </View>
                                     <YStack style={{ flex: 1 }}>
                                         <Text fontSize="$4" fontWeight="700" color="$color12">Tạo phiên bản mới</Text>
-                                        <Text fontSize="$2" color="$color10">Liên kết với hồ sơ gốc, các bên đã chia sẻ vẫn truy cập được.</Text>
+                                        <Text fontSize="$2" color="$color10">
+                                            {iAmOwner
+                                                ? 'Liên kết với hồ sơ gốc, các bên đã chia sẻ vẫn truy cập được.'
+                                                : 'Bác sĩ cập nhật hồ sơ bệnh nhân. Key mới sẽ cascade tới mọi người đang có quyền.'}
+                                        </Text>
                                     </YStack>
                                 </XStack>
                             </View>
