@@ -677,10 +677,16 @@ router.get('/recipients/:cidHash', authenticate, async (req, res, next) => {
         }
 
         // 2. Fetch all recipients who have claimed the key for this record
+        // Include 'pending' shares too so auto-propagate (patient creates V2)
+        // still cascades keys to doctors who were granted V1 but haven't
+        // claimed it yet. Filtering to status='claimed' left recipients
+        // stranded when the patient updated before the doctor logged in.
+        // Exclude: revoked/rejected (dead), awaiting_claim (2-step request
+        // not completed on-chain — no consent yet).
         const recipients = await prisma.keyShare.findMany({
             where: {
                 cidHash: cidHashLower,
-                status: 'claimed', // Only active participants
+                status: { notIn: ['revoked', 'rejected', 'awaiting_claim'] },
             },
             include: {
                 recipient: {
