@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 import { toast } from '@/components/ui/use-toast';
 
-import { recordService, ipfsService, computeCidHash, keyShareService, authService, generateAESKey, exportAESKey, encryptData, pendingUpdateService } from '@/services';
+import { recordService, ipfsService, computeCidHash, keyShareService, authService, generateAESKey, exportAESKey, encryptData } from '@/services';
 import { encryptForRecipient, getOrCreateEncryptionKeypair } from '@/services/nacl-crypto';
 import { useWalletAddress } from '@/hooks/useWalletAddress';
 import { createWalletClient, createPublicClient, http, custom, parseGwei, keccak256, toBytes } from 'viem';

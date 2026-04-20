@@ -15,7 +15,7 @@ import RequestAccessForm from '@/components/dashboard/RequestAccessForm';
 import DoctorVerificationForm from '@/components/dashboard/DoctorVerificationForm';
 import DoctorAddRecordForm from '@/components/dashboard/DoctorAddRecordForm';
 import PendingClaims from '@/components/dashboard/PendingClaims';
-import PendingUpdateClaims from '@/components/dashboard/PendingUpdateClaims';
+// PendingUpdateClaims removed 2026-04-19 — doctor updates are direct on-chain.
 import UploadRecordModal from '@/components/dashboard/UploadRecordModal';
 import DelegatableRecords from '@/components/dashboard/DelegatableRecords';
 import { useWalletAddress } from '@/hooks/useWalletAddress';
@@ -416,11 +416,6 @@ export default function DoctorDashboardPage() {
                         walletAddress={walletAddress}
                         provider={provider}
                         onClaimed={() => { fetchSharedRecords(); fetchOutgoingRequests(); }}
-                    />
-                    <PendingUpdateClaims
-                        walletAddress={walletAddress}
-                        provider={provider}
-                        onClaimed={() => fetchSharedRecords()}
                     />
                 </div>
 

@@ -63,13 +63,18 @@ const saveOnlySchema = z.object({
     cidHash: z.string().regex(/^0x[a-fA-F0-9]{64}$/),
     recordTypeHash: z.string().regex(/^0x[a-fA-F0-9]{64}$/).optional().nullable(),
     ownerAddress: z.string().regex(/^0x[a-fA-F0-9]{40}$/),
-    encryptedPayload: z.string().optional().nullable(),
+    encryptedPayload: z.string().optional().nullable(),          // doctor's own copy
     senderPublicKey: z.string().optional().nullable(),
     title: z.string().max(255).optional().nullable(),
     description: z.string().optional().nullable(),
     recordType: z.string().max(50).optional().nullable(),
     parentCidHash: z.string().regex(/^0x[a-fA-F0-9]{64}$/).optional().nullable(),
     txHash: z.string().regex(/^0x[a-fA-F0-9]{64}$/).optional().nullable(),
+    // 2026-04-19: doctor update flow now goes direct on-chain (no PendingUpdate).
+    // When doctor updates a patient's record, mobile provides a NaCl-sealed
+    // envelope of {cid, aesKey} encrypted for the PATIENT so the patient can
+    // decrypt the new version. Optional for legacy/no-patient-share callers.
+    patientEncryptedPayload: z.string().optional().nullable(),
 });
 
 // POST /api/records - Upload record with quota check and on-chain registration
@@ -279,6 +284,7 @@ router.post('/save-only', authenticate, async (req, res, next) => {
             recordType,
             parentCidHash,
             txHash,
+            patientEncryptedPayload,
         } = saveOnlySchema.parse(req.body);
 
         const creatorAddress = normalizeAddress(req.user.walletAddress);
@@ -365,6 +371,35 @@ router.post('/save-only', authenticate, async (req, res, next) => {
                     senderPublicKey: senderPublicKey || null,
                     status: 'claimed',
                     expiresAt,
+                },
+            });
+        }
+
+        // 2026-04-19 doctor-update-direct flow: create KeyShare for the PATIENT
+        // (owner) so they can decrypt the new version the doctor just wrote.
+        // Only fires when doctor is updating on behalf of someone else — skip
+        // when creator == owner (patient creating their own record path).
+        if (patientEncryptedPayload && creatorAddress !== patientAddress) {
+            await prisma.keyShare.upsert({
+                where: {
+                    cidHash_senderAddress_recipientAddress: {
+                        cidHash: normalizedCidHash,
+                        senderAddress: creatorAddress,   // doctor as sender
+                        recipientAddress: patientAddress, // patient as recipient
+                    },
+                },
+                update: {
+                    encryptedPayload: patientEncryptedPayload,
+                    senderPublicKey: senderPublicKey || undefined,
+                    status: 'pending',
+                },
+                create: {
+                    cidHash: normalizedCidHash,
+                    senderAddress: creatorAddress,
+                    recipientAddress: patientAddress,
+                    encryptedPayload: patientEncryptedPayload,
+                    senderPublicKey: senderPublicKey || null,
+                    status: 'pending',
                 },
             });
         }

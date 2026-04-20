@@ -15,7 +15,7 @@ import UploadRecordModal from '@/components/dashboard/UploadRecordModal';
 import AccessRequestList from '@/components/dashboard/AccessRequestList';
 import ConsentList from '@/components/dashboard/ConsentList';
 import QuotaDisplay from '@/components/dashboard/QuotaDisplay';
-import PendingUpdatesSection from '@/components/dashboard/PendingUpdatesSection';
+// PendingUpdatesSection removed 2026-04-19 — doctor updates are direct on-chain.
 import AccessLogTab from '@/components/dashboard/AccessLogTab';
 import DelegationManager from '@/components/dashboard/DelegationManager';
 import { recordService } from '@/services';
@@ -268,11 +268,6 @@ const PatientDashboard = () => {
                     </div>
                 </div>
             )}
-
-            {/* Pending Doctor Updates */}
-            <div className="mb-6">
-                <PendingUpdatesSection walletAddress={address} onUpdated={fetchRecords} />
-            </div>
 
             <Tabs defaultValue="records" className="space-y-6">
                 <TabsList className="bg-white border border-slate-200 p-1 rounded-xl w-full sm:w-auto grid grid-cols-5 sm:flex h-auto">

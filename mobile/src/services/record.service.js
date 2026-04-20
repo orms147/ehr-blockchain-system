@@ -13,6 +13,38 @@ export const recordService = {
         });
     },
 
+    // Save-only: doctor already submitted addRecordByDoctor on-chain; backend
+    // just mirrors into RecordMetadata + creates KeyShare for doctor (and for
+    // patient when `patientEncryptedPayload` is provided — the 2026-04-19
+    // direct doctor-update flow).
+    async saveOnly({
+        cidHash,
+        recordTypeHash = null,
+        ownerAddress,              // patient (record owner)
+        encryptedPayload = null,   // doctor's own copy (NaCl sealed for doctor OR plaintext self)
+        senderPublicKey = null,
+        title = null,
+        description = null,
+        recordType = null,
+        parentCidHash = null,
+        txHash = null,
+        patientEncryptedPayload = null, // NaCl-sealed {cid,aesKey} for patient
+    }) {
+        return api.post('/api/records/save-only', {
+            cidHash,
+            recordTypeHash,
+            ownerAddress,
+            encryptedPayload,
+            senderPublicKey,
+            title,
+            description,
+            recordType,
+            parentCidHash,
+            txHash,
+            patientEncryptedPayload,
+        });
+    },
+
     // Get my records
     async getMyRecords() {
         return api.get('/api/records/my');

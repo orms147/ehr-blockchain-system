@@ -19,11 +19,21 @@ import {
 } from 'lucide-react-native';
 import { Button, Text, View, XStack, YStack } from 'tamagui';
 
+import { keccak256, parseGwei, toBytes } from 'viem';
+
 import Icd10Picker from '../../components/Icd10Picker';
 import type { Icd10Code } from '../../constants/icd10';
 import { encryptData, generateAESKey } from '../../services/crypto';
-import pendingUpdateService from '../../services/pendingUpdate.service';
+import { encryptForRecipient, getOrCreateEncryptionKeypair } from '../../services/nacl-crypto';
+import ipfsService from '../../services/ipfs.service';
+import walletActionService from '../../services/walletAction.service';
+import keyShareService from '../../services/keyShare.service';
+import authService from '../../services/auth.service';
+import recordService from '../../services/record.service';
+import { RECORD_REGISTRY_ABI } from '../../abi/contractABI';
 import useAuthStore from '../../store/authStore';
+
+const RECORD_REGISTRY_ADDRESS = process.env.EXPO_PUBLIC_RECORD_REGISTRY_ADDRESS as `0x${string}`;
 import {
     EHR_ERROR,
     EHR_ERROR_CONTAINER,
@@ -223,54 +233,134 @@ export default function DoctorCreateUpdateScreen({ navigation, route }: any) {
                 } : {}),
             };
 
-            // Encrypt content
+            // 2026-04-19 direct doctor-update flow: doctor uploads IPFS + calls
+            // addRecordByDoctor on-chain + backend mirrors + cascade keys. No
+            // PendingUpdate + patient approval — match Luật KCB VN / HIPAA:
+            // doctor documentation is authoritative; patient has read + amend
+            // rights but does not gate each chart entry.
+
             const aesKey = await generateAESKey();
             const encryptedContent = await encryptData(payload, aesKey);
 
-            // Submit pending update to backend
-            const created: any = await pendingUpdateService.createUpdate(
-                parentCidHash,
-                patientAddress,
-                encryptedContent,
-                recordType,
-                title.trim(),
-            );
+            // 1. Upload encrypted payload to IPFS
+            const { cid } = await ipfsService.uploadEncrypted({
+                encryptedData: encryptedContent,
+                metadata: { title: title.trim(), recordType },
+            });
 
-            // Persist AES key locally keyed by pendingUpdate.id so the claim step
-            // (DoctorOutgoingScreen) can retrieve it after patient approval.
-            // Without this the claim would use a placeholder key and nobody could
-            // decrypt the new version.
-            const pendingUpdateId = created?.pendingUpdate?.id || created?.id;
-            if (pendingUpdateId) {
-                try {
-                    const draftsStr = await AsyncStorage.getItem('doctor_update_drafts');
-                    const drafts = draftsStr ? JSON.parse(draftsStr) : {};
-                    drafts[pendingUpdateId] = {
-                        aesKey,
-                        parentCidHash,
-                        patientAddress,
-                        recordType,
-                        title: title.trim(),
-                        createdAt: new Date().toISOString(),
-                    };
-                    await AsyncStorage.setItem('doctor_update_drafts', JSON.stringify(drafts));
-                } catch (persistErr) {
-                    console.warn('Failed to persist update draft aesKey:', persistErr);
+            const cidHash = keccak256(toBytes(cid));
+            const recordTypeHash = keccak256(toBytes(recordType || 'checkup'));
+
+            // 2. Call RecordRegistry.addRecordByDoctor directly (doctor pays gas).
+            const { walletClient, address: myAddress } = await walletActionService.getWalletContext();
+            const txHash = await walletClient.writeContract({
+                address: RECORD_REGISTRY_ADDRESS,
+                abi: RECORD_REGISTRY_ABI,
+                functionName: 'addRecordByDoctor',
+                args: [
+                    cidHash,
+                    parentCidHash as `0x${string}`,
+                    recordTypeHash,
+                    patientAddress as `0x${string}`,
+                ],
+                gas: BigInt(400000),
+                maxFeePerGas: parseGwei('1.0'),
+                maxPriorityFeePerGas: parseGwei('0.1'),
+            });
+
+            // 3. NaCl-seal {cid, aesKey} for the patient so they can decrypt.
+            const myKeypair = await getOrCreateEncryptionKeypair(walletClient, myAddress);
+            const payloadJson = JSON.stringify({ cid, aesKey });
+            let patientEncryptedPayload: string | null = null;
+            try {
+                const patientKeyRes: any = await authService.getEncryptionKey(patientAddress);
+                const patientPubKey = patientKeyRes?.encryptionPublicKey || null;
+                if (patientPubKey) {
+                    patientEncryptedPayload = encryptForRecipient(payloadJson, patientPubKey, myKeypair.secretKey);
                 }
+            } catch (e) {
+                console.warn('Fetch patient pubkey failed:', e);
+            }
+
+            // Doctor's own sealed copy so /save-only can create the
+            // doctor->doctor KeyShare (self-access for 7 days).
+            const doctorEncryptedPayload = encryptForRecipient(payloadJson, myKeypair.publicKey, myKeypair.secretKey);
+
+            // 4. Mirror to backend: RecordMetadata + KeyShare(patient) + KeyShare(doctor).
+            await recordService.saveOnly({
+                cidHash,
+                recordTypeHash,
+                ownerAddress: patientAddress,
+                encryptedPayload: doctorEncryptedPayload,
+                senderPublicKey: myKeypair.publicKey,
+                title: title.trim(),
+                description: description.trim() || null,
+                recordType,
+                parentCidHash,
+                txHash,
+                patientEncryptedPayload,
+            });
+
+            // 5. Cache locally so this device decrypts without round-trip.
+            try {
+                const lrStr = await AsyncStorage.getItem('ehr_local_records');
+                const localRecords = lrStr ? JSON.parse(lrStr) : {};
+                localRecords[cidHash.toLowerCase()] = {
+                    ...(localRecords[cidHash.toLowerCase()] || {}),
+                    cid,
+                    aesKey,
+                    title: title.trim(),
+                    recordType,
+                    parentCidHash,
+                    ownerAddress: patientAddress,
+                    createdBy: myAddress,
+                    createdAt: new Date().toISOString(),
+                    syncStatus: 'confirmed',
+                    txHash,
+                };
+                await AsyncStorage.setItem('ehr_local_records', JSON.stringify(localRecords));
+            } catch (lrErr) {
+                console.warn('Failed to save local record:', lrErr);
+            }
+
+            // 6. Cascade key to everyone already on the parent chain so nobody
+            //    silently loses access after an update.
+            try {
+                const recipients: any = await keyShareService.getRecordRecipients(parentCidHash);
+                if (Array.isArray(recipients)) {
+                    for (const r of recipients) {
+                        const addr = String(r.walletAddress || '').toLowerCase();
+                        if (!addr || addr === myAddress.toLowerCase() || addr === patientAddress.toLowerCase()) continue;
+                        if (!r.encryptionPublicKey) continue;
+                        try {
+                            const enc = encryptForRecipient(payloadJson, r.encryptionPublicKey, myKeypair.secretKey);
+                            await keyShareService.shareKey({
+                                cidHash,
+                                recipientAddress: addr,
+                                encryptedPayload: enc,
+                                senderPublicKey: myKeypair.publicKey,
+                            });
+                        } catch (innerErr) {
+                            console.warn('Propagate share failed for', addr, innerErr);
+                        }
+                    }
+                }
+            } catch (propErr) {
+                console.warn('Auto-propagation failed:', propErr);
             }
 
             Alert.alert(
-                'Đã gửi yêu cầu cập nhật',
-                'Bệnh nhân sẽ nhận được thông báo và phê duyệt.',
+                'Đã cập nhật hồ sơ',
+                'Phiên bản mới đã được lưu lên blockchain. Bệnh nhân và các bác sĩ có quyền sẽ thấy ngay.',
                 [{ text: 'OK', onPress: () => navigation.goBack() }]
             );
         } catch (submitError: any) {
             const code = submitError?.code || submitError?.data?.code;
-            let message = submitError?.message || 'Không thể gửi yêu cầu cập nhật';
+            let message = submitError?.message || 'Không thể cập nhật hồ sơ';
             if (code === 'CONSENT_NOT_FOUND') {
                 message = 'Bạn không có quyền truy cập hồ sơ này.';
-            } else if (code === 'PENDING_UPDATE_ALREADY_PROCESSED') {
-                message = 'Hồ sơ đã có bản cập nhật. Vui lòng cập nhật từ phiên bản mới nhất.';
+            } else if (code === 'PARENT_ALREADY_UPDATED' || code === 'MAX_CHILDREN_REACHED') {
+                message = 'Hồ sơ đã có bản cập nhật mới. Hãy cập nhật từ phiên bản mới nhất.';
             }
             setError(message);
             Alert.alert('Lỗi', message);

@@ -8,7 +8,7 @@ import EmptyState from '../components/EmptyState';
 import LoadingSpinner from '../components/LoadingSpinner';
 import useRequests from '../hooks/useRequests';
 import requestService from '../services/request.service';
-import pendingUpdateService from '../services/pendingUpdate.service';
+// pendingUpdateService removed 2026-04-19 — doctor updates now go direct on-chain.
 import authService from '../services/auth.service';
 import consentService from '../services/consent.service';
 import keyShareService from '../services/keyShare.service';
@@ -72,17 +72,6 @@ const formatDuration = (item: RequestItem) => {
     if (hours < 24) return `${Math.round(hours)} giờ`;
     const days = Math.round(hours / 24);
     return `${days} ngày`;
-};
-
-type PendingUpdateItem = {
-    id: string;
-    doctorAddress: string;
-    parentCidHash: string;
-    title?: string;
-    recordType?: string;
-    createdAt: string;
-    expiresAt: string;
-    status: string;
 };
 
 type FilterKey = 'all' | 'pending' | 'approved' | 'rejected';
@@ -290,82 +279,14 @@ const RequestRenderItem = React.memo(({
     );
 });
 
-const PendingUpdateRenderItem = React.memo(({
-    item,
-    onApprove,
-    onReject,
-}: {
-    item: PendingUpdateItem;
-    onApprove: (u: PendingUpdateItem) => void;
-    onReject: (u: PendingUpdateItem) => void;
-}) => (
-    <View style={{ backgroundColor: EHR_SURFACE_LOWEST, borderColor: EHR_TERTIARY_FIXED, borderWidth: 1, borderRadius: 20, padding: 14, marginBottom: 12 }}>
-        <XStack style={{ alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 10 }}>
-            <YStack style={{ flex: 1, paddingRight: 10 }}>
-                <XStack style={{ alignItems: 'center', marginBottom: 4 }}>
-                    <FilePlus2 size={16} color={EHR_TERTIARY} style={{ marginRight: 6 }} />
-                    <Text fontSize="$5" fontWeight="700" color="$color12">
-                        {item.title || 'Cập nhật hồ sơ'}
-                    </Text>
-                </XStack>
-                <XStack style={{ alignItems: 'center', marginBottom: 4 }}>
-                    <User size={14} color={EHR_ON_SURFACE_VARIANT} style={{ marginRight: 4 }} />
-                    <Text fontSize="$3" color="$color10">BS: {truncateAddr(item.doctorAddress)}</Text>
-                </XStack>
-            </YStack>
-            <View style={{ backgroundColor: EHR_TERTIARY_FIXED, borderRadius: 10, paddingVertical: 4, paddingHorizontal: 8 }}>
-                <Text style={{ color: EHR_TERTIARY, fontSize: 12, fontWeight: '700' }}>Cập nhật</Text>
-            </View>
-        </XStack>
-
-        <XStack style={{ alignItems: 'center', marginBottom: 12 }}>
-            <Clock size={12} color={EHR_ON_SURFACE_VARIANT} style={{ marginRight: 4 }} />
-            <Text fontSize="$2" color="$color9">{formatDate(item.createdAt)}</Text>
-            {item.recordType ? (
-                <View style={{ backgroundColor: EHR_SURFACE_LOW, borderRadius: 8, paddingVertical: 4, paddingHorizontal: 8, marginLeft: 8 }}>
-                    <Text fontSize="$2" color="$color11">{item.recordType}</Text>
-                </View>
-            ) : null}
-        </XStack>
-
-        <XStack style={{ justifyContent: 'flex-end', gap: 8 }}>
-            <Button size="$3" variant="outlined" borderColor={EHR_OUTLINE_VARIANT} pressStyle={{ background: EHR_SURFACE_LOW }} icon={<X size={15} color={EHR_ON_SURFACE_VARIANT} />} onPress={() => onReject(item)}>
-                <Text color="$color11" fontWeight="500">Từ chối</Text>
-            </Button>
-            <Button size="$3" background={EHR_PRIMARY} pressStyle={{ background: EHR_PRIMARY }} icon={<Check size={15} color="white" />} onPress={() => onApprove(item)}>
-                <Text color="white" fontWeight="500">Phê duyệt</Text>
-            </Button>
-        </XStack>
-    </View>
-));
-
 export default function RequestsScreen() {
     const { requests, isLoading, isRefreshing, refresh } = useRequests();
     const [activeFilter, setActiveFilter] = useState<FilterKey>('all');
-    const [pendingUpdates, setPendingUpdates] = useState<PendingUpdateItem[]>([]);
-    const [updatesLoading, setUpdatesLoading] = useState(true);
     const [approvingId, setApprovingId] = useState<string | null>(null);
-
-    const fetchPendingUpdates = useCallback(async () => {
-        try {
-            const res = await pendingUpdateService.getIncoming();
-            setPendingUpdates(res?.updates || []);
-        } catch (err) {
-            console.error('Failed to fetch pending updates:', err);
-        } finally {
-            setUpdatesLoading(false);
-        }
-    }, []);
-
-    useEffect(() => {
-        fetchPendingUpdates();
-    }, [fetchPendingUpdates]);
 
     const handleRefreshAll = useCallback(() => {
         refresh();
-        setUpdatesLoading(true);
-        fetchPendingUpdates();
-    }, [refresh, fetchPendingUpdates]);
+    }, [refresh]);
 
     const normalizedRequests = useMemo(() => {
         return (requests || []).map((r: RequestItem) => ({
@@ -630,41 +551,11 @@ export default function RequestsScreen() {
         ]);
     }, [refresh]);
 
-    const handleApproveUpdate = useCallback(async (update: PendingUpdateItem) => {
-        try {
-            await pendingUpdateService.approve(update.id);
-            Alert.alert('Thành công', 'Đã phê duyệt cập nhật. Bác sĩ sẽ xác nhận trên blockchain.');
-            fetchPendingUpdates();
-        } catch (err: any) {
-            Alert.alert('Lỗi', err?.message || 'Không thể phê duyệt.');
-        }
-    }, [fetchPendingUpdates]);
-
-    const handleRejectUpdate = useCallback((update: PendingUpdateItem) => {
-        Alert.alert('Từ chối cập nhật', 'Bạn có chắc chắn muốn từ chối?', [
-            { text: 'Huỷ', style: 'cancel' },
-            {
-                text: 'Từ chối',
-                style: 'destructive',
-                onPress: async () => {
-                    try {
-                        await pendingUpdateService.reject(update.id);
-                        Alert.alert('Thành công', 'Đã từ chối cập nhật.');
-                        fetchPendingUpdates();
-                    } catch (err: any) {
-                        Alert.alert('Lỗi', err?.message || 'Không thể từ chối.');
-                    }
-                },
-            },
-        ]);
-    }, [fetchPendingUpdates]);
-
-    if (isLoading && !isRefreshing && updatesLoading) {
+    if (isLoading && !isRefreshing) {
         return <LoadingSpinner message={'Đang tải danh sách yêu cầu...'} />;
     }
 
-    const allData: { type: 'update' | 'request'; data: any }[] = [
-        ...pendingUpdates.map((u) => ({ type: 'update' as const, data: u })),
+    const allData: { type: 'request'; data: any }[] = [
         ...filteredRequests.map((r) => ({ type: 'request' as const, data: r })),
     ];
 
@@ -713,25 +604,16 @@ export default function RequestsScreen() {
             ) : (
                 <FlatList
                     data={allData}
-                    keyExtractor={(item, index) => {
-                        if (item.type === 'update') return `update-${item.data.id}`;
-                        return item.data.id?.toString() || item.data.requestId || `request-${index}`;
-                    }}
-                    renderItem={({ item }) => {
-                        if (item.type === 'update') {
-                            return <PendingUpdateRenderItem item={item.data} onApprove={handleApproveUpdate} onReject={handleRejectUpdate} />;
-                        }
-                        return <RequestRenderItem item={item.data} onApprove={handleApprove} onArchive={handleArchive} isApproving={approvingId === (item.data.requestId || item.data.id)} />;
-                    }}
+                    keyExtractor={(item, index) =>
+                        item.data.id?.toString() || item.data.requestId || `request-${index}`
+                    }
+                    renderItem={({ item }) => (
+                        <RequestRenderItem item={item.data} onApprove={handleApprove} onArchive={handleArchive} isApproving={approvingId === (item.data.requestId || item.data.id)} />
+                    )}
                     contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 20 }}
                     refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={handleRefreshAll} colors={[EHR_PRIMARY]} />}
                     ListHeaderComponent={
                         <YStack style={{ marginBottom: 10 }}>
-                            {pendingUpdates.length > 0 ? (
-                                <Text fontSize="$3" fontWeight="600" style={{ color: EHR_TERTIARY, marginBottom: 4 }}>
-                                    {pendingUpdates.length} cập nhật từ bác sĩ chờ duyệt
-                                </Text>
-                            ) : null}
                             <Text fontSize="$3" color="$color10">{filteredRequests.length} yêu cầu</Text>
                         </YStack>
                     }

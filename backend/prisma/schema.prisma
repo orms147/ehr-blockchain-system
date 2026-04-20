@@ -412,37 +412,9 @@ model OrganizationMember {
   @@index([memberAddress])
 }
 
-// Pending Updates - Doctor update requiring patient approval
-model PendingUpdate {
-  id                String   @id @default(uuid())
-  doctorAddress     String   @db.VarChar(42)
-  patientAddress    String   @db.VarChar(42)
-  parentCidHash     String   @db.VarChar(66)  // Record being updated
-  
-  // Encrypted content (stored before on-chain)
-  encryptedContent  String   @db.Text        // Encrypted FHIR bundle (base64)
-  contentHash       String   @db.VarChar(66)  // keccak256 of content for integrity
-  recordType        String?  @db.VarChar(50)
-  title             String?  @db.VarChar(255)
-  
-  // Status tracking
-  status            String   @default("pending")  // pending, approved, claimed, rejected, expired
-  
-  // Approval
-  approvedAt        DateTime?
-  
-  // Claim
-  cidHash           String?  @db.VarChar(66)  // Set after IPFS upload
-  txHash            String?  @db.VarChar(66)  // On-chain tx
-  claimedAt         DateTime?
-  
-  // Metadata
-  createdAt         DateTime @default(now())
-  expiresAt         DateTime                  // Auto-expire pending updates (7 days)
-  
-  @@index([patientAddress, status])
-  @@index([doctorAddress, status])
-}
+// PendingUpdate model removed 2026-04-19 — doctor updates now go direct
+// on-chain via addRecordByDoctor. Migration 20260419_drop_pending_update
+// drops the table. See context/06_design_decisions.md §0a for reasoning.
 
 // Event Sync State - Track blockchain sync progress (reorg-safe)
 // Each contract gets its own row, keyed by contractName (unique).

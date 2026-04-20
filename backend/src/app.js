@@ -18,7 +18,7 @@ import delegationRoutes from './routes/delegation.routes.js';
 import pushRoutes from './routes/push.routes.js';
 import orgRoutes from './routes/org.routes.js';
 import adminRoutes from './routes/admin.routes.js';
-import pendingUpdateRoutes from './routes/pendingUpdate.routes.js';
+// pendingUpdate routes removed 2026-04-19 — doctor updates are direct on-chain.
 import profileRoutes from './routes/profile.routes.js';
 import testRoutes from './routes/test.routes.js';
 import { startEventSync } from './services/eventSync.service.js';
@@ -73,7 +73,6 @@ app.use('/api/delegation', delegationRoutes);  // Family delegation
 app.use('/api/push', pushRoutes);              // Expo push notifications
 app.use('/api/org', orgRoutes);                // Organization management
 app.use('/api/admin', adminRoutes);            // Ministry-only endpoints
-app.use('/api/pending-updates', pendingUpdateRoutes); // Doctor update approval
 app.use('/api/profile', profileRoutes);               // User profile & metadata
 app.use('/api/test', testRoutes);              // Development only
 

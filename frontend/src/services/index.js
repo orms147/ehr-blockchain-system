@@ -11,7 +11,7 @@ export { verificationService } from './verification.service';
 export { emergencyService } from './emergency.service';
 export { delegationService } from './delegation.service';
 export { orgService } from './org.service';
-export { pendingUpdateService } from './pendingUpdate.service';
+// pendingUpdateService removed 2026-04-19 — doctor updates are direct on-chain.
 export { accessLogService } from './accessLog.service';
 export { default as profileService } from './profile.service';
 export * from './crypto';

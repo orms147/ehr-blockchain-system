@@ -25,10 +25,9 @@ import EmptyState from '../../components/EmptyState';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import useAuthStore from '../../store/authStore';
 import api from '../../services/api';
-import pendingUpdateService from '../../services/pendingUpdate.service';
+// pendingUpdate service + hooks removed 2026-04-19 — doctor updates are direct on-chain.
 import ipfsService from '../../services/ipfs.service';
 import walletActionService from '../../services/walletAction.service';
-import { useOutgoingPendingUpdates, useClaimPendingUpdate } from '../../hooks/queries/usePendingUpdates';
 import {
     EHR_ERROR,
     EHR_ERROR_CONTAINER,
@@ -77,16 +76,7 @@ type RequestItem = {
     deadline?: string;
 };
 
-type PendingUpdateItem = {
-    id: string;
-    patientAddress: string;
-    parentCidHash: string;
-    encryptedContent: string;
-    title?: string;
-    recordType?: string;
-    createdAt: string;
-    status: string;
-};
+// PendingUpdateItem type removed 2026-04-19 — doctor updates are direct on-chain.
 
 const SPRING = { damping: 18, stiffness: 120, mass: 0.8 };
 
@@ -178,75 +168,11 @@ const OutgoingRequestCard = React.memo(({ item, index }: { item: RequestItem; in
     );
 });
 
-/* ── Pending update card ── */
-const PendingUpdateCard = React.memo(({
-    item,
-    index,
-    isClaiming,
-    onClaim,
-}: {
-    item: PendingUpdateItem;
-    index: number;
-    isClaiming: boolean;
-    onClaim: (u: PendingUpdateItem) => void;
-}) => {
-    const cfg = getStatusConfig(item.status);
-    const isApproved = item.status === 'approved';
-
-    return (
-        <AnimatedCardWrapper index={index}>
-            <View style={[s.updateCard, isApproved && s.updateCardApproved]}>
-                <XStack style={s.cardTop}>
-                    <View style={s.updateIconWrap}>
-                        <FilePlus2 size={18} color={EHR_TERTIARY} />
-                    </View>
-                    <YStack style={{ flex: 1 }}>
-                        <Text style={s.cardTitle}>
-                            {item.title || 'Cập nhật hồ sơ'}
-                        </Text>
-                        <Text style={s.cardDate}>
-                            BN: {truncateAddr(item.patientAddress)} {' \u2022 '} {formatDate(item.createdAt)}
-                        </Text>
-                    </YStack>
-                    <View style={[s.statusChip, { backgroundColor: cfg.bg }]}>
-                        <cfg.Icon size={11} color={cfg.color} />
-                        <Text style={[s.statusText, { color: cfg.color }]}>{cfg.label}</Text>
-                    </View>
-                </XStack>
-
-                {isApproved ? (
-                    <Pressable
-                        onPress={() => onClaim(item)}
-                        disabled={isClaiming}
-                        style={({ pressed }) => [pressed && { opacity: 0.85 }]}
-                    >
-                        <LinearGradient
-                            colors={[EHR_PRIMARY, EHR_PRIMARY_CONTAINER]}
-                            start={{ x: 0, y: 0 }}
-                            end={{ x: 1, y: 0 }}
-                            style={s.claimBtn}
-                        >
-                            {isClaiming ? (
-                                <Text style={s.claimBtnText}>Đang xác nhận...</Text>
-                            ) : (
-                                <>
-                                    <Upload size={14} color={EHR_ON_PRIMARY} />
-                                    <Text style={s.claimBtnText}>Xác nhận on-chain</Text>
-                                    <ArrowUpRight size={14} color={EHR_ON_PRIMARY} />
-                                </>
-                            )}
-                        </LinearGradient>
-                    </Pressable>
-                ) : null}
-            </View>
-        </AnimatedCardWrapper>
-    );
-});
+/* PendingUpdateCard removed 2026-04-19 — doctor updates are direct on-chain. */
 
 /* ── Main screen ── */
 export default function DoctorOutgoingScreen() {
     const { token } = useAuthStore();
-    const [claimingId, setClaimingId] = useState<string | null>(null);
 
     // Outgoing access requests — kept on direct API call (no dedicated service method).
     const requestsQuery = useQuery({
@@ -258,14 +184,9 @@ export default function DoctorOutgoingScreen() {
         enabled: !!token,
     });
 
-    // Outgoing pending updates via shared hook
-    const pendingUpdatesQuery = useOutgoingPendingUpdates(!!token);
-    const claimMutation = useClaimPendingUpdate();
-
     const requests = requestsQuery.data ?? [];
-    const pendingUpdates = (pendingUpdatesQuery.data?.updates ?? []) as PendingUpdateItem[];
-    const isLoading = (requestsQuery.isLoading || pendingUpdatesQuery.isLoading) && !requestsQuery.data && !pendingUpdatesQuery.data;
-    const isRefreshing = requestsQuery.isFetching || pendingUpdatesQuery.isFetching;
+    const isLoading = requestsQuery.isLoading && !requestsQuery.data;
+    const isRefreshing = requestsQuery.isFetching;
 
     const headerEnter = useSharedValue(0);
     useEffect(() => {
@@ -281,182 +202,16 @@ export default function DoctorOutgoingScreen() {
 
     const handleRefresh = () => {
         requestsQuery.refetch();
-        pendingUpdatesQuery.refetch();
     };
 
-    const handleClaimUpdate = async (update: PendingUpdateItem) => {
-        if (update.status !== 'approved') {
-            Alert.alert('Chưa được duyệt', 'Cần bệnh nhân phê duyệt trước.');
-            return;
-        }
-
-        setClaimingId(update.id);
-        try {
-            // Load the AES key we stashed at create time. Without it, nobody can
-            // decrypt the new version (doctor or patient).
-            const draftsStr = await AsyncStorage.getItem('doctor_update_drafts');
-            const drafts = draftsStr ? JSON.parse(draftsStr) : {};
-            const draft = drafts[update.id];
-            if (!draft?.aesKey) {
-                Alert.alert(
-                    'Thiếu khoá AES',
-                    'Không tìm thấy khoá AES gốc (có thể bạn đang dùng thiết bị khác). Vui lòng tạo lại yêu cầu cập nhật trên thiết bị đã soạn thảo.'
-                );
-                setClaimingId(null);
-                return;
-            }
-            const aesKey: string = draft.aesKey;
-
-            const { cid } = await ipfsService.uploadEncrypted({
-                encryptedData: update.encryptedContent,
-                metadata: { title: update.title || 'Doctor update', recordType: update.recordType || 'checkup' },
-            });
-
-            const cidHash = keccak256(toBytes(cid));
-            const recordTypeHash = keccak256(toBytes(update.recordType || 'checkup'));
-            const { walletClient, address: myAddress } = await walletActionService.getWalletContext();
-
-            const txHash = await walletClient.writeContract({
-                address: RECORD_REGISTRY_ADDRESS,
-                abi: RECORD_REGISTRY_ABI,
-                functionName: 'addRecordByDoctor',
-                args: [
-                    cidHash,
-                    update.parentCidHash as `0x${string}`,
-                    recordTypeHash,
-                    update.patientAddress as `0x${string}`,
-                ],
-                gas: BigInt(400000),
-                maxFeePerGas: parseGwei('1.0'),
-                maxPriorityFeePerGas: parseGwei('0.1'),
-            });
-
-            // NaCl-encrypt the {cid, aesKey} payload for the patient so the
-            // backend stores a real sealed envelope (not plaintext JSON).
-            const myKeypair = await getOrCreateEncryptionKeypair(walletClient, myAddress);
-            const payloadJson = JSON.stringify({ cid, aesKey });
-
-            let encryptedPayloadForPatient: string | null = null;
-            let patientPubKey: string | null = null;
-            try {
-                const patientKeyRes: any = await authService.getEncryptionKey(update.patientAddress);
-                patientPubKey = patientKeyRes?.encryptionPublicKey || null;
-                if (patientPubKey) {
-                    encryptedPayloadForPatient = encryptForRecipient(
-                        payloadJson,
-                        patientPubKey,
-                        myKeypair.secretKey,
-                    );
-                }
-            } catch (e) {
-                console.warn('Fetch patient pubkey failed:', e);
-            }
-
-            await claimMutation.mutateAsync({
-                id: update.id,
-                cidHash,
-                txHash,
-                cid,
-                aesKey,
-                encryptedPayloadForPatient,
-                senderPublicKey: myKeypair.publicKey,
-            } as any);
-
-            // Save to local records so this device can immediately decrypt the
-            // new version without a server round-trip.
-            try {
-                const lrStr = await AsyncStorage.getItem('ehr_local_records');
-                const localRecords = lrStr ? JSON.parse(lrStr) : {};
-                localRecords[cidHash.toLowerCase()] = {
-                    ...(localRecords[cidHash.toLowerCase()] || {}),
-                    cid,
-                    aesKey,
-                    title: update.title || null,
-                    recordType: update.recordType || null,
-                    parentCidHash: update.parentCidHash,
-                    ownerAddress: update.patientAddress,
-                    createdBy: myAddress,
-                    createdAt: new Date().toISOString(),
-                    syncStatus: 'confirmed',
-                    txHash,
-                };
-                await AsyncStorage.setItem('ehr_local_records', JSON.stringify(localRecords));
-            } catch (lrErr) {
-                console.warn('Failed to save local record:', lrErr);
-            }
-
-            // Auto-propagate to other recipients of the parent chain so nobody
-            // silently loses access when a new version is added.
-            try {
-                const recipients: any = await keyShareService.getRecordRecipients(update.parentCidHash);
-                if (Array.isArray(recipients)) {
-                    // 2026-04-19: consent covers whole chain. Every active
-                    // recipient of the parent gets the new version's key.
-                    for (const r of recipients) {
-                        const addr = String(r.walletAddress || '').toLowerCase();
-                        if (!addr || addr === myAddress.toLowerCase() || addr === String(update.patientAddress).toLowerCase()) continue;
-                        if (!r.encryptionPublicKey) continue;
-                        try {
-                            const enc = encryptForRecipient(payloadJson, r.encryptionPublicKey, myKeypair.secretKey);
-                            await keyShareService.shareKey({
-                                cidHash,
-                                recipientAddress: addr,
-                                encryptedPayload: enc,
-                                senderPublicKey: myKeypair.publicKey,
-                            });
-                        } catch (innerErr) {
-                            console.warn('Propagate share failed for', addr, innerErr);
-                        }
-                    }
-                }
-            } catch (propErr) {
-                console.warn('Auto-propagation failed:', propErr);
-            }
-
-            // Clean up draft
-            try {
-                delete drafts[update.id];
-                await AsyncStorage.setItem('doctor_update_drafts', JSON.stringify(drafts));
-            } catch { }
-
-            Alert.alert('Đã xác nhận!', 'Hồ sơ đã được lưu lên blockchain.');
-        } catch (err: any) {
-            const msg = String(err?.message || '');
-            if (msg.includes('insufficient funds') || msg.includes('Insufficient')) {
-                Alert.alert(
-                    'Không đủ tiền phí giao dịch',
-                    'Ví của bạn không đủ ETH để thực hiện. Vào mục Cá nhân \u2192 Nạp ETH để nạp thêm.'
-                );
-            } else if (msg.includes('eth_sendTransaction')) {
-                Alert.alert(
-                    'Lỗi kết nối ví',
-                    'Không thể gửi giao dịch. Vui lòng đăng xuất và đăng nhập lại.'
-                );
-            } else if (msg.includes('network') || msg.includes('rpc') || msg.includes('fetch')) {
-                Alert.alert(
-                    'Lỗi kết nối mạng',
-                    'Không thể kết nối đến hệ thống blockchain. Vui lòng kiểm tra kết nối internet và thử lại.'
-                );
-            } else {
-                Alert.alert(
-                    'Không thể xác nhận hồ sơ',
-                    'Đã xảy ra lỗi. Vui lòng thử lại sau hoặc liên hệ hỗ trợ.'
-                );
-            }
-            console.error('Claim update error:', err);
-        } finally {
-            setClaimingId(null);
-        }
-    };
+    // handleClaimUpdate removed 2026-04-19 — doctor updates are now direct
+    // on-chain via DoctorCreateUpdateScreen.handleSubmit.
 
     if (isLoading && !isRefreshing) return <LoadingSpinner message="Đang tải yêu cầu đã gửi..." />;
 
-    const allItems: { type: 'update' | 'request'; data: any }[] = [
-        ...pendingUpdates.map((u) => ({ type: 'update' as const, data: u })),
+    const allItems: { type: 'request'; data: any }[] = [
         ...requests.map((r) => ({ type: 'request' as const, data: r })),
     ];
-
-    const approvedCount = pendingUpdates.filter((u) => u.status === 'approved').length;
 
     return (
         <SafeAreaView style={{ flex: 1, backgroundColor: EHR_SURFACE }} edges={['right', 'left']}>
@@ -469,23 +224,12 @@ export default function DoctorOutgoingScreen() {
             ) : (
                 <FlatList
                     data={allItems}
-                    keyExtractor={(item, idx) => {
-                        if (item.type === 'update') return `update-${item.data.id}`;
-                        return item.data.id?.toString() || item.data.requestId || `req-${idx}`;
-                    }}
-                    renderItem={({ item, index }) => {
-                        if (item.type === 'update') {
-                            return (
-                                <PendingUpdateCard
-                                    item={item.data}
-                                    index={index}
-                                    isClaiming={claimingId === item.data.id}
-                                    onClaim={handleClaimUpdate}
-                                />
-                            );
-                        }
-                        return <OutgoingRequestCard item={item.data} index={index} />;
-                    }}
+                    keyExtractor={(item, idx) =>
+                        item.data.id?.toString() || item.data.requestId || `req-${idx}`
+                    }
+                    renderItem={({ item, index }) => (
+                        <OutgoingRequestCard item={item.data} index={index} />
+                    )}
                     contentContainerStyle={{ padding: 16, paddingBottom: 100 }}
                     refreshControl={
                         <RefreshControl
@@ -498,33 +242,15 @@ export default function DoctorOutgoingScreen() {
                         <Animated.View style={headerStyle}>
                             <Text style={s.screenTitle}>Yêu cầu đã gửi</Text>
                             <Text style={s.screenSubtitle}>
-                                Theo dõi trạng thái yêu cầu và cập nhật hồ sơ
+                                Theo dõi trạng thái các yêu cầu truy cập bạn đã gửi
                             </Text>
 
-                            {/* Stats row */}
                             <XStack style={s.statsRow}>
-                                <View style={s.statCard}>
-                                    <Text style={s.statValue}>{pendingUpdates.length}</Text>
-                                    <Text style={s.statLabel}>Cập nhật</Text>
-                                </View>
-                                <View style={s.statCard}>
-                                    <Text style={[s.statValue, { color: EHR_TERTIARY }]}>{approvedCount}</Text>
-                                    <Text style={s.statLabel}>Chờ xác nhận</Text>
-                                </View>
                                 <View style={s.statCard}>
                                     <Text style={[s.statValue, { color: EHR_SECONDARY }]}>{requests.length}</Text>
                                     <Text style={s.statLabel}>Yêu cầu</Text>
                                 </View>
                             </XStack>
-
-                            {approvedCount > 0 ? (
-                                <View style={s.infoBanner}>
-                                    <Upload size={14} color={EHR_PRIMARY} />
-                                    <Text style={s.infoBannerText}>
-                                        {approvedCount} cập nhật đã được duyệt, sẵn sàng xác nhận on-chain
-                                    </Text>
-                                </View>
-                            ) : null}
                         </Animated.View>
                     }
                 />
