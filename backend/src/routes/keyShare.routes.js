@@ -198,46 +198,15 @@ router.post('/', authenticate, async (req, res, next) => {
         // SECURITY: Only the Owner (Patient) can grant "Delegation Power" (allowDelegate=true).
         const finalAllowDelegate = (isOwner || isCreator) ? (allowDelegate === true) : false;
 
-        // CLEAN SLATE: When owner/creator re-shares, DELETE all old KeyShare rows
-        // for this recipient across the ENTIRE record chain. This prevents stale
-        // rows (expired, revoked, wrong flags) from polluting the doctor's view.
-        // New rows will be created fresh by this request + cascade from mobile.
-        let isReShare = false;
-        if (isOwner || isCreator) {
-            try {
-                const chainCids = await getChainCidHashes(cidHashLower);
-                // Only delete STALE rows (created >60s ago). This prevents cascade
-                // calls (which fire within seconds of the main share) from deleting
-                // rows that the main share or earlier cascade steps just created.
-                const staleThreshold = new Date(Date.now() - 60000);
-                const staleCount = await prisma.keyShare.count({
-                    where: {
-                        recipientAddress: recipientLower,
-                        senderAddress: senderAddress,
-                        cidHash: { in: chainCids },
-                        createdAt: { lt: staleThreshold },
-                    },
-                });
-                if (staleCount > 0) {
-                    const deleted = await prisma.keyShare.deleteMany({
-                        where: {
-                            recipientAddress: recipientLower,
-                            senderAddress: senderAddress,
-                            cidHash: { in: chainCids },
-                            createdAt: { lt: staleThreshold },
-                        },
-                    });
-                    isReShare = true;
-                    log.info('Clean slate: deleted stale KeyShares for re-share', {
-                        recipient: recipientLower,
-                        chainSize: chainCids.length,
-                        deletedCount: deleted.count,
-                    });
-                }
-            } catch (err) {
-                log.warn('Clean slate failed (non-fatal, proceeding with upsert)', { error: err?.message });
-            }
-        }
+        // "Clean slate" (chain-wide delete of old KeyShares) removed 2026-04-19.
+        // It was deleting ancestor rows during new-version cascade — e.g. when
+        // patient created V3, the cascade POST for V3 would delete the doctor's
+        // V2 KeyShare because V2 was part of V3's chainCids and >60s old. Doctor
+        // would then lose V2 from their dashboard even though the share was
+        // still valid. Dashboard filtering (visibleParentCids) already hides
+        // ancestor versions when a leaf is present; revoke flow has its own
+        // status='revoked' path (handleConsentRevoked). No need for CLEAN SLATE.
+        const isReShare = false;
 
         // INHERITANCE ENFORCEMENT: Check parent expiry — child cannot outlive parent.
         // BUT: skip clamping when parent's expiresAt is ALREADY EXPIRED. This prevents
