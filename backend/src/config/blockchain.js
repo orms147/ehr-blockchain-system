@@ -1,6 +1,7 @@
 import { createPublicClient, http } from 'viem';
 import { arbitrumSepolia } from 'viem/chains';
 import { createLogger } from '../utils/logger.js';
+import { withRpcRetry } from '../utils/rpcRetry.js';
 
 const log = createLogger('Blockchain');
 
@@ -118,11 +119,38 @@ export const ACCESS_CONTROL_ABI = [
     },
 ];
 
-// Public client for reading blockchain data
+// Public client for reading blockchain data. Bumped retry options on the
+// transport handle viem's internal retries; withRpcRetry around individual
+// calls below adds a second longer-backoff layer for 429 specifically.
 export const publicClient = createPublicClient({
     chain: arbitrumSepolia,
-    transport: http(process.env.RPC_URL),
+    transport: http(process.env.RPC_URL, {
+        retryCount: Number(process.env.RPC_TRANSPORT_RETRIES ?? 3),
+        retryDelay: Number(process.env.RPC_TRANSPORT_RETRY_DELAY_MS ?? 600),
+    }),
 });
+
+// In-memory cache for on-chain role flags. The middleware fires on every
+// authenticated request and triggers 8+ readContract calls — without cache,
+// even modest traffic blows past Alchemy free tier 300 CU/sec. Roles change
+// rarely (DoctorVerified events are infrequent), so a 60s TTL is a fair
+// trade-off between freshness and RPC pressure. Override via env.
+const ROLE_CACHE_TTL_MS = Number(process.env.ROLE_CACHE_TTL_MS ?? 60_000);
+const roleCache = new Map(); // address -> { value, expiresAt }
+
+function getCachedRole(address) {
+    const entry = roleCache.get(address);
+    if (!entry) return null;
+    if (Date.now() > entry.expiresAt) {
+        roleCache.delete(address);
+        return null;
+    }
+    return entry.value;
+}
+
+function setCachedRole(address, value) {
+    roleCache.set(address, { value, expiresAt: Date.now() + ROLE_CACHE_TTL_MS });
+}
 
 // Contract addresses
 export const CONTRACT_ADDRESSES = {
@@ -177,6 +205,24 @@ export async function checkConsent(patientAddress, granteeAddress, cidHash) {
 
 async function readUserRole(address) {
     const normalized = normalizeAddress(address);
+
+    // Cache hit fast-path — avoids 8 readContract calls on every API request.
+    const cached = getCachedRole(normalized);
+    if (cached) return cached;
+
+    // Each call wrapped with withRpcRetry so a single 429 in the burst doesn't
+    // poison the whole role lookup (and from there poison the request that
+    // depends on it). Promise.all means parallel; retries happen per-call.
+    const callRead = (functionName) => withRpcRetry(
+        () => publicClient.readContract({
+            address: CONTRACT_ADDRESSES.AccessControl,
+            abi: ACCESS_CONTROL_ABI,
+            functionName,
+            args: [normalized],
+        }),
+        { label: `readUserRole.${functionName}` },
+    );
+
     const [
         isPatient,
         isDoctor,
@@ -187,54 +233,14 @@ async function readUserRole(address) {
         isActiveOrgAdmin,
         adminOrgId,
     ] = await Promise.all([
-        publicClient.readContract({
-            address: CONTRACT_ADDRESSES.AccessControl,
-            abi: ACCESS_CONTROL_ABI,
-            functionName: 'isPatient',
-            args: [normalized],
-        }),
-        publicClient.readContract({
-            address: CONTRACT_ADDRESSES.AccessControl,
-            abi: ACCESS_CONTROL_ABI,
-            functionName: 'isDoctor',
-            args: [normalized],
-        }),
-        publicClient.readContract({
-            address: CONTRACT_ADDRESSES.AccessControl,
-            abi: ACCESS_CONTROL_ABI,
-            functionName: 'isVerifiedDoctor',
-            args: [normalized],
-        }),
-        publicClient.readContract({
-            address: CONTRACT_ADDRESSES.AccessControl,
-            abi: ACCESS_CONTROL_ABI,
-            functionName: 'isMinistry',
-            args: [normalized],
-        }),
-        publicClient.readContract({
-            address: CONTRACT_ADDRESSES.AccessControl,
-            abi: ACCESS_CONTROL_ABI,
-            functionName: 'isOrganization',
-            args: [normalized],
-        }),
-        publicClient.readContract({
-            address: CONTRACT_ADDRESSES.AccessControl,
-            abi: ACCESS_CONTROL_ABI,
-            functionName: 'isVerifiedOrganization',
-            args: [normalized],
-        }),
-        publicClient.readContract({
-            address: CONTRACT_ADDRESSES.AccessControl,
-            abi: ACCESS_CONTROL_ABI,
-            functionName: 'isActiveOrgAdmin',
-            args: [normalized],
-        }),
-        publicClient.readContract({
-            address: CONTRACT_ADDRESSES.AccessControl,
-            abi: ACCESS_CONTROL_ABI,
-            functionName: 'getAdminOrgId',
-            args: [normalized],
-        }),
+        callRead('isPatient'),
+        callRead('isDoctor'),
+        callRead('isVerifiedDoctor'),
+        callRead('isMinistry'),
+        callRead('isOrganization'),
+        callRead('isVerifiedOrganization'),
+        callRead('isActiveOrgAdmin'),
+        callRead('getAdminOrgId'),
     ]);
 
     const orgId = adminOrgId > 0n ? Number(adminOrgId) : null;
@@ -254,7 +260,7 @@ async function readUserRole(address) {
         }
     }
 
-    return {
+    const result = {
         isPatient,
         isDoctor,
         isVerifiedDoctor,
@@ -265,10 +271,22 @@ async function readUserRole(address) {
         orgId,
         orgName,
     };
+    setCachedRole(normalized, result);
+    return result;
 }
 
 export async function getUserRoleStrict(address) {
     return readUserRole(address);
+}
+
+/**
+ * Invalidate cached role for an address. Call after any tx that changes the
+ * role (registerAsPatient, verifyDoctor, etc.) so the next request re-reads.
+ */
+export function invalidateRoleCache(address) {
+    if (typeof address === 'string') {
+        roleCache.delete(address.toLowerCase());
+    }
 }
 
 // Safe wrapper with retry — used by auth routes.

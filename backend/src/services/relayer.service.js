@@ -10,6 +10,7 @@ import {
     RECORD_REGISTRY_ABI,
     CONSENT_LEDGER_ABI,
 } from '../config/contractABI.js';
+import { withRpcRetry } from '../utils/rpcRetry.js';
 
 // Unified gas sponsorship quota — 100 signatures/month pool covering every
 // patient on-chain action (upload, update, grant/share, revoke, delegate).
@@ -29,15 +30,24 @@ const sponsorAccount = process.env.SPONSOR_PRIVATE_KEY
     ? privateKeyToAccount(process.env.SPONSOR_PRIVATE_KEY)
     : null;
 
+// Bump viem's built-in transport retry so 429 / transient network blips don't
+// bubble straight up to the relayer routes (and from there to mobile, where
+// users see a generic "Chia sẻ thất bại"). withRpcRetry wraps each sponsor
+// function additionally for clearer logging + uniform backoff.
+const TRANSPORT_OPTS = {
+    retryCount: Number(process.env.RPC_TRANSPORT_RETRIES ?? 3),
+    retryDelay: Number(process.env.RPC_TRANSPORT_RETRY_DELAY_MS ?? 600),
+};
+
 const publicClient = createPublicClient({
     chain: arbitrumSepolia,
-    transport: http(process.env.RPC_URL),
+    transport: http(process.env.RPC_URL, TRANSPORT_OPTS),
 });
 
 const walletClient = sponsorAccount ? createWalletClient({
     account: sponsorAccount,
     chain: arbitrumSepolia,
-    transport: http(process.env.RPC_URL),
+    transport: http(process.env.RPC_URL, TRANSPORT_OPTS),
 }) : null;
 
 function createRelayerError(message, { code = 'RELAYER_ERROR', statusCode = 500, details = null, txHash = null } = {}) {
@@ -454,23 +464,29 @@ export async function sponsorGrantConsent(
     const patient = patientAddress.toLowerCase();
     await consumeQuota(patient, 'grant');
 
-    const hash = await walletClient.writeContract({
-        address: CONTRACTS.CONSENT_LEDGER,
-        abi: CONSENT_LEDGER_ABI,
-        functionName: 'grantBySig',
-        args: [
-            patient,
-            granteeAddress.toLowerCase(),
-            cidHash,
-            encKeyHash,
-            expireAt,
-            allowDelegate,
-            deadline,
-            signature,
-        ],
-    });
+    const hash = await withRpcRetry(
+        () => walletClient.writeContract({
+            address: CONTRACTS.CONSENT_LEDGER,
+            abi: CONSENT_LEDGER_ABI,
+            functionName: 'grantBySig',
+            args: [
+                patient,
+                granteeAddress.toLowerCase(),
+                cidHash,
+                encKeyHash,
+                expireAt,
+                allowDelegate,
+                deadline,
+                signature,
+            ],
+        }),
+        { label: 'sponsorGrantConsent.writeContract' },
+    );
 
-    const receipt = await publicClient.waitForTransactionReceipt({ hash });
+    const receipt = await withRpcRetry(
+        () => publicClient.waitForTransactionReceipt({ hash }),
+        { label: 'sponsorGrantConsent.waitForReceipt' },
+    );
 
     await bumpSignatureCounter(patient);
     return { txHash: hash, receipt };
@@ -582,25 +598,37 @@ export async function getGrantContext(patientAddress, granteeAddress) {
     const patient = patientAddress.toLowerCase();
     const grantee = granteeAddress.toLowerCase();
 
+    // 3 parallel reads burst-load Alchemy free tier easily. Each one is
+    // wrapped in withRpcRetry so a 429 on any single read backs off and
+    // recovers instead of failing the whole share precheck.
     const [nonce, isDoctor, isVerifiedDoctor] = await Promise.all([
-        publicClient.readContract({
-            address: CONTRACTS.CONSENT_LEDGER,
-            abi: CONSENT_LEDGER_ABI,
-            functionName: 'nonces',
-            args: [patient],
-        }),
-        publicClient.readContract({
-            address: CONTRACTS.ACCESS_CONTROL,
-            abi: ACCESS_CONTROL_ABI,
-            functionName: 'isDoctor',
-            args: [grantee],
-        }),
-        publicClient.readContract({
-            address: CONTRACTS.ACCESS_CONTROL,
-            abi: ACCESS_CONTROL_ABI,
-            functionName: 'isVerifiedDoctor',
-            args: [grantee],
-        }),
+        withRpcRetry(
+            () => publicClient.readContract({
+                address: CONTRACTS.CONSENT_LEDGER,
+                abi: CONSENT_LEDGER_ABI,
+                functionName: 'nonces',
+                args: [patient],
+            }),
+            { label: 'getGrantContext.nonces' },
+        ),
+        withRpcRetry(
+            () => publicClient.readContract({
+                address: CONTRACTS.ACCESS_CONTROL,
+                abi: ACCESS_CONTROL_ABI,
+                functionName: 'isDoctor',
+                args: [grantee],
+            }),
+            { label: 'getGrantContext.isDoctor' },
+        ),
+        withRpcRetry(
+            () => publicClient.readContract({
+                address: CONTRACTS.ACCESS_CONTROL,
+                abi: ACCESS_CONTROL_ABI,
+                functionName: 'isVerifiedDoctor',
+                args: [grantee],
+            }),
+            { label: 'getGrantContext.isVerifiedDoctor' },
+        ),
     ]);
 
     const quota = await getQuotaStatus(patient);

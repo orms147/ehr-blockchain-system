@@ -20,6 +20,8 @@ import prisma from '../config/database.js';
 import { emitToUser, getIO } from './socket.service.js';
 import { sendPushToWallet } from './push.service.js';
 import { createLogger } from '../utils/logger.js';
+import { withRpcRetry } from '../utils/rpcRetry.js';
+import { applyRevoke } from './keyShareWriter.service.js';
 
 const log = createLogger('ConsentSync');
 
@@ -507,17 +509,41 @@ async function handleConsentRevoked(event) {
 
     const cidHashes = await collectDescendantCidHashes(rootCidHash);
 
-    const updateResult = await prisma.keyShare.updateMany({
-        where: {
-            senderAddress: patient,
-            recipientAddress: grantee,
-            cidHash: { in: cidHashes },
-            status: { not: 'revoked' },
-        },
-        data: {
-            status: 'revoked',
-            encryptedPayload: '',
-        },
+    // Envelope-encryption invariant (see context/06_design_decisions.md §0b):
+    // a doctor who AUTHORED a record already "knows" the content — revoking
+    // patient consent cannot un-know it. Wiping the doctor's self KeyShare
+    // only breaks their ability to re-read their own notes after they clear
+    // the local AES cache (e.g. logout), without any real security benefit.
+    // Exclude cidHashes where this `grantee` is the record's createdBy.
+    const authoredCidHashes = cidHashes.length
+        ? (await prisma.recordMetadata.findMany({
+            where: {
+                cidHash: { in: cidHashes },
+                createdBy: grantee,
+            },
+            select: { cidHash: true },
+        })).map((r) => r.cidHash)
+        : [];
+    const authoredCidHashSet = new Set(authoredCidHashes);
+    const revocableCidHashes = cidHashes.filter((c) => !authoredCidHashSet.has(c));
+
+    // S14 race fix: route through keyShareWriter so the timestamp guard rejects
+    // stale revoke events from the catchup queue. Event timestamp comes from the
+    // contract emit (uint40 seconds). Without this, an old ConsentRevoked from a
+    // prior revoke could overwrite a fresh share that just landed via POST /api/key-share.
+    const eventTimestampMs = event.args?.timestamp
+        ? Number(event.args.timestamp) * 1000
+        : null;
+    const sourceTimestamp = eventTimestampMs
+        ? new Date(eventTimestampMs)
+        : new Date();  // legacy events without timestamp arg fall back to now
+
+    const updateResult = await applyRevoke({
+        senderAddress: patient,
+        recipientAddress: grantee,
+        cidHashes: revocableCidHashes,
+        source: 'event-revoke',
+        sourceTimestamp,
     });
 
     try {
@@ -537,7 +563,8 @@ async function handleConsentRevoked(event) {
         patient,
         grantee,
         rootCidHash,
-        keySharesRevoked: updateResult.count,
+        keySharesRevoked: updateResult.applied,
+        keySharesSkipped: updateResult.skipped,
         versionCount: cidHashes.length,
     });
 
@@ -611,9 +638,23 @@ async function catchupLogs() {
         const syncState = await getSyncState();
         const currentBlock = await client.getBlockNumber();
         const safeBlock = currentBlock - BigInt(REORG_SAFETY_BLOCKS);
-        const fromBlock = syncState.lastSyncedBlock + 1n;
+        let fromBlock = syncState.lastSyncedBlock + 1n;
 
         if (fromBlock > safeBlock) return;
+
+        // Skip ahead on huge catchups (see eventSync.service.js for rationale).
+        const MAX_BLOCKS = BigInt(process.env.RPC_CATCHUP_MAX_BLOCKS || 5000);
+        if (safeBlock - fromBlock > MAX_BLOCKS) {
+            const skipTo = safeBlock - MAX_BLOCKS;
+            log.warn('Catchup gap too large, skipping ahead', {
+                originalFrom: fromBlock,
+                skipTo,
+                gap: safeBlock - fromBlock,
+                max: MAX_BLOCKS,
+            });
+            await updateSyncState(skipTo, null);
+            fromBlock = skipTo + 1n;
+        }
 
         log.info('Catching up', { fromBlock, toBlock: safeBlock });
 
@@ -635,7 +676,10 @@ async function catchupLogs() {
             }
         }
 
-        const CHUNK_SIZE = 10000n;
+        // Alchemy free tier caps eth_getLogs to a 10-block range; override via
+        // RPC_LOGS_CHUNK_SIZE on paid plans.
+        const CHUNK_SIZE = BigInt(process.env.RPC_LOGS_CHUNK_SIZE || 10);
+        const CHUNK_DELAY_MS = Number(process.env.RPC_CATCHUP_DELAY_MS ?? 200);
         let chunkFrom = fromBlock;
 
         while (chunkFrom <= safeBlock) {
@@ -643,12 +687,15 @@ async function catchupLogs() {
 
             for (const [eventName, eventAbi] of Object.entries(EVENTS)) {
                 try {
-                    const logs = await client.getLogs({
-                        address: CONSENT_LEDGER_ADDRESS,
-                        event: eventAbi,
-                        fromBlock: chunkFrom,
-                        toBlock: chunkTo,
-                    });
+                    const logs = await withRpcRetry(
+                        () => client.getLogs({
+                            address: CONSENT_LEDGER_ADDRESS,
+                            event: eventAbi,
+                            fromBlock: chunkFrom,
+                            toBlock: chunkTo,
+                        }),
+                        { label: `ConsentSync.getLogs(${eventName})` },
+                    );
 
                     for (const eventLog of logs) {
                         await processLog(eventName, eventLog);
@@ -659,13 +706,19 @@ async function catchupLogs() {
             }
 
             try {
-                const block = await client.getBlock({ blockNumber: chunkTo });
+                const block = await withRpcRetry(
+                    () => client.getBlock({ blockNumber: chunkTo }),
+                    { label: 'ConsentSync.getBlock' },
+                );
                 await updateSyncState(chunkTo, block.hash);
             } catch {
                 await updateSyncState(chunkTo, null);
             }
 
             chunkFrom = chunkTo + 1n;
+            if (CHUNK_DELAY_MS > 0 && chunkFrom <= safeBlock) {
+                await new Promise((resolve) => setTimeout(resolve, CHUNK_DELAY_MS));
+            }
         }
 
         log.info('Catchup complete', { syncedToBlock: safeBlock });
@@ -681,12 +734,16 @@ function startRealtimeWatch() {
     }
 
     const client = getPublicClient();
+    // Throttle realtime polling to avoid Alchemy free-tier 429. See
+    // eventSync.service.js for rationale.
+    const POLL_MS = Number(process.env.RPC_WATCH_POLL_MS ?? 15_000);
 
     for (const [eventName, eventAbi] of Object.entries(EVENTS)) {
         try {
             const unwatch = client.watchContractEvent({
                 address: CONSENT_LEDGER_ADDRESS,
                 abi: [eventAbi],
+                pollingInterval: POLL_MS,
                 onLogs: async (logs) => {
                     for (const logEntry of logs) {
                         log.info(`Realtime ${eventName}`, { blockNumber: logEntry.blockNumber });

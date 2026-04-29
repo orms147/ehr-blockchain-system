@@ -37,7 +37,9 @@ const resolveWeb3AuthRedirect = (): string => {
 const chainConfig = {
   chainNamespace: 'eip155' as const,
   chainId: ARBITRUM_SEPOLIA_CHAIN_ID,
-  rpcTarget: 'https://sepolia-rollup.arbitrum.io/rpc',
+  // Prefer private RPC when set — Web3Auth periodically polls eth_blockNumber
+  // / eth_chainId during init. Public RPC gets rate-limited under heavy use.
+  rpcTarget: process.env.EXPO_PUBLIC_RPC_URL || 'https://sepolia-rollup.arbitrum.io/rpc',
   displayName: 'Arbitrum Sepolia',
   blockExplorerUrl: 'https://sepolia.arbiscan.io',
   ticker: 'ETH',

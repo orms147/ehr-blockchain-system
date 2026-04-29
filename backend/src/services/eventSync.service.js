@@ -6,6 +6,7 @@ import { arbitrumSepolia } from 'viem/chains';
 import prisma from '../config/database.js';
 import { emitToUser, getIO } from './socket.service.js';
 import { createLogger } from '../utils/logger.js';
+import { withRpcRetry } from '../utils/rpcRetry.js';
 
 const log = createLogger('EventSync');
 
@@ -538,10 +539,29 @@ async function catchupLogs() {
         const syncState = await getSyncState();
         const currentBlock = await client.getBlockNumber();
         const safeBlock = currentBlock - BigInt(REORG_SAFETY_BLOCKS);
-        const fromBlock = syncState.lastSyncedBlock + 1n;
+        let fromBlock = syncState.lastSyncedBlock + 1n;
 
         if (fromBlock > safeBlock) {
             return;
+        }
+
+        // Bail out of multi-day catchups on free-tier RPC. Each 10-block
+        // chunk costs 7 getLogs + 1 getBlock = 8 calls; 290k-block catchup
+        // would take ~96 minutes and DOS the rate limit. If the gap exceeds
+        // RPC_CATCHUP_MAX_BLOCKS (default 5_000 = ~20 min of Arbitrum),
+        // jump ahead and only sync the recent window. Older state is still
+        // accurate on-chain — we just skip the DB cache sync for that span.
+        const MAX_BLOCKS = BigInt(process.env.RPC_CATCHUP_MAX_BLOCKS || 5000);
+        if (safeBlock - fromBlock > MAX_BLOCKS) {
+            const skipTo = safeBlock - MAX_BLOCKS;
+            log.warn('Catchup gap too large, skipping ahead', {
+                originalFrom: fromBlock,
+                skipTo,
+                gap: safeBlock - fromBlock,
+                max: MAX_BLOCKS,
+            });
+            await updateSyncState(skipTo, null);
+            fromBlock = skipTo + 1n;
         }
 
         log.info('Catching up', { fromBlock, toBlock: safeBlock });
@@ -564,20 +584,36 @@ async function catchupLogs() {
             }
         }
 
-        const CHUNK_SIZE = 10000n;
+        // Alchemy free tier caps eth_getLogs to a 10-block range. Paid tiers
+        // and most other RPC providers allow much larger windows. Override
+        // via RPC_LOGS_CHUNK_SIZE in .env when on a paid plan to speed up
+        // catch-up after long downtime.
+        const CHUNK_SIZE = BigInt(process.env.RPC_LOGS_CHUNK_SIZE || 10);
         let chunkFrom = fromBlock;
+
+        // Small delay between chunks to spread the load and avoid Alchemy
+        // free-tier 300 CU/sec ceiling. Override via RPC_CATCHUP_DELAY_MS for
+        // paid plans (set to 0 for no throttle).
+        const CHUNK_DELAY_MS = Number(process.env.RPC_CATCHUP_DELAY_MS ?? 200);
 
         while (chunkFrom <= safeBlock) {
             const chunkTo = chunkFrom + CHUNK_SIZE - 1n > safeBlock ? safeBlock : chunkFrom + CHUNK_SIZE - 1n;
 
             for (const [eventName, eventAbi] of Object.entries(EVENTS)) {
                 try {
-                    const logs = await client.getLogs({
-                        address: ACCESS_CONTROL_ADDRESS,
-                        event: eventAbi,
-                        fromBlock: chunkFrom,
-                        toBlock: chunkTo,
-                    });
+                    // withRpcRetry: backoff on 429 / network blip. Without
+                    // this, a single 429 silently dropped the chunk's events
+                    // — they were never reprocessed because lastSyncedBlock
+                    // got bumped past them at the bottom of the loop.
+                    const logs = await withRpcRetry(
+                        () => client.getLogs({
+                            address: ACCESS_CONTROL_ADDRESS,
+                            event: eventAbi,
+                            fromBlock: chunkFrom,
+                            toBlock: chunkTo,
+                        }),
+                        { label: `EventSync.getLogs(${eventName})` },
+                    );
 
                     for (const eventLog of logs) {
                         await processLog(eventName, eventLog);
@@ -588,13 +624,19 @@ async function catchupLogs() {
             }
 
             try {
-                const block = await client.getBlock({ blockNumber: chunkTo });
+                const block = await withRpcRetry(
+                    () => client.getBlock({ blockNumber: chunkTo }),
+                    { label: 'EventSync.getBlock' },
+                );
                 await updateSyncState(chunkTo, block.hash);
             } catch {
                 await updateSyncState(chunkTo, null);
             }
 
             chunkFrom = chunkTo + 1n;
+            if (CHUNK_DELAY_MS > 0 && chunkFrom <= safeBlock) {
+                await new Promise((resolve) => setTimeout(resolve, CHUNK_DELAY_MS));
+            }
         }
 
         log.info('Catchup complete', { syncedToBlock: safeBlock });
@@ -613,11 +655,18 @@ function startRealtimeWatch() {
 
     const client = getPublicClient();
 
+    // Default viem pollingInterval is 4s. With 16 watchers across 3 services
+    // each calling eth_getFilterChanges every 4s, free-tier RPC saturates fast.
+    // 15s spreads the load (~1 poll/sec total across all watchers) and is
+    // still snappy enough for UX. Override via RPC_WATCH_POLL_MS on paid plans.
+    const POLL_MS = Number(process.env.RPC_WATCH_POLL_MS ?? 15_000);
+
     for (const [eventName, eventAbi] of Object.entries(EVENTS)) {
         try {
             const unwatch = client.watchContractEvent({
                 address: ACCESS_CONTROL_ADDRESS,
                 abi: [eventAbi],
+                pollingInterval: POLL_MS,
                 onLogs: async (logs) => {
                     for (const eventLog of logs) {
                         log.info(`Realtime ${eventName}`, { blockNumber: eventLog.blockNumber });

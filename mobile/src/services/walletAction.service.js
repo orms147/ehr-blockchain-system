@@ -3,7 +3,10 @@ import { createWalletClient, http } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { arbitrumSepolia } from 'viem/chains';
 
-const ARBITRUM_SEPOLIA_RPC = 'https://sepolia-rollup.arbitrum.io/rpc';
+// Public Arbitrum Sepolia RPC gets rate-limited (HTTP 429) fast under
+// heavy testing. Prefer EXPO_PUBLIC_RPC_URL (private endpoint, e.g. Alchemy)
+// when set; fall back to public for local dev convenience.
+const ARBITRUM_SEPOLIA_RPC = process.env.EXPO_PUBLIC_RPC_URL || 'https://sepolia-rollup.arbitrum.io/rpc';
 const SIGN_RETRY_COUNT = 1;
 const INIT_TIMEOUT_MS = 15000;
 const LOGIN_TIMEOUT_MS = 90000;
@@ -39,6 +42,15 @@ function mapWalletError(error, fallbackMessage) {
 
     if (raw.includes('user rejected') || raw.includes('user canceled') || raw.includes('cancelled')) {
         return 'Bạn đã huỷ thao tác ký. Vui lòng thử lại.';
+    }
+
+    // RPC rate limit (Alchemy free tier 300 CU/sec).
+    if (error?.status === 429 || raw.includes('429') || raw.includes('too many requests') || raw.includes('rate limit')) {
+        return 'Hệ thống blockchain đang quá tải. Vui lòng thử lại sau vài giây.';
+    }
+
+    if (raw.includes('upgrade to payg') || raw.includes('block range')) {
+        return 'Yêu cầu RPC vượt giới hạn quota free. Liên hệ admin để nâng cấp.';
     }
 
     if (raw.includes('session') || raw.includes('provider') || raw.includes('not logged in') || raw.includes('walletconnect')) {
@@ -211,6 +223,13 @@ async function getWalletContext() {
     return ctx;
 }
 
+function isRetryableSignError(error) {
+    const raw = (error?.message || '').toLowerCase();
+    if (error?.status === 429 || error?.cause?.status === 429) return true;
+    return raw.includes('timeout') || raw.includes('network') || raw.includes('rpc')
+        || raw.includes('429') || raw.includes('too many requests') || raw.includes('rate limit');
+}
+
 async function signMessage(walletClient, message) {
     if (!walletClient) {
         throw new Error('Không tìm thấy wallet client để ký dữ liệu.');
@@ -221,10 +240,7 @@ async function signMessage(walletClient, message) {
             () => walletClient.signMessage({ message }),
             {
                 retries: SIGN_RETRY_COUNT,
-                shouldRetry: (error) => {
-                    const raw = (error?.message || '').toLowerCase();
-                    return raw.includes('timeout') || raw.includes('network') || raw.includes('rpc');
-                },
+                shouldRetry: isRetryableSignError,
             }
         );
     } catch (error) {
@@ -242,10 +258,7 @@ async function signTypedData(walletClient, typedDataPayload) {
             () => walletClient.signTypedData(typedDataPayload),
             {
                 retries: SIGN_RETRY_COUNT,
-                shouldRetry: (error) => {
-                    const raw = (error?.message || '').toLowerCase();
-                    return raw.includes('timeout') || raw.includes('network') || raw.includes('rpc');
-                },
+                shouldRetry: isRetryableSignError,
             }
         );
     } catch (error) {

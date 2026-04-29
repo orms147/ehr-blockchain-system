@@ -6,10 +6,20 @@ import { arbitrumSepolia } from 'viem/chains';
 import prisma from '../config/database.js';
 import { emitToUser, getIO } from './socket.service.js';
 import { createLogger } from '../utils/logger.js';
+import { withRpcRetry } from '../utils/rpcRetry.js';
 
 const log = createLogger('RecordSync');
 
 const RECORD_REGISTRY_ADDRESS = process.env.RECORD_REGISTRY_ADDRESS;
+// When doctors create records via DoctorUpdate.addRecordByDoctor (6-arg wrapper),
+// RecordRegistry sees msg.sender = DoctorUpdate contract, so Record.createdBy
+// on-chain is the contract address. That's useless for backend business logic
+// (isCreator checks) — the real creator is the doctor's wallet, captured by
+// /api/records/save-only from the JWT. Skip the on-chain value when it points
+// to the DoctorUpdate contract and fall back to the DB value instead.
+const DOCTOR_UPDATE_ADDRESS = typeof process.env.DOCTOR_UPDATE_ADDRESS === 'string'
+    ? process.env.DOCTOR_UPDATE_ADDRESS.toLowerCase()
+    : null;
 const RPC_URL = process.env.RPC_URL || 'https://sepolia-rollup.arbitrum.io/rpc';
 const CATCHUP_INTERVAL_MS = 5 * 60 * 1000;
 const REORG_SAFETY_BLOCKS = 5;
@@ -195,7 +205,11 @@ async function hydrateRecordFromChain(cidHash, options = {}, visited = new Set()
         ?? normalizeAddress(options.fallbackOwner)
         ?? existing?.ownerAddress
         ?? null;
-    const createdBy = onChainRecord?.createdBy
+    const onChainCreatedBy = onChainRecord?.createdBy;
+    const createdByIsContract = !!onChainCreatedBy
+        && !!DOCTOR_UPDATE_ADDRESS
+        && onChainCreatedBy === DOCTOR_UPDATE_ADDRESS;
+    const createdBy = (createdByIsContract ? null : onChainCreatedBy)
         ?? normalizeAddress(options.fallbackCreatedBy)
         ?? existing?.createdBy
         ?? ownerAddress;
@@ -455,10 +469,24 @@ async function catchupLogs() {
         const syncState = await getSyncState();
         const currentBlock = await client.getBlockNumber();
         const safeBlock = currentBlock - BigInt(REORG_SAFETY_BLOCKS);
-        const fromBlock = syncState.lastSyncedBlock + 1n;
+        let fromBlock = syncState.lastSyncedBlock + 1n;
 
         if (fromBlock > safeBlock) {
             return;
+        }
+
+        // Skip ahead on huge catchups (see eventSync.service.js for rationale).
+        const MAX_BLOCKS = BigInt(process.env.RPC_CATCHUP_MAX_BLOCKS || 5000);
+        if (safeBlock - fromBlock > MAX_BLOCKS) {
+            const skipTo = safeBlock - MAX_BLOCKS;
+            log.warn('Catchup gap too large, skipping ahead', {
+                originalFrom: fromBlock,
+                skipTo,
+                gap: safeBlock - fromBlock,
+                max: MAX_BLOCKS,
+            });
+            await updateSyncState(skipTo, null);
+            fromBlock = skipTo + 1n;
         }
 
         log.info('Catching up', { fromBlock, toBlock: safeBlock });
@@ -482,7 +510,10 @@ async function catchupLogs() {
             }
         }
 
-        const CHUNK_SIZE = 10000n;
+        // Alchemy free tier caps eth_getLogs to a 10-block range; override via
+        // RPC_LOGS_CHUNK_SIZE on paid plans.
+        const CHUNK_SIZE = BigInt(process.env.RPC_LOGS_CHUNK_SIZE || 10);
+        const CHUNK_DELAY_MS = Number(process.env.RPC_CATCHUP_DELAY_MS ?? 200);
         let chunkFrom = fromBlock;
 
         while (chunkFrom <= safeBlock) {
@@ -490,12 +521,15 @@ async function catchupLogs() {
 
             for (const [eventName, eventAbi] of Object.entries(EVENTS)) {
                 try {
-                    const logs = await client.getLogs({
-                        address: RECORD_REGISTRY_ADDRESS,
-                        event: eventAbi,
-                        fromBlock: chunkFrom,
-                        toBlock: chunkTo,
-                    });
+                    const logs = await withRpcRetry(
+                        () => client.getLogs({
+                            address: RECORD_REGISTRY_ADDRESS,
+                            event: eventAbi,
+                            fromBlock: chunkFrom,
+                            toBlock: chunkTo,
+                        }),
+                        { label: `RecordSync.getLogs(${eventName})` },
+                    );
 
                     for (const eventLog of logs) {
                         await processLog(eventName, eventLog);
@@ -506,13 +540,19 @@ async function catchupLogs() {
             }
 
             try {
-                const block = await client.getBlock({ blockNumber: chunkTo });
+                const block = await withRpcRetry(
+                    () => client.getBlock({ blockNumber: chunkTo }),
+                    { label: 'RecordSync.getBlock' },
+                );
                 await updateSyncState(chunkTo, block.hash);
             } catch {
                 await updateSyncState(chunkTo, null);
             }
 
             chunkFrom = chunkTo + 1n;
+            if (CHUNK_DELAY_MS > 0 && chunkFrom <= safeBlock) {
+                await new Promise((resolve) => setTimeout(resolve, CHUNK_DELAY_MS));
+            }
         }
 
         log.info('Catchup complete', { syncedToBlock: safeBlock });
@@ -528,12 +568,16 @@ function startRealtimeWatch() {
     }
 
     const client = getPublicClient();
+    // Throttle realtime polling to avoid Alchemy free-tier 429. See
+    // eventSync.service.js for rationale.
+    const POLL_MS = Number(process.env.RPC_WATCH_POLL_MS ?? 15_000);
 
     for (const [eventName, eventAbi] of Object.entries(EVENTS)) {
         try {
             const unwatch = client.watchContractEvent({
                 address: RECORD_REGISTRY_ADDRESS,
                 abi: [eventAbi],
+                pollingInterval: POLL_MS,
                 onLogs: async (logs) => {
                     for (const logEntry of logs) {
                         log.info(`Realtime ${eventName}`, { blockNumber: logEntry.blockNumber });
