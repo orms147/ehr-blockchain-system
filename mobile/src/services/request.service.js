@@ -26,8 +26,13 @@ export const requestService = {
         return api.get(`/api/requests/${requestId}/approval-message`);
     },
 
-    // For patients: Approve with signature + encrypted key
-    async approveWithSignature(requestId, signature, deadline, encryptedKeyPayload = null, cidHash = null, senderPublicKey = null) {
+    // For patients: Approve with signature + encrypted key.
+    // cascadePayloads (S11.D, 2026-04-22): pre-computed payloads for OTHER
+    // versions in the chain, staged on AccessRequest and applied by the
+    // backend at mark-claimed time. Avoids updating ancestor KeyShares before
+    // doctor's on-chain consent is minted.
+    // Shape: [{ cidHash, encryptedPayload, senderPublicKey }]
+    async approveWithSignature(requestId, signature, deadline, encryptedKeyPayload = null, cidHash = null, senderPublicKey = null, cascadePayloads = null) {
         return api.post('/api/requests/approve-with-sig', {
             requestId,
             signature,
@@ -35,6 +40,7 @@ export const requestService = {
             encryptedKeyPayload,
             cidHash,
             senderPublicKey,
+            cascadePayloads,
         });
     },
 

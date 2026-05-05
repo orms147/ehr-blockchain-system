@@ -7,7 +7,7 @@ import { signDelegationPermit, getDeadline } from '../utils/eip712';
 import { CONSENT_LEDGER_ABI } from '../abi/contractABI';
 
 const CONSENT_LEDGER_ADDRESS = process.env.EXPO_PUBLIC_CONSENT_LEDGER_ADDRESS;
-const ARBITRUM_SEPOLIA_RPC = 'https://sepolia-rollup.arbitrum.io/rpc';
+const ARBITRUM_SEPOLIA_RPC = process.env.EXPO_PUBLIC_RPC_URL || 'https://sepolia-rollup.arbitrum.io/rpc';
 
 /**
  * Patient delegation service (CHAIN topology).
