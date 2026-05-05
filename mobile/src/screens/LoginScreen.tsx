@@ -1,12 +1,16 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
     ActivityIndicator,
     Alert,
     Dimensions,
+    KeyboardAvoidingView,
+    Modal,
+    Platform,
     Pressable,
     ScrollView,
     StyleSheet,
     Text,
+    TextInput,
     TouchableOpacity,
     View,
 } from 'react-native';
@@ -175,6 +179,56 @@ export default function LoginScreen({ navigation }: any) {
         throw lastError;
     };
 
+    // Cross-platform input modal for passwordless login_hint. Alert.prompt is
+    // iOS-only; Android needs a real Modal. We resolve the promise via the
+    // modal's confirm/cancel buttons. Web3Auth requires login_hint upfront for
+    // SMS — without it the hosted page errors "Missing login_hint for web3auth
+    // passwordless login". E.164 format (+84xxxxxxxxx); we auto-prepend +84
+    // for Vietnam numbers entered as 0xxx.
+    const [hintModalProvider, setHintModalProvider] = useState<ProviderKey | null>(null);
+    const [hintInput, setHintInput] = useState('');
+    const hintResolverRef = useRef<((value: string | null) => void) | null>(null);
+
+    const promptForLoginHint = (provider: ProviderKey): Promise<string | null> => {
+        return new Promise((resolve) => {
+            hintResolverRef.current = resolve;
+            setHintInput('');
+            setHintModalProvider(provider);
+        });
+    };
+
+    const closeHintModal = (value: string | null) => {
+        const resolver = hintResolverRef.current;
+        hintResolverRef.current = null;
+        setHintModalProvider(null);
+        setHintInput('');
+        resolver?.(value);
+    };
+
+    const handleHintConfirm = () => {
+        const provider = hintModalProvider;
+        const raw = hintInput.trim();
+        if (!provider || !raw) {
+            closeHintModal(null);
+            return;
+        }
+        if (provider === 'sms_passwordless') {
+            let phone = raw.replace(/[\s-]/g, '');
+            if (/^0\d{8,10}$/.test(phone)) phone = '+84' + phone.slice(1);
+            if (!/^\+\d{8,15}$/.test(phone)) {
+                Alert.alert('Số điện thoại không hợp lệ', 'Hãy nhập theo định dạng quốc tế, ví dụ +84901234567.');
+                return;
+            }
+            closeHintModal(phone);
+        } else {
+            if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(raw)) {
+                Alert.alert('Email không hợp lệ', 'Hãy nhập email đúng định dạng.');
+                return;
+            }
+            closeHintModal(raw);
+        }
+    };
+
     const handleWeb3Login = async (providerKey?: ProviderKey) => {
         const providerToUse = providerKey || selectedProvider;
 
@@ -190,12 +244,24 @@ export default function LoginScreen({ navigation }: any) {
             return;
         }
 
+        // Passwordless flows need login_hint (phone for SMS, email for email).
+        // Email is accepted even without hint (Web3Auth shows form), but SMS REQUIRES it.
+        let loginHint: string | undefined;
+        if (providerToUse === 'sms_passwordless' || providerToUse === 'email_passwordless') {
+            const hint = await promptForLoginHint(providerToUse);
+            if (!hint) return; // user cancelled or invalid input
+            loginHint = hint;
+        }
+
         try {
             setLoading(true);
             setSelectedProvider(providerToUse);
 
             await walletActionService.ensureWeb3AuthReady();
-            const { walletClient, address } = await walletActionService.loginWithWeb3Auth(providerToUse);
+            const { walletClient, address } = await walletActionService.loginWithWeb3Auth(
+                providerToUse,
+                loginHint ? { loginHint } : undefined
+            );
 
             await runAuthStepWithRetry(() => authService.ping(), 1);
 
@@ -455,6 +521,55 @@ export default function LoginScreen({ navigation }: any) {
                     </Animated.View>
                 </ScrollView>
             </SafeAreaView>
+
+            {/* Passwordless login_hint input modal (cross-platform Alert.prompt replacement) */}
+            <Modal
+                visible={hintModalProvider !== null}
+                transparent
+                animationType="fade"
+                onRequestClose={() => closeHintModal(null)}
+            >
+                <KeyboardAvoidingView
+                    behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+                    style={styles.hintModalBackdrop}
+                >
+                    <View style={styles.hintModalCard}>
+                        <Text style={styles.hintModalTitle}>
+                            {hintModalProvider === 'sms_passwordless' ? 'Đăng nhập bằng số điện thoại' : 'Đăng nhập bằng email'}
+                        </Text>
+                        <Text style={styles.hintModalSubtitle}>
+                            {hintModalProvider === 'sms_passwordless'
+                                ? 'Nhập số điện thoại theo định dạng quốc tế. Số 0xxx sẽ được tự động đổi thành +84xxx.'
+                                : 'Mã xác thực sẽ được gửi đến email này.'}
+                        </Text>
+                        <TextInput
+                            style={styles.hintModalInput}
+                            value={hintInput}
+                            onChangeText={setHintInput}
+                            keyboardType={hintModalProvider === 'sms_passwordless' ? 'phone-pad' : 'email-address'}
+                            autoCapitalize="none"
+                            autoCorrect={false}
+                            placeholder={hintModalProvider === 'sms_passwordless' ? '+84901234567' : 'name@example.com'}
+                            placeholderTextColor={EHR_ON_SURFACE_VARIANT}
+                            autoFocus
+                        />
+                        <View style={styles.hintModalActions}>
+                            <TouchableOpacity
+                                style={[styles.hintModalBtn, styles.hintModalBtnGhost]}
+                                onPress={() => closeHintModal(null)}
+                            >
+                                <Text style={styles.hintModalBtnGhostText}>Huỷ</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={[styles.hintModalBtn, styles.hintModalBtnPrimary]}
+                                onPress={handleHintConfirm}
+                            >
+                                <Text style={styles.hintModalBtnPrimaryText}>Tiếp tục</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </KeyboardAvoidingView>
+            </Modal>
         </View>
     );
 }
@@ -734,5 +849,72 @@ const styles = StyleSheet.create({
         color: EHR_ON_SURFACE_VARIANT,
         fontWeight: '600',
         letterSpacing: 0.2,
+    },
+
+    /* Login hint modal (passwordless phone/email input) */
+    hintModalBackdrop: {
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.45)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 24,
+    },
+    hintModalCard: {
+        width: '100%',
+        maxWidth: 380,
+        backgroundColor: EHR_SURFACE,
+        borderRadius: 16,
+        padding: 20,
+        gap: 12,
+    },
+    hintModalTitle: {
+        fontSize: 16,
+        fontWeight: '700',
+        color: EHR_ON_SURFACE,
+    },
+    hintModalSubtitle: {
+        fontSize: 13,
+        color: EHR_ON_SURFACE_VARIANT,
+        lineHeight: 18,
+    },
+    hintModalInput: {
+        borderWidth: 1,
+        borderColor: EHR_OUTLINE_VARIANT,
+        borderRadius: 10,
+        paddingHorizontal: 12,
+        paddingVertical: 10,
+        fontSize: 15,
+        color: EHR_ON_SURFACE,
+        backgroundColor: EHR_SURFACE_LOW,
+    },
+    hintModalActions: {
+        flexDirection: 'row',
+        gap: 10,
+        marginTop: 4,
+    },
+    hintModalBtn: {
+        flex: 1,
+        paddingVertical: 12,
+        borderRadius: 10,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    hintModalBtnGhost: {
+        backgroundColor: EHR_SURFACE_LOW,
+        borderWidth: 1,
+        borderColor: EHR_OUTLINE_VARIANT,
+    },
+    hintModalBtnGhostText: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: EHR_ON_SURFACE,
+    },
+    hintModalBtnPrimary: {
+        backgroundColor: EHR_PRIMARY,
+    },
+    hintModalBtnPrimaryText: {
+        fontSize: 14,
+        fontWeight: '700',
+        color: '#FFFFFF',
     },
 });

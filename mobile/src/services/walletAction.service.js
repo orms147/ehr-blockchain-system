@@ -266,15 +266,25 @@ async function signTypedData(walletClient, typedDataPayload) {
     }
 }
 
-async function loginWithWeb3Auth(loginProvider = 'google') {
+/**
+ * Login via Web3Auth.
+ * @param {string} loginProvider - 'google' | 'apple' | 'twitter' | 'facebook' | 'discord' | 'email_passwordless' | 'sms_passwordless'
+ * @param {object} [options]
+ * @param {string} [options.loginHint] - Required for sms_passwordless (phone in E.164 format e.g. +84901234567)
+ *                                       and recommended for email_passwordless (skips Web3Auth's email input form).
+ *                                       Web3Auth rejects sms_passwordless without it: "Missing login_hint for web3auth passwordless login".
+ */
+async function loginWithWeb3Auth(loginProvider = 'google', options = {}) {
     const web3authInstance = await ensureWeb3AuthReady();
+    const { loginHint } = options;
 
     try {
+        const loginParams = { loginProvider, redirectUrl };
+        if (loginHint) {
+            loginParams.extraLoginOptions = { login_hint: loginHint };
+        }
         await withTimeout(
-            web3authInstance.login({
-                loginProvider,
-                redirectUrl,
-            }),
+            web3authInstance.login(loginParams),
             LOGIN_TIMEOUT_MS,
             'Đăng nhập Web3Auth quá thời gian. Vui lòng thử lại.'
         );
