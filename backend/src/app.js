@@ -14,6 +14,7 @@ import relayerRoutes from './routes/relayer.routes.js';
 import requestRoutes from './routes/request.routes.js';
 import verificationRoutes from './routes/verification.routes.js';
 import emergencyRoutes from './routes/emergency.routes.js';
+import trustedContactRoutes from './routes/trustedContact.routes.js';
 import delegationRoutes from './routes/delegation.routes.js';
 import pushRoutes from './routes/push.routes.js';
 import orgRoutes from './routes/org.routes.js';
@@ -74,7 +75,8 @@ app.use('/api/access-logs', accessLogRoutes);
 app.use('/api/relayer', relayerRoutes);       // Gas sponsorship
 app.use('/api/requests', requestRoutes);       // Access requests
 app.use('/api/verification', verificationRoutes);  // Doctor verification
-app.use('/api/emergency', emergencyRoutes);    // Emergency access
+app.use('/api/emergency', emergencyRoutes);    // Emergency CCCD lookup (S18)
+app.use('/api/trusted-contacts', trustedContactRoutes); // Trusted Contact registry (S18)
 app.use('/api/delegation', delegationRoutes);  // Family delegation
 app.use('/api/push', pushRoutes);              // Expo push notifications
 app.use('/api/org', orgRoutes);                // Organization management
@@ -89,10 +91,10 @@ app.use(errorHandler);
 server.listen(PORT, () => {
     console.log(`🚀 Server running on port ${PORT}`);
     // S17 2026-04-30: zero RPC polling. All event sync via subgraph.
-    // subgraphSync covers: ConsentEvent, DelegationEvent, EmergencyEvent,
-    // DelegationAccessGrant, Doctor (verifiedAt → roleCache invalidate).
-    // recordRegistrySync handlers not migrated (save-only API is primary
-    // path for RecordMetadata writes).
+    // subgraphSync covers: ConsentEvent, DelegationEvent, DelegationAccessGrant,
+    // TrustedContactEvent (S18 2026-05-04, replaced EmergencyEvent), Doctor
+    // (verifiedAt → roleCache invalidate). recordRegistrySync handlers not
+    // migrated (save-only API is primary path for RecordMetadata writes).
     startSubgraphSync();
 });
 

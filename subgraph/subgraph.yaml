@@ -71,6 +71,7 @@ dataSources:
         - ConsentEvent
         - DelegationEvent
         - DelegationAccessGrant
+        - TrustedContactEvent
       abis:
         - name: ConsentLedger
           file: ./abis/ConsentLedger.json
@@ -79,14 +80,16 @@ dataSources:
           handler: handleConsentGranted
         - event: ConsentRevoked(indexed address,indexed address,indexed bytes32,uint40)
           handler: handleConsentRevoked
-        - event: EmergencyGranted(indexed address,indexed address,indexed bytes32,uint40)
-          handler: handleEmergencyGranted
         - event: DelegationGranted(indexed address,indexed address,uint40,bool)
           handler: handleDelegationGranted
         - event: DelegationRevoked(indexed address,indexed address)
           handler: handleDelegationRevoked
         - event: AccessGrantedViaDelegation(indexed address,indexed address,indexed address,bytes32)
           handler: handleAccessGrantedViaDelegation
+        - event: TrustedContactSet(indexed address,indexed address,string)
+          handler: handleTrustedContactSet
+        - event: TrustedContactRevoked(indexed address,indexed address)
+          handler: handleTrustedContactRevoked
 
   - kind: ethereum/contract
     name: AccessControl

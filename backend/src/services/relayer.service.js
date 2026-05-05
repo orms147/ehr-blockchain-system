@@ -594,6 +594,101 @@ export async function sponsorDelegateAuthority({
     return { txHash: hash, receipt };
 }
 
+// Relay a Trusted Contact registry mutation via ConsentLedger.setTrustedContactBySig.
+// Patient signs EIP-712 TrustedContactPermit off-chain; backend submits with
+// sponsor gas. Counts against the same 100/month pool because the action is
+// patient-initiated state mutation.
+//
+// active=true → designate, active=false → revoke. Same nonce slot as
+// ConsentPermit / DelegationPermit (single counter on `patient`).
+export async function sponsorSetTrustedContact({
+    patientAddress,
+    contactAddress,
+    label,
+    active,
+    deadline,
+    signature,
+}) {
+    ensureSponsorWalletConfigured();
+
+    const patient = patientAddress.toLowerCase();
+    const contact = contactAddress.toLowerCase();
+    await consumeQuota(patient, 'trustedContact');
+
+    let hash;
+    try {
+        const simulation = await publicClient.simulateContract({
+            account: sponsorAccount,
+            address: CONTRACTS.CONSENT_LEDGER,
+            abi: CONSENT_LEDGER_ABI,
+            functionName: 'setTrustedContactBySig',
+            args: [
+                patient,
+                contact,
+                label || '',
+                Boolean(active),
+                BigInt(deadline),
+                signature,
+            ],
+        });
+        hash = await walletClient.writeContract(simulation.request);
+    } catch (error) {
+        throw buildUploadError(error);
+    }
+
+    let receipt;
+    try {
+        receipt = await publicClient.waitForTransactionReceipt({ hash });
+    } catch (error) {
+        throw buildUploadError(error, hash);
+    }
+
+    await bumpSignatureCounter(patient);
+
+    // Eager DB cache write so the patient's UI sees the change before the
+    // subgraph catches up (typical lag 30-60s). Subgraph handler will re-upsert
+    // (idempotent on @@unique(patientAddress, contactAddress)).
+    try {
+        if (active) {
+            await prisma.trustedContact.upsert({
+                where: {
+                    patientAddress_contactAddress: { patientAddress: patient, contactAddress: contact },
+                },
+                update: {
+                    label: label || null,
+                    status: 'active',
+                    setTxHash: hash,
+                    setBlockNumber: receipt?.blockNumber ?? null,
+                    setAt: new Date(),
+                    revokedAt: null,
+                    revokedTxHash: null,
+                },
+                create: {
+                    patientAddress: patient,
+                    contactAddress: contact,
+                    label: label || null,
+                    status: 'active',
+                    setTxHash: hash,
+                    setBlockNumber: receipt?.blockNumber ?? null,
+                },
+            });
+        } else {
+            await prisma.trustedContact.updateMany({
+                where: { patientAddress: patient, contactAddress: contact, status: 'active' },
+                data: {
+                    status: 'revoked',
+                    revokedAt: new Date(),
+                    revokedTxHash: hash,
+                },
+            });
+        }
+    } catch (dbError) {
+        console.warn('TrustedContact eager DB write failed (event sync will retry):', dbError?.message);
+    }
+
+    return { txHash: hash, receipt };
+}
+
 export async function getGrantContext(patientAddress, granteeAddress) {
     const patient = patientAddress.toLowerCase();
     const grantee = granteeAddress.toLowerCase();
@@ -684,6 +779,7 @@ export default {
     sponsorRevoke,
     sponsorGrantConsent,
     sponsorDelegateAuthority,
+    sponsorSetTrustedContact,
     getGrantContext,
     archiveRequest,
     getArchivedRequests,

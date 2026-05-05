@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
+import { keccak256, toBytes } from 'viem';
 import prisma from '../config/database.js';
 import { authenticate } from '../middleware/auth.js';
 
@@ -54,6 +55,45 @@ router.get('/me', authenticate, async (req, res, next) => {
 
         res.json(user);
     } catch (error) {
+        next(error);
+    }
+});
+
+// PUT /api/profile/me/national-id — Opt-in to emergency CCCD lookup.
+// Stores keccak256(rawCccd) so doctor in ER can hash the patient's physical
+// CCCD card and look up the wallet address. Plaintext CCCD never leaves the
+// patient's device. Patient can clear by passing nationalId=null.
+const nationalIdSchema = z.object({
+    nationalId: z.string().regex(/^\d{9,12}$/, 'CCCD/CMND phải là 9-12 chữ số').nullable(),
+});
+router.put('/me/national-id', authenticate, async (req, res, next) => {
+    try {
+        const { nationalId } = nationalIdSchema.parse(req.body);
+
+        const nationalIdHash = nationalId
+            ? keccak256(toBytes(nationalId))
+            : null;
+
+        await prisma.user.update({
+            where: { walletAddress: req.user.walletAddress },
+            data: { nationalIdHash },
+        });
+
+        res.json({
+            success: true,
+            optedIn: nationalIdHash !== null,
+            message: nationalIdHash
+                ? 'Đã đăng ký mã định danh khẩn cấp. Bác sĩ cấp cứu có thể tra cứu địa chỉ ví của bạn qua CCCD.'
+                : 'Đã huỷ đăng ký mã định danh khẩn cấp.',
+        });
+    } catch (error) {
+        if (error?.code === 'P2002') {
+            // Unique constraint violation — another user already registered this CCCD hash.
+            return res.status(409).json({
+                code: 'NATIONAL_ID_TAKEN',
+                error: 'CCCD này đã được đăng ký bởi một người dùng khác. Nếu đây là CCCD của bạn, hãy huỷ ở tài khoản kia trước.',
+            });
+        }
         next(error);
     }
 });

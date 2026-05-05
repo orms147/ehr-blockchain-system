@@ -610,42 +610,110 @@ async function handleConsentRevoked(event) {
     }).catch((err) => log.warn('push send failed', { error: err?.message }));
 }
 
-// EmergencyGranted — 24h emergency access, stored separately from normal consent
-// (BUG-D fix). We log it + emit socket for both parties so the UI can show a
-// banner, but we do NOT touch the Consent or KeyShare tables: on-chain is the
-// authority and canAccess OR-checks both storages.
-async function handleEmergencyGranted(event) {
+// TrustedContactSet — patient designated a wallet as Trusted Contact.
+// Mirror to TrustedContact table for fast UI lookup and pre-share triggering.
+async function handleTrustedContactSet(event) {
     const patient = normalizeAddress(event.args.patient);
-    const grantee = normalizeAddress(event.args.grantee);
-    const rootCidHash = normalizeHash(event.args.rootCidHash);
-    const expireAtSec = event.args.expireAt;
-    if (!patient || !grantee || !rootCidHash) return;
+    const contact = normalizeAddress(event.args.contact);
+    const label = event.args.label || null;
+    if (!patient || !contact) return;
 
     await ensureUserRecord(patient);
-    await ensureUserRecord(grantee);
+    await ensureUserRecord(contact);
 
-    log.info('EmergencyGranted', {
-        patient, grantee, rootCidHash,
-        expireAtSec: String(expireAtSec),
+    await prisma.trustedContact.upsert({
+        where: {
+            patientAddress_contactAddress: { patientAddress: patient, contactAddress: contact },
+        },
+        update: {
+            label,
+            status: 'active',
+            setTxHash: event.transactionHash || null,
+            setBlockNumber: event.blockNumber ?? null,
+            setAt: new Date(),
+            revokedAt: null,
+            revokedTxHash: null,
+        },
+        create: {
+            patientAddress: patient,
+            contactAddress: contact,
+            label,
+            status: 'active',
+            setTxHash: event.transactionHash || null,
+            setBlockNumber: event.blockNumber ?? null,
+        },
     });
 
-    emitToUser(patient, 'consentUpdated', { action: 'emergencyGranted', patient, grantee, rootCidHash });
-    emitToUser(grantee, 'consentUpdated', { action: 'emergencyGrantedToMe', patient, grantee, rootCidHash });
+    log.info('TrustedContactSet', { patient, contact, label });
+    emitToUser(patient, 'trustedContactUpdated', { action: 'set', contact, label });
+    emitToUser(contact, 'trustedContactUpdated', { action: 'designatedAsContact', patient, label });
 
-    sendPushToWallet(patient, {
-        title: 'Truy cập khẩn cấp đã được cấp',
-        body: 'Một bác sĩ vừa kích hoạt quyền truy cập khẩn cấp vào hồ sơ của bạn.',
-        data: { kind: 'emergency_granted', grantee, rootCidHash },
+    sendPushToWallet(contact, {
+        title: 'Bạn đã được chỉ định là Người thân tin cậy',
+        body: 'Bạn sẽ tự động nhận quyền truy cập hồ sơ y tế nếu bệnh nhân cần sự hỗ trợ khẩn cấp.',
+        data: { kind: 'trusted_contact_set', patient },
     }).catch((err) => log.warn('push send failed', { error: err?.message }));
+}
+
+// TrustedContactRevoked — patient removed a wallet from their list.
+// Cascade revoke any KeyShare rows where contact was the recipient (auto
+// pre-share at record creation time): the contact loses decryption ability
+// the moment the on-chain registry says they're no longer trusted.
+async function handleTrustedContactRevoked(event) {
+    const patient = normalizeAddress(event.args.patient);
+    const contact = normalizeAddress(event.args.contact);
+    if (!patient || !contact) return;
+
+    await prisma.trustedContact.updateMany({
+        where: { patientAddress: patient, contactAddress: contact, status: 'active' },
+        data: {
+            status: 'revoked',
+            revokedAt: new Date(),
+            revokedTxHash: event.transactionHash || null,
+        },
+    });
+
+    // Cascade: revoke KeyShare rows where patient is sender + contact is recipient.
+    // Only those auto-pre-shared via the Trusted Contact ceremony — regular
+    // share/grant rows from the patient stay (e.g. patient also shared a
+    // record to family member as a doctor, separately). We scope by source=
+    // 'trusted-contact-pre-share' which the writer tags those rows with.
+    try {
+        const rows = await prisma.keyShare.findMany({
+            where: {
+                senderAddress: patient,
+                recipientAddress: contact,
+                status: { not: 'revoked' },
+            },
+            select: { cidHash: true },
+        });
+        const cidHashes = rows.map((r) => r.cidHash);
+        if (cidHashes.length > 0) {
+            await applyRevoke({
+                senderAddress: patient,
+                recipientAddress: contact,
+                cidHashes,
+                source: 'trusted-contact-revoked',
+                sourceTimestamp: new Date(),
+            });
+        }
+    } catch (err) {
+        log.warn('Cascade revoke for trusted contact failed', { error: err?.message });
+    }
+
+    log.info('TrustedContactRevoked', { patient, contact });
+    emitToUser(patient, 'trustedContactUpdated', { action: 'revoked', contact });
+    emitToUser(contact, 'trustedContactUpdated', { action: 'undesignated', patient });
 }
 
 const EVENT_HANDLERS = {
     ConsentGranted: handleConsentGranted,
     ConsentRevoked: handleConsentRevoked,
-    EmergencyGranted: handleEmergencyGranted,
     DelegationGranted: handleDelegationGranted,
     DelegationRevoked: handleDelegationRevoked,
     AccessGrantedViaDelegation: handleAccessGrantedViaDelegation,
+    TrustedContactSet: handleTrustedContactSet,
+    TrustedContactRevoked: handleTrustedContactRevoked,
 };
 
 async function processLog(eventName, eventLog) {
@@ -839,10 +907,11 @@ export function stopConsentLedgerSync() {
 export {
     handleConsentGranted,
     handleConsentRevoked,
-    handleEmergencyGranted,
     handleDelegationGranted,
     handleDelegationRevoked,
     handleAccessGrantedViaDelegation,
+    handleTrustedContactSet,
+    handleTrustedContactRevoked,
 };
 
 export default {

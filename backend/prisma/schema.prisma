@@ -70,6 +70,14 @@ model User {
   oauthProvider String? // google, twitter, facebook, etc.
   email         String? @unique
 
+  // Opt-in CCCD/CMND hash for emergency lookup. We store keccak256(rawCccd)
+  // — never the plaintext ID. Doctor in ER computes the same hash from the
+  // patient's physical card, queries the lookup endpoint, and gets the
+  // wallet address back. Patient sets this once via Settings → "Mã định danh
+  // khẩn cấp" with explicit consent. Skipping it leaves the user out of
+  // CCCD lookup entirely (Trusted Contact still works via QR scan).
+  nationalIdHash String? @unique @db.VarChar(66)
+
   // === Profile Metadata (Off-chain) ===
   fullName    String?   @db.VarChar(100)
   dateOfBirth DateTime?
@@ -310,32 +318,34 @@ model VerificationRequest {
   @@index([status])
 }
 
-// Emergency Access - for doctors to access patient records in emergencies
-model EmergencyAccess {
-  id             String  @id @default(uuid())
-  doctorAddress  String  @db.VarChar(42)
-  patientAddress String  @db.VarChar(42)
-  cidHash        String? @db.VarChar(66) // null = all records
+// Trusted Contact mirror of ConsentLedger.isTrustedContact registry.
+// Cache populated by subgraphSync via TrustedContactSet/TrustedContactRevoked
+// events — on-chain registry is the source of truth.
+//
+// Used by:
+//   - Mobile patient: Settings UI lists Trusted Contacts (label, status)
+//   - Mobile doctor: emergency lookup endpoint joins this with User to surface
+//     contact name + phone
+//   - Backend: pre-share trigger when patient creates a record (auto KeyShare
+//     write to every active Trusted Contact's pubkey, off-chain)
+//
+// status: 'active' | 'revoked'. Revoked rows kept for audit trail; queries
+// filter by status='active'.
+model TrustedContact {
+  id             String   @id @default(uuid())
+  patientAddress String   @db.VarChar(42)
+  contactAddress String   @db.VarChar(42)
+  label          String?  @db.VarChar(120)
+  status         String   @default("active") @db.VarChar(20)
+  setTxHash      String?  @db.VarChar(66)
+  setBlockNumber BigInt?
+  setAt          DateTime @default(now())
+  revokedTxHash  String?  @db.VarChar(66)
+  revokedAt      DateTime?
 
-  // Emergency details
-  reason        String // Why emergency access is needed
-  emergencyType String  @default("medical") // medical, accident, critical
-  location      String? // Hospital/location
-
-  // Status
-  status    String   @default("active") // active, expired, revoked
-  expiresAt DateTime // Auto-expire after 24-48h
-
-  // Audit trail
-  approvedBy String?   @db.VarChar(42) // Org admin who approved
-  revokedBy  String?   @db.VarChar(42) // Who revoked early
-  revokedAt  DateTime?
-
-  createdAt DateTime @default(now())
-
-  @@index([patientAddress])
-  @@index([doctorAddress])
-  @@index([status])
+  @@unique([patientAddress, contactAddress])
+  @@index([patientAddress, status])
+  @@index([contactAddress, status])
 }
 
 // Delegation - CHAIN topology mirror of ConsentLedger.delegations.

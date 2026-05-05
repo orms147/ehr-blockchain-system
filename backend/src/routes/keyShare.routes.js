@@ -64,6 +64,23 @@ const createKeyShareSchema = z.object({
     allowDelegate: z.boolean().optional().default(false), // For RecordDelegation
 });
 
+// Bulk pre-share to a Trusted Contact (S18 encryption ceremony, 2026-05-04).
+// When patient adds a Trusted Contact, mobile encrypts aesKey for the contact's
+// pubkey for every existing record and POSTs the batch here. Backend verifies
+// (a) sender (msg.user) owns each record and (b) recipient is currently an
+// active Trusted Contact in the cache (subgraph mirror). Then writes one
+// KeyShare row per item via keyShareWriter.applyShare with
+// source='trusted-contact-pre-share' so the cascade revoke handler can target
+// these specifically.
+const bulkTrustedContactSchema = z.object({
+    recipientAddress: z.string().regex(/^0x[a-fA-F0-9]{40}$/),
+    senderPublicKey: z.string().min(1),
+    items: z.array(z.object({
+        cidHash: z.string().regex(/^0x[a-fA-F0-9]{64}$/),
+        encryptedPayload: z.string().min(1),
+    })).min(1).max(500),  // sanity cap; a patient with 500+ records is implausible
+});
+
 // POST /api/key-share - Share encrypted key with recipient
 router.post('/', authenticate, async (req, res, next) => {
     try {
@@ -337,6 +354,124 @@ router.post('/', authenticate, async (req, res, next) => {
         }).catch((err) => log.warn('push send failed', { error: err?.message }));
 
     } catch (error) {
+        next(error);
+    }
+});
+
+// POST /api/key-share/bulk-trusted-contact — encryption ceremony for a new
+// Trusted Contact. Sender (patient) submits one batch encrypting all their
+// records' AES keys for the contact's pubkey. Backend validates + writes one
+// KeyShare row per item via keyShareWriter.applyShare.
+router.post('/bulk-trusted-contact', authenticate, async (req, res, next) => {
+    try {
+        const { recipientAddress, senderPublicKey, items } = bulkTrustedContactSchema.parse(req.body);
+
+        const sender = req.user.walletAddress.toLowerCase();
+        const recipient = recipientAddress.toLowerCase();
+
+        if (sender === recipient) {
+            return res.status(400).json({
+                code: 'CONTACT_IS_SELF',
+                error: 'Không thể tự đặt mình làm Người thân tin cậy',
+            });
+        }
+
+        // Verify recipient is currently an active Trusted Contact of the sender.
+        // This is the auth gate — if the contact isn't on the patient's
+        // on-chain registry (subgraph cache), we refuse to pre-share.
+        const tc = await prisma.trustedContact.findUnique({
+            where: {
+                patientAddress_contactAddress: {
+                    patientAddress: sender,
+                    contactAddress: recipient,
+                },
+            },
+        });
+        if (!tc || tc.status !== 'active') {
+            return res.status(403).json({
+                code: 'NOT_A_TRUSTED_CONTACT',
+                error: 'Người nhận chưa được đăng ký làm Người thân tin cậy của bạn. Hãy thêm họ trước khi pre-share.',
+            });
+        }
+
+        // Verify every cidHash in the batch is owned (ownerAddress=sender) or
+        // created (createdBy=sender) by the patient. Doctor-authored records
+        // for a patient have ownerAddress=patient, so this single condition
+        // covers both create cases.
+        const cidHashes = items.map((i) => i.cidHash.toLowerCase());
+        const records = await prisma.recordMetadata.findMany({
+            where: { cidHash: { in: cidHashes } },
+            select: { cidHash: true, ownerAddress: true, createdBy: true },
+        });
+        const recordByCid = new Map(records.map((r) => [r.cidHash.toLowerCase(), r]));
+
+        const unowned = [];
+        for (const cid of cidHashes) {
+            const rec = recordByCid.get(cid);
+            if (!rec) {
+                unowned.push({ cidHash: cid, reason: 'RECORD_NOT_FOUND' });
+                continue;
+            }
+            const owns = rec.ownerAddress?.toLowerCase() === sender;
+            const created = rec.createdBy?.toLowerCase() === sender;
+            if (!owns && !created) {
+                unowned.push({ cidHash: cid, reason: 'NOT_OWNED' });
+            }
+        }
+        if (unowned.length > 0) {
+            return res.status(403).json({
+                code: 'BULK_AUTH_FAILED',
+                error: 'Một hoặc nhiều hồ sơ không thuộc quyền sở hữu của bạn.',
+                details: unowned,
+            });
+        }
+
+        // Write KeyShare rows. Idempotent on (cidHash, sender, recipient).
+        const sourceTimestamp = new Date();
+        let written = 0;
+        const failures = [];
+        for (const item of items) {
+            try {
+                await applyShare({
+                    cidHash: item.cidHash.toLowerCase(),
+                    senderAddress: sender,
+                    recipientAddress: recipient,
+                    encryptedPayload: item.encryptedPayload,
+                    senderPublicKey,
+                    status: 'claimed',  // Trusted Contact pre-share is auto-claimed
+                    expiresAt: null,    // FOREVER until the contact is revoked
+                    allowDelegate: true, // Trusted Contact can re-share to ER doctor
+                    source: 'trusted-contact-pre-share',
+                    sourceTimestamp,
+                });
+                written += 1;
+            } catch (err) {
+                log.warn('Bulk pre-share item failed', { cidHash: item.cidHash, error: err?.message });
+                failures.push({ cidHash: item.cidHash, error: err?.message });
+            }
+        }
+
+        log.info('Bulk pre-share complete', { sender, recipient, written, failures: failures.length });
+
+        emitToUser(recipient, 'trustedContactPreShareReceived', {
+            patient: sender,
+            count: written,
+        });
+
+        sendPushToWallet(recipient, {
+            title: 'Bạn đã nhận khoá hồ sơ',
+            body: `Bệnh nhân vừa chia sẻ ${written} hồ sơ y tế cho bạn với tư cách Người thân tin cậy.`,
+            data: { kind: 'trusted_contact_pre_share', patient: sender, count: written },
+        }).catch((e) => log.warn('push failed', { error: e?.message }));
+
+        res.json({
+            success: true,
+            written,
+            failed: failures.length,
+            failures,
+        });
+    } catch (error) {
+        log.error('bulk-trusted-contact failed', { error: error.message });
         next(error);
     }
 });

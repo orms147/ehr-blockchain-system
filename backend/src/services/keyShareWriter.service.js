@@ -40,6 +40,7 @@ const SHARE_SOURCES = new Set([
     'approve-with-sig',
     'mark-claimed',
     'grant-as-delegate',
+    'trusted-contact-pre-share',
 ]);
 
 const STATUS_FLIP_SOURCES = new Set([
@@ -52,6 +53,7 @@ const STATUS_FLIP_SOURCES = new Set([
 const REVOKE_SOURCES = new Set([
     'event-revoke',
     'revoke-endpoint',
+    'trusted-contact-revoked',
 ]);
 
 

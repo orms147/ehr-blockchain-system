@@ -2,16 +2,17 @@ import { BigInt } from "@graphprotocol/graph-ts";
 import {
   ConsentGranted,
   ConsentRevoked,
-  EmergencyGranted,
   DelegationGranted,
   DelegationRevoked,
   AccessGrantedViaDelegation,
+  TrustedContactSet,
+  TrustedContactRevoked,
 } from "../generated/ConsentLedger/ConsentLedger";
 import {
   ConsentEvent,
-  EmergencyEvent,
   DelegationEvent,
   DelegationAccessGrant,
+  TrustedContactEvent,
 } from "../generated/schema";
 
 function eventId(txHash: string, logIndex: BigInt): string {
@@ -44,13 +45,24 @@ export function handleConsentRevoked(event: ConsentRevoked): void {
   e.save();
 }
 
-export function handleEmergencyGranted(event: EmergencyGranted): void {
+export function handleTrustedContactSet(event: TrustedContactSet): void {
   let id = eventId(event.transaction.hash.toHexString(), event.logIndex);
-  let e = new EmergencyEvent(id);
+  let e = new TrustedContactEvent(id);
+  e.kind = "set";
   e.patient = event.params.patient;
-  e.grantee = event.params.grantee;
-  e.rootCidHash = event.params.rootCidHash;
-  e.expireAt = event.params.expireAt;
+  e.contact = event.params.contact;
+  e.label = event.params.label;
+  e.timestamp = event.block.timestamp;
+  e.txHash = event.transaction.hash;
+  e.save();
+}
+
+export function handleTrustedContactRevoked(event: TrustedContactRevoked): void {
+  let id = eventId(event.transaction.hash.toHexString(), event.logIndex);
+  let e = new TrustedContactEvent(id);
+  e.kind = "revoked";
+  e.patient = event.params.patient;
+  e.contact = event.params.contact;
   e.timestamp = event.block.timestamp;
   e.txHash = event.transaction.hash;
   e.save();

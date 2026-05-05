@@ -94,16 +94,17 @@ type ConsentEvent @entity(immutable: true) {
   txHash: Bytes!
 }
 
-# Emergency access events. Stored in separate contract storage from normal
-# Consent so a 24h emergency grant does NOT overwrite an existing long-term
-# consent (BUG-D fix). Indexer keeps them in a distinct entity so the admin /
-# audit UI can filter "tất cả emergency access gần đây".
-type EmergencyEvent @entity(immutable: true) {
+# TrustedContactEvent — patient designated or revoked a Trusted Contact via
+# ConsentLedger.setTrustedContact / setTrustedContactBySig. Replaces the old
+# EmergencyEvent (grantEmergencyAccess removed 2026-05-04, S18). Backend
+# subgraphSync polls this stream and mirrors to the TrustedContact table for
+# fast lookup + KeyShare cascade revoke when the patient un-trusts a contact.
+type TrustedContactEvent @entity(immutable: true) {
   id: ID!                        # txHash + logIndex
+  kind: String!                  # set | revoked
   patient: Bytes!
-  grantee: Bytes!
-  rootCidHash: Bytes!             # canonical root
-  expireAt: BigInt!
+  contact: Bytes!
+  label: String                  # null when kind == 'revoked'
   timestamp: BigInt!
   txHash: Bytes!
 }

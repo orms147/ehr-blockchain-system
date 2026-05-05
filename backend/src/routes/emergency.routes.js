@@ -1,186 +1,97 @@
-// Emergency Access Routes - API for emergency medical access
+// Emergency lookup routes (S18, 2026-05-04 — replaces grantEmergencyAccess flow).
+//
+// New emergency flow:
+//   1. Doctor scans patient's CCCD/CMND in ER → mobile hashes locally,
+//      submits to GET /api/emergency/lookup-by-cccd?cccdHash=0x... → receives
+//      patientAddress.
+//   2. Doctor reads patient's Trusted Contacts via
+//      GET /api/trusted-contacts/by-patient/:address (separate router).
+//   3. Doctor calls a contact who logs in to their own wallet and re-shares
+//      via per-record-delegate flow (existing share endpoints).
+//
+// We do NOT auto-create an EmergencyAccess row — the EmergencyAccess table
+// has been dropped. The on-chain emergency primitive (grantEmergencyAccess)
+// has also been dropped because it granted on-chain canAccess without an
+// off-chain key delivery path.
+//
+// Rate-limit the lookup endpoint to deter brute-forcing CCCD hashes (the
+// hash space is 2^256 but raw CCCDs are 9-12 digits ~ 10^12, brute-forceable
+// in seconds without a rate limit). Doctor must be authenticated AND
+// on-chain isVerifiedDoctor.
+
 import { Router } from 'express';
 import { z } from 'zod';
+import prisma from '../config/database.js';
 import { authenticate } from '../middleware/auth.js';
 import { requireOnChainRoles } from '../middleware/onChainRole.js';
-import prisma from '../config/database.js';
-import { publicClient, CONTRACT_ADDRESSES } from '../config/blockchain.js';
-import { ACCESS_CONTROL_ABI } from '../config/contractABI.js';
+import { createLogger } from '../utils/logger.js';
 
+const log = createLogger('EmergencyRoutes');
 const router = Router();
-const requireDoctorRole = requireOnChainRoles('doctor');
+const requireDoctorRole = requireOnChainRoles('verifiedDoctor');
 
-// Validation schemas
-const createEmergencySchema = z.object({
-    patientAddress: z.string().regex(/^0x[a-fA-F0-9]{40}$/),
-    cidHash: z.string().regex(/^0x[a-fA-F0-9]{64}$/).optional(),
-    reason: z.string().min(10).max(500),
-    emergencyType: z.enum(['medical', 'accident', 'critical']).default('medical'),
-    location: z.string().optional(),
-    durationHours: z.number().min(1).max(48).default(24),
-});
+// Naive in-memory rate limiter: 5 lookups per minute per doctor wallet.
+// Sufficient for the thesis demo. Production would back this with Redis +
+// IP + sliding window.
+const lookupBuckets = new Map(); // walletAddress -> { count, windowStart }
+const LOOKUP_WINDOW_MS = 60_000;
+const LOOKUP_MAX = 5;
 
-// POST /api/emergency/request - Doctor requests emergency access
-router.post('/request', authenticate, requireDoctorRole, async (req, res, next) => {
-    try {
-        const data = createEmergencySchema.parse(req.body);
-        const doctorAddress = req.user.walletAddress.toLowerCase();
-
-        // Check if doctor is verified (in production, enforce this strictly)
-        // For now, just create the emergency access
-
-        const expiresAt = new Date();
-        expiresAt.setHours(expiresAt.getHours() + data.durationHours);
-
-        const emergency = await prisma.emergencyAccess.create({
-            data: {
-                doctorAddress: doctorAddress,
-                patientAddress: data.patientAddress.toLowerCase(),
-                cidHash: data.cidHash || null,
-                reason: data.reason,
-                emergencyType: data.emergencyType,
-                location: data.location,
-                expiresAt: expiresAt,
-            },
-        });
-
-        res.json({
-            success: true,
-            message: 'Yêu cầu truy cập khẩn cấp đã được tạo.',
-            emergency: emergency,
-            // In practice, you might need org admin approval
-            // For now, auto-approve for verified doctors
-        });
-    } catch (error) {
-        next(error);
+function rateLimitOk(walletAddress) {
+    const now = Date.now();
+    const bucket = lookupBuckets.get(walletAddress);
+    if (!bucket || now - bucket.windowStart > LOOKUP_WINDOW_MS) {
+        lookupBuckets.set(walletAddress, { count: 1, windowStart: now });
+        return true;
     }
+    bucket.count += 1;
+    return bucket.count <= LOOKUP_MAX;
+}
+
+const lookupSchema = z.object({
+    cccdHash: z.string().regex(/^0x[a-fA-F0-9]{64}$/),
 });
 
-// GET /api/emergency/active - Get active emergency accesses for current doctor
-router.get('/active', authenticate, async (req, res, next) => {
+// GET /api/emergency/lookup-by-cccd?cccdHash=0x...
+router.get('/lookup-by-cccd', authenticate, requireDoctorRole, async (req, res, next) => {
     try {
-        const doctorAddress = req.user.walletAddress.toLowerCase();
+        const { cccdHash } = lookupSchema.parse(req.query);
 
-        const emergencies = await prisma.emergencyAccess.findMany({
-            where: {
-                doctorAddress: doctorAddress,
-                status: 'active',
-                expiresAt: { gt: new Date() },
-            },
-            orderBy: { createdAt: 'desc' },
-        });
-
-        res.json({
-            count: emergencies.length,
-            emergencies: emergencies,
-        });
-    } catch (error) {
-        next(error);
-    }
-});
-
-// GET /api/emergency/patient/:patientAddress - Get emergency accesses for a patient
-router.get('/patient/:patientAddress', authenticate, async (req, res, next) => {
-    try {
-        const { patientAddress } = req.params;
-        const userAddress = req.user.walletAddress.toLowerCase();
-
-        // Only the patient or accessing doctor can view
-        const emergencies = await prisma.emergencyAccess.findMany({
-            where: {
-                patientAddress: patientAddress.toLowerCase(),
-                OR: [
-                    { patientAddress: userAddress },
-                    { doctorAddress: userAddress },
-                ],
-            },
-            orderBy: { createdAt: 'desc' },
-        });
-
-        res.json({
-            count: emergencies.length,
-            emergencies: emergencies,
-        });
-    } catch (error) {
-        next(error);
-    }
-});
-
-// POST /api/emergency/revoke/:id - Revoke emergency access early
-router.post('/revoke/:id', authenticate, async (req, res, next) => {
-    try {
-        const { id } = req.params;
-        const userAddress = req.user.walletAddress.toLowerCase();
-
-        const emergency = await prisma.emergencyAccess.findUnique({
-            where: { id: id },
-        });
-
-        if (!emergency) {
-            return res.status(404).json({ error: 'Không tìm thấy quyền truy cập khẩn cấp' });
+        if (!rateLimitOk(req.user.walletAddress)) {
+            return res.status(429).json({
+                code: 'LOOKUP_RATE_LIMITED',
+                error: `Quá ${LOOKUP_MAX} lần tra cứu/phút. Vui lòng thử lại sau.`,
+            });
         }
 
-        // Only patient OR an active org admin can revoke. Org admins can override
-        // emergency access for governance reasons (e.g. doctor abusing the privilege).
-        // The on-chain canAccess walk is the source of truth for permissions; here
-        // we only check the AccessControl flag because the emergency table is purely
-        // off-chain for this DATN scope.
-        if (emergency.patientAddress !== userAddress) {
-            let isOrgAdmin = false;
-            try {
-                isOrgAdmin = await publicClient.readContract({
-                    address: CONTRACT_ADDRESSES.AccessControl,
-                    abi: ACCESS_CONTROL_ABI,
-                    functionName: 'isActiveOrgAdmin',
-                    args: [userAddress],
-                });
-            } catch (err) {
-                // If chain read fails, fall back to deny — fail closed
-                console.warn('isActiveOrgAdmin check failed', err?.message || err);
-            }
-            if (!isOrgAdmin) {
-                return res.status(403).json({ error: 'Không có quyền thu hồi' });
-            }
+        const user = await prisma.user.findUnique({
+            where: { nationalIdHash: cccdHash.toLowerCase() },
+            select: {
+                walletAddress: true,
+                fullName: true,
+                gender: true,
+                bloodType: true,        // critical info for ER
+                allergies: true,        // critical info for ER
+                avatarUrl: true,
+            },
+        });
+
+        if (!user) {
+            log.info('CCCD lookup miss', { doctor: req.user.walletAddress });
+            return res.status(404).json({
+                code: 'PATIENT_NOT_FOUND',
+                error: 'Không tìm thấy bệnh nhân với CCCD này. Bệnh nhân có thể chưa đăng ký Mã định danh khẩn cấp trong app.',
+            });
         }
 
-        await prisma.emergencyAccess.update({
-            where: { id: id },
-            data: {
-                status: 'revoked',
-                revokedBy: userAddress,
-                revokedAt: new Date(),
-            },
+        log.info('CCCD lookup hit', {
+            doctor: req.user.walletAddress,
+            patient: user.walletAddress,
         });
 
-        res.json({
-            success: true,
-            message: 'Đã thu hồi quyền truy cập khẩn cấp',
-        });
+        res.json(user);
     } catch (error) {
-        next(error);
-    }
-});
-
-// GET /api/emergency/check/:patientAddress - Check if doctor has emergency access to patient
-router.get('/check/:patientAddress', authenticate, async (req, res, next) => {
-    try {
-        const { patientAddress } = req.params;
-        const doctorAddress = req.user.walletAddress.toLowerCase();
-
-        const activeAccess = await prisma.emergencyAccess.findFirst({
-            where: {
-                doctorAddress: doctorAddress,
-                patientAddress: patientAddress.toLowerCase(),
-                status: 'active',
-                expiresAt: { gt: new Date() },
-            },
-        });
-
-        res.json({
-            hasAccess: !!activeAccess,
-            access: activeAccess,
-        });
-    } catch (error) {
+        log.error('lookup-by-cccd failed', { error: error.message });
         next(error);
     }
 });

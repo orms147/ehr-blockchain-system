@@ -323,6 +323,45 @@ router.post('/grant', authenticate, requirePatientRole, async (req, res, next) =
     }
 });
 
+// Validation schema for Trusted Contact registry (S18, 2026-05-04).
+// Patient signs an EIP-712 TrustedContactPermit off-chain, backend relays
+// setTrustedContactBySig. label is optional ("Vợ", "Con trai"...) and stored
+// on-chain — keep short, will appear in events.
+const trustedContactSchema = z.object({
+    contactAddress: z.string().regex(/^0x[a-fA-F0-9]{40}$/),
+    label: z.string().max(120).optional().default(''),
+    active: z.boolean(),                           // true = designate, false = revoke
+    deadline: z.number().int().positive(),
+    signature: z.string().regex(/^0x[a-fA-F0-9]+$/),
+});
+
+// POST /api/relayer/trusted-contact
+router.post('/trusted-contact', authenticate, requirePatientRole, async (req, res, next) => {
+    try {
+        const data = trustedContactSchema.parse(req.body);
+
+        const result = await relayerService.sponsorSetTrustedContact({
+            patientAddress: req.user.walletAddress,
+            contactAddress: data.contactAddress,
+            label: data.label,
+            active: data.active,
+            deadline: data.deadline,
+            signature: data.signature,
+        });
+
+        res.json({
+            success: true,
+            message: data.active
+                ? 'Đã thêm Người thân tin cậy thành công'
+                : 'Đã huỷ Người thân tin cậy thành công',
+            txHash: result.txHash,
+        });
+    } catch (error) {
+        log.error('trusted-contact failed', { error: error.message, wallet: req.user?.walletAddress });
+        next(error);
+    }
+});
+
 export default router;
 
 

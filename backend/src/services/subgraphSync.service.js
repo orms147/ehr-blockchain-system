@@ -24,10 +24,11 @@ import { invalidateRoleCache } from '../config/blockchain.js';
 import {
     handleConsentGranted,
     handleConsentRevoked,
-    handleEmergencyGranted,
     handleDelegationGranted,
     handleDelegationRevoked,
     handleAccessGrantedViaDelegation,
+    handleTrustedContactSet,
+    handleTrustedContactRevoked,
 } from './consentLedgerSync.service.js';
 
 const log = createLogger('SubgraphSync');
@@ -39,8 +40,8 @@ const POLL_MS = Number(process.env.SUBGRAPH_POLL_MS ?? 30_000);
 const CURSOR_KEYS = {
     consent: 'subgraph:consentEvent:lastTimestamp',
     delegation: 'subgraph:delegationEvent:lastTimestamp',
-    emergency: 'subgraph:emergencyEvent:lastTimestamp',
     delegationAccess: 'subgraph:delegationAccessGrant:lastTimestamp',
+    trustedContact: 'subgraph:trustedContactEvent:lastTimestamp',
     // Doctor entity is mutable in subgraph: Doctor.verifiedAt is set when
     // DoctorVerified event fires. We poll for newly-verified doctors and
     // invalidate the backend's roleCache so verifying organizations don't
@@ -100,13 +101,12 @@ function shapeConsentEvent(row) {
     };
 }
 
-function shapeEmergencyEvent(row) {
+function shapeTrustedContactEvent(row) {
     return {
         args: {
             patient: row.patient,
-            grantee: row.grantee,
-            rootCidHash: row.rootCidHash,
-            expireAt: asBigInt(row.expireAt),
+            contact: row.contact,
+            label: row.label ?? null,
         },
         transactionHash: row.txHash,
         blockNumber: null,
@@ -145,8 +145,8 @@ const QUERY = `
     query SubgraphSync(
         $sinceConsent: BigInt!,
         $sinceDelegation: BigInt!,
-        $sinceEmergency: BigInt!,
         $sinceDelegationAccess: BigInt!,
+        $sinceTrustedContact: BigInt!,
         $sinceDoctorVerified: BigInt!
     ) {
         consentEvents(
@@ -165,14 +165,6 @@ const QUERY = `
         ) {
             id kind patient delegatee expiresAt allowSubDelegate timestamp txHash
         }
-        emergencyEvents(
-            where: { timestamp_gt: $sinceEmergency }
-            orderBy: timestamp
-            orderDirection: asc
-            first: 200
-        ) {
-            id patient grantee rootCidHash expireAt timestamp txHash
-        }
         delegationAccessGrants(
             where: { timestamp_gt: $sinceDelegationAccess }
             orderBy: timestamp
@@ -180,6 +172,14 @@ const QUERY = `
             first: 200
         ) {
             id patient newGrantee byDelegatee rootCidHash timestamp txHash
+        }
+        trustedContactEvents(
+            where: { timestamp_gt: $sinceTrustedContact }
+            orderBy: timestamp
+            orderDirection: asc
+            first: 200
+        ) {
+            id kind patient contact label timestamp txHash
         }
         doctors(
             where: { verifiedAt_gt: $sinceDoctorVerified, verified: true }
@@ -193,11 +193,11 @@ const QUERY = `
 `;
 
 async function syncOnce() {
-    const [sinceConsent, sinceDelegation, sinceEmergency, sinceDelegationAccess, sinceDoctorVerified] = await Promise.all([
+    const [sinceConsent, sinceDelegation, sinceDelegationAccess, sinceTrustedContact, sinceDoctorVerified] = await Promise.all([
         getCursor(CURSOR_KEYS.consent),
         getCursor(CURSOR_KEYS.delegation),
-        getCursor(CURSOR_KEYS.emergency),
         getCursor(CURSOR_KEYS.delegationAccess),
+        getCursor(CURSOR_KEYS.trustedContact),
         getCursor(CURSOR_KEYS.doctorVerified),
     ]);
 
@@ -206,8 +206,8 @@ async function syncOnce() {
         data = await gql(QUERY, {
             sinceConsent: sinceConsent.toString(),
             sinceDelegation: sinceDelegation.toString(),
-            sinceEmergency: sinceEmergency.toString(),
             sinceDelegationAccess: sinceDelegationAccess.toString(),
+            sinceTrustedContact: sinceTrustedContact.toString(),
             sinceDoctorVerified: sinceDoctorVerified.toString(),
         });
     } catch (err) {
@@ -219,11 +219,11 @@ async function syncOnce() {
     const counts = {
         consent: data.consentEvents?.length ?? 0,
         delegation: data.delegationEvents?.length ?? 0,
-        emergency: data.emergencyEvents?.length ?? 0,
         delegationAccess: data.delegationAccessGrants?.length ?? 0,
+        trustedContact: data.trustedContactEvents?.length ?? 0,
         doctorVerified: data.doctors?.length ?? 0,
     };
-    const total = counts.consent + counts.delegation + counts.emergency + counts.delegationAccess + counts.doctorVerified;
+    const total = counts.consent + counts.delegation + counts.delegationAccess + counts.trustedContact + counts.doctorVerified;
     if (total === 0) return;
 
     log.info('Processing subgraph batch', counts);
@@ -248,13 +248,21 @@ async function syncOnce() {
         }
     }
 
-    // Apply EmergencyEvent.
-    for (const row of data.emergencyEvents ?? []) {
+    // Apply TrustedContactEvent (set | revoked).
+    for (const row of data.trustedContactEvents ?? []) {
         try {
-            await handleEmergencyGranted(shapeEmergencyEvent(row));
-            await setCursor(CURSOR_KEYS.emergency, BigInt(row.timestamp));
+            const event = shapeTrustedContactEvent(row);
+            if (row.kind === 'set') {
+                await handleTrustedContactSet(event);
+            } else if (row.kind === 'revoked') {
+                await handleTrustedContactRevoked(event);
+            } else {
+                log.warn('Unknown TrustedContactEvent.kind', { id: row.id, kind: row.kind });
+                continue;
+            }
+            await setCursor(CURSOR_KEYS.trustedContact, BigInt(row.timestamp));
         } catch (err) {
-            log.error('EmergencyEvent handler failed', { id: row.id, error: err.message });
+            log.error('TrustedContactEvent handler failed', { id: row.id, error: err.message });
             break;
         }
     }
