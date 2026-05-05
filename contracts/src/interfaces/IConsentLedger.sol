@@ -30,16 +30,6 @@ interface IConsentLedger {
         bool active;
     }
 
-    /// @notice Emergency consent lives in a SEPARATE storage slot from normal
-    /// consent. Fixes BUG-D where an emergency 24h grant would overwrite an
-    /// existing 30-day consent. canAccess OR-checks both: patient keeps the
-    /// long-term consent untouched even if the same doctor triggers emergency.
-    struct EmergencyConsent {
-        uint40 issuedAt;
-        uint40 expireAt;
-        bool active;
-    }
-
     // Events
     event ConsentGranted(
         address indexed patient,
@@ -75,14 +65,22 @@ interface IConsentLedger {
         bytes32 rootCidHash
     );
 
-    /// @notice Emergency access granted (separate from ConsentGranted — this
-    /// does NOT touch the normal consent storage so the regular consent
-    /// survives the emergency window).
-    event EmergencyGranted(
+    /// @notice Patient designates a Trusted Contact (e.g. family member) who
+    /// receives pre-shared encrypted AES keys for ALL the patient's records.
+    /// This is the on-chain replacement for grantEmergencyAccess: when the
+    /// patient is unconscious, the Trusted Contact uses their own wallet to
+    /// re-share keys with the emergency doctor via per-record delegate flow.
+    /// Stored on-chain (not just backend DB) so the backend cannot silently
+    /// inject fake contacts and pre-share patient keys to attackers.
+    event TrustedContactSet(
         address indexed patient,
-        address indexed grantee,
-        bytes32 indexed rootCidHash,
-        uint40 expireAt
+        address indexed contact,
+        string label
+    );
+
+    event TrustedContactRevoked(
+        address indexed patient,
+        address indexed contact
     );
 
     event AuthorizedContract(address indexed contractAddress, bool allowed);
@@ -119,22 +117,6 @@ interface IConsentLedger {
         bytes32 encKeyHash,
         uint40 expireAt,
         bool allowDelegate
-    ) external;
-
-    /**
-     * @notice Grant emergency access (separate storage from normal consent).
-     *         Called by DoctorUpdate.grantEmergencyAccess after witness validation.
-     *         A normal consent at the same (patient, grantee, root) is NOT overwritten.
-     * @param patient Patient address
-     * @param grantee Doctor invoking emergency
-     * @param inputCidHash any cidHash in the target record chain (walked to root)
-     * @param expireAt Emergency window end (must be > now)
-     */
-    function grantEmergencyInternal(
-        address patient,
-        address grantee,
-        bytes32 inputCidHash,
-        uint40 expireAt
     ) external;
 
     /**
@@ -269,4 +251,40 @@ interface IConsentLedger {
     function getDelegation(address patient, address delegatee) external view returns (Delegation memory);
 
     function getNonce(address patient) external view returns (uint256);
+
+    // ============ TRUSTED CONTACT REGISTRY ============
+
+    /**
+     * @notice Patient sets/updates a Trusted Contact via EIP-712 signature.
+     *         Relayer-friendly (gas sponsored). Setting active=false revokes.
+     * @param patient   Patient designating the contact (signer)
+     * @param contact   Address being designated as Trusted Contact
+     * @param label     Optional UX label ("Vợ", "Con trai", "Mẹ"...). Bytes
+     *                  on-chain — keep short.
+     * @param active    true = set, false = revoke
+     * @param deadline  EIP-712 sig deadline
+     * @param signature Patient's EIP-712 signature
+     */
+    function setTrustedContactBySig(
+        address patient,
+        address contact,
+        string calldata label,
+        bool active,
+        uint256 deadline,
+        bytes calldata signature
+    ) external;
+
+    /**
+     * @notice Patient sets/updates a Trusted Contact directly (no relayer).
+     *         msg.sender = patient. Setting active=false revokes.
+     */
+    function setTrustedContact(
+        address contact,
+        string calldata label,
+        bool active
+    ) external;
+
+    /// @notice Get all addresses currently designated as Trusted Contact for
+    ///         the given patient. Filters out revoked entries.
+    function getTrustedContacts(address patient) external view returns (address[] memory);
 }

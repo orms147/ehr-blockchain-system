@@ -157,92 +157,23 @@ contract DoctorUpdateTest is TestHelpers {
         );
     }
     
-    // ========== EMERGENCY ACCESS ==========
-    
-    function test_GrantEmergencyAccess_Success() public {
-        address[] memory witnesses = new address[](2);
-        witnesses[0] = witness1;
-        witnesses[1] = witness2;
-        
-        vm.prank(doctor1);
-        doctorUpdate.grantEmergencyAccess(
-            patient1,
-            CID_HASH,
-            ENC_KEY_HASH,
-            "Patient unconscious, need immediate access",
-            witnesses
-        );
-        
-        // Doctor should have 24h access
-        assertTrue(consentLedger.canAccess(patient1, doctor1, CID_HASH), "Doctor should have emergency access");
-        
-        // Check expiry is 24h
-        IConsentLedger.Consent memory c = consentLedger.getConsent(patient1, doctor1, CID_HASH);
-        assertEq(c.expireAt, uint40(block.timestamp) + 24 hours, "Should expire in 24h");
-    }
-    
-    function test_GrantEmergencyAccess_RevertWhen_InsufficientWitnesses() public {
-        address[] memory witnesses = new address[](1);  // Only 1 witness
-        witnesses[0] = witness1;
-        
-        vm.expectRevert();  // InsufficientWitnesses
-        vm.prank(doctor1);
-        doctorUpdate.grantEmergencyAccess(
-            patient1, CID_HASH, ENC_KEY_HASH, "Emergency", witnesses
-        );
-    }
-    
-    function test_GrantEmergencyAccess_RevertWhen_WitnessIsDoctor() public {
-        address[] memory witnesses = new address[](2);
-        witnesses[0] = doctor1;  // Doctor is witness - invalid
-        witnesses[1] = witness2;
-        
-        vm.expectRevert();  // InvalidWitness
-        vm.prank(doctor1);
-        doctorUpdate.grantEmergencyAccess(
-            patient1, CID_HASH, ENC_KEY_HASH, "Emergency", witnesses
-        );
-    }
-    
-    function test_GrantEmergencyAccess_RevertWhen_DuplicateWitness() public {
-        address[] memory witnesses = new address[](2);
-        witnesses[0] = witness1;
-        witnesses[1] = witness1;  // Duplicate
-        
-        vm.expectRevert();  // InvalidWitness
-        vm.prank(doctor1);
-        doctorUpdate.grantEmergencyAccess(
-            patient1, CID_HASH, ENC_KEY_HASH, "Emergency", witnesses
-        );
-    }
-    
-    function test_GrantEmergencyAccess_RevertWhen_EmptyJustification() public {
-        address[] memory witnesses = new address[](2);
-        witnesses[0] = witness1;
-        witnesses[1] = witness2;
-        
-        vm.expectRevert();  // InvalidParameter
-        vm.prank(doctor1);
-        doctorUpdate.grantEmergencyAccess(
-            patient1, CID_HASH, ENC_KEY_HASH, "", witnesses  // Empty justification
-        );
-    }
-    
+    // grantEmergencyAccess removed 2026-05-04 — see ConsentLedger Trusted
+    // Contact registry. Emergency access pattern is now: doctor identifies
+    // patient via CCCD lookup → backend returns Trusted Contact list →
+    // contact ('người thân') uses their own wallet to per-record-delegate
+    // share keys with the doctor. No on-chain emergency primitive.
+
     // ========== VIEW FUNCTIONS ==========
-    
+
     function test_GetAccessLimits() public view {
         (
             uint40 minHours,
             uint40 maxHours,
-            uint40 defaultHours,
-            uint40 emergencyHours,
-            uint8 minWitnesses
+            uint40 defaultHours
         ) = doctorUpdate.getAccessLimits();
-        
+
         assertEq(minHours, 1, "Min should be 1 hour");
         assertEq(maxHours, 90 * 24, "Max should be 90 days in hours");
         assertEq(defaultHours, 7 * 24, "Default should be 7 days in hours");
-        assertEq(emergencyHours, 24, "Emergency should be 24 hours");
-        assertEq(minWitnesses, 2, "Min witnesses should be 2");
     }
 }

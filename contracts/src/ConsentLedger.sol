@@ -30,6 +30,14 @@ contract ConsentLedger is EIP712, ReentrancyGuard, IConsentLedger {
         "DelegationPermit(address patient,address delegatee,uint40 duration,bool allowSubDelegate,uint256 deadline,uint256 nonce)"
     );
 
+    // EIP-712 typehash for Trusted Contact designation (patient signs off-chain,
+    // relayer submits). Shares the patient nonce slot with ConsentPermit and
+    // DelegationPermit so a single counter prevents replay across all permit
+    // types.
+    bytes32 private constant TRUSTED_CONTACT_PERMIT_TYPEHASH = keccak256(
+        "TrustedContactPermit(address patient,address contact,string label,bool active,uint256 deadline,uint256 nonce)"
+    );
+
     // Storage
     // Key: bytes32 = keccak256(patient, grantee, rootCidHash)
     mapping(bytes32 => Consent) private _consents;
@@ -73,12 +81,21 @@ contract ConsentLedger is EIP712, ReentrancyGuard, IConsentLedger {
     // Set once by admin via setAccessControl after deploy (avoids constructor circular dep).
     IAccessControl public accessControl;
 
-    // BUG-D fix: emergency access lives in a SEPARATE mapping so a 24h
-    // emergency grant does not overwrite an existing long-term consent.
-    // canAccess OR-checks both — doctor can use emergency without the patient
-    // losing their regular consent after the emergency window ends.
-    // Key = keccak256(patient, grantee, rootCidHash)
-    mapping(bytes32 => EmergencyConsent) private _emergencyConsents;
+    // Trusted Contact registry. Patient pre-designates family members (or any
+    // wallet) who will receive auto-shared encrypted AES keys for every
+    // record. Used in the emergency flow as the on-chain replacement for
+    // grantEmergencyAccess (dropped 2026-05-04).
+    //
+    // Stored on-chain (not just backend DB) so the backend operator cannot
+    // silently inject fake "trusted contacts" and trigger off-chain
+    // pre-share to an attacker — patient sovereignty enforced cryptographically.
+    //
+    // _trustedContactList may contain stale entries (revoked contacts kept
+    // for cheaper writes). getTrustedContacts() filters by isTrustedContact
+    // when returning.
+    mapping(address => mapping(address => bool)) public isTrustedContact;
+    mapping(address => mapping(address => string)) public trustedContactLabel;
+    mapping(address => address[]) private _trustedContactList;
 
     // BUG-C fix: track which sender issued a per-record delegation consent.
     // Distinct from `consentDelegationSource` which is for bulk-delegation
@@ -212,42 +229,6 @@ contract ConsentLedger is EIP712, ReentrancyGuard, IConsentLedger {
             expireAt,
             allowDelegate
         );
-    }
-
-    /**
-     * @notice Grant emergency access. Writes to a SEPARATE storage from normal
-     *         consent so patient's long-term grant is preserved after the
-     *         emergency window. canAccess() OR-checks both.
-     *
-     *         BUG-D fix: previously DoctorUpdate.grantEmergencyAccess called
-     *         grantInternal which overwrote the normal consent. A 24h emergency
-     *         then silently wiped a 30-day consent when the emergency expired.
-     *
-     * @param patient       Patient address
-     * @param grantee       Doctor invoking emergency (msg.sender in DoctorUpdate)
-     * @param inputCidHash  any cidHash in the target record chain; walked to root
-     * @param expireAt      emergency window end (must be > now, < FOREVER)
-     */
-    function grantEmergencyInternal(
-        address patient,
-        address grantee,
-        bytes32 inputCidHash,
-        uint40 expireAt
-    ) external override onlyAuthorized nonReentrant {
-        if (grantee == address(0)) revert Unauthorized();
-        if (inputCidHash == bytes32(0)) revert EmptyCID();
-        if (expireAt == 0 || expireAt <= block.timestamp) revert InvalidExpire();
-
-        bytes32 root = _walkToRoot(inputCidHash);
-        bytes32 key = keccak256(abi.encode(patient, grantee, root));
-
-        _emergencyConsents[key] = EmergencyConsent({
-            issuedAt: uint40(block.timestamp),
-            expireAt: expireAt,
-            active: true
-        });
-
-        emit EmergencyGranted(patient, grantee, root, expireAt);
     }
 
     /**
@@ -686,35 +667,19 @@ contract ConsentLedger is EIP712, ReentrancyGuard, IConsentLedger {
         bytes32 root = _walkToRoot(queryCidHash);
         bytes32 key = keccak256(abi.encode(patient, grantee, root));
 
-        // FIX (audit #3): unverified doctors never pass — applies to BOTH normal
-        // and emergency paths, so check once here.
+        // FIX (audit #3): unverified doctors never pass — check once here.
         if (address(accessControl) != address(0)) {
             if (accessControl.isDoctor(grantee) && !accessControl.isVerifiedDoctor(grantee)) {
                 return false;
             }
         }
 
-        // Try normal consent. If it succeeds, we're done.
-        if (_hasValidNormalConsent(key, queryCidHash, patient, root)) {
-            return true;
-        }
-
-        // BUG-D fix: emergency consent lives in a separate mapping so it doesn't
-        // collide with / overwrite the normal consent. Fall back to it only when
-        // normal consent doesn't grant access.
-        EmergencyConsent memory em = _emergencyConsents[key];
-        if (em.active && block.timestamp <= em.expireAt) {
-            return true;
-        }
-
-        return false;
+        return _hasValidNormalConsent(key, queryCidHash, patient, root);
     }
 
-    /// @dev Normal consent validation extracted so canAccess can OR it with the
-    /// emergency consent path. Returns true iff the `(patient, grantee, root)`
-    /// consent is active, unexpired, any bulk-delegation chain is still intact
-    /// (audit #4), and any per-record delegation source (BUG-C) is still
-    /// allowed to delegate.
+    /// @dev Returns true iff the `(patient, grantee, root)` consent is active,
+    /// unexpired, any bulk-delegation chain is still intact (audit #4), and
+    /// any per-record delegation source (BUG-C) is still allowed to delegate.
     function _hasValidNormalConsent(
         bytes32 key,
         bytes32 /*queryCidHash*/,
@@ -802,5 +767,128 @@ contract ConsentLedger is EIP712, ReentrancyGuard, IConsentLedger {
 
     function getNonce(address patient) external view override returns (uint256) {
         return nonces[patient];
+    }
+
+    // ================ TRUSTED CONTACT REGISTRY ================
+    //
+    // Patient designates Trusted Contacts (e.g. family members) who hold
+    // pre-shared encrypted AES keys for the patient's records. In emergency
+    // (patient unconscious), the Trusted Contact uses their own wallet to
+    // re-share keys with the ER doctor via the per-record delegate flow.
+    //
+    // Why on-chain: if this list lived only in backend DB, a compromised or
+    // malicious backend operator could silently inject fake "trusted
+    // contacts" and trigger off-chain pre-share to an attacker. On-chain,
+    // only the patient's EIP-712 signature can mutate the list — backend is
+    // a relayer, not a TCB.
+
+    /**
+     * @notice Patient signs EIP-712 TrustedContactPermit, relayer submits.
+     *         Setting active=false revokes (logically; entry stays in array
+     *         to keep the write cheap; getTrustedContacts filters).
+     */
+    function setTrustedContactBySig(
+        address patient,
+        address contact,
+        string calldata label,
+        bool active,
+        uint256 deadline,
+        bytes calldata signature
+    ) external override nonReentrant {
+        if (block.timestamp > deadline) revert DeadlinePassed();
+        if (contact == address(0) || contact == patient) revert Unauthorized();
+
+        uint256 currentNonce = nonces[patient];
+
+        bytes32 structHash = keccak256(abi.encode(
+            TRUSTED_CONTACT_PERMIT_TYPEHASH,
+            patient,
+            contact,
+            keccak256(bytes(label)),
+            active,
+            deadline,
+            currentNonce
+        ));
+
+        bytes32 digest = _hashTypedDataV4(structHash);
+        address signer = digest.recover(signature);
+
+        if (signer != patient) revert InvalidSignature();
+
+        nonces[patient] = currentNonce + 1;
+
+        _applyTrustedContact(patient, contact, label, active);
+    }
+
+    /**
+     * @notice Patient calls directly (no relayer). msg.sender = patient.
+     */
+    function setTrustedContact(
+        address contact,
+        string calldata label,
+        bool active
+    ) external override nonReentrant {
+        if (contact == address(0) || contact == msg.sender) revert Unauthorized();
+        _applyTrustedContact(msg.sender, contact, label, active);
+    }
+
+    function _applyTrustedContact(
+        address patient,
+        address contact,
+        string calldata label,
+        bool active
+    ) internal {
+        bool wasActive = isTrustedContact[patient][contact];
+        isTrustedContact[patient][contact] = active;
+        trustedContactLabel[patient][contact] = label;
+
+        // Append to list only on first activation. Re-activating a previously
+        // revoked contact does not append (entry already exists in array).
+        if (active && !wasActive) {
+            // Idempotency check: walk the list to see if contact is already in.
+            // List grows linearly in number of unique contacts ever designated;
+            // bounded by realistic family size. O(n) acceptable.
+            address[] storage list = _trustedContactList[patient];
+            bool found = false;
+            for (uint256 i = 0; i < list.length; i++) {
+                if (list[i] == contact) { found = true; break; }
+            }
+            if (!found) list.push(contact);
+        }
+
+        if (active) {
+            emit TrustedContactSet(patient, contact, label);
+        } else {
+            emit TrustedContactRevoked(patient, contact);
+        }
+    }
+
+    /**
+     * @notice Returns currently-active Trusted Contacts for the patient.
+     *         Filters out revoked entries. O(n) where n = unique contacts
+     *         ever designated.
+     */
+    function getTrustedContacts(address patient) external view override returns (address[] memory) {
+        address[] storage list = _trustedContactList[patient];
+        uint256 n = list.length;
+
+        // First pass: count active.
+        uint256 activeCount = 0;
+        for (uint256 i = 0; i < n; i++) {
+            if (isTrustedContact[patient][list[i]]) activeCount++;
+        }
+
+        // Second pass: collect.
+        address[] memory result = new address[](activeCount);
+        uint256 j = 0;
+        for (uint256 i = 0; i < n; i++) {
+            address c = list[i];
+            if (isTrustedContact[patient][c]) {
+                result[j] = c;
+                j++;
+            }
+        }
+
+        return result;
     }
 }

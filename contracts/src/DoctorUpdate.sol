@@ -24,10 +24,6 @@ contract DoctorUpdate is ReentrancyGuard {
     uint40 private constant MIN_DOCTOR_ACCESS = 1 hours;
     uint40 private constant MAX_DOCTOR_ACCESS = 90 days;
     uint40 private constant DEFAULT_DOCTOR_ACCESS = 7 days;
-    uint40 private constant EMERGENCY_ACCESS_DURATION = 24 hours;
-
-    uint8 private constant MIN_WITNESSES = 2;
-    uint8 private constant MAX_WITNESSES = 10;
 
     // ================ EVENTS ================
     event RecordAddedByDoctor(
@@ -47,26 +43,11 @@ contract DoctorUpdate is ReentrancyGuard {
         uint40 duration
     );
 
-    event EmergencyAccessGranted(
-        address indexed doctor,
-        address indexed patient,
-        bytes32 indexed cidHash,
-        string justification,
-        address[] witnesses,
-        uint40 expireAt
-    );
-
-
-
     // ================ ERRORS ================
     error NotDoctor();
     error NotPatient();
     error InvalidParameter();
     error InvalidAccessDuration();
-    error InsufficientWitnesses();
-    error TooManyWitnesses();
-    error InvalidWitness();
-    error RecordNotExist();
 
     // ================ CONSTRUCTOR ================
     constructor(
@@ -141,61 +122,6 @@ contract DoctorUpdate is ReentrancyGuard {
         );
     }
 
-    // ================ EMERGENCY ACCESS (Hash-based) ================
-
-    /**
-     * @notice Grant emergency access with witness validation
-     * @param cidHash keccak256(bytes(cid)) - computed OFF-CHAIN
-     * @param encKeyHash Encryption key hash
-     * @param justification Reason for emergency access (OK as string - not sensitive)
-     * @param witnesses Array of witness addresses
-     */
-    function grantEmergencyAccess(
-        address patient,
-        bytes32 cidHash,
-        bytes32 encKeyHash,
-        string calldata justification,
-        address[] calldata witnesses
-    ) external onlyDoctor nonReentrant {
-        if (!accessControl.isPatient(patient)) revert NotPatient();
-        if (witnesses.length < MIN_WITNESSES) revert InsufficientWitnesses();
-        if (witnesses.length > MAX_WITNESSES) revert TooManyWitnesses();
-        if (bytes(justification).length == 0) revert InvalidParameter();
-        if (encKeyHash == bytes32(0)) revert InvalidParameter();
-        if (cidHash == bytes32(0)) revert InvalidParameter();
-        // FIX (audit #5): emergency access must reference an existing record.
-        if (!recordRegistry.recordExists(cidHash)) revert RecordNotExist();
-
-        // Validate witnesses
-        _validateWitnesses(witnesses);
-
-        // FIX (audit #7): explicit overflow guard on uint40 cast.
-        uint256 expireAt256 = block.timestamp + EMERGENCY_ACCESS_DURATION;
-        if (expireAt256 > type(uint40).max) revert InvalidAccessDuration();
-        uint40 expireAt = uint40(expireAt256);
-
-        // BUG-D fix: write emergency into a separate storage via
-        // grantEmergencyInternal. This preserves any existing long-term consent
-        // for (patient, doctor, root) so the 24h emergency window doesn't wipe
-        // a patient's previously-granted 30-day (or longer) consent when the
-        // emergency expires.
-        consentLedger.grantEmergencyInternal(
-            patient,
-            msg.sender,
-            cidHash,
-            expireAt
-        );
-
-        emit EmergencyAccessGranted(
-            msg.sender,
-            patient,
-            cidHash,
-            justification,
-            witnesses,
-            expireAt
-        );
-    }
-
     // ================ INTERNAL FUNCTIONS ================
 
     function _grantDoctorAccess(
@@ -234,43 +160,17 @@ contract DoctorUpdate is ReentrancyGuard {
         emit TemporaryAccessGranted(patient, doctor, cidHash, expireAt, duration);
     }
 
-    function _validateWitnesses(address[] calldata witnesses) internal view {
-        uint256 witnessCount = witnesses.length;
-
-        for (uint256 i; i < witnessCount;) {
-            address witness = witnesses[i];
-
-            if (witness == msg.sender) revert InvalidWitness();
-
-            bool isValidWitness = accessControl.isDoctor(witness) ||
-                                 accessControl.isOrganization(witness);
-
-            if (!isValidWitness) revert InvalidWitness();
-
-            for (uint256 j = i + 1; j < witnessCount;) {
-                if (witnesses[j] == witness) revert InvalidWitness();
-                unchecked { ++j; }
-            }
-
-            unchecked { ++i; }
-        }
-    }
-
     // ================ VIEW FUNCTIONS ================
 
     function getAccessLimits() external pure returns (
         uint40 minHours,
         uint40 maxHours,
-        uint40 defaultHours,
-        uint40 emergencyHours,
-        uint8 minWitnesses
+        uint40 defaultHours
     ) {
         return (
             MIN_DOCTOR_ACCESS / 1 hours,
             MAX_DOCTOR_ACCESS / 1 hours,
-            DEFAULT_DOCTOR_ACCESS / 1 hours,
-            EMERGENCY_ACCESS_DURATION / 1 hours,
-            MIN_WITNESSES
+            DEFAULT_DOCTOR_ACCESS / 1 hours
         );
     }
 }

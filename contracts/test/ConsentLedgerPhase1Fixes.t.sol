@@ -174,65 +174,9 @@ contract ConsentLedgerPhase1FixesTest is TestHelpers {
         assertFalse(consentLedger.canAccess(patient, doctorB, V2), "B expires with source");
     }
 
-    // =================================================================
-    // BUG-D: Emergency access does NOT overwrite normal consent
-    // =================================================================
-
-    function test_BugD_EmergencyDoesNotOverwriteNormalConsent() public {
-        // Patient grants long-term 30-day consent
-        uint40 longExpiry = uint40(block.timestamp + 30 days);
-        consentLedger.grantInternal(patient, doctorA, V1, EK, longExpiry, false);
-        assertTrue(consentLedger.canAccess(patient, doctorA, V1));
-
-        // Doctor A triggers 24h emergency (via grantEmergencyInternal directly for test)
-        uint40 emergencyExpiry = uint40(block.timestamp + 1 days);
-        consentLedger.grantEmergencyInternal(patient, doctorA, V1, emergencyExpiry);
-
-        // Both present: canAccess should still be TRUE
-        assertTrue(consentLedger.canAccess(patient, doctorA, V1), "canAccess during both");
-
-        // Warp past emergency but before normal expiry
-        vm.warp(block.timestamp + 2 days);
-
-        // Normal 30-day consent MUST still work (this is the core of BUG-D).
-        assertTrue(
-            consentLedger.canAccess(patient, doctorA, V1),
-            "30-day normal consent must survive emergency expiry (BUG-D)"
-        );
-    }
-
-    function test_BugD_EmergencyWorksAloneWhenNoNormalConsent() public {
-        // No prior consent. Doctor triggers emergency.
-        uint40 emergencyExpiry = uint40(block.timestamp + 1 days);
-        consentLedger.grantEmergencyInternal(patient, doctorA, V1, emergencyExpiry);
-
-        assertTrue(consentLedger.canAccess(patient, doctorA, V1), "Emergency-only access");
-
-        // After emergency expires, no more access
-        vm.warp(block.timestamp + 2 days);
-        assertFalse(consentLedger.canAccess(patient, doctorA, V1), "Emergency expired, no fallback");
-    }
-
-    function test_BugD_EmergencyReachesWholeChain() public {
-        // Emergency anchored on V2 — walks to root V1 → covers chain (no includeUpdates gating for emergency).
-        consentLedger.grantEmergencyInternal(patient, doctorA, V2, uint40(block.timestamp + 1 days));
-
-        assertTrue(consentLedger.canAccess(patient, doctorA, V1));
-        assertTrue(consentLedger.canAccess(patient, doctorA, V2));
-        assertTrue(consentLedger.canAccess(patient, doctorA, V3));
-    }
-
-    function test_BugD_UnverifiedDoctorStillDeniedDuringEmergency() public {
-        address unverified = makeAddr("unverifiedDoctor");
-        vm.prank(unverified);
-        accessControl.registerAsDoctor();
-        // NOT verified by org
-
-        consentLedger.grantEmergencyInternal(patient, unverified, V1, uint40(block.timestamp + 1 days));
-
-        assertFalse(
-            consentLedger.canAccess(patient, unverified, V1),
-            "Unverified doctors must not access even via emergency (FIX audit #3 preserved)"
-        );
-    }
+    // BUG-D emergency tests removed 2026-05-04 — grantEmergencyInternal +
+    // _emergencyConsents storage dropped along with DoctorUpdate.grantEmergencyAccess.
+    // The emergency flow was architecturally broken (on-chain consent without
+    // off-chain key delivery), and is replaced by the Trusted Contact registry
+    // (see ConsentLedgerTrustedContact.t.sol).
 }
