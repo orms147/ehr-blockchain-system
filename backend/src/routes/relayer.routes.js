@@ -36,6 +36,75 @@ router.get('/quota', authenticate, async (req, res, next) => {
     }
 });
 
+// GET /api/relayer/all-grantees - Patient sees ALL active grantees on their records,
+// including downstream grants minted via delegation chain (D shared to D1 via
+// grantUsingRecordDelegation → D1 listed). UI uses this to revoke individual
+// grantees independently. Without this, patient could only revoke direct grants
+// (from /api/key-share/sent) and was forced to revoke D wholesale to kill D1.
+router.get('/all-grantees', authenticate, async (req, res, next) => {
+    try {
+        const prisma = (await import('../config/database.js')).default;
+        const patientAddress = req.user.walletAddress.toLowerCase();
+
+        const consents = await prisma.consent.findMany({
+            where: { patientAddress, status: 'active' },
+            orderBy: { grantedAt: 'desc' },
+        });
+        if (consents.length === 0) {
+            return res.json([]);
+        }
+
+        const cidHashes = Array.from(new Set(consents.map((c) => c.cidHash)));
+        const records = await prisma.recordMetadata.findMany({
+            where: { cidHash: { in: cidHashes } },
+            select: { cidHash: true, title: true, recordType: true },
+        });
+        const recordByCid = new Map(records.map((r) => [r.cidHash.toLowerCase(), r]));
+
+        // DelegationAccessLog tracks AccessGrantedViaDelegation events (both
+        // grantUsingDelegation + grantUsingRecordDelegation emit it). When a
+        // row exists for (patient, grantee, root), it means the grant was
+        // minted via delegation chain — byDelegatee is the doctor who relayed.
+        // Absent row = direct grant from patient.
+        const accessLogs = await prisma.delegationAccessLog.findMany({
+            where: { patientAddress },
+            select: { newGrantee: true, rootCidHash: true, byDelegatee: true, createdAt: true },
+            orderBy: { createdAt: 'desc' },
+        });
+        const sourceByGranteeChain = new Map();
+        for (const log of accessLogs) {
+            const key = `${log.newGrantee.toLowerCase()}|${log.rootCidHash.toLowerCase()}`;
+            // Keep only the latest source if multiple grants happened for same chain
+            if (!sourceByGranteeChain.has(key)) {
+                sourceByGranteeChain.set(key, log.byDelegatee.toLowerCase());
+            }
+        }
+
+        const result = consents.map((c) => {
+            const cid = c.cidHash.toLowerCase();
+            const grantee = c.granteeAddress.toLowerCase();
+            const record = recordByCid.get(cid);
+            const sourceDelegatee = sourceByGranteeChain.get(`${grantee}|${cid}`);
+            return {
+                granteeAddress: c.granteeAddress,
+                cidHash: c.cidHash,
+                recordTitle: record?.title || null,
+                recordType: record?.recordType || null,
+                grantedAt: c.grantedAt,
+                expiresAt: c.expiresAt,
+                source: sourceDelegatee
+                    ? { type: 'via-delegate', byDelegatee: sourceDelegatee }
+                    : { type: 'direct' },
+            };
+        });
+
+        res.json(result);
+    } catch (error) {
+        log.error('all-grantees failed', { error: error.message });
+        next(error);
+    }
+});
+
 // POST /api/relayer/register - Sponsor patient/doctor registration
 router.post('/register', authenticate, async (req, res, next) => {
     try {

@@ -6,6 +6,7 @@ import prisma from '../config/database.js';
 import { createPublicClient, http, keccak256, encodePacked } from 'viem';
 import { arbitrumSepolia } from 'viem/chains';
 import { requireOnChainRoles } from '../middleware/onChainRole.js';
+import { applyShare, applyStatusFlip } from '../services/keyShareWriter.service.js';
 import {
     RequestType,
     OnChainRequestStatus,
@@ -315,13 +316,19 @@ router.post('/create', authenticate, requireDoctorRole, async (req, res, next) =
             )
         );
 
-        // Store in database for tracking
+        // Store in database for tracking. Normalize cidHash to lowercase so
+        // downstream lookups in mark-claimed (which compares against KeyShare
+        // rows that are always lowercase via the writer service) always match.
+        // Without this, mixed-case input from mobile produced silent skip on
+        // the main row update — KeyShare.allowDelegate stayed at the value
+        // set by the previous cascade share, making delegate requests
+        // ineffective for the requested cidHash specifically.
         const request = await prisma.accessRequest.create({
             data: {
                 requestId: requestId, // This is now the on-chain reqId
                 requesterAddress: doctorAddress,
                 patientAddress: patientAddress.toLowerCase(),
-                cidHash: cidHash,
+                cidHash: cidHash ? cidHash.toLowerCase() : cidHash,
                 requestType: requestType,
                 status: 'pending',
                 deadline: deadline,
@@ -407,7 +414,13 @@ router.get('/:requestId/approval-message', authenticate, requirePatientRole, asy
 // POST /api/requests/approve-with-sig - Patient signs approval (Doctor will claim later)
 router.post('/approve-with-sig', authenticate, requirePatientRole, async (req, res, next) => {
     try {
-        const { requestId, signature, deadline, encryptedKeyPayload, cidHash, senderPublicKey } = req.body;
+        const {
+            requestId, signature, deadline, encryptedKeyPayload, cidHash, senderPublicKey,
+            // S11.D: cascade payloads for OTHER versions in the chain. Staged
+            // on AccessRequest; applied when doctor confirms on-chain (mark-claimed).
+            // Shape: [{ cidHash, encryptedPayload, senderPublicKey }]
+            cascadePayloads,
+        } = req.body;
         const patientAddress = req.user.walletAddress.toLowerCase();
 
         // Verify patient owns this request
@@ -432,13 +445,25 @@ router.post('/approve-with-sig', authenticate, requirePatientRole, async (req, r
             });
         }
 
-        // Store signature - Doctor will claim on-chain
+        // Store signature - Doctor will claim on-chain. Also stash cascade
+        // payloads for OTHER versions so mark-claimed can apply them in one
+        // shot after on-chain confirmation (S11.D).
+        const sanitizedCascade = Array.isArray(cascadePayloads)
+            ? cascadePayloads
+                .filter((p) => p && typeof p.cidHash === 'string' && typeof p.encryptedPayload === 'string')
+                .map((p) => ({
+                    cidHash: String(p.cidHash).toLowerCase(),
+                    encryptedPayload: String(p.encryptedPayload),
+                    senderPublicKey: p.senderPublicKey ? String(p.senderPublicKey) : null,
+                }))
+            : null;
         await prisma.accessRequest.update({
             where: { requestId: requestId },
             data: {
                 status: 'signed',
                 signature: signature,
                 signatureDeadline: BigInt(deadline),
+                pendingCascadePayloads: sanitizedCascade ?? undefined,
             },
         });
 
@@ -450,34 +475,33 @@ router.post('/approve-with-sig', authenticate, requirePatientRole, async (req, r
             ? new Date(Date.now() + request.consentDurationHours * 3600 * 1000)
             : null;
 
-        // If encrypted key payload provided, create KeyShare entry for Doctor
-        // Status 'awaiting_claim' means Doctor must claim on-chain before accessing
+        // If encrypted key payload provided, create KeyShare entry for Doctor.
+        // Status 'awaiting_claim' means Doctor must claim on-chain before access.
+        // NOTE (S11.C, 2026-04-22): expiresAt + allowDelegate deferred to
+        // mark-claimed. Reason: patient's signature is intent-only; the real
+        // consent is minted when doctor submits `confirmAccessRequest` on-chain.
+        // Updating these fields now makes the dashboard UI lie about on-chain
+        // state if the doctor never confirms. The `create` branch still seeds
+        // them so a brand-new row has sensible defaults (no previous value to
+        // preserve); the `update` branch leaves them untouched so an existing
+        // claimed row keeps its current expiry/delegate until mark-claimed.
         if (encryptedKeyPayload && cidHash) {
-            await prisma.keyShare.upsert({
-                where: {
-                    cidHash_senderAddress_recipientAddress: {
-                        cidHash: cidHash,
-                        senderAddress: patientAddress,
-                        recipientAddress: request.requesterAddress,
-                    }
-                },
-                update: {
-                    encryptedPayload: encryptedKeyPayload,
-                    senderPublicKey: senderPublicKey || null,
-                    status: 'awaiting_claim',
-                    expiresAt: keyShareExpiresAt,
-                    allowDelegate: request.requestType === 2,
-                },
-                create: {
-                    senderAddress: patientAddress,
-                    recipientAddress: request.requesterAddress,
-                    cidHash: cidHash,
-                    encryptedPayload: encryptedKeyPayload,
-                    senderPublicKey: senderPublicKey || null,
-                    status: 'awaiting_claim',
-                    expiresAt: keyShareExpiresAt,
-                    allowDelegate: request.requestType === 2,
-                },
+            // S11.C: expiresAt + allowDelegate represent on-chain consent that
+            // isn't minted until doctor confirms via mark-claimed. We seed
+            // them on a brand-new row but skip on update so the dashboard
+            // doesn't display values that don't exist on-chain yet.
+            await applyShare({
+                cidHash: cidHash,
+                senderAddress: patientAddress,
+                recipientAddress: request.requesterAddress,
+                encryptedPayload: encryptedKeyPayload,
+                senderPublicKey: senderPublicKey || null,
+                status: 'awaiting_claim',
+                expiresAt: keyShareExpiresAt,
+                allowDelegate: request.requestType === 2,
+                createOnlyFields: ['expiresAt', 'allowDelegate'],
+                source: 'approve-with-sig',
+                sourceTimestamp: new Date(),
             });
         }
 
@@ -516,17 +540,90 @@ router.post('/mark-claimed', authenticate, requireDoctorRole, async (req, res, n
         });
 
         // IMPORTANT: Also update KeyShare status from 'awaiting_claim' to 'pending'
-        // This allows Doctor to now access the shared record
-        const updatedKeyShare = await prisma.keyShare.updateMany({
+        // This allows Doctor to now access the shared record. ALSO apply the
+        // deferred expiresAt + allowDelegate from the request (S11.C): they
+        // reflect on-chain consent state that's only minted when this endpoint
+        // fires (right after doctor's `confirmAccessRequestWithSignature` tx).
+        const newExpiresAt = request.consentDurationHours
+            ? new Date(Date.now() + Number(request.consentDurationHours) * 3600 * 1000)
+            : null;
+        const newAllowDelegate = request.requestType === 2;
+        // Find the awaiting_claim row(s) and flip via writer service. Use
+        // applyShare here (not applyStatusFlip) because we also need to set
+        // expiresAt and allowDelegate, which applyStatusFlip doesn't expose.
+        // Defensive lowercase: legacy AccessRequest rows may have mixed-case
+        // cidHash if they were created before the create-route fix landed.
+        // KeyShare rows are always lowercase via the writer service.
+        const requestCidLower = request.cidHash?.toLowerCase();
+        const awaitingRow = await prisma.keyShare.findFirst({
             where: {
                 recipientAddress: doctorAddress,
-                cidHash: request.cidHash,
+                cidHash: requestCidLower,
                 status: 'awaiting_claim',
             },
-            data: {
-                status: 'pending',
-            },
         });
+        let mainKeyShareApplied = false;
+        if (awaitingRow) {
+            const result = await applyShare({
+                cidHash: awaitingRow.cidHash,
+                senderAddress: awaitingRow.senderAddress,
+                recipientAddress: awaitingRow.recipientAddress,
+                encryptedPayload: awaitingRow.encryptedPayload,
+                senderPublicKey: awaitingRow.senderPublicKey,
+                status: 'pending',
+                expiresAt: newExpiresAt,
+                allowDelegate: newAllowDelegate,
+                source: 'mark-claimed',
+                sourceTimestamp: new Date(),
+            });
+            mainKeyShareApplied = result.applied;
+        }
+        const updatedKeyShare = { count: mainKeyShareApplied ? 1 : 0 };
+
+        // Apply staged cascade payloads (S11.D): patient prepared these at
+        // approve-with-sig time; they're for OTHER versions in the chain
+        // (parent + sibling versions) so doctor can read the full history.
+        // Upsert each with the newly-minted expiresAt/allowDelegate and
+        // status='claimed' (doctor explicitly consented to this chain
+        // on-chain just now, so no second "Nhận và xem" click needed).
+        const staged = Array.isArray(request.pendingCascadePayloads)
+            ? request.pendingCascadePayloads
+            : [];
+        const cascadeFailures = [];
+        for (const entry of staged) {
+            if (!entry?.cidHash || !entry?.encryptedPayload) continue;
+            try {
+                await applyShare({
+                    cidHash: entry.cidHash,
+                    senderAddress: request.patientAddress,
+                    recipientAddress: doctorAddress,
+                    encryptedPayload: entry.encryptedPayload,
+                    senderPublicKey: entry.senderPublicKey || null,
+                    status: 'claimed',
+                    expiresAt: newExpiresAt,
+                    allowDelegate: newAllowDelegate,
+                    claimedAt: new Date(),
+                    source: 'mark-claimed',
+                    sourceTimestamp: new Date(),
+                });
+            } catch (cascadeErr) {
+                // Non-fatal: main claim already succeeded. Track failures so we
+                // can surface them to the doctor instead of silently swallowing.
+                cascadeFailures.push({ cidHash: entry.cidHash, error: cascadeErr?.message });
+                console.error('[mark-claimed] cascade applyShare failed', {
+                    cidHash: entry.cidHash,
+                    error: cascadeErr?.message,
+                });
+            }
+        }
+
+        // Clear staged payloads so they're not reapplied on retries.
+        if (staged.length > 0) {
+            await prisma.accessRequest.update({
+                where: { requestId: requestId },
+                data: { pendingCascadePayloads: null },
+            });
+        }
 
         // Detect: patient revoked consent AFTER approval but BEFORE doctor claimed.
         // The ConsentRevoked event handler already flipped the KeyShare row to
@@ -537,7 +634,7 @@ router.post('/mark-claimed', authenticate, requireDoctorRole, async (req, res, n
             const revokedShare = await prisma.keyShare.findFirst({
                 where: {
                     recipientAddress: doctorAddress,
-                    cidHash: request.cidHash,
+                    cidHash: requestCidLower,
                     status: 'revoked',
                 },
                 select: { id: true },
@@ -608,31 +705,16 @@ router.post('/grant-as-delegate', authenticate, async (req, res, next) => {
 
         // 4. Update KeyShare if payload provided
         if (encryptedKeyPayload && cidHash) {
-            await prisma.keyShare.upsert({
-                where: {
-                    cidHash_senderAddress_recipientAddress: {
-                        cidHash: cidHash,
-                        senderAddress: request.patientAddress, // Sender implies owner/patient
-                        recipientAddress: request.requesterAddress,
-                    }
-                },
-                update: {
-                    encryptedPayload: encryptedKeyPayload,
-                    senderPublicKey: senderPublicKey || null,
-                    status: 'pending', // Directly pending (active), no claim needed
-                    // null = let on-chain consent expireAt be source of truth. `request.deadline`
-                    // is now the REQUEST expiry (24h window to approve), not consent duration.
-                    expiresAt: null,
-                },
-                create: {
-                    senderAddress: request.patientAddress, // "On behalf of" patient
-                    recipientAddress: request.requesterAddress,
-                    cidHash: cidHash,
-                    encryptedPayload: encryptedKeyPayload,
-                    senderPublicKey: senderPublicKey || null,
-                    status: 'pending',
-                    expiresAt: null,
-                },
+            await applyShare({
+                cidHash: cidHash,
+                senderAddress: request.patientAddress,
+                recipientAddress: request.requesterAddress,
+                encryptedPayload: encryptedKeyPayload,
+                senderPublicKey: senderPublicKey || null,
+                status: 'pending',
+                expiresAt: null, // null = on-chain consent expireAt is source of truth
+                source: 'grant-as-delegate',
+                sourceTimestamp: new Date(),
             });
         }
 

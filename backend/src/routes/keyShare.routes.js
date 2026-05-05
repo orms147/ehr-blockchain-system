@@ -7,6 +7,7 @@ import { ACCESS_CONTROL_ABI } from '../config/contractABI.js';
 import { emitToUser } from '../services/socket.service.js';
 import { sendPushToWallet } from '../services/push.service.js';
 import { createLogger } from '../utils/logger.js';
+import { applyShare, applyStatusFlip } from '../services/keyShareWriter.service.js';
 
 const log = createLogger('KeyShareRoutes');
 const router = Router();
@@ -196,17 +197,51 @@ router.post('/', authenticate, async (req, res, next) => {
         }
 
         // SECURITY: Only the Owner (Patient) can grant "Delegation Power" (allowDelegate=true).
-        const finalAllowDelegate = (isOwner || isCreator) ? (allowDelegate === true) : false;
+        let finalAllowDelegate = (isOwner || isCreator) ? (allowDelegate === true) : false;
 
-        // "Clean slate" (chain-wide delete of old KeyShares) removed 2026-04-19.
-        // It was deleting ancestor rows during new-version cascade — e.g. when
-        // patient created V3, the cascade POST for V3 would delete the doctor's
-        // V2 KeyShare because V2 was part of V3's chainCids and >60s old. Doctor
-        // would then lose V2 from their dashboard even though the share was
-        // still valid. Dashboard filtering (visibleParentCids) already hides
-        // ancestor versions when a leaf is present; revoke flow has its own
-        // status='revoked' path (handleConsentRevoked). No need for CLEAN SLATE.
-        const isReShare = false;
+        // Auto-claim cascade + allowDelegate inheritance: walk ancestors once,
+        // collect both signals from the recipient's existing KeyShare rows.
+        // - inheritsFromClaimedAncestor: skip "Nhận và xem" liability modal on
+        //   cascade share for an already-claimed chain.
+        // - allowDelegate inheritance: per medical episode model the on-chain
+        //   Consent is stored at the chain root with a single allowDelegate
+        //   flag — every version inherits it. CreateRecordScreen cascade
+        //   hardcodes `allowDelegate: false` for new versions, which would
+        //   silently downgrade the recipient's UI ("Có thể chia sẻ lại" tag
+        //   disappears) even though contract grantUsingRecordDelegation walks
+        //   to root and accepts the tx. We restore the invariant here: if any
+        //   ancestor share for this recipient has allowDelegate=true, the new
+        //   version inherits it.
+        let inheritsFromClaimedAncestor = false;
+        if (record.parentCidHash) {
+            let ancestor = record.parentCidHash.toLowerCase();
+            let walked = 0;
+            while (ancestor && walked < 20) {
+                const ancestorShare = await prisma.keyShare.findFirst({
+                    where: {
+                        cidHash: ancestor,
+                        recipientAddress: recipientLower,
+                        status: { notIn: ['revoked', 'rejected'] },
+                    },
+                    select: { id: true, status: true, allowDelegate: true },
+                });
+                if (ancestorShare) {
+                    if (ancestorShare.status === 'claimed') {
+                        inheritsFromClaimedAncestor = true;
+                    }
+                    if (ancestorShare.allowDelegate === true && finalAllowDelegate === false) {
+                        finalAllowDelegate = true;
+                    }
+                    if (inheritsFromClaimedAncestor && finalAllowDelegate) break;
+                }
+                const parentRow = await prisma.recordMetadata.findUnique({
+                    where: { cidHash: ancestor },
+                    select: { parentCidHash: true },
+                });
+                ancestor = parentRow?.parentCidHash?.toLowerCase() || null;
+                walked++;
+            }
+        }
 
         // INHERITANCE ENFORCEMENT: Check parent expiry — child cannot outlive parent.
         // BUT: skip clamping when parent's expiresAt is ALREADY EXPIRED. This prevents
@@ -238,61 +273,30 @@ router.post('/', authenticate, async (req, res, next) => {
             }
         }
 
-        // IDEMPOTENT UPSERT: If an active row already exists for this
-        // (cidHash, sender, recipient) triple — e.g. patient accidentally re-shares —
-        // update it in place instead of delete+create. This preserves the
-        // existing 'claimed' status so the recipient doesn't lose access and
-        // avoids the frontend briefly seeing KEY_SHARE_NOT_FOUND during the
-        // race window.
-        const keyShare = await prisma.$transaction(async (tx) => {
-            const existing = await tx.keyShare.findFirst({
-                where: {
-                    cidHash: cidHashLower,
-                    senderAddress: senderAddress,
-                    recipientAddress: recipientLower,
-                }
-            });
+        // Routed through keyShareWriter.applyShare so the timestamp guard rejects
+        // stale revoke events from the catchup queue overwriting this fresh
+        // share. Source distinguishes a manual share from cascade/auto-claim
+        // (used in audit log and UI). preserveClaimed prevents a doctor's
+        // already-claimed row from being downgraded back to pending when the
+        // patient idempotently re-shares.
+        const isSelfShare = senderAddress.toLowerCase() === recipientLower;
+        const autoClaim = isSelfShare || inheritsFromClaimedAncestor;
+        const writeSource = inheritsFromClaimedAncestor ? 'cascade' : 'manual';
 
-            const isSelfShare = senderAddress.toLowerCase() === recipientLower;
-
-            if (existing) {
-                // Re-share (clean-slate DELETE ran) or self-share → auto-claim.
-                // Otherwise preserve existing 'claimed' status.
-                const nextStatus = (isSelfShare || isReShare || existing.status === 'claimed')
-                    ? 'claimed'
-                    : 'pending';
-
-                return tx.keyShare.update({
-                    where: { id: existing.id },
-                    data: {
-                        encryptedPayload,
-                        senderPublicKey,
-                        allowDelegate: finalAllowDelegate,
-                        status: nextStatus,
-                        claimedAt: nextStatus === 'claimed' ? (existing.claimedAt || new Date()) : null,
-                        expiresAt: finalExpiresAt ? new Date(finalExpiresAt) : null,
-                    }
-                });
-            }
-
-            // For re-shares (clean slate DELETE ran above), auto-claim so doctor
-            // doesn't need to re-click "Nhận và xem". Patient explicitly re-granted.
-            const autoClaimStatus = isSelfShare || isReShare ? 'claimed' : 'pending';
-
-            return tx.keyShare.create({
-                data: {
-                    cidHash: cidHashLower,
-                    senderAddress,
-                    recipientAddress: recipientLower,
-                    encryptedPayload,
-                    senderPublicKey,
-                    allowDelegate: finalAllowDelegate,
-                    status: autoClaimStatus,
-                    claimedAt: autoClaimStatus === 'claimed' ? new Date() : null,
-                    expiresAt: finalExpiresAt ? new Date(finalExpiresAt) : null,
-                }
-            });
+        const writeResult = await applyShare({
+            cidHash: cidHashLower,
+            senderAddress: senderAddress.toLowerCase(),
+            recipientAddress: recipientLower,
+            encryptedPayload,
+            senderPublicKey,
+            status: autoClaim ? 'claimed' : 'pending',
+            expiresAt: finalExpiresAt ? new Date(finalExpiresAt) : null,
+            allowDelegate: finalAllowDelegate,
+            preserveClaimed: true,
+            source: writeSource,
+            sourceTimestamp: new Date(),
         });
+        const keyShare = writeResult.row;
 
         // Log access
         await prisma.accessLog.create({
@@ -356,6 +360,73 @@ router.get('/my', authenticate, async (req, res, next) => {
             },
             orderBy: { createdAt: 'desc' }
         });
+
+        // Defensive union: include records where the user is the `createdBy`
+        // (doctor who authored the record) but no KeyShare row exists (e.g. a
+        // transient upsert failure during /save-only). Without this, a doctor
+        // may never see records they just created if the KeyShare write fell
+        // through. Synthesize a self-access "virtual KeyShare" for those.
+        //
+        // BUT: skip cidHashes where the patient explicitly revoked the
+        // doctor's KeyShare. Without this guard, after a revoke the row was
+        // excluded from `keyShares` (filter notIn:['revoked',...]), then the
+        // doctor's createdBy lookup re-synthesized it as `status='claimed'`,
+        // making the dashboard show a ghost row that the doctor couldn't
+        // actually decrypt (on-chain canAccess gate denied).
+        const existingCids = new Set(keyShares.map(ks => ks.cidHash?.toLowerCase()).filter(Boolean));
+        const revokedRows = await prisma.keyShare.findMany({
+            where: { recipientAddress, status: 'revoked' },
+            select: { cidHash: true },
+        });
+        const revokedCids = new Set(revokedRows.map((r) => r.cidHash?.toLowerCase()).filter(Boolean));
+        const excludeCids = Array.from(new Set([...existingCids, ...revokedCids]));
+        const orphanCreated = await prisma.recordMetadata.findMany({
+            where: {
+                createdBy: recipientAddress,
+                syncStatus: 'confirmed',
+                NOT: { cidHash: { in: excludeCids } },
+            },
+            orderBy: { createdAt: 'desc' },
+        });
+
+        // Build a lookup of existing real KeyShare allowDelegate values keyed
+        // by cidHash, so synth rows can inherit the chain's effective delegate
+        // flag instead of hardcoding false (same medical-episode invariant as
+        // POST /api/key-share + save-only-doctor inheritance fixes).
+        const allowDelegateByCid = new Map();
+        for (const ks of keyShares) {
+            const key = ks.cidHash?.toLowerCase();
+            if (key) allowDelegateByCid.set(key, ks.allowDelegate === true);
+        }
+
+        // Synthesize entries shaped like a KeyShare include result so the
+        // processing loop below can handle them uniformly.
+        const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
+        const syntheticKeyShares = orphanCreated.map((record) => {
+            // Inherit allowDelegate from parent KeyShare if present. Synth row
+            // represents a doctor-created record with no real KeyShare row;
+            // per medical-episode model the chain root's allowDelegate applies.
+            const parentAllowDelegate = record.parentCidHash
+                ? (allowDelegateByCid.get(record.parentCidHash.toLowerCase()) === true)
+                : false;
+            return {
+                id: `synthetic-${record.cidHash}`,
+                cidHash: record.cidHash,
+                senderAddress: record.ownerAddress,
+                recipientAddress,
+                encryptedPayload: null,  // doctor still has local AES cache from creation
+                senderPublicKey: null,
+                allowDelegate: parentAllowDelegate,
+                status: 'claimed',
+                createdAt: record.createdAt,
+                claimedAt: record.createdAt,
+                expiresAt: new Date(new Date(record.createdAt).getTime() + SEVEN_DAYS_MS),
+                record,
+                sender: null,
+                _synthetic: true,
+            };
+        });
+        keyShares.push(...syntheticKeyShares);
 
         // Create a map to look up parent status efficiently
         const recordsMap = new Map();
@@ -432,6 +503,100 @@ router.get('/my', authenticate, async (req, res, next) => {
         });
 
         res.json(processedRecords);
+    } catch (error) {
+        next(error);
+    }
+});
+
+// GET /api/key-share/missing-for-creator (S12.C, 2026-04-25)
+// For records the caller AUTHORED (createdBy = caller), find recipients who
+// have on-chain consent on the chain but NO KeyShare row for this specific
+// version. Mobile uses the result to re-encrypt the AES key from local cache
+// and upload — heals the "patient never had pubkey at creation time, so V1
+// patient KeyShare missing → cascade to new doctor silently skips V1" bug.
+router.get('/missing-for-creator', authenticate, async (req, res, next) => {
+    try {
+        const creatorAddress = req.user.walletAddress.toLowerCase();
+
+        // Records this user created (any version, any chain).
+        const myRecords = await prisma.recordMetadata.findMany({
+            where: {
+                createdBy: creatorAddress,
+                syncStatus: 'confirmed',
+            },
+            select: { cidHash: true, parentCidHash: true },
+        });
+
+        if (myRecords.length === 0) {
+            return res.json([]);
+        }
+
+        // Compute chain root for each record (consent is keyed at root).
+        const rootCache = new Map();
+        const computeRoot = async (cidHash) => {
+            if (rootCache.has(cidHash)) return rootCache.get(cidHash);
+            let cursor = cidHash;
+            let depth = 0;
+            while (depth < 50) {
+                const r = await prisma.recordMetadata.findUnique({
+                    where: { cidHash: cursor },
+                    select: { parentCidHash: true },
+                });
+                if (!r?.parentCidHash) {
+                    rootCache.set(cidHash, cursor);
+                    return cursor;
+                }
+                cursor = r.parentCidHash;
+                depth++;
+            }
+            rootCache.set(cidHash, cursor);
+            return cursor;
+        };
+
+        const orphans = [];
+        for (const r of myRecords) {
+            const root = await computeRoot(r.cidHash);
+
+            // Active consents on this chain (mirror of on-chain ConsentLedger).
+            // Consent.expiresAt is non-nullable per schema, so a simple `gt`
+            // check covers all live consents — no null branch needed.
+            const consents = await prisma.consent.findMany({
+                where: {
+                    cidHash: root,
+                    status: 'active',
+                    expiresAt: { gt: new Date() },
+                },
+                select: { granteeAddress: true },
+            });
+
+            for (const c of consents) {
+                if (c.granteeAddress.toLowerCase() === creatorAddress) continue; // skip self
+
+                const existing = await prisma.keyShare.findFirst({
+                    where: {
+                        cidHash: r.cidHash,
+                        recipientAddress: c.granteeAddress.toLowerCase(),
+                        status: { notIn: ['revoked', 'rejected'] },
+                    },
+                    select: { id: true },
+                });
+                if (existing) continue;
+
+                const u = await prisma.user.findUnique({
+                    where: { walletAddress: c.granteeAddress.toLowerCase() },
+                    select: { encryptionPublicKey: true },
+                });
+                if (!u?.encryptionPublicKey) continue;
+
+                orphans.push({
+                    cidHash: r.cidHash,
+                    recipientAddress: c.granteeAddress.toLowerCase(),
+                    recipientPubkey: u.encryptionPublicKey,
+                });
+            }
+        }
+
+        res.json(orphans);
     } catch (error) {
         next(error);
     }
@@ -669,8 +834,8 @@ router.get('/recipients/:cidHash', authenticate, async (req, res, next) => {
         });
 
         // Return public keys for re-encryption + flags the mobile share-modal
-        // downgrade guard reads. 2026-04-19: dropped `includeUpdates` — medical
-        // episode model means every consent covers the whole chain.
+        // downgrade guard reads. Consent covers the whole chain (medical episode
+        // model), so allowDelegate + expiresAt are the only per-share flags.
         const team = recipients.map(share => ({
             walletAddress: share.recipient.walletAddress,
             encryptionPublicKey: share.recipient.encryptionPublicKey || share.senderPublicKey,
@@ -940,13 +1105,14 @@ router.post('/:id/claim', authenticate, async (req, res, next) => {
             }
         }
 
-        const updated = await prisma.keyShare.update({
-            where: { id: req.params.id },
-            data: {
-                status: 'claimed',
-                claimedAt: new Date()
-            }
+        const flipResult = await applyStatusFlip({
+            keyShareId: req.params.id,
+            newStatus: 'claimed',
+            claimedAt: new Date(),
+            source: 'recipient-claim',
+            sourceTimestamp: new Date(),
         });
+        const updated = flipResult.row;
 
         // Log access
         await prisma.accessLog.create({
@@ -985,9 +1151,11 @@ router.delete('/:id', authenticate, async (req, res, next) => {
             return res.status(403).json({ code: 'REQUEST_NOT_AUTHORIZED', error: 'Only sender can revoke', message: 'Only sender can revoke' });
         }
 
-        await prisma.keyShare.update({
-            where: { id: req.params.id },
-            data: { status: 'revoked' }
+        await applyStatusFlip({
+            keyShareId: req.params.id,
+            newStatus: 'revoked',
+            source: 'sender-revoke',
+            sourceTimestamp: new Date(),
         });
 
         // Emit real-time event to recipient that access was revoked
@@ -1026,9 +1194,11 @@ router.post('/:id/reject', authenticate, async (req, res, next) => {
             return res.status(400).json({ code: 'REQUEST_ALREADY_PROCESSED', error: 'Already rejected', message: 'Already rejected' });
         }
 
-        await prisma.keyShare.update({
-            where: { id: req.params.id },
-            data: { status: 'rejected' }
+        await applyStatusFlip({
+            keyShareId: req.params.id,
+            newStatus: 'rejected',
+            source: 'recipient-reject',
+            sourceTimestamp: new Date(),
         });
 
         // Emit real-time event to sender that share was rejected

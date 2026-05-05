@@ -5,6 +5,8 @@ import { authenticate } from '../middleware/auth.js';
 import relayerService from '../services/relayer.service.js';
 import { emitToUser } from '../services/socket.service.js';
 import { createLogger } from '../utils/logger.js';
+import { normalizeAddress, normalizeHash } from '../utils/normalize.js';
+import { applyShare, applyRevoke } from '../services/keyShareWriter.service.js';
 
 const log = createLogger('RecordRoutes');
 
@@ -19,12 +21,22 @@ const RECORD_SYNC_STATUS = {
 const ZERO_HASH = '0x0000000000000000000000000000000000000000000000000000000000000000';
 const MAX_CHILDREN = 100;
 
-function normalizeAddress(value) {
-    return typeof value === 'string' ? value.toLowerCase() : null;
-}
-
-function normalizeHash(value) {
-    return typeof value === 'string' ? value.toLowerCase() : null;
+// Backend tables (KeyShare, RecordMetadata) have FK constraints to User. When a
+// doctor writes a record for a patient who has never logged in, the patient
+// User row may not exist yet and the KeyShare upsert would silently fail with
+// a FK violation, leaving the doctor unable to decrypt their own creation.
+// Upsert the User row defensively before writing anything that references it.
+async function ensureUserRow(walletAddress) {
+    if (!walletAddress) return;
+    try {
+        await prisma.user.upsert({
+            where: { walletAddress },
+            update: {},
+            create: { walletAddress },
+        });
+    } catch (err) {
+        log.warn('ensureUserRow failed', { walletAddress, error: err?.message });
+    }
 }
 
 function buildConfirmedRecordWhere(extraWhere = {}) {
@@ -70,7 +82,6 @@ const saveOnlySchema = z.object({
     recordType: z.string().max(50).optional().nullable(),
     parentCidHash: z.string().regex(/^0x[a-fA-F0-9]{64}$/).optional().nullable(),
     txHash: z.string().regex(/^0x[a-fA-F0-9]{64}$/).optional().nullable(),
-    // 2026-04-19: doctor update flow now goes direct on-chain (no PendingUpdate).
     // When doctor updates a patient's record, mobile provides a NaCl-sealed
     // envelope of {cid, aesKey} encrypted for the PATIENT so the patient can
     // decrypt the new version. Optional for legacy/no-patient-share callers.
@@ -85,6 +96,12 @@ router.post('/', authenticate, async (req, res, next) => {
         const normalizedCidHash = normalizeHash(cidHash);
         const normalizedParentCidHash = normalizeHash(parentCidHash);
         const normalizedRecordTypeHash = normalizeHash(recordTypeHash);
+        // Canonical "no parent" = null in DB. Clients send ZERO_HASH for root
+        // records (contract requires bytes32), but storing that string in DB
+        // breaks chain grouping (version walk loops, filter(Boolean) sets).
+        const effectiveParentCidHash = normalizedParentCidHash && normalizedParentCidHash !== ZERO_HASH
+            ? normalizedParentCidHash
+            : null;
 
         const existing = await prisma.recordMetadata.findUnique({
             where: { cidHash: normalizedCidHash },
@@ -115,15 +132,15 @@ router.post('/', authenticate, async (req, res, next) => {
             });
         }
 
-        if (normalizedParentCidHash) {
-            const parentRecord = await findConfirmedRecordByCidHash(normalizedParentCidHash);
+        if (effectiveParentCidHash) {
+            const parentRecord = await findConfirmedRecordByCidHash(effectiveParentCidHash);
 
             if (!parentRecord) {
                 return res.status(404).json({ code: 'RECORD_NOT_FOUND', error: 'Parent record not found', message: 'Parent record not found' });
             }
 
             const childCount = await prisma.recordMetadata.count({
-                where: buildConfirmedRecordWhere({ parentCidHash: normalizedParentCidHash }),
+                where: buildConfirmedRecordWhere({ parentCidHash: effectiveParentCidHash }),
             });
 
             if (childCount >= MAX_CHILDREN) {
@@ -136,7 +153,7 @@ router.post('/', authenticate, async (req, res, next) => {
             const isOwner = normalizeAddress(parentRecord.ownerAddress) === walletAddress;
             const hasKeyShare = await prisma.keyShare.findFirst({
                 where: {
-                    cidHash: normalizedParentCidHash,
+                    cidHash: effectiveParentCidHash,
                     recipientAddress: walletAddress,
                     status: { in: ['pending', 'claimed'] },
                     OR: [
@@ -172,7 +189,7 @@ router.post('/', authenticate, async (req, res, next) => {
                     ownerAddress: walletAddress,
                     createdBy: walletAddress,
                     recordTypeHash: normalizedRecordTypeHash,
-                    parentCidHash: normalizedParentCidHash,
+                    parentCidHash: effectiveParentCidHash,
                     title: title || null,
                     description: description || null,
                     recordType: recordType || null,
@@ -191,7 +208,7 @@ router.post('/', authenticate, async (req, res, next) => {
                     ownerAddress: walletAddress,
                     createdBy: walletAddress,
                     recordTypeHash: normalizedRecordTypeHash,
-                    parentCidHash: normalizedParentCidHash,
+                    parentCidHash: effectiveParentCidHash,
                     title: title || null,
                     description: description || null,
                     recordType: recordType || null,
@@ -206,7 +223,7 @@ router.post('/', authenticate, async (req, res, next) => {
             txResult = await relayerService.sponsorUploadRecord(
                 walletAddress,
                 normalizedCidHash,
-                normalizedParentCidHash || ZERO_HASH,
+                effectiveParentCidHash || ZERO_HASH,
                 normalizedRecordTypeHash || ZERO_HASH,
             );
         } catch (txError) {
@@ -293,8 +310,19 @@ router.post('/save-only', authenticate, async (req, res, next) => {
         const normalizedParentCidHash = normalizeHash(parentCidHash);
         const normalizedRecordTypeHash = normalizeHash(recordTypeHash);
         const normalizedTxHash = normalizeHash(txHash);
+        // Canonical "no parent" = null in DB (see POST / for rationale).
+        const effectiveParentCidHash = normalizedParentCidHash && normalizedParentCidHash !== ZERO_HASH
+            ? normalizedParentCidHash
+            : null;
         const confirmedAt = new Date();
         let record;
+
+        // Guarantee both sides of the upcoming FK edges exist before any
+        // RecordMetadata / KeyShare writes. Without this, a doctor writing for
+        // a never-logged-in patient would fail on KeyShare.sender FK and leave
+        // the doctor unable to decrypt their own record.
+        await ensureUserRow(creatorAddress);
+        await ensureUserRow(patientAddress);
 
         const existing = await prisma.recordMetadata.findUnique({
             where: { cidHash: normalizedCidHash },
@@ -302,11 +330,15 @@ router.post('/save-only', authenticate, async (req, res, next) => {
 
         if (existing) {
             const isMissingParent = !existing.parentCidHash || existing.parentCidHash === ZERO_HASH;
-            const hasNewParent = normalizedParentCidHash && normalizedParentCidHash !== ZERO_HASH;
+            const hasNewParent = !!effectiveParentCidHash;
             const shouldPatchParent = isMissingParent && hasNewParent;
             const shouldMarkConfirmed = existing.syncStatus !== RECORD_SYNC_STATUS.CONFIRMED || !existing.confirmedAt || !!existing.syncError;
 
             if (shouldPatchParent || shouldMarkConfirmed) {
+                // When not patching, preserve existing.parentCidHash — but
+                // collapse legacy ZERO_HASH rows to null so the canonical shape
+                // spreads organically.
+                const preservedParent = existing.parentCidHash === ZERO_HASH ? null : existing.parentCidHash;
                 record = await prisma.recordMetadata.update({
                     where: { id: existing.id },
                     data: {
@@ -316,7 +348,7 @@ router.post('/save-only', authenticate, async (req, res, next) => {
                         title: title || existing.title || null,
                         description: description || existing.description || null,
                         recordType: recordType || existing.recordType || null,
-                        parentCidHash: shouldPatchParent ? normalizedParentCidHash : existing.parentCidHash,
+                        parentCidHash: shouldPatchParent ? effectiveParentCidHash : preservedParent,
                         syncStatus: RECORD_SYNC_STATUS.CONFIRMED,
                         txHash: normalizedTxHash || existing.txHash,
                         submittedAt: existing.submittedAt || confirmedAt,
@@ -338,7 +370,7 @@ router.post('/save-only', authenticate, async (req, res, next) => {
                     title: title || null,
                     description: description || null,
                     recordType: recordType || null,
-                    parentCidHash: normalizedParentCidHash,
+                    parentCidHash: effectiveParentCidHash,
                     syncStatus: RECORD_SYNC_STATUS.CONFIRMED,
                     txHash: normalizedTxHash,
                     submittedAt: confirmedAt,
@@ -356,18 +388,26 @@ router.post('/save-only', authenticate, async (req, res, next) => {
             // expiry (permanent — typical for the patient themselves) the
             // new row also gets null so owners don't accidentally self-expire.
             let inheritedExpiresAt = null;
+            let inheritedAllowDelegate = false;
             let useFallback = true;
-            if (normalizedParentCidHash && creatorAddress !== patientAddress) {
+            if (effectiveParentCidHash && creatorAddress !== patientAddress) {
                 const parentShare = await prisma.keyShare.findFirst({
                     where: {
-                        cidHash: normalizedParentCidHash,
+                        cidHash: effectiveParentCidHash,
                         recipientAddress: creatorAddress,
                         status: { notIn: ['revoked', 'rejected'] },
                     },
-                    select: { expiresAt: true },
+                    select: { expiresAt: true, allowDelegate: true },
                 });
                 if (parentShare) {
                     inheritedExpiresAt = parentShare.expiresAt; // may be null (forever)
+                    // On-chain Consent is at chain root with a single allowDelegate
+                    // flag — every version inherits it. Without this, when D updates
+                    // V1 → V2, V2's new self-share defaults to allowDelegate=false
+                    // and the dashboard's "Có thể chia sẻ lại" tag disappears even
+                    // though contract grantUsingRecordDelegation walks to root and
+                    // would still accept the share.
+                    inheritedAllowDelegate = parentShare.allowDelegate === true;
                     useFallback = false;
                 }
             }
@@ -375,20 +415,8 @@ router.post('/save-only', authenticate, async (req, res, next) => {
             fallbackExpiresAt.setDate(fallbackExpiresAt.getDate() + 7);
             const finalExpiresAt = useFallback ? fallbackExpiresAt : inheritedExpiresAt;
 
-            await prisma.keyShare.upsert({
-                where: {
-                    cidHash_senderAddress_recipientAddress: {
-                        cidHash: normalizedCidHash,
-                        senderAddress: patientAddress,
-                        recipientAddress: creatorAddress,
-                    },
-                },
-                update: {
-                    encryptedPayload,
-                    status: 'claimed',
-                    expiresAt: finalExpiresAt,
-                },
-                create: {
+            try {
+                await applyShare({
                     cidHash: normalizedCidHash,
                     senderAddress: patientAddress,
                     recipientAddress: creatorAddress,
@@ -396,7 +424,27 @@ router.post('/save-only', authenticate, async (req, res, next) => {
                     senderPublicKey: senderPublicKey || null,
                     status: 'claimed',
                     expiresAt: finalExpiresAt,
-                },
+                    allowDelegate: inheritedAllowDelegate,
+                    preserveClaimed: true,
+                    source: 'save-only-doctor',
+                    sourceTimestamp: new Date(),
+                });
+            } catch (err) {
+                // Don't fail the whole request if KeyShare write blows up —
+                // the on-chain record + RecordMetadata are already committed.
+                // But surface it loudly in logs so silent "can't decrypt"
+                // reports stop being a mystery.
+                log.error('save-only: doctor self KeyShare upsert failed', {
+                    cidHash: normalizedCidHash,
+                    senderAddress: patientAddress,
+                    recipientAddress: creatorAddress,
+                    error: err?.message,
+                });
+            }
+        } else {
+            log.warn('save-only: encryptedPayload empty — skipping doctor self KeyShare', {
+                cidHash: normalizedCidHash,
+                creatorAddress,
             });
         }
 
@@ -405,28 +453,26 @@ router.post('/save-only', authenticate, async (req, res, next) => {
         // Only fires when doctor is updating on behalf of someone else — skip
         // when creator == owner (patient creating their own record path).
         if (patientEncryptedPayload && creatorAddress !== patientAddress) {
-            await prisma.keyShare.upsert({
-                where: {
-                    cidHash_senderAddress_recipientAddress: {
-                        cidHash: normalizedCidHash,
-                        senderAddress: creatorAddress,   // doctor as sender
-                        recipientAddress: patientAddress, // patient as recipient
-                    },
-                },
-                update: {
-                    encryptedPayload: patientEncryptedPayload,
-                    senderPublicKey: senderPublicKey || undefined,
-                    status: 'pending',
-                },
-                create: {
+            try {
+                await applyShare({
                     cidHash: normalizedCidHash,
                     senderAddress: creatorAddress,
                     recipientAddress: patientAddress,
                     encryptedPayload: patientEncryptedPayload,
                     senderPublicKey: senderPublicKey || null,
                     status: 'pending',
-                },
-            });
+                    preserveClaimed: true,
+                    source: 'save-only-patient',
+                    sourceTimestamp: new Date(),
+                });
+            } catch (err) {
+                log.error('save-only: patient KeyShare upsert failed', {
+                    cidHash: normalizedCidHash,
+                    senderAddress: creatorAddress,
+                    recipientAddress: patientAddress,
+                    error: err?.message,
+                });
+            }
         }
 
         await prisma.accessLog.create({
@@ -438,7 +484,7 @@ router.post('/save-only', authenticate, async (req, res, next) => {
             },
         });
 
-        const patchedParent = !!existing && (!existing.parentCidHash || existing.parentCidHash === ZERO_HASH) && !!normalizedParentCidHash;
+        const patchedParent = !!existing && (!existing.parentCidHash || existing.parentCidHash === ZERO_HASH) && !!effectiveParentCidHash;
 
         res.status(existing ? 200 : 201).json({
             id: record.id,
@@ -535,6 +581,12 @@ router.get('/chain/:cidHash', authenticate, async (req, res, next) => {
             return res.status(404).json({ code: 'RECORD_NOT_FOUND', error: 'Record not found', message: 'Record not found' });
         }
 
+        // Collapse legacy zero-hash parentCidHash to null so version walks +
+        // parent lookups don't loop through a non-existent phantom root.
+        if (record.parentCidHash === ZERO_HASH) {
+            record.parentCidHash = null;
+        }
+
         let parent = null;
         if (record.parentCidHash) {
             parent = await findConfirmedRecordByCidHash(record.parentCidHash);
@@ -558,12 +610,13 @@ router.get('/chain/:cidHash', authenticate, async (req, res, next) => {
 
         let version = 1;
         let currentParent = record.parentCidHash;
-        while (currentParent) {
+        while (currentParent && currentParent !== ZERO_HASH) {
             version += 1;
             const parentRecord = await findConfirmedRecordByCidHash(currentParent, {
                 select: { parentCidHash: true },
             });
-            currentParent = parentRecord?.parentCidHash || null;
+            const nextParent = parentRecord?.parentCidHash || null;
+            currentParent = (nextParent === ZERO_HASH) ? null : nextParent;
         }
 
         res.json({
@@ -605,7 +658,9 @@ router.get('/chain-cids/:cidHash', authenticate, async (req, res, next) => {
                 const record = await findConfirmedRecordByCidHash(current, {
                     select: { parentCidHash: true },
                 });
-                current = record?.parentCidHash || null;
+                // Treat zero-hash parentCidHash as no-parent (legacy data).
+                const nextParent = record?.parentCidHash || null;
+                current = (nextParent === ZERO_HASH) ? null : nextParent;
             }
 
             return ancestors[ancestors.length - 1];
@@ -751,16 +806,30 @@ router.delete('/:cidHash/access/:address', authenticate, async (req, res, next) 
             }
         }
 
-        await prisma.keyShare.updateMany({
-            where: {
-                id: { in: keyShares.map(keyShare => keyShare.id) },
-            },
-            data: {
-                status: 'revoked',
-                encryptedPayload: '',
-                expiresAt: new Date(),
-            },
-        });
+        // Group revokes by sender so applyRevoke can apply the timestamp guard
+        // per-row. Multiple senders are possible (patient + doctors who re-shared
+        // earlier); revoking all of them is intentional — patient is killing
+        // every access path to `targetAddress` for this chain.
+        const bySender = new Map();
+        for (const ks of keyShares) {
+            const key = ks.senderAddress.toLowerCase();
+            if (!bySender.has(key)) bySender.set(key, []);
+            bySender.get(key).push(ks.cidHash.toLowerCase());
+        }
+        const revokeTimestamp = new Date();
+        for (const [senderAddr, cids] of bySender) {
+            await applyRevoke({
+                senderAddress: senderAddr,
+                recipientAddress: targetAddress,
+                cidHashes: cids,
+                source: 'revoke-endpoint',
+                sourceTimestamp: revokeTimestamp,
+            });
+        }
+        // Note: applyRevoke clears encryptedPayload and sets status='revoked'
+        // but does NOT touch expiresAt. The original code set expiresAt=now()
+        // as a defensive marker; removed because status='revoked' is the
+        // primary signal and KeyShare reads filter on it.
 
         await prisma.accessLog.create({
             data: {
