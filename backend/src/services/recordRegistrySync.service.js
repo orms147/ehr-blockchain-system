@@ -7,6 +7,7 @@ import prisma from '../config/database.js';
 import { emitToUser, getIO } from './socket.service.js';
 import { createLogger } from '../utils/logger.js';
 import { withRpcRetry } from '../utils/rpcRetry.js';
+import { normalizeAddress, normalizeHash } from '../utils/normalize.js';
 
 const log = createLogger('RecordSync');
 
@@ -54,18 +55,6 @@ function getPublicClient() {
         });
     }
     return publicClient;
-}
-
-function normalizeAddress(value) {
-    return typeof value === 'string' ? value.toLowerCase() : null;
-}
-
-function normalizeHash(value) {
-    if (typeof value !== 'string') {
-        return null;
-    }
-
-    return /^0x[a-fA-F0-9]{64}$/.test(value) ? value.toLowerCase() : null;
 }
 
 function toOptionalHash(value) {

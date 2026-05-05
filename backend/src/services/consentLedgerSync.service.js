@@ -21,6 +21,7 @@ import { emitToUser, getIO } from './socket.service.js';
 import { sendPushToWallet } from './push.service.js';
 import { createLogger } from '../utils/logger.js';
 import { withRpcRetry } from '../utils/rpcRetry.js';
+import { normalizeAddress, normalizeHash } from '../utils/normalize.js';
 import { applyRevoke } from './keyShareWriter.service.js';
 
 const log = createLogger('ConsentSync');
@@ -74,14 +75,6 @@ function getPublicClient() {
     return publicClient;
 }
 
-function normalizeAddress(value) {
-    return typeof value === 'string' ? value.toLowerCase() : null;
-}
-
-function normalizeHash(value) {
-    if (typeof value !== 'string') return null;
-    return /^0x[a-fA-F0-9]{64}$/.test(value) ? value.toLowerCase() : null;
-}
 
 async function ensureUserRecord(walletAddress) {
     if (!walletAddress) return null;
@@ -546,6 +539,43 @@ async function handleConsentRevoked(event) {
         sourceTimestamp,
     });
 
+    // Cascade revoke for downstream recipients: when patient revokes D_A, contract
+    // cascades through `recordDelegationSource` so canAccess() denies any C that
+    // received per-record delegation from D_A. Mirror that in the DB so C's
+    // dashboard doesn't show ghost rows that 403 on tap. Find KeyShare rows
+    // where the revoked grantee was the SENDER (D_A re-shared to C) and revoke
+    // those too. Contract's grantUsingRecordDelegation hardcodes one-hop, so
+    // only 1 cascade level needed.
+    const downstreamRows = revocableCidHashes.length
+        ? await prisma.keyShare.findMany({
+            where: {
+                senderAddress: grantee,
+                cidHash: { in: revocableCidHashes },
+                status: { not: 'revoked' },
+            },
+            select: { recipientAddress: true },
+        })
+        : [];
+    const downstreamRecipients = Array.from(new Set(downstreamRows.map((r) => r.recipientAddress?.toLowerCase()).filter(Boolean)));
+    let cascadeRevoked = 0;
+    for (const recipient of downstreamRecipients) {
+        const result = await applyRevoke({
+            senderAddress: grantee,
+            recipientAddress: recipient,
+            cidHashes: revocableCidHashes,
+            source: 'event-revoke',
+            sourceTimestamp,
+        });
+        cascadeRevoked += result.applied;
+        // Notify each downstream recipient too
+        emitToUser(recipient, 'consentUpdated', {
+            action: 'cascade_revoked',
+            patient,
+            via: grantee,
+            rootCidHash,
+        });
+    }
+
     try {
         await prisma.consent.updateMany({
             where: {
@@ -565,6 +595,8 @@ async function handleConsentRevoked(event) {
         rootCidHash,
         keySharesRevoked: updateResult.applied,
         keySharesSkipped: updateResult.skipped,
+        cascadeDownstreamRevoked: cascadeRevoked,
+        cascadeRecipientCount: downstreamRecipients.length,
         versionCount: cidHashes.length,
     });
 
@@ -799,6 +831,19 @@ export function stopConsentLedgerSync() {
         catchupInterval = null;
     }
 }
+
+// Exported for subgraphSync (S17): when reading events from the subgraph
+// instead of polling RPC, we still want the same DB side effects + socket
+// emits, so subgraphSync shapes its rows into the {args, transactionHash}
+// structure these handlers expect and dispatches here.
+export {
+    handleConsentGranted,
+    handleConsentRevoked,
+    handleEmergencyGranted,
+    handleDelegationGranted,
+    handleDelegationRevoked,
+    handleAccessGrantedViaDelegation,
+};
 
 export default {
     startConsentLedgerSync,

@@ -21,9 +21,15 @@ import adminRoutes from './routes/admin.routes.js';
 // pendingUpdate routes removed 2026-04-19 — doctor updates are direct on-chain.
 import profileRoutes from './routes/profile.routes.js';
 import testRoutes from './routes/test.routes.js';
-import { startEventSync } from './services/eventSync.service.js';
-import { startRecordRegistrySync } from './services/recordRegistrySync.service.js';
-import { startConsentLedgerSync } from './services/consentLedgerSync.service.js';
+// startEventSync (AccessControl RPC polling) disabled 2026-04-30:
+// 7 watchers + 5min catchup loop on Alchemy free tier produced sustained
+// 429 storms (eth_getFilterChanges rate-limited). subgraphSync now polls
+// Doctor verifications via The Graph (zero RPC cost) and invalidates
+// roleCache directly. Other AccessControl events (Member*, Organization*)
+// were admin-only DB cache mirrors — those tables now eventual-consistency
+// from on-demand reads. Kept the import as comment for easy revert if needed.
+// import { startEventSync } from './services/eventSync.service.js';
+import { startSubgraphSync } from './services/subgraphSync.service.js';
 import { errorHandler } from './middleware/errorHandler.js';
 
 dotenv.config();
@@ -82,10 +88,12 @@ app.use(errorHandler);
 // Start server with Socket.io
 server.listen(PORT, () => {
     console.log(`🚀 Server running on port ${PORT}`);
-    // Start blockchain event sync workers
-    startEventSync();
-    startRecordRegistrySync();
-    startConsentLedgerSync();
+    // S17 2026-04-30: zero RPC polling. All event sync via subgraph.
+    // subgraphSync covers: ConsentEvent, DelegationEvent, EmergencyEvent,
+    // DelegationAccessGrant, Doctor (verifiedAt → roleCache invalidate).
+    // recordRegistrySync handlers not migrated (save-only API is primary
+    // path for RecordMetadata writes).
+    startSubgraphSync();
 });
 
 export default app;

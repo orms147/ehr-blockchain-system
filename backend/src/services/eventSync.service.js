@@ -7,6 +7,8 @@ import prisma from '../config/database.js';
 import { emitToUser, getIO } from './socket.service.js';
 import { createLogger } from '../utils/logger.js';
 import { withRpcRetry } from '../utils/rpcRetry.js';
+import { normalizeAddress } from '../utils/normalize.js';
+import { invalidateRoleCache } from '../config/blockchain.js';
 
 const log = createLogger('EventSync');
 
@@ -43,9 +45,6 @@ function getPublicClient() {
     return publicClient;
 }
 
-function normalizeAddress(value) {
-    return typeof value === 'string' ? value.toLowerCase() : null;
-}
 
 function normalizeChainOrgId(value) {
     if (value === undefined || value === null) {
@@ -233,6 +232,10 @@ async function handleMemberAdded(event) {
         },
     });
 
+    // Membership flips affect isActiveOrgAdmin / isOrg flags in the cached
+    // role result; bust the cache so the next role lookup hits chain truth.
+    invalidateRoleCache(doctorAddress);
+
     log.info('MemberAdded', { doctor: doctorAddress, org: organization.name });
 
     emitToUser(orgAdminAddress, 'orgMemberUpdated', {
@@ -277,6 +280,8 @@ async function handleMemberRemoved(event) {
         // Ignore if the membership was never cached locally.
     }
 
+    invalidateRoleCache(doctorAddress);
+
     log.info('MemberRemoved', { doctor: doctorAddress, org: organization.name });
 
     emitToUser(orgAdminAddress, 'orgMemberUpdated', {
@@ -318,6 +323,12 @@ async function handleDoctorVerified(event) {
         data: verificationUpdate,
     });
 
+    // The on-chain role middleware caches isVerifiedDoctor for 60s. Without
+    // this invalidation, fresh requests after verification still see "not
+    // verified" until cache expires — patient share would block on
+    // DOCTOR_NOT_VERIFIED for a minute after the verify tx confirms.
+    invalidateRoleCache(doctorAddress);
+
     log.info('DoctorVerified', { doctor: doctorAddress, verifier: verifierAddress, chainOrgId: chainOrgId?.toString() ?? 'n/a' });
 
     emitToUser(doctorAddress, 'doctorVerified', {
@@ -345,6 +356,8 @@ async function handleVerificationRevoked(event) {
     if (!userAddress) {
         return;
     }
+
+    invalidateRoleCache(userAddress);
 
     log.info('VerificationRevoked', { user: userAddress, revoker: revokerAddress });
 

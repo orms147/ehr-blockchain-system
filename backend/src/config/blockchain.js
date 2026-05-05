@@ -2,6 +2,7 @@ import { createPublicClient, http } from 'viem';
 import { arbitrumSepolia } from 'viem/chains';
 import { createLogger } from '../utils/logger.js';
 import { withRpcRetry } from '../utils/rpcRetry.js';
+import { normalizeAddress } from '../utils/normalize.js';
 
 const log = createLogger('Blockchain');
 
@@ -119,14 +120,16 @@ export const ACCESS_CONTROL_ABI = [
     },
 ];
 
-// Public client for reading blockchain data. Bumped retry options on the
-// transport handle viem's internal retries; withRpcRetry around individual
-// calls below adds a second longer-backoff layer for 429 specifically.
+// Public client for reading blockchain data. viem's transport retry is
+// disabled — `withRpcRetry` (utils/rpcRetry.js) is the single retry layer at
+// the app level, with longer exponential backoff tuned for Alchemy free-tier
+// 429s. Stacking both layers used to multiply delays into ~26s hangs. Override
+// only if running against an RPC that needs a separate transport-level retry.
 export const publicClient = createPublicClient({
     chain: arbitrumSepolia,
     transport: http(process.env.RPC_URL, {
-        retryCount: Number(process.env.RPC_TRANSPORT_RETRIES ?? 3),
-        retryDelay: Number(process.env.RPC_TRANSPORT_RETRY_DELAY_MS ?? 600),
+        retryCount: Number(process.env.RPC_TRANSPORT_RETRIES ?? 0),
+        retryDelay: Number(process.env.RPC_TRANSPORT_RETRY_DELAY_MS ?? 0),
     }),
 });
 
@@ -135,7 +138,12 @@ export const publicClient = createPublicClient({
 // even modest traffic blows past Alchemy free tier 300 CU/sec. Roles change
 // rarely (DoctorVerified events are infrequent), so a 60s TTL is a fair
 // trade-off between freshness and RPC pressure. Override via env.
-const ROLE_CACHE_TTL_MS = Number(process.env.ROLE_CACHE_TTL_MS ?? 60_000);
+// 10 min default. Subgraph polls Doctor.verifiedAt every SUBGRAPH_POLL_MS
+// (30s) and explicitly invalidates the cache for newly-verified doctors via
+// invalidateRoleCache(), so the long TTL doesn't lag verification flow.
+// VerificationRevoked events have no subgraph signal — those still wait for
+// the TTL to expire (admin action, rare; 10 min is acceptable).
+const ROLE_CACHE_TTL_MS = Number(process.env.ROLE_CACHE_TTL_MS ?? 600_000);
 const roleCache = new Map(); // address -> { value, expiresAt }
 
 function getCachedRole(address) {
@@ -160,10 +168,6 @@ export const CONTRACT_ADDRESSES = {
     EHRSystemSecure: process.env.EHR_SYSTEM_ADDRESS,
     DoctorUpdate: process.env.DOCTOR_UPDATE_ADDRESS,
 };
-
-function normalizeAddress(address) {
-    return typeof address === 'string' ? address.toLowerCase() : address;
-}
 
 // Helper: Check if user has consent to access a record
 export async function checkConsent(patientAddress, granteeAddress, cidHash) {

@@ -28,6 +28,7 @@
 
 import prisma from '../config/database.js';
 import { createLogger } from '../utils/logger.js';
+import { normalizeAddress, normalizeHash } from '../utils/normalize.js';
 
 const log = createLogger('KeyShareWriter');
 
@@ -53,13 +54,6 @@ const REVOKE_SOURCES = new Set([
     'revoke-endpoint',
 ]);
 
-function normalizeAddress(value) {
-    return typeof value === 'string' ? value.toLowerCase() : value;
-}
-
-function normalizeHash(value) {
-    return typeof value === 'string' ? value.toLowerCase() : value;
-}
 
 async function logMutation(tx, {
     cidHash, senderAddress, recipientAddress,
