@@ -1,8 +1,8 @@
 import { create } from 'zustand';
 import * as SecureStore from 'expo-secure-store';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import api from '../services/api';
 import walletActionService from '../services/walletAction.service';
+import localRecordStore from '../services/localRecordStore';
 import { deriveRolesFromUser, resolveActiveRole, sanitizeRoles } from '../utils/authRoles';
 import { setSentryUser } from '../lib/sentry';
 import { queryClient } from '../lib/queryClient';
@@ -88,6 +88,25 @@ const useAuthStore = create((set, get) => ({
             walletAddress
         );
 
+        // Defence in depth: wipe any query cache that could have survived a
+        // racy logout (an in-flight fetch from the previous account resolving
+        // AFTER queryClient.clear but BEFORE this login). Without this, the
+        // next dashboard render might hydrate from the previous user's data
+        // before its refetch lands.
+        try {
+            api.abortAll();
+            await queryClient.cancelQueries();
+            queryClient.clear();
+            queryClient.removeQueries();
+        } catch (err) {
+            console.warn('Login: pre-clear cache failed', err);
+        }
+        try {
+            await localRecordStore.clear();
+        } catch (err) {
+            console.warn('Login: clear ehr_local_records failed', err);
+        }
+
         api.setToken(token);
         await SecureStore.setItemAsync('jwt_token', token);
 
@@ -118,7 +137,29 @@ const useAuthStore = create((set, get) => ({
     },
 
     logout: async () => {
+        // Clear the in-memory token FIRST so any in-flight request that
+        // resolves during the rest of logout can't leak A's data into the
+        // cache (the cache clear below would then be undone by that response).
         api.clearToken();
+
+        // Abort every in-flight HTTP request so a slow fetch started as user
+        // A can't resolve into the TanStack cache after we clear it. Without
+        // this, B's dashboard hydrated from A's late-arriving data until the
+        // first refetch landed — the "still see A's dashboard after login B"
+        // bug.
+        try {
+            api.abortAll();
+        } catch (err) {
+            console.warn('Logout: abortAll failed', err);
+        }
+
+        // Tell TanStack to also cancel any query-layer retries / reconciliation.
+        try {
+            await queryClient.cancelQueries();
+        } catch (err) {
+            console.warn('Logout: cancelQueries failed', err);
+        }
+
         try {
             await walletActionService.logoutWeb3Auth();
         } catch (error) {
@@ -137,13 +178,14 @@ const useAuthStore = create((set, get) => ({
         // first refetch).
         try {
             queryClient.clear();
+            queryClient.removeQueries();
         } catch (err) {
             console.warn('Logout: queryClient.clear failed', err);
         }
         try {
             // ehr_local_records holds decrypted cids + aes keys per cidHash.
             // These are per-user secrets — must not persist across accounts.
-            await AsyncStorage.removeItem('ehr_local_records');
+            await localRecordStore.clear();
         } catch (err) {
             console.warn('Logout: clear ehr_local_records failed', err);
         }

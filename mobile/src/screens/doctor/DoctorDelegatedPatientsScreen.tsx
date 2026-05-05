@@ -14,7 +14,7 @@ import {
     TextInput,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import localRecordStore from '../../services/localRecordStore';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
     ChevronRight,
@@ -122,9 +122,7 @@ function ShareRecordModal({
             // would receive an on-chain entry with no off-chain payload to decrypt.
             // The doctor obtains this key via a normal patient → doctor share flow
             // BEFORE attempting to re-share via delegation.
-            const localStr = await AsyncStorage.getItem('ehr_local_records');
-            const localRecords = localStr ? JSON.parse(localStr) : {};
-            const local = localRecords[record.cidHash];
+            const local = await localRecordStore.getKey(record.cidHash);
             if (!local?.cid || !local?.aesKey) {
                 Alert.alert(
                     'Chưa có khoá giải mã',
@@ -179,7 +177,7 @@ function ShareRecordModal({
             // STEP 2C (Option B): Check if grantee already has on-chain consent.
             // If yes, re-sharing would OVERWRITE — warn doctor A.
             try {
-                const pc = createPublicClient({ chain: arbitrumSepolia, transport: http('https://sepolia-rollup.arbitrum.io/rpc') });
+                const pc = createPublicClient({ chain: arbitrumSepolia, transport: http(process.env.EXPO_PUBLIC_RPC_URL || 'https://sepolia-rollup.arbitrum.io/rpc') });
                 const CONSENT_ADDR = process.env.EXPO_PUBLIC_CONSENT_LEDGER_ADDRESS as `0x${string}`;
                 const alreadyHas = await pc.readContract({
                     address: CONSENT_ADDR,

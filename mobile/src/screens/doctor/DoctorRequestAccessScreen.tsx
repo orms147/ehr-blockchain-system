@@ -6,12 +6,13 @@ import { YStack, XStack, Text, Button, Input, TextArea, View } from 'tamagui';
 
 import api from '../../services/api';
 import walletActionService from '../../services/walletAction.service';
+import { withRpcRetry, formatChainError } from '../../utils/rpcRetry';
 import { createPublicClient, http, parseEventLogs, parseGwei } from 'viem';
 import { arbitrumSepolia } from 'viem/chains';
 import QrAddressScanner from '../../components/QrAddressScanner';
 
 const EHR_SYSTEM_ADDRESS = process.env.EXPO_PUBLIC_EHR_SYSTEM_ADDRESS as `0x${string}`;
-const ARBITRUM_RPC = 'https://sepolia-rollup.arbitrum.io/rpc';
+const ARBITRUM_RPC = process.env.EXPO_PUBLIC_RPC_URL || 'https://sepolia-rollup.arbitrum.io/rpc';
 
 const REQUEST_ACCESS_ABI = [
     {
@@ -51,7 +52,8 @@ const REQUEST_ACCESS_ABI = [
 
 const publicClient = createPublicClient({
     chain: arbitrumSepolia,
-    transport: http(ARBITRUM_RPC),
+    // withRpcRetry wraps reads — disable viem-level retry to avoid stacking.
+    transport: http(ARBITRUM_RPC, { retryCount: 0 }),
 });
 import {
     EHR_ON_SURFACE_VARIANT,
@@ -109,14 +111,14 @@ export default function DoctorRequestAccessScreen() {
         // Check if target address is registered as patient on-chain
         try {
             const targetAddr = patientAddress.trim().toLowerCase();
-            const isPatient = await publicClient.readContract({
+            const isPatient = await withRpcRetry(() => publicClient.readContract({
                 address: (process.env.EXPO_PUBLIC_ACCESS_CONTROL_ADDRESS || '') as `0x${string}`,
                 abi: [{ name: 'isPatient', type: 'function', stateMutability: 'view',
                     inputs: [{ name: 'account', type: 'address' }],
                     outputs: [{ type: 'bool' }] }],
                 functionName: 'isPatient',
                 args: [targetAddr as `0x${string}`],
-            });
+            }));
             if (!isPatient) {
                 Alert.alert(
                     'Không phải bệnh nhân',
@@ -265,7 +267,7 @@ export default function DoctorRequestAccessScreen() {
             setSelectedType(0);
             setReason('');
         } catch (error: any) {
-            Alert.alert('Lỗi', error?.message || 'Không thể gửi yêu cầu. Vui lòng thử lại.');
+            Alert.alert('Lỗi', formatChainError(error, 'Không thể gửi yêu cầu. Vui lòng thử lại.'));
         } finally {
             setIsSubmitting(false);
         }

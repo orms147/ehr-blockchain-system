@@ -10,7 +10,7 @@ import authService from '../../services/auth.service';
 import consentService from '../../services/consent.service';
 import walletActionService from '../../services/walletAction.service';
 import { getOrCreateEncryptionKeypair, encryptForRecipient } from '../../services/nacl-crypto';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import localRecordStore from '../../services/localRecordStore';
 import recordService from '../../services/record.service';
 import useAuthStore from '../../store/authStore';
 
@@ -67,9 +67,7 @@ export default function DoctorDelegatableRecordsScreen() {
             }
 
             // 2. Get local key for this record (I must have claimed & decrypted it before)
-            const localStr = await AsyncStorage.getItem('ehr_local_records');
-            const localRecords = localStr ? JSON.parse(localStr) : {};
-            const localRecord = localRecords?.[selected.cidHash];
+            const localRecord = await localRecordStore.getKey(selected.cidHash);
             if (!localRecord?.cid || !localRecord?.aesKey) {
                 throw new Error('Không tìm thấy khóa giải mã. Hãy mở hồ sơ này trước khi ủy quyền.');
             }
@@ -111,6 +109,7 @@ export default function DoctorDelegatableRecordsScreen() {
                 const chainRes: any = await recordService.getChainCids(selected.cidHash);
                 const allVersions: any[] = (chainRes?.records || [])
                     .filter((v: any) => v?.cidHash && v.cidHash !== selected.cidHash);
+                const localRecords = await localRecordStore.getAll();
                 for (const v of allVersions) {
                     const vLocal = localRecords[v.cidHash];
                     if (!vLocal?.cid || !vLocal?.aesKey) continue;

@@ -1,7 +1,5 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import recordService from './record.service';
-
-const LOCAL_RECORDS_STORAGE_KEY = 'ehr_local_records';
+import localRecordStore from './localRecordStore';
 
 function toLocalRenderableRecord(cidHash, raw) {
     const createdAtSource = raw?.createdAt || raw?.submittedAt || raw?.failedAt || Date.now();
@@ -30,23 +28,6 @@ function toLocalRenderableRecord(cidHash, raw) {
     };
 }
 
-async function readLocalRecordsMap() {
-    const raw = await AsyncStorage.getItem(LOCAL_RECORDS_STORAGE_KEY);
-    if (!raw) {
-        return {};
-    }
-
-    try {
-        const parsed = JSON.parse(raw);
-        return parsed && typeof parsed === 'object' ? parsed : {};
-    } catch {
-        return {};
-    }
-}
-
-async function writeLocalRecordsMap(map) {
-    await AsyncStorage.setItem(LOCAL_RECORDS_STORAGE_KEY, JSON.stringify(map || {}));
-}
 
 function isRecordAlreadyExistsError(error) {
     if (!error) return false;
@@ -113,7 +94,7 @@ async function retryOneRecord(cidHash, draft) {
 }
 
 export async function retryFailedLocalRecords({ limit = 3 } = {}) {
-    const localMap = await readLocalRecordsMap();
+    const localMap = await localRecordStore.getAll();
     const failedEntries = Object.entries(localMap).filter(([, value]) => value?.syncStatus === 'failed');
 
     if (failedEntries.length === 0) {
@@ -123,16 +104,17 @@ export async function retryFailedLocalRecords({ limit = 3 } = {}) {
     let attempted = 0;
     let succeeded = 0;
     let failed = 0;
+    const updates = {};
 
     for (const [cidHash, draft] of failedEntries.slice(0, Math.max(1, limit))) {
         attempted += 1;
 
         try {
-            localMap[cidHash] = await retryOneRecord(cidHash, draft || {});
+            updates[cidHash] = await retryOneRecord(cidHash, draft || {});
             succeeded += 1;
         } catch (error) {
             failed += 1;
-            localMap[cidHash] = {
+            updates[cidHash] = {
                 ...(draft || {}),
                 syncStatus: 'failed',
                 syncError: error?.message || 'Không thể đồng bộ on-chain. Vui lòng thử lại.',
@@ -141,12 +123,12 @@ export async function retryFailedLocalRecords({ limit = 3 } = {}) {
         }
     }
 
-    await writeLocalRecordsMap(localMap);
+    await localRecordStore.merge(updates);
     return { attempted, succeeded, failed };
 }
 
 export async function getLocalDraftRecords() {
-    const localMap = await readLocalRecordsMap();
+    const localMap = await localRecordStore.getAll();
 
     return Object.entries(localMap)
         .filter(([, value]) => value?.syncStatus === 'failed' || value?.syncStatus === 'pending')

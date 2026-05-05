@@ -12,6 +12,15 @@ import { recordKeys } from './queries/queryKeys';
  * Adds: server-fetch dedup across screens, automatic background refresh on focus.
  */
 
+const ZERO_HASH = '0x0000000000000000000000000000000000000000000000000000000000000000';
+
+// Defensive: legacy rows may carry ZERO_HASH as parentCidHash for root records.
+// Collapse to null so chain grouping + filter(Boolean) treat them as roots.
+const normalizeParentCid = (value) => {
+    if (!value) return null;
+    return value.toLowerCase() === ZERO_HASH ? null : value;
+};
+
 const transformRecords = (data) => {
     const transformedRecords = (data || []).map((record, index) => {
         const recordType = record.recordType || 'Record';
@@ -25,7 +34,7 @@ const transformRecords = (data) => {
         return {
             id: record.id || index + 1,
             cidHash: record.cidHash,
-            parentCidHash: record.parentCidHash || null,
+            parentCidHash: normalizeParentCid(record.parentCidHash),
             type: recordType,
             title: record.title || `${recordType} #${record.id || index + 1}`,
             description: record.description || null,

@@ -1,7 +1,6 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Image, Pressable, ScrollView, TextInput, type KeyboardTypeOptions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
 import {
     Activity,
@@ -28,6 +27,8 @@ import recordService from '../services/record.service';
 import keyShareService from '../services/keyShare.service';
 import walletActionService from '../services/walletAction.service';
 import { getOrCreateEncryptionKeypair, encryptForRecipient } from '../services/nacl-crypto';
+import { normalizeBase64 } from '../utils/base64';
+import localRecordStore from '../services/localRecordStore';
 import useAuthStore from '../store/authStore';
 import {
     EHR_ERROR,
@@ -99,8 +100,6 @@ const RECORD_TYPES: RecordTypeOption[] = [
     { key: 'vital_signs', label: 'Chỉ số sinh tồn', icon: HeartPulse, tint: EHR_PRIMARY, bg: EHR_SURFACE_HIGH },
 ];
 
-const LOCAL_RECORDS_STORAGE_KEY = 'ehr_local_records';
-
 function toSerializableRecord(record: Record<string, any>) {
     const createdAtIso = record?.createdAt
         ? new Date(record.createdAt).toISOString()
@@ -112,12 +111,6 @@ function toSerializableRecord(record: Record<string, any>) {
     };
 }
 
-function normalizeBase64(data: string) {
-    return data
-        .replace(/^data:[^;]+;base64,/, '')
-        .replace(/\s+/g, '')
-        .trim();
-}
 
 function buildCreateRecordErrorMessage(submitError: any): string {
     const code = submitError?.code || submitError?.data?.code;
@@ -254,6 +247,12 @@ function buildPayload({
 export default function CreateRecordScreen({ navigation, route: navRoute }: any) {
     const { user } = useAuthStore();
     const recordApi: any = recordService;
+    // Track mount so a late-arriving upload completion (user hit Back while
+    // IPFS + on-chain tx were still running) doesn't call navigation.replace
+    // on a stale nav ref — that collapses MainTabs and leaves RecordDetail
+    // as the only screen in the stack, hiding the header back button.
+    const isMountedRef = useRef(true);
+    useEffect(() => () => { isMountedRef.current = false; }, []);
     const parentCidHash: string | null = navRoute?.params?.parentCidHash || null;
     const initialTitle: string = navRoute?.params?.initialTitle || '';
     const initialRecordType: string | null = navRoute?.params?.initialRecordType || null;
@@ -425,13 +424,7 @@ export default function CreateRecordScreen({ navigation, route: navRoute }: any)
                 hasImage: Boolean(selectedImage),
             };
 
-            const localRecordsStr = await AsyncStorage.getItem(LOCAL_RECORDS_STORAGE_KEY);
-            const localRecords = localRecordsStr ? JSON.parse(localRecordsStr) : {};
-            localRecords[cidHash] = {
-                ...(localRecords[cidHash] || {}),
-                ...localDraft,
-            };
-            await AsyncStorage.setItem(LOCAL_RECORDS_STORAGE_KEY, JSON.stringify(localRecords));
+            await localRecordStore.setKey(cidHash, localDraft);
 
             const created = await recordApi.createRecord(
                 cidHash,
@@ -442,10 +435,7 @@ export default function CreateRecordScreen({ navigation, route: navRoute }: any)
                 recordType
             );
 
-            const refreshedLocalRecordsStr = await AsyncStorage.getItem(LOCAL_RECORDS_STORAGE_KEY);
-            const refreshedLocalRecords = refreshedLocalRecordsStr ? JSON.parse(refreshedLocalRecordsStr) : {};
-            refreshedLocalRecords[cidHash] = {
-                ...(refreshedLocalRecords[cidHash] || {}),
+            await localRecordStore.setKey(cidHash, {
                 ...localDraft,
                 createdAt: created?.createdAt || nowIso,
                 confirmedAt: created?.confirmedAt || nowIso,
@@ -453,8 +443,7 @@ export default function CreateRecordScreen({ navigation, route: navRoute }: any)
                 syncError: null,
                 txHash: created?.txHash || null,
                 recordId: created?.id || null,
-            };
-            await AsyncStorage.setItem(LOCAL_RECORDS_STORAGE_KEY, JSON.stringify(refreshedLocalRecords));
+            });
 
             const record = {
                 id: created?.id,
@@ -527,29 +516,33 @@ export default function CreateRecordScreen({ navigation, route: navRoute }: any)
                 }
             }
 
+            // Skip UI work if the user navigated away during the upload —
+            // record is saved either way, and calling navigation.replace on a
+            // stale ref would pop MainTabs and leave RecordDetail headerless.
+            if (!isMountedRef.current) return;
+
             Alert.alert(
                 isUpdateMode ? 'Cập nhật hồ sơ thành công' : 'Tạo hồ sơ thành công',
                 isUpdateMode
                     ? 'Phiên bản mới đã được mã hoá, lưu IPFS và liên kết với hồ sơ gốc.'
                     : 'Hồ sơ mới đã được mã hoá, lưu IPFS và đăng ký lên hệ thống.'
             );
-            navigation.replace('RecordDetail', { record: toSerializableRecord(record) });
+            if (navigation.canGoBack?.()) {
+                navigation.replace('RecordDetail', { record: toSerializableRecord(record) });
+            }
         } catch (submitError: any) {
             const message = buildCreateRecordErrorMessage(submitError);
+            if (!isMountedRef.current) return;
             setError(message);
 
             if (cidHashForRecovery && localDraft) {
                 try {
-                    const localRecordsStr = await AsyncStorage.getItem(LOCAL_RECORDS_STORAGE_KEY);
-                    const localRecords = localRecordsStr ? JSON.parse(localRecordsStr) : {};
-                    localRecords[cidHashForRecovery] = {
-                        ...(localRecords[cidHashForRecovery] || {}),
+                    await localRecordStore.setKey(cidHashForRecovery, {
                         ...localDraft,
                         syncStatus: 'failed',
                         syncError: message,
                         failedAt: new Date().toISOString(),
-                    };
-                    await AsyncStorage.setItem(LOCAL_RECORDS_STORAGE_KEY, JSON.stringify(localRecords));
+                    });
                 } catch (storageError) {
                     console.warn('Không thể lưu trạng thái retry local:', storageError);
                 }
@@ -570,7 +563,14 @@ export default function CreateRecordScreen({ navigation, route: navRoute }: any)
                     'On-chain tạm thời thất bại',
                     `${message}\n\nDữ liệu đã được lưu local, bạn có thể mở chi tiết để xem/giải mã và thử lại sau.`,
                     [
-                        { text: 'Mở chi tiết', onPress: () => navigation.replace('RecordDetail', { record: toSerializableRecord(offlineRecord) }) },
+                        {
+                            text: 'Mở chi tiết',
+                            onPress: () => {
+                                if (navigation.canGoBack?.()) {
+                                    navigation.replace('RecordDetail', { record: toSerializableRecord(offlineRecord) });
+                                }
+                            },
+                        },
                         { text: 'Đóng', style: 'cancel' },
                     ]
                 );
@@ -578,7 +578,7 @@ export default function CreateRecordScreen({ navigation, route: navRoute }: any)
                 Alert.alert('Tạo hồ sơ thất bại', message);
             }
         } finally {
-            setIsSubmitting(false);
+            if (isMountedRef.current) setIsSubmitting(false);
         }
     };
 

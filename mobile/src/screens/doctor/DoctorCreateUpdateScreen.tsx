@@ -1,6 +1,6 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Image, Pressable, ScrollView, TextInput, type KeyboardTypeOptions } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useQueryClient } from '@tanstack/react-query';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import {
@@ -30,10 +30,13 @@ import walletActionService from '../../services/walletAction.service';
 import keyShareService from '../../services/keyShare.service';
 import authService from '../../services/auth.service';
 import recordService from '../../services/record.service';
-import { RECORD_REGISTRY_ABI } from '../../abi/contractABI';
+import { DOCTOR_UPDATE_ABI } from '../../abi/contractABI';
+import { formatChainError } from '../../utils/rpcRetry';
+import { normalizeBase64 } from '../../utils/base64';
+import localRecordStore from '../../services/localRecordStore';
 import useAuthStore from '../../store/authStore';
 
-const RECORD_REGISTRY_ADDRESS = process.env.EXPO_PUBLIC_RECORD_REGISTRY_ADDRESS as `0x${string}`;
+const DOCTOR_UPDATE_ADDRESS = process.env.EXPO_PUBLIC_DOCTOR_UPDATE_ADDRESS as `0x${string}`;
 import {
     EHR_ERROR,
     EHR_ERROR_CONTAINER,
@@ -79,9 +82,6 @@ const RECORD_TYPES: RecordTypeOption[] = [
     { key: 'vital_signs', label: 'Chỉ số sinh tồn', icon: HeartPulse, tint: EHR_PRIMARY, bg: EHR_SURFACE_HIGH },
 ];
 
-function normalizeBase64(data: string) {
-    return data.replace(/^data:[^;]+;base64,/, '').replace(/\s+/g, '').trim();
-}
 
 function splitLines(value: string): string[] {
     return value.split(/\r?\n|;/).map((s: string) => s.trim()).filter(Boolean);
@@ -91,6 +91,12 @@ const ZERO_BYTES32 = '0x00000000000000000000000000000000000000000000000000000000
 
 export default function DoctorCreateUpdateScreen({ navigation, route }: any) {
     const { user } = useAuthStore();
+    const queryClient = useQueryClient();
+    // Track mount so late-arriving callbacks (Alert onPress after an in-flight
+    // upload finishes) don't call goBack on an already-popped screen — that
+    // triggers "GO_BACK was not handled by any navigator".
+    const isMountedRef = useRef(true);
+    useEffect(() => () => { isMountedRef.current = false; }, []);
     const { parentCidHash: routeParentCidHash, patientAddress: routePatientAddress } = route.params || {};
     // Create-new-root mode: no parentCidHash. Doctor may or may not know the
     // patient address in advance — if not passed via route, show an input.
@@ -188,6 +194,30 @@ export default function DoctorCreateUpdateScreen({ navigation, route }: any) {
         setIsSubmitting(true);
         setError(null);
 
+        // S12.A pre-check (BEFORE any IPFS upload or on-chain tx): patient
+        // must have a registered NaCl encryption pubkey, otherwise we can't
+        // seal the AES key for them and they will be permanently locked out
+        // of this version (silent failure in backend save-only). Doing the
+        // check up-front avoids leaving a phantom on-chain record with no
+        // decryptable patient KeyShare.
+        try {
+            const precheck: any = await authService.getEncryptionKey(patientAddress).catch(() => null);
+            if (!precheck?.encryptionPublicKey) {
+                if (isMountedRef.current) setIsSubmitting(false);
+                Alert.alert(
+                    'Bệnh nhân chưa đăng ký khoá mã hoá',
+                    'Bệnh nhân cần đăng nhập app ít nhất 1 lần để hệ thống tạo khoá mã hoá cho họ. ' +
+                    'Hãy yêu cầu bệnh nhân đăng nhập, sau đó tạo lại hồ sơ.\n\n' +
+                    'Nếu tạo trong tình trạng này, bệnh nhân sẽ KHÔNG thể giải mã được phiên bản này về sau.',
+                );
+                return;
+            }
+        } catch (precheckErr) {
+            console.warn('Patient pubkey precheck failed:', precheckErr);
+            // Don't bail on network errors here — let main flow surface it
+            // through its existing error handling. Better than over-rejecting.
+        }
+
         try {
             const observations: Record<string, string> = {};
             if (heartRate) observations.heartRate = `${heartRate} bpm`;
@@ -262,37 +292,59 @@ export default function DoctorCreateUpdateScreen({ navigation, route }: any) {
 
             const cidHash = keccak256(toBytes(cid));
             const recordTypeHash = keccak256(toBytes(recordType || 'checkup'));
+            const doctorEncKeyHash = keccak256(toBytes(aesKey));
 
-            // 2. Call RecordRegistry.addRecordByDoctor directly (doctor pays gas).
+            // 2. Call DoctorUpdate.addRecordByDoctor (6-arg wrapper): creates
+            // record in RecordRegistry AND (for new-root records) auto-grants
+            // the doctor a 7-day on-chain consent so canAccess works when the
+            // patient later updates the chain (S9.1, 2026-04-20). For updates
+            // (parentCidHash != 0) the wrapper skips the consent grant — doctor
+            // relies on the existing consent inherited from the parent chain.
+            // NOTE: msg.sender to RecordRegistry becomes this contract's
+            // address, so Record.createdBy on-chain is DoctorUpdate, not the
+            // doctor. Backend sync is patched (S9.1b) to ignore that value and
+            // keep the save-only doctor-wallet value in DB.
             const { walletClient, address: myAddress } = await walletActionService.getWalletContext();
             const txHash = await walletClient.writeContract({
-                address: RECORD_REGISTRY_ADDRESS,
-                abi: RECORD_REGISTRY_ABI,
+                address: DOCTOR_UPDATE_ADDRESS,
+                abi: DOCTOR_UPDATE_ABI,
                 functionName: 'addRecordByDoctor',
                 args: [
                     cidHash,
                     parentCidHash as `0x${string}`,
                     recordTypeHash,
                     patientAddress as `0x${string}`,
+                    doctorEncKeyHash,
+                    0,  // 0 => contract uses DEFAULT_DOCTOR_ACCESS (7 days)
                 ],
-                gas: BigInt(400000),
+                gas: BigInt(600000),
                 maxFeePerGas: parseGwei('1.0'),
                 maxPriorityFeePerGas: parseGwei('0.1'),
             });
 
             // 3. NaCl-seal {cid, aesKey} for the patient so they can decrypt.
+            // S12.A (2026-04-25): patient MUST have an encryption pubkey on
+            // file before we proceed. If not, the patient KeyShare can't be
+            // sealed → backend save-only skips creating it (gate requires
+            // patientEncryptedPayload non-null) → patient is permanently
+            // locked out of this version's AES key, and any future cascade
+            // share to other doctors will silently skip this cidHash. Bail
+            // out loudly instead of corrupting the data.
             const myKeypair = await getOrCreateEncryptionKeypair(walletClient, myAddress);
             const payloadJson = JSON.stringify({ cid, aesKey });
-            let patientEncryptedPayload: string | null = null;
-            try {
-                const patientKeyRes: any = await authService.getEncryptionKey(patientAddress);
-                const patientPubKey = patientKeyRes?.encryptionPublicKey || null;
-                if (patientPubKey) {
-                    patientEncryptedPayload = encryptForRecipient(payloadJson, patientPubKey, myKeypair.secretKey);
-                }
-            } catch (e) {
-                console.warn('Fetch patient pubkey failed:', e);
+            const patientKeyRes: any = await authService.getEncryptionKey(patientAddress).catch(() => null);
+            const patientPubKey = patientKeyRes?.encryptionPublicKey || null;
+            if (!patientPubKey) {
+                if (isMountedRef.current) setIsSubmitting(false);
+                Alert.alert(
+                    'Bệnh nhân chưa đăng ký khoá mã hoá',
+                    'Bệnh nhân cần đăng nhập app ít nhất 1 lần để hệ thống tạo khoá mã hoá cho họ. ' +
+                    'Hãy yêu cầu bệnh nhân đăng nhập, sau đó tạo lại hồ sơ.\n\n' +
+                    'Nếu tạo trong tình trạng này, bệnh nhân sẽ KHÔNG thể giải mã được phiên bản này về sau.',
+                );
+                return;
             }
+            const patientEncryptedPayload = encryptForRecipient(payloadJson, patientPubKey, myKeypair.secretKey);
 
             // Doctor's own sealed copy so /save-only can create the
             // doctor->doctor KeyShare (self-access for 7 days).
@@ -315,10 +367,7 @@ export default function DoctorCreateUpdateScreen({ navigation, route }: any) {
 
             // 5. Cache locally so this device decrypts without round-trip.
             try {
-                const lrStr = await AsyncStorage.getItem('ehr_local_records');
-                const localRecords = lrStr ? JSON.parse(lrStr) : {};
-                localRecords[cidHash.toLowerCase()] = {
-                    ...(localRecords[cidHash.toLowerCase()] || {}),
+                await localRecordStore.setKey(cidHash.toLowerCase(), {
                     cid,
                     aesKey,
                     title: title.trim(),
@@ -329,8 +378,7 @@ export default function DoctorCreateUpdateScreen({ navigation, route }: any) {
                     createdAt: new Date().toISOString(),
                     syncStatus: 'confirmed',
                     txHash,
-                };
-                await AsyncStorage.setItem('ehr_local_records', JSON.stringify(localRecords));
+                });
             } catch (lrErr) {
                 console.warn('Failed to save local record:', lrErr);
             }
@@ -364,25 +412,42 @@ export default function DoctorCreateUpdateScreen({ navigation, route }: any) {
                 console.warn('Auto-propagation failed:', propErr);
             }
 
+            // Invalidate caches so doctor dashboard shows the new record
+            // immediately without requiring a pull-to-refresh. Patient records
+            // list also refetches so if this doctor is ALSO a patient viewing
+            // their own chart, they see it too.
+            queryClient.invalidateQueries({ queryKey: ['doctor', 'sharedRecords'] });
+            queryClient.invalidateQueries({ queryKey: ['records', 'my'] });
+            queryClient.invalidateQueries({ queryKey: ['records', 'chain'] });
+
+            // Skip the success Alert if the user already navigated away during
+            // the in-flight upload — the record is saved either way.
+            if (!isMountedRef.current) return;
+
             Alert.alert(
                 isCreateNewRoot ? 'Đã tạo hồ sơ' : 'Đã cập nhật hồ sơ',
                 isCreateNewRoot
                     ? 'Hồ sơ mới đã được lưu lên blockchain. Bệnh nhân sẽ thấy ngay.'
                     : 'Phiên bản mới đã được lưu lên blockchain. Bệnh nhân và các bác sĩ có quyền sẽ thấy ngay.',
-                [{ text: 'OK', onPress: () => navigation.goBack() }]
+                [{
+                    text: 'OK',
+                    onPress: () => {
+                        // Guard against double-pop: if user already tapped back
+                        // before tapping OK, goBack would error. canGoBack is
+                        // false once we've been popped off the stack.
+                        if (navigation.canGoBack?.()) {
+                            navigation.goBack();
+                        }
+                    },
+                }]
             );
         } catch (submitError: any) {
-            const code = submitError?.code || submitError?.data?.code;
-            let message = submitError?.message || 'Không thể cập nhật hồ sơ';
-            if (code === 'CONSENT_NOT_FOUND') {
-                message = 'Bạn không có quyền truy cập hồ sơ này.';
-            } else if (code === 'PARENT_ALREADY_UPDATED' || code === 'MAX_CHILDREN_REACHED') {
-                message = 'Hồ sơ đã có bản cập nhật mới. Hãy cập nhật từ phiên bản mới nhất.';
-            }
+            const message = formatChainError(submitError, 'Không thể cập nhật hồ sơ');
+            if (!isMountedRef.current) return;
             setError(message);
             Alert.alert('Lỗi', message);
         } finally {
-            setIsSubmitting(false);
+            if (isMountedRef.current) setIsSubmitting(false);
         }
     };
 

@@ -8,13 +8,12 @@ import EmptyState from '../components/EmptyState';
 import LoadingSpinner from '../components/LoadingSpinner';
 import useRequests from '../hooks/useRequests';
 import requestService from '../services/request.service';
-// pendingUpdateService removed 2026-04-19 — doctor updates now go direct on-chain.
 import authService from '../services/auth.service';
 import consentService from '../services/consent.service';
 import keyShareService from '../services/keyShare.service';
 import recordService from '../services/record.service';
 import { getOrCreateEncryptionKeypair, encryptForRecipient, decryptFromSender } from '../services/nacl-crypto';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import localRecordStore from '../services/localRecordStore';
 import walletActionService from '../services/walletAction.service';
 import {
     EHR_ERROR,
@@ -437,7 +436,7 @@ export default function RequestsScreen() {
                         cid: parsed.cid,
                         aesKey: parsed.aesKey,
                     };
-                    await AsyncStorage.setItem('ehr_local_records', JSON.stringify(localMap));
+                    await localRecordStore.setKey(cidHash, { cid: parsed.cid, aesKey: parsed.aesKey });
                     return { cid: parsed.cid, aesKey: parsed.aesKey };
                 } catch (err) {
                     console.warn('Self-share fallback failed for', cidHash, err);
@@ -450,8 +449,7 @@ export default function RequestsScreen() {
                 senderPublicKey = myKeypair.publicKey;
                 const docKeyRes = await authService.getEncryptionKey(request.requesterAddress);
                 const doctorPubKey = docKeyRes?.encryptionPublicKey;
-                const localRecordsStr = await AsyncStorage.getItem('ehr_local_records');
-                const localRecords = localRecordsStr ? JSON.parse(localRecordsStr) : {};
+                const localRecords = await localRecordStore.getAll();
                 const resolved = request.cidHash
                     ? await resolveLocalKey(request.cidHash, localRecords, myKeypair)
                     : null;
@@ -463,19 +461,18 @@ export default function RequestsScreen() {
                 console.warn('Key sharing encryption step failed/skipped:', err);
             }
 
-            await (requestService as any).approveWithSignature(
-                reqId, signature, deadline,
-                encryptedKeyPayload || undefined,
-                request.cidHash || undefined,
-                senderPublicKey || undefined
-            );
-
-            // CASCADE: share keys for ALL other versions in the record chain
-            // (parent + children) so doctor can view the full history — same as
-            // RecordDetailScreen.performShare cascade logic.
+            // S11.D (2026-04-22): build cascade payloads for OTHER versions in
+            // the chain NOW (while patient has access to the NaCl secret key)
+            // but stage them on the AccessRequest server-side instead of
+            // calling shareKey immediately. The backend applies them when
+            // doctor confirms on-chain (mark-claimed), so ancestor KeyShare
+            // expiresAt/allowDelegate don't get rewritten before on-chain
+            // consent is actually minted.
+            let cascadePayloads: Array<{ cidHash: string; encryptedPayload: string; senderPublicKey: string }> = [];
+            const skippedVersions: Array<{ cidHash: string; title?: string }> = [];
+            let cascadeBuildError: string | null = null;
             try {
-                const localRecordsStr2 = await AsyncStorage.getItem('ehr_local_records');
-                const localRecords2 = localRecordsStr2 ? JSON.parse(localRecordsStr2) : {};
+                const localRecords2 = await localRecordStore.getAll();
                 const myKeypair2 = await getOrCreateEncryptionKeypair(
                     (await walletActionService.getWalletContext()).walletClient, address
                 );
@@ -488,39 +485,61 @@ export default function RequestsScreen() {
                         (v: any) => v?.cidHash && v.cidHash !== request.cidHash
                     );
 
-                    // Compute KeyShare.expiresAt from consentDurationHours so the
-                    // cascade rows match the on-chain consent lifetime instead of
-                    // defaulting to null ("Vĩnh viễn").
-                    const cascadeExpiresAt = request.consentDurationHours
-                        ? new Date(Date.now() + request.consentDurationHours * 3600 * 1000).toISOString()
-                        : null;
                     for (const v of allVersions) {
-                        // Same fallback as main flow: if patient doesn't have this
-                        // version's aesKey in AsyncStorage, pull it from their
-                        // self-share backup on the server before sharing to doctor.
                         const vKey = await resolveLocalKey(v.cidHash, localRecords2, myKeypair2);
-                        if (!vKey) continue;
+                        if (!vKey) {
+                            // S12.B: track silently-skipped versions so we
+                            // can warn patient instead of letting the doctor
+                            // discover the gap when they tap V1 and get
+                            // KEY_NOT_SHARED_FOR_VERSION.
+                            skippedVersions.push({ cidHash: v.cidHash, title: v.title });
+                            continue;
+                        }
                         const vPayload = JSON.stringify({ cid: vKey.cid, aesKey: vKey.aesKey });
                         const vEncrypted = encryptForRecipient(vPayload, doctorPubKey2, myKeypair2.secretKey);
-                        try {
-                            await keyShareService.shareKey({
-                                cidHash: v.cidHash,
-                                recipientAddress: request.requesterAddress || '',
-                                encryptedPayload: vEncrypted,
-                                senderPublicKey: myKeypair2.publicKey,
-                                expiresAt: cascadeExpiresAt,
-                            });
-                        } catch (e) {
-                            console.warn('Cascade keyShare failed for version', v.cidHash, e);
-                        }
+                        cascadePayloads.push({
+                            cidHash: v.cidHash,
+                            encryptedPayload: vEncrypted,
+                            senderPublicKey: myKeypair2.publicKey,
+                        });
                     }
                 }
-            } catch (cascadeErr) {
-                // Non-fatal — main approval succeeded, cascade is best-effort
-                console.warn('Cascade keyShare error:', cascadeErr);
+            } catch (cascadeErr: any) {
+                // Non-fatal — main approval still goes through. But surface
+                // failure to user instead of silent partial: without this, they
+                // see "Thành công" while the doctor lacks chain access.
+                console.error('[Approve] Cascade payload build error:', cascadeErr);
+                cascadeBuildError = cascadeErr?.message || 'Lỗi không xác định';
             }
 
-            Alert.alert('Thành công', 'Đã phê duyệt và cấp quyền truy cập.');
+            await (requestService as any).approveWithSignature(
+                reqId, signature, deadline,
+                encryptedKeyPayload || undefined,
+                request.cidHash || undefined,
+                senderPublicKey || undefined,
+                cascadePayloads.length > 0 ? cascadePayloads : undefined,
+            );
+
+            if (cascadeBuildError) {
+                Alert.alert(
+                    'Phê duyệt thành công nhưng cảnh báo',
+                    `Đã phê duyệt yêu cầu chính. Tuy nhiên, hệ thống không thể chuẩn bị chia sẻ các phiên bản khác trong chain (lý do: ${cascadeBuildError}).\n\n` +
+                    'Bác sĩ chỉ nhận được khoá cho phiên bản đã yêu cầu, các phiên bản khác sẽ KHÔNG đọc được.',
+                );
+            } else if (skippedVersions.length > 0) {
+                const list = skippedVersions
+                    .map((s) => `• ${s.title || `${s.cidHash.slice(0, 10)}...`}`)
+                    .join('\n');
+                Alert.alert(
+                    'Một số phiên bản chưa thể chia sẻ',
+                    `Bác sĩ sẽ KHÔNG đọc được các phiên bản sau:\n${list}\n\n` +
+                    'Lý do: bạn chưa từng có khoá giải mã cho các phiên bản này ' +
+                    '(thường gặp khi hồ sơ được tạo trước khi bạn đăng nhập app lần đầu). ' +
+                    'Hãy yêu cầu bác sĩ tạo các phiên bản đó tự re-share để khôi phục.',
+                );
+            } else {
+                Alert.alert('Thành công', 'Đã phê duyệt. Bác sĩ sẽ nhận quyền truy cập sau khi xác nhận trên blockchain.');
+            }
             refresh();
         } catch (error) {
             console.error(error);

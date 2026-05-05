@@ -21,8 +21,6 @@ export const requestKeys = {
     detail: (requestId: string | number) => [...requestKeys.all, 'detail', String(requestId)] as const,
 };
 
-// pendingUpdateKeys removed 2026-04-19 — doctor updates are direct on-chain.
-
 export const sharedRecordKeys = {
     all: ['sharedRecords'] as const,
     list: () => [...sharedRecordKeys.all, 'list'] as const,

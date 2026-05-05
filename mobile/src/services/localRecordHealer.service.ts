@@ -15,8 +15,8 @@
 // after login; idempotent after that.
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import localRecordStore from './localRecordStore';
 
-const CACHE_KEY = 'ehr_local_records';
 const HEALED_FLAG_KEY = 'ehr_local_records_healed_v1';
 
 /**
@@ -37,7 +37,7 @@ export async function healLocalRecordCache(): Promise<void> {
         // Wipe the cache. Records the user opens from now on will repopulate
         // via RecordDetailScreen.performDecrypt → saveLocalKey which calls
         // the refactored backend that no longer returns ancestor fallbacks.
-        await AsyncStorage.removeItem(CACHE_KEY);
+        await localRecordStore.clear();
         await AsyncStorage.setItem(HEALED_FLAG_KEY, '1');
         // eslint-disable-next-line no-console
         console.info('[healer] Purged ehr_local_records once (root-walk migration)');

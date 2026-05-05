@@ -4,6 +4,11 @@ class ApiService {
     constructor() {
         this.baseUrl = API_BASE_URL;
         this.token = null;
+        // Track AbortControllers for every in-flight request so we can cancel
+        // them on logout. Without this, a slow fetch started as user A that
+        // resolves AFTER login-as-B can leak A's data into B's TanStack cache
+        // and make B's dashboard show A's records until the next refetch.
+        this.activeControllers = new Set();
     }
 
     setToken(token) {
@@ -16,6 +21,13 @@ class ApiService {
 
     getToken() {
         return this.token;
+    }
+
+    abortAll() {
+        for (const ctrl of this.activeControllers) {
+            try { ctrl.abort(); } catch { /* ignore */ }
+        }
+        this.activeControllers.clear();
     }
 
     async parseResponseBody(response) {
@@ -93,6 +105,7 @@ class ApiService {
         for (let attempt = 0; attempt <= retryCount; attempt += 1) {
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+            this.activeControllers.add(controller);
 
             try {
                 const response = await fetch(url, {
@@ -132,6 +145,7 @@ class ApiService {
                 throw error;
             } finally {
                 clearTimeout(timeoutId);
+                this.activeControllers.delete(controller);
             }
         }
 
