@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ActivityIndicator, FlatList, RefreshControl, Alert, Pressable, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
-import { FileText, Users, Clock3, Loader2, CheckCircle, Clock, Siren, AlertTriangle, FilePlus2 } from 'lucide-react-native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import { FileText, Users, Clock3, Loader2, CheckCircle, Clock, Siren, AlertTriangle, FilePlus2, Share2 } from 'lucide-react-native';
 import { YStack, XStack, Text, View, Button } from 'tamagui';
 import { parseGwei } from 'viem';
 import Animated, {
@@ -26,6 +26,8 @@ import recordService from '../../services/record.service';
 import requestService from '../../services/request.service';
 import walletActionService from '../../services/walletAction.service';
 import consentService from '../../services/consent.service';
+import { runKeyShareHealer } from '../../services/keyShareHealer.service';
+import { formatChainError } from '../../utils/rpcRetry';
 import useAuthStore from '../../store/authStore';
 import {
     EHR_ON_PRIMARY,
@@ -81,6 +83,7 @@ type SharedRecord = {
     status?: string;
     active?: boolean;
     parentCidHash?: string;
+    rootCidHash?: string;
     senderAddress?: string;
     versionCount?: number;
     allowDelegate?: boolean;
@@ -124,8 +127,16 @@ export default function DoctorDashboardScreen() {
 
     // Shared records from key-share service. Heavy processing (dedupe, version walk)
     // happens inside queryFn so the result is memoized in the cache.
+    //
+    // refetchInterval=15s: backend has subgraph indexing lag (~10-20s) +
+    // subgraphSync poll cycle (30s). Without auto-refetch, the doctor stays on
+    // the dashboard and never sees patient-side mutations (new version cascade,
+    // revoke) until they manually pull-to-refresh or switch tabs. Mobile has no
+    // socket.io listener so polling is the realtime substitute. 15s × 1 query
+    // is negligible vs the 16-watcher RPC storm we removed in S17.
     const sharedRecordsQuery = useQuery({
         queryKey: ['doctor', 'sharedRecords'],
+        refetchInterval: 15_000,
         queryFn: async (): Promise<SharedRecord[]> => {
             const records: SharedRecord[] = await keyShareService.getReceivedKeys();
             const uniqueMap = new Map<string, SharedRecord>();
@@ -134,20 +145,35 @@ export default function DoctorDashboardScreen() {
             // Keep BOTH active and inactive (expired/revoked) so doctor sees historical access.
             // 'awaiting_claim' is still hidden — those belong to the "Chờ nhận truy cập" section.
             const visible = distinct.filter((r) => r.status !== 'awaiting_claim');
-            const visibleParentCids = new Set(
-                visible.map((r) => r.parentCidHash?.toLowerCase()).filter(Boolean) as string[]
-            );
-            const latest = visible.filter((r) => !visibleParentCids.has(r.cidHash?.toLowerCase() || ''));
-            const processed = latest.map((record) => {
-                let count = 1;
-                let current = record;
-                const visited = new Set([record.cidHash]);
-                while (current.parentCidHash && uniqueMap.has(current.parentCidHash)) {
-                    if (visited.has(current.parentCidHash)) break;
-                    count += 1;
-                    current = uniqueMap.get(current.parentCidHash) as SharedRecord;
-                    visited.add(current.cidHash);
+            // Group keyshares by chain root (server-computed rootCidHash in
+            // keyShare.routes.js processedRecords). Keep the newest-createdAt
+            // row per chain as the visible leaf. Replaces the old
+            // parentCidHash-based filter which was fragile when legacy rows
+            // had ZERO_HASH or null parentCidHash on what should have been
+            // mid-chain descendants.
+            const byRoot = new Map<string, SharedRecord>();
+            for (const r of visible) {
+                const root = (r.rootCidHash || r.cidHash || '').toLowerCase();
+                if (!root) continue;
+                const prev = byRoot.get(root);
+                if (!prev) {
+                    byRoot.set(root, r);
+                    continue;
                 }
+                const rTs = new Date(r.createdAt || 0).getTime();
+                const prevTs = new Date(prev.createdAt || 0).getTime();
+                if (rTs > prevTs) byRoot.set(root, r);
+            }
+            const latest = Array.from(byRoot.values());
+            const processed = latest.map((record) => {
+                // versionCount = how many distinct cidHashes share this root in
+                // the full keyShare list. Covers the chain even when mid-chain
+                // versions get filtered out above.
+                const root = (record.rootCidHash || record.cidHash || '').toLowerCase();
+                const count = visible.filter((r) => {
+                    const rRoot = (r.rootCidHash || r.cidHash || '').toLowerCase();
+                    return rRoot === root;
+                }).length;
                 return { ...record, versionCount: count };
             });
             processed.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
@@ -158,12 +184,32 @@ export default function DoctorDashboardScreen() {
 
     const pendingClaimsQuery = useQuery({
         queryKey: ['requests', 'signed'],
+        refetchInterval: 15_000,
         queryFn: async () => {
             const response = await requestService.getSignedRequests();
             return (response?.requests || []) as PendingClaim[];
         },
         enabled: !!token,
     });
+
+    // Auto-refetch when the dashboard regains focus (e.g. doctor returns from
+    // DoctorCreateUpdateScreen). Complements the invalidateQueries call in
+    // the create flow — defensive against any missed invalidation.
+    useFocusEffect(
+        useCallback(() => {
+            if (token) {
+                sharedRecordsQuery.refetch();
+                pendingClaimsQuery.refetch();
+                // S12.C: heal any orphan KeyShares for records this doctor
+                // authored (e.g. patient cascade missed V1 because they had
+                // no key for it). Throttled internally to ~1/minute.
+                runKeyShareHealer().catch((err) => {
+                    console.warn('keyShareHealer error:', err);
+                });
+            }
+            // eslint-disable-next-line react-hooks/exhaustive-deps
+        }, [token])
+    );
 
     const allShared = sharedRecordsQuery.data ?? [];
     const isInactive = (r: SharedRecord) => {
@@ -292,19 +338,16 @@ export default function DoctorDashboardScreen() {
             }
             invalidateAll();
         } catch (err: any) {
+            // Use centralised mapping — handles 429, contract reverts, network,
+            // wallet rejections, etc. Bespoke text for the 2 most likely flows
+            // (eth_sendTransaction → user-rejected-or-wallet-stale, deadline).
             const msg = String(err?.message || '');
-            if (msg.includes('insufficient funds') || msg.includes('Insufficient')) {
-                Alert.alert('Không đủ tiền phí giao dịch', 'Ví của bạn không đủ ETH để thực hiện. Vào mục Cá nhân → Nạp ETH để nạp thêm.');
-            } else if (msg.includes('ApprovalTooSoon') || msg.includes('0x3d693ada')) {
-                Alert.alert('Vui lòng chờ thêm', 'Hệ thống cần xử lý yêu cầu trước đó. Hãy thử lại sau 15-30 giây.');
-            } else if (msg.includes('deadline') || msg.includes('expired') || msg.includes('InvalidSignature') || msg.includes('0x8baa579f')) {
-                Alert.alert('Phê duyệt đã hết hạn', 'Bệnh nhân đã ký hơn 24 giờ trước. Vui lòng yêu cầu bệnh nhân phê duyệt lại.');
-            } else if (msg.includes('eth_sendTransaction')) {
+            if (msg.includes('eth_sendTransaction')) {
                 Alert.alert('Lỗi kết nối ví', 'Không thể gửi giao dịch. Vui lòng đăng xuất và đăng nhập lại.');
-            } else if (msg.includes('network') || msg.includes('rpc') || msg.includes('fetch')) {
-                Alert.alert('Lỗi kết nối mạng', 'Không thể kết nối đến hệ thống blockchain. Vui lòng kiểm tra kết nối internet và thử lại.');
+            } else if (msg.includes('deadline') || msg.includes('expired') || msg.includes('0x8baa579f')) {
+                Alert.alert('Phê duyệt đã hết hạn', 'Bệnh nhân đã ký hơn 24 giờ trước. Vui lòng yêu cầu bệnh nhân phê duyệt lại.');
             } else {
-                Alert.alert('Không thể nhận quyền truy cập', 'Đã xảy ra lỗi. Vui lòng thử lại sau hoặc liên hệ hỗ trợ.');
+                Alert.alert('Không thể nhận quyền truy cập', formatChainError(err, 'Đã xảy ra lỗi. Vui lòng thử lại sau.'));
             }
             console.error('Claim error:', err);
         } finally {
@@ -651,6 +694,29 @@ export default function DoctorDashboardScreen() {
                             <YStack flex={1}>
                                 <Text fontSize={14} fontWeight="700" color="#075985">Bệnh nhân uỷ quyền</Text>
                                 <Text fontSize={12} color="#0369a1">Chia sẻ hồ sơ thay bệnh nhân với đồng nghiệp</Text>
+                            </YStack>
+                        </Pressable>
+
+                        {/* Doctor's outgoing shares — review + revoke */}
+                        <Pressable
+                            onPress={() => navigation.navigate('DoctorOutgoingShares')}
+                            style={{
+                                backgroundColor: '#fef3c7',
+                                borderWidth: 1,
+                                borderColor: '#fcd34d',
+                                borderRadius: 16,
+                                padding: 14,
+                                marginBottom: 12,
+                                flexDirection: 'row',
+                                alignItems: 'center',
+                            }}
+                        >
+                            <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: '#d97706', alignItems: 'center', justifyContent: 'center', marginRight: 12 }}>
+                                <Share2 size={20} color="white" />
+                            </View>
+                            <YStack flex={1}>
+                                <Text fontSize={14} fontWeight="700" color="#78350f">Hồ sơ đã chia sẻ lại</Text>
+                                <Text fontSize={12} color="#92400e">Xem + thu hồi quyền truy cập đã cấp cho bác sĩ khác</Text>
                             </YStack>
                         </Pressable>
 

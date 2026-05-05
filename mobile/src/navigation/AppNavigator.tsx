@@ -24,6 +24,7 @@ import DoctorExpiredRecordsScreen from '../screens/doctor/DoctorExpiredRecordsSc
 import DoctorCreateUpdateScreen from '../screens/doctor/DoctorCreateUpdateScreen';
 import DoctorDelegatableRecordsScreen from '../screens/doctor/DoctorDelegatableRecordsScreen';
 import DoctorDelegatedPatientsScreen from '../screens/doctor/DoctorDelegatedPatientsScreen';
+import DoctorOutgoingSharesScreen from '../screens/doctor/DoctorOutgoingSharesScreen';
 import DoctorEmergencyRequestScreen from '../screens/doctor/DoctorEmergencyRequestScreen';
 import DoctorActiveEmergenciesScreen from '../screens/doctor/DoctorActiveEmergenciesScreen';
 import EmergencyAccessLogScreen from '../screens/EmergencyAccessLogScreen';
@@ -228,6 +229,11 @@ function MainStackNavigator() {
                 name="DoctorDelegatedPatients"
                 component={DoctorDelegatedPatientsScreen}
                 options={{ title: 'B\u1EC7nh nh\u00E2n \u1EE7y quy\u1EC1n' }}
+            />
+            <Stack.Screen
+                name="DoctorOutgoingShares"
+                component={DoctorOutgoingSharesScreen}
+                options={{ title: 'H\u1ED3 s\u01A1 \u0111\u00E3 chia s\u1EBB l\u1EA1i' }}
             />
             <Stack.Screen
                 name="EditProfile"

@@ -247,11 +247,12 @@ const DelegationLogItem = React.memo(({ item }: { item: DelegationAccessLogRow }
 
 // ============ TAB SWITCHER ============
 
-type TabId = 'direct' | 'delegated';
+type TabId = 'direct' | 'all' | 'delegated';
 
 function TabSwitcher({ active, onChange }: { active: TabId; onChange: (t: TabId) => void }) {
     const tabs: { id: TabId; label: string }[] = [
         { id: 'direct', label: 'Trực tiếp' },
+        { id: 'all', label: 'Mọi người có quyền' },
         { id: 'delegated', label: 'Qua uỷ quyền' },
     ];
     return (
@@ -291,7 +292,20 @@ export default function AccessLogScreen() {
     const [isRefreshing, setIsRefreshing] = useState(false);
     const [revokingKeys, setRevokingKeys] = useState<Set<string>>(new Set());
 
-    // Tab 2: delegation audit log
+    // Tab 2 (all-grantees): comprehensive list including downstream grants
+    type GranteeRow = {
+        granteeAddress: string;
+        cidHash: string;
+        recordTitle?: string | null;
+        recordType?: string | null;
+        grantedAt?: string;
+        expiresAt?: string;
+        source: { type: 'direct' } | { type: 'via-delegate'; byDelegatee: string };
+    };
+    const [allGrantees, setAllGrantees] = useState<GranteeRow[]>([]);
+    const [isLoadingAll, setIsLoadingAll] = useState(false);
+
+    // Tab 3: delegation audit log
     const delegationLogsQuery = useDelegationAccessLogs('patient', !!token);
 
     const fetchConsents = useCallback(async () => {
@@ -307,18 +321,37 @@ export default function AccessLogScreen() {
         }
     }, []);
 
+    const fetchAllGrantees = useCallback(async () => {
+        setIsLoadingAll(true);
+        try {
+            const data = await consentService.getAllActiveGrantees();
+            setAllGrantees(Array.isArray(data) ? data : []);
+        } catch (err) {
+            console.error('Failed to fetch all grantees:', err);
+        } finally {
+            setIsLoadingAll(false);
+            setIsRefreshing(false);
+        }
+    }, []);
+
     useEffect(() => {
         if (token) fetchConsents();
     }, [token, fetchConsents]);
+
+    useEffect(() => {
+        if (token && tab === 'all') fetchAllGrantees();
+    }, [token, tab, fetchAllGrantees]);
 
     const handleRefresh = useCallback(() => {
         setIsRefreshing(true);
         if (tab === 'direct') {
             fetchConsents();
+        } else if (tab === 'all') {
+            fetchAllGrantees();
         } else {
             delegationLogsQuery.refetch().finally(() => setIsRefreshing(false));
         }
-    }, [tab, fetchConsents, delegationLogsQuery]);
+    }, [tab, fetchConsents, fetchAllGrantees, delegationLogsQuery]);
 
     const handleRevoke = useCallback((group: GroupedConsent) => {
         const title = group.versionCount > 1 ? 'Thu hồi toàn bộ phiên bản' : 'Thu hồi quyền truy cập';
@@ -353,8 +386,53 @@ export default function AccessLogScreen() {
         [groupedConsents]
     );
 
-    const initialLoading = tab === 'direct' ? (isLoading && !isRefreshing) : delegationLogsQuery.isLoading;
+    const initialLoading = tab === 'direct'
+        ? (isLoading && !isRefreshing)
+        : tab === 'all'
+            ? (isLoadingAll && !isRefreshing)
+            : delegationLogsQuery.isLoading;
     if (initialLoading) return <LoadingSpinner message="Đang tải nhật ký truy cập..." />;
+
+    const handleRevokeGrantee = async (g: GranteeRow) => {
+        const sourceText = g.source.type === 'direct'
+            ? 'Bạn cấp trực tiếp'
+            : `Bác sĩ ${g.source.byDelegatee.slice(0, 6)}…${g.source.byDelegatee.slice(-4)} cấp qua uỷ quyền`;
+        Alert.alert(
+            'Thu hồi quyền',
+            `Thu hồi quyền của ${g.granteeAddress.slice(0, 6)}…${g.granteeAddress.slice(-4)} cho hồ sơ "${g.recordTitle || g.cidHash.slice(0, 10) + '…'}"?\n\n` +
+            `Nguồn: ${sourceText}\n\n` +
+            'Đây là thao tác on-chain, sẽ trừ 1 lượt chữ ký miễn phí.',
+            [
+                { text: 'Huỷ', style: 'cancel' },
+                {
+                    text: 'Thu hồi',
+                    style: 'destructive',
+                    onPress: async () => {
+                        const key = `${g.granteeAddress}|${g.cidHash}`;
+                        setRevokingKeys((prev) => new Set(prev).add(key));
+                        try {
+                            await consentService.revokeConsent(
+                                { granteeAddress: g.granteeAddress, recipientAddress: g.granteeAddress, cidHash: g.cidHash },
+                                g.cidHash
+                            );
+                            Alert.alert('Thành công', 'Đã thu hồi quyền on-chain.');
+                            fetchAllGrantees();
+                            fetchConsents();
+                        } catch (err: any) {
+                            const msg = err?.data?.message || err?.message || 'Không thể thu hồi.';
+                            Alert.alert('Lỗi', msg);
+                        } finally {
+                            setRevokingKeys((prev) => {
+                                const next = new Set(prev);
+                                next.delete(key);
+                                return next;
+                            });
+                        }
+                    },
+                },
+            ]
+        );
+    };
 
     const delegationLogs = delegationLogsQuery.data || [];
 
@@ -390,6 +468,75 @@ export default function AccessLogScreen() {
                                     {activeGroupCount} đang hoạt động
                                 </Text>
                             </XStack>
+                        }
+                    />
+                )
+            ) : tab === 'all' ? (
+                allGrantees.length === 0 ? (
+                    <EmptyState
+                        icon={Shield}
+                        title="Chưa có ai có quyền"
+                        description="Danh sách hiển thị tất cả người đang giữ quyền truy cập trên hồ sơ của bạn (cả trực tiếp và qua uỷ quyền)."
+                    />
+                ) : (
+                    <FlatList
+                        data={allGrantees}
+                        keyExtractor={(g) => `${g.granteeAddress}|${g.cidHash}`}
+                        contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 16 }}
+                        refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} colors={[EHR_PRIMARY]} />}
+                        renderItem={({ item }) => {
+                            const key = `${item.granteeAddress}|${item.cidHash}`;
+                            const isRevoking = revokingKeys.has(key);
+                            const sourceLabel = item.source.type === 'direct' ? 'Trực tiếp' : 'Qua uỷ quyền';
+                            return (
+                                <View style={{ backgroundColor: EHR_SURFACE_LOW, borderRadius: 14, borderWidth: 1, borderColor: EHR_OUTLINE_VARIANT, padding: 14, marginBottom: 12 }}>
+                                    <XStack style={{ alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                                        <User size={16} color={EHR_PRIMARY} />
+                                        <Text fontWeight="700" fontSize="$4" color="$color12" style={{ flex: 1 }}>
+                                            {item.granteeAddress.slice(0, 10)}…{item.granteeAddress.slice(-6)}
+                                        </Text>
+                                        <View style={{
+                                            paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999,
+                                            backgroundColor: item.source.type === 'direct' ? EHR_PRIMARY_FIXED : '#fef3c7',
+                                            borderWidth: 1,
+                                            borderColor: item.source.type === 'direct' ? EHR_PRIMARY : '#fcd34d',
+                                        }}>
+                                            <Text fontSize="$1" fontWeight="700" style={{ color: item.source.type === 'direct' ? EHR_PRIMARY : '#92400e' }}>
+                                                {sourceLabel}
+                                            </Text>
+                                        </View>
+                                    </XStack>
+                                    <Text fontSize="$3" color="$color11">
+                                        {item.recordTitle || `Hồ sơ ${item.cidHash.slice(0, 10)}…`}
+                                    </Text>
+                                    {item.source.type === 'via-delegate' ? (
+                                        <Text fontSize="$2" color="$color10" style={{ marginTop: 4 }}>
+                                            Cấp bởi: {item.source.byDelegatee.slice(0, 10)}…{item.source.byDelegatee.slice(-6)}
+                                        </Text>
+                                    ) : null}
+                                    {item.expiresAt ? (
+                                        <Text fontSize="$2" color="$color10" style={{ marginTop: 2 }}>
+                                            Hết hạn: {new Date(item.expiresAt).toLocaleString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                                        </Text>
+                                    ) : null}
+                                    <Button
+                                        size="$3"
+                                        backgroundColor="#fee2e2"
+                                        color="#991b1b"
+                                        marginTop={10}
+                                        icon={<XCircle size={16} color="#991b1b" />}
+                                        disabled={isRevoking}
+                                        onPress={() => handleRevokeGrantee(item)}
+                                    >
+                                        {isRevoking ? 'Đang thu hồi…' : 'Thu hồi quyền'}
+                                    </Button>
+                                </View>
+                            );
+                        }}
+                        ListHeaderComponent={
+                            <Text fontSize="$3" color="$color10" style={{ marginBottom: 12 }}>
+                                {allGrantees.length} người đang có quyền truy cập
+                            </Text>
                         }
                     />
                 )

@@ -1,6 +1,7 @@
 import api from './api';
 import walletActionService from './walletAction.service';
 import { signGrantConsent, computeCidHash, computeEncKeyHash, getDeadline } from '../utils/eip712';
+import { withRpcRetry } from '../utils/rpcRetry';
 import { createPublicClient, http, keccak256, toBytes } from 'viem';
 import { arbitrumSepolia } from 'viem/chains';
 import { CONSENT_LEDGER_ABI } from '../abi/contractABI';
@@ -54,10 +55,17 @@ export async function delegateOnChain({
 
     const publicClient = createPublicClient({
         chain: arbitrumSepolia,
-        transport: http('https://sepolia-rollup.arbitrum.io/rpc'),
+        // retryCount=0: withRpcRetry below is the single retry layer. viem
+        // transport-level retry on top would stack into ~26s hangs on 429s.
+        transport: http(process.env.EXPO_PUBLIC_RPC_URL || 'https://sepolia-rollup.arbitrum.io/rpc', {
+            retryCount: 0,
+        }),
     });
 
-    const hash = await walletClient.writeContract({
+    // Both writeContract and waitForTransactionReceipt poll Alchemy and can
+    // hit the 300 CU/sec rate limit during share bursts. withRpcRetry handles
+    // 429 transparently with backoff.
+    const hash = await withRpcRetry(() => walletClient.writeContract({
         account,
         address: CONSENT_LEDGER_ADDRESS,
         abi: CONSENT_LEDGER_ABI,
@@ -69,9 +77,9 @@ export async function delegateOnChain({
             encKeyHash,
             expireAt,
         ],
-    });
+    }));
 
-    await publicClient.waitForTransactionReceipt({ hash });
+    await withRpcRetry(() => publicClient.waitForTransactionReceipt({ hash }));
     return { txHash: hash, encKeyHash, clampedExpireAt: expireAt };
 }
 
@@ -148,6 +156,16 @@ export async function getMyGrantedConsents() {
     return api.get('/api/key-share/sent');
 }
 
+/**
+ * Patient: list ALL active grantees on my records, including downstream
+ * (D1, D2 minted via D's delegation) — backend joins Consent mirror with
+ * DelegationAccessLog so each row carries `source` (direct vs via-delegate).
+ * UI uses this for selective per-grantee revoke.
+ */
+export async function getAllActiveGrantees() {
+    return api.get('/api/relayer/all-grantees');
+}
+
 export async function getMyReceivedConsents() {
     return api.get('/api/key-share/my');
 }
@@ -206,6 +224,7 @@ export async function checkConsent(patientAddress, granteeAddress, cidHash) {
 
 export const consentService = {
     getMyGrantedConsents,
+    getAllActiveGrantees,
     getMyReceivedConsents,
     revokeConsent,
     checkConsent,

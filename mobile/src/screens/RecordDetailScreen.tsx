@@ -8,8 +8,6 @@ import { QrCode, Lock, Clock, FileText, User, Share2, Unlock, X, FilePlus2, Copy
 import * as Clipboard from 'expo-clipboard';
 import useAuthStore from '../store/authStore';
 import { YStack, XStack, Text, Button, View } from 'tamagui';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-
 import { getOrCreateEncryptionKeypair, decryptFromSender, encryptForRecipient } from '../services/nacl-crypto';
 import { importAESKey, decryptData } from '../services/crypto';
 import ipfsService from '../services/ipfs.service';
@@ -18,6 +16,9 @@ import consentService, { delegateOnChain } from '../services/consent.service';
 import walletActionService from '../services/walletAction.service';
 import authService from '../services/auth.service';
 import { computeCidHash } from '../utils/eip712';
+import { withRpcRetry, formatChainError } from '../utils/rpcRetry';
+import { normalizeBase64 } from '../utils/base64';
+import localRecordStore from '../services/localRecordStore';
 import { createPublicClient, http } from 'viem';
 import { arbitrumSepolia } from 'viem/chains';
 import {
@@ -49,12 +50,6 @@ type DecryptedImage = {
     fileName?: string;
 };
 
-function normalizeBase64(data: string) {
-    return data
-        .replace(/^data:[^;]+;base64,/, '')
-        .replace(/\s+/g, '')
-        .trim();
-}
 
 function toDataUri(base64Data: string, contentType = 'image/jpeg') {
     if (base64Data.startsWith('data:')) {
@@ -99,7 +94,15 @@ export default function RecordDetailScreen({ route, navigation }: any) {
     const ownerAddrLc = String((record as any)?.ownerAddress || '').toLowerCase();
     const iAmDoctor = activeRole === 'doctor';
     const creatorAddrLc = String((record as any)?.createdBy || '').toLowerCase();
+    // iAmOwner = "I have legitimate local AES from creation/decrypt" (caching + UI semantics).
+    // Includes creator because doctor-as-creator does have their own local AES from save-only.
     const iAmOwner = !!me && (me === ownerAddrLc || me === creatorAddrLc);
+    // isRecordOwner = strict patient ownership. Used for the share PATH selection:
+    //   patient grantConsentOnChain (relayer, requirePatientRole) vs
+    //   doctor delegateOnChain (direct on-chain grantUsingRecordDelegation).
+    // Without this split, doctor-as-creator (iAmOwner=true) hit /api/relayer/grant
+    // which is gated by requirePatientRole → 403 ONCHAIN_ROLE_FORBIDDEN.
+    const isRecordOwner = !!me && me === ownerAddrLc;
 
     const [isDecrypting, setIsDecrypting] = useState(false);
     const [decryptedData, setDecryptedData] = useState<any>(null);
@@ -206,15 +209,11 @@ export default function RecordDetailScreen({ route, navigation }: any) {
         // Caching shared-key for non-owner would let revoked/unverified doctors keep decrypting forever.
         if (!iAmOwner) return;
 
-        const latestLocalRecordsString = await AsyncStorage.getItem('ehr_local_records');
-        const latestRecords = latestLocalRecordsString ? JSON.parse(latestLocalRecordsString) : {};
-        latestRecords[cidHash] = {
-            ...(latestRecords[cidHash] || {}),
+        await localRecordStore.setKey(cidHash, {
             cid,
             aesKey: aesKeyString,
             title: title || 'Hồ sơ được chia sẻ',
-        };
-        await AsyncStorage.setItem('ehr_local_records', JSON.stringify(latestRecords));
+        });
     };
 
 function classifyDecryptError(error: any): string {
@@ -255,19 +254,62 @@ function classifyDecryptError(error: any): string {
     return error?.message || 'Không thể giải mã hồ sơ. Vui lòng thử lại.';
 }
 
-    const performShare = async (address: string) => {
-        // Load local CID + AES key
-        const localStr = await AsyncStorage.getItem('ehr_local_records');
-        const localRecords = localStr ? JSON.parse(localStr) : {};
-        const local = localRecords[record.cidHash || ''];
+    const performShare = async (address: string, prefetchedRecipientPubKey?: string | null) => {
+        // Init my keypair upfront so resolveLocalKey can NaCl-decrypt server self-share
+        // when the local AsyncStorage cache is empty (e.g. doctor as cascade recipient
+        // who decrypted in memory but didn't save — saveLocalKey skips !iAmOwner).
+        const { walletClient, address: myAddress } = await walletActionService.getWalletContext();
+        const myKeypair = await getOrCreateEncryptionKeypair(walletClient, myAddress);
+
+        // resolveLocalKey: fast-path local cache, fall back to decrypting the caller's
+        // own KeyShare row from the backend on-the-fly. Same pattern as RequestsScreen
+        // handleApprove and the cascade loop below — we lift it to the top so the MAIN
+        // row check also benefits, fixing "Chưa giải mã" alerts on V4 etc. when the
+        // doctor decrypted in UI but doesn't have the AES cached locally.
+        const resolveLocalKey = async (
+            cidHash: string,
+            localMap: Record<string, any>,
+        ): Promise<{ cid: string; aesKey: string } | null> => {
+            const direct = localMap[cidHash];
+            if (direct?.cid && direct?.aesKey) return { cid: direct.cid, aesKey: direct.aesKey };
+            try {
+                const selfShare: any = await keyShareService.getKeyForRecord(cidHash);
+                if (!selfShare?.encryptedPayload || !selfShare?.senderPublicKey) return null;
+                const decrypted = decryptFromSender(
+                    selfShare.encryptedPayload,
+                    selfShare.senderPublicKey,
+                    myKeypair.secretKey,
+                );
+                if (!decrypted) return null;
+                const parsed = JSON.parse(decrypted);
+                if (!parsed?.cid || !parsed?.aesKey) return null;
+                localMap[cidHash] = { ...(localMap[cidHash] || {}), cid: parsed.cid, aesKey: parsed.aesKey };
+                await localRecordStore.setKey(cidHash, { cid: parsed.cid, aesKey: parsed.aesKey });
+                return { cid: parsed.cid, aesKey: parsed.aesKey };
+            } catch (err) {
+                console.warn('[Share] Self-share fallback failed for', cidHash, err);
+                return null;
+            }
+        };
+
+        // Resolve main-row CID + AES (cache → backend self-share fallback).
+        const localRecords = await localRecordStore.getAll();
+        const local = await resolveLocalKey(record.cidHash || '', localRecords);
         if (!local?.cid || !local?.aesKey) {
-            Alert.alert('Chưa giải mã', 'Hãy giải mã hồ sơ trước khi chia sẻ để lấy khóa.');
+            Alert.alert(
+                'Không tìm thấy khoá',
+                'Hệ thống không có khoá chia sẻ cho phiên bản này. Hãy thử giải mã lại hồ sơ rồi chia sẻ.',
+            );
             return;
         }
 
-        // Get recipient NaCl public key
-        const recipientKeyRes = await authService.getEncryptionKey(address);
-        const recipientPubKey = recipientKeyRes?.encryptionPublicKey;
+        // Recipient NaCl pubkey: prefer prefetched value from handleShare's pre-check
+        // to save a backend round trip. Fallback fetch only if caller didn't supply it.
+        let recipientPubKey = prefetchedRecipientPubKey || null;
+        if (!recipientPubKey) {
+            const recipientKeyRes = await authService.getEncryptionKey(address);
+            recipientPubKey = recipientKeyRes?.encryptionPublicKey;
+        }
         if (!recipientPubKey) {
             Alert.alert('Không tìm thấy khóa', 'Địa chỉ ví này chưa đăng ký khóa mã hoá trong hệ thống.');
             return;
@@ -288,7 +330,7 @@ function classifyDecryptError(error: any): string {
         //   B. DOCTOR (delegated, allowDelegate=true) → grantUsingRecordDelegation
         //      (direct call, doctor pays gas, msg.sender must be the doctor)
         let grantResult: any;
-        if (iAmOwner) {
+        if (isRecordOwner) {
             // Path A: patient signs EIP-712, relayer submits grantBySig
             grantResult = await consentService.grantConsentOnChain({
                 granteeAddress: address,
@@ -309,58 +351,21 @@ function classifyDecryptError(error: any): string {
             }
             const shareCidHash = computeCidHash(shareCid);
 
-            // Option B: check if grantee already has access → warn about overwrite
-            try {
-                const pc = createPublicClient({ chain: arbitrumSepolia, transport: http('https://sepolia-rollup.arbitrum.io/rpc') });
-                const CONSENT_ADDR = process.env.EXPO_PUBLIC_CONSENT_LEDGER_ADDRESS as `0x${string}`;
-                const alreadyHas = await pc.readContract({
-                    address: CONSENT_ADDR,
-                    abi: [{ name: 'canAccess', type: 'function', stateMutability: 'view',
-                        inputs: [{ name: 'p', type: 'address' }, { name: 'g', type: 'address' }, { name: 'c', type: 'bytes32' }],
-                        outputs: [{ type: 'bool' }] }],
-                    functionName: 'canAccess',
-                    args: [patientAddr as `0x${string}`, address as `0x${string}`, shareCidHash],
-                });
-                if (alreadyHas) {
-                    Alert.alert(
-                        'Bác sĩ đã có quyền',
-                        'Bác sĩ này đã có quyền truy cập. Chia sẻ sẽ GHI ĐÈ quyền cũ. Để thay đổi, bệnh nhân nên thu hồi quyền cũ trước.',
-                        [{ text: 'Đã hiểu' }],
-                    );
-                    return;
-                }
-            } catch { /* proceed if check fails */ }
-
-            // Read sender's own consent expiry to clamp the new grant.
-            // If the record being viewed has an expiresAt from KeyShare, use that.
-            // Otherwise read on-chain getConsent for exact expiry.
-            let senderExpireSec = 0;
-            try {
-                const myKeyShare = await keyShareService.getKeyForRecord(record.cidHash);
-                if (myKeyShare?.expiresAt) {
-                    senderExpireSec = Math.floor(new Date(myKeyShare.expiresAt).getTime() / 1000);
-                }
-            } catch {}
-
-            // Warn doctor if their own access is shorter than requested duration.
-            if (senderExpireSec > 0 && expiresAtMs) {
-                const requestedExpireSec = Math.floor(expiresAtMs / 1000);
-                if (requestedExpireSec > senderExpireSec) {
-                    const remainingH = Math.max(0, Math.floor((senderExpireSec * 1000 - Date.now()) / 3600000));
-                    Alert.alert(
-                        'Thời hạn bị giới hạn',
-                        `Bạn chỉ còn ~${remainingH} giờ truy cập. Thời hạn chia sẻ cho bác sĩ mới sẽ bị giới hạn bằng thời hạn của bạn.`,
-                    );
-                }
-            }
-
+            // S15.4 perf: removed 3 pre-share RPC/backend round trips.
+            // - canAccess pre-check: was UX-only "Bác sĩ đã có quyền" warning. Contract
+            //   overwrites existing Consent on grant anyway, so the warning was misleading.
+            // - getKeyForRecord clamp pre-check: contract clamps finalExpiry to
+            //   senderConsent.expireAt internally (ConsentLedger.sol:638-642).
+            // - "Thời hạn bị giới hạn" alert: depended on the clamp pre-check; the
+            //   on-chain clamp now happens silently. User sees actual expiry post-tx.
+            // Combined savings: ~1-12s per share depending on 429 retries.
             const delegateResult = await delegateOnChain({
                 patientAddress: patientAddr,
                 granteeAddress: address,
                 rootCidHash: shareCidHash,
                 aesKey: shareAesKey,
                 expiresAtMs,
-                senderConsentExpireAtSec: senderExpireSec,
+                senderConsentExpireAtSec: 0, // contract clamps internally
             });
             grantResult = {
                 txHash: delegateResult.txHash,
@@ -370,9 +375,8 @@ function classifyDecryptError(error: any): string {
             };
         }
 
-        // 2. Off-chain encrypted payload (blind mailbox)
-        const { walletClient, address: myAddress } = await walletActionService.getWalletContext();
-        const myKeypair = await getOrCreateEncryptionKeypair(walletClient, myAddress);
+        // 2. Off-chain encrypted payload (blind mailbox).
+        // walletClient + myKeypair already initialized at top of performShare.
         const payload = JSON.stringify({ cid: local.cid, aesKey: local.aesKey });
         const encryptedPayload = encryptForRecipient(payload, recipientPubKey, myKeypair.secretKey);
 
@@ -388,19 +392,17 @@ function classifyDecryptError(error: any): string {
         });
 
         // CASCADE: create KeyShare rows for every other version in the chain.
-        // 2026-04-19 medical episode model: on-chain consent covers the whole
-        // tree unconditionally, so every version needs an off-chain key-share
-        // row for the doctor to decrypt whichever one they open.
+        // resolveLocalKey defined at top of performShare; reused here.
+        const cascadeFailures: Array<{ cidHash: string; title?: string; reason: string }> = [];
+        const cascadeSkipped: Array<{ cidHash: string; title?: string; reason: string }> = [];
         try {
-            // Full chain loop: fetch ALL versions in the tree (ancestors + descendants)
-            // via backend chain-cids endpoint, then create keyShare for each.
             let versionsToShare: any[] = [];
             try {
                 const chainRes: any = await recordService.getChainCids(record.cidHash!);
                 const all = chainRes?.records || [];
                 versionsToShare = all.filter((v: any) => v?.cidHash && v.cidHash !== record.cidHash);
             } catch (e) {
-                console.warn('getChainCids failed, falling back to parent/children', e);
+                console.error('[Share] getChainCids failed, falling back to parent/children', e);
                 if (chain?.parent?.cidHash && chain.parent.cidHash !== record.cidHash) {
                     versionsToShare.push(chain.parent);
                 }
@@ -409,10 +411,21 @@ function classifyDecryptError(error: any): string {
                 });
             }
 
-            for (const v of versionsToShare) {
-                const vLocal = localRecords[v.cidHash];
-                if (!vLocal?.cid || !vLocal?.aesKey) continue; // patient doesn't have key for this version
-                const vPayload = JSON.stringify({ cid: vLocal.cid, aesKey: vLocal.aesKey });
+            // Parallelize cascade: each version's resolveLocalKey + shareKey is
+            // independent (different cidHash), so Promise.all cuts ~2-3s on
+            // a 4-version chain. Each iteration still tracks its own success
+            // / failure / skipped state.
+            await Promise.all(versionsToShare.map(async (v) => {
+                const vKey = await resolveLocalKey(v.cidHash, localRecords);
+                if (!vKey) {
+                    cascadeSkipped.push({
+                        cidHash: v.cidHash,
+                        title: v.title,
+                        reason: 'Bạn không có khoá giải mã (hồ sơ tạo trước khi bạn đăng ký khoá)',
+                    });
+                    return;
+                }
+                const vPayload = JSON.stringify({ cid: vKey.cid, aesKey: vKey.aesKey });
                 const vEncrypted = encryptForRecipient(vPayload, recipientPubKey, myKeypair.secretKey);
                 try {
                     await keyShareService.shareKey({
@@ -423,24 +436,39 @@ function classifyDecryptError(error: any): string {
                         expiresAt: expiresAtMs ? new Date(expiresAtMs).toISOString() : null,
                         allowDelegate: allowDelegateFlag,
                     });
-                } catch (e) {
-                    console.warn('Cascade keyShare failed for version', v.cidHash, e);
+                } catch (e: any) {
+                    console.error('[Share] Cascade keyShare failed for version', v.cidHash, e);
+                    cascadeFailures.push({
+                        cidHash: v.cidHash,
+                        title: v.title,
+                        reason: e?.response?.data?.message || e?.message || 'Lỗi không xác định',
+                    });
                 }
-            }
+            }));
         } catch (e) {
-            console.warn('Cascade keyShare error', e);
+            console.error('[Share] Cascade outer error', e);
         }
 
         setShowShareModal(false);
         setShareAddress('');
 
-        const warn = grantResult.isDoctor && !grantResult.isVerifiedDoctor
+        const verifyWarn = grantResult.isDoctor && !grantResult.isVerifiedDoctor
             ? '\n\n⚠️ Bác sĩ này chưa được xác minh — họ sẽ chỉ đọc được hồ sơ sau khi tổ chức y tế xác minh.'
             : '';
-        Alert.alert(
-            'Chia sẻ thành công',
-            `Đã cấp quyền on-chain (tx: ${grantResult.txHash.slice(0, 10)}…).\nCòn ${grantResult.signaturesRemaining} chữ ký miễn phí tháng này.${warn}`
-        );
+
+        // Build final alert: success message + any partial-failure warning so
+        // the user is never told "thành công" while versions silently failed.
+        let title = 'Chia sẻ thành công';
+        let body = `Đã cấp quyền on-chain (tx: ${grantResult.txHash.slice(0, 10)}…).\nCòn ${grantResult.signaturesRemaining} chữ ký miễn phí tháng này.${verifyWarn}`;
+        if (cascadeFailures.length > 0 || cascadeSkipped.length > 0) {
+            title = 'Chia sẻ một phần';
+            const list = [
+                ...cascadeFailures.map((f) => `• ${f.title || f.cidHash.slice(0, 10)}: ${f.reason}`),
+                ...cascadeSkipped.map((s) => `• ${s.title || s.cidHash.slice(0, 10)}: ${s.reason}`),
+            ].join('\n');
+            body += `\n\nMột số phiên bản chưa thể chia sẻ — bác sĩ sẽ KHÔNG đọc được:\n${list}`;
+        }
+        Alert.alert(title, body);
     };
 
     const handleShare = async () => {
@@ -578,27 +606,33 @@ function classifyDecryptError(error: any): string {
                 }
             }
 
-            await performShare(address);
+            // Pass D2's pubkey down so performShare doesn't re-fetch it (saves ~300ms).
+            await performShare(address, recipientPub);
         } catch (err: any) {
+            // Log raw error so devs can see WHY formatChainError fell back to
+            // the generic message. Without this, "Chia sẻ thất bại / Không
+            // thể chia sẻ" gives no clue about the actual cause.
+            console.warn('[Share] Raw error:', {
+                code: err?.code,
+                status: err?.status,
+                dataCode: err?.data?.code,
+                message: err?.message,
+                dataMessage: err?.data?.message,
+                stack: err?.stack?.slice(0, 500),
+            });
+
+            // Quota check uses backend-layer message (not a chain error).
             const raw = String(err?.data?.message || err?.data?.error || err?.message || '').toLowerCase();
             let title = 'Chia sẻ thất bại';
-            let msg = err?.data?.message || err?.data?.error || err?.message || 'Không thể chia sẻ hồ sơ.';
-            if (raw.includes('quota') || raw.includes('limit') || raw.includes('miễn phí')) {
+            let msg: string;
+            if (raw.includes('quota') || raw.includes('miễn phí')) {
                 title = 'Hết lượt miễn phí';
                 msg = 'Bạn đã dùng hết lượt giao dịch on-chain miễn phí trong tháng. Hãy thử lại tháng sau hoặc dùng ví riêng.';
-            } else if (raw.includes('nonce')) {
-                title = 'Lỗi đồng bộ chữ ký';
-                msg = 'Nonce on-chain không khớp. Vui lòng thử lại.';
-            } else if (raw.includes('signature') || raw.includes('sign')) {
-                title = 'Lỗi ký giao dịch';
-            } else if (raw.includes('network') || raw.includes('fetch') || raw.includes('timeout')) {
-                title = 'Lỗi kết nối';
-                msg = 'Không kết nối được server hoặc blockchain. Kiểm tra mạng và thử lại.';
-            } else if (raw.includes('revert')) {
-                title = 'Giao dịch bị từ chối';
-                msg = 'Smart contract từ chối giao dịch: ' + msg;
+            } else {
+                // Centralised mapping (rate limit / revert / nonce / network / etc).
+                msg = formatChainError(err, 'Không thể chia sẻ hồ sơ. Vui lòng thử lại.');
             }
-            Alert.alert(title, String(msg));
+            Alert.alert(title, msg);
         } finally {
             setIsSharing(false);
         }
@@ -620,9 +654,7 @@ function classifyDecryptError(error: any): string {
             const creatorAddr = String(record?.createdBy || '').toLowerCase();
             const iAmOwner = !!me && (me === ownerAddr || me === creatorAddr);
 
-            const localRecordsString = await AsyncStorage.getItem('ehr_local_records');
-            const localRecords = localRecordsString ? JSON.parse(localRecordsString) : {};
-            const localData = localRecords[record.cidHash || ''];
+            const localData = (await localRecordStore.getKey(record.cidHash || '')) || null;
 
             if (iAmOwner && localData?.cid && localData?.aesKey) {
                 cid = localData.cid;
@@ -1127,10 +1159,18 @@ function classifyDecryptError(error: any): string {
                                 Loại quyền truy cập
                             </Text>
                             <YStack style={{ gap: 8, marginBottom: 16 }}>
-                                {([
-                                    { value: 'read-update', label: 'Đọc & cập nhật', sub: 'Bác sĩ đọc toàn bộ hồ sơ bao gồm các phiên bản cập nhật' },
-                                    { value: 'read-delegate', label: 'Đọc & ủy quyền lại', sub: 'Bác sĩ đọc toàn bộ + có thể chia sẻ lại cho bác sĩ khác' },
-                                ] as { value: ShareType; label: string; sub: string }[]).map((opt) => {
+                                {(() => {
+                                    // Bác sĩ re-share (không phải owner): contract grantUsingRecordDelegation
+                                    // hardcode allowDelegate=false (one-hop limit). Hide option để tránh
+                                    // mislead UX — backend cũng force false cho non-owner.
+                                    const opts: { value: ShareType; label: string; sub: string }[] = [
+                                        { value: 'read-update', label: 'Đọc & cập nhật', sub: 'Bác sĩ đọc toàn bộ hồ sơ bao gồm các phiên bản cập nhật' },
+                                    ];
+                                    if (isRecordOwner) {
+                                        opts.push({ value: 'read-delegate', label: 'Đọc & ủy quyền lại', sub: 'Bác sĩ đọc toàn bộ + có thể chia sẻ lại cho bác sĩ khác' });
+                                    }
+                                    return opts;
+                                })().map((opt) => {
                                     const active = shareType === opt.value;
                                     return (
                                         <Pressable key={opt.value} onPress={() => setShareType(opt.value)}>

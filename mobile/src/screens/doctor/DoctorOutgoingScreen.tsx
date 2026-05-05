@@ -25,7 +25,6 @@ import EmptyState from '../../components/EmptyState';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import useAuthStore from '../../store/authStore';
 import api from '../../services/api';
-// pendingUpdate service + hooks removed 2026-04-19 — doctor updates are direct on-chain.
 import ipfsService from '../../services/ipfs.service';
 import walletActionService from '../../services/walletAction.service';
 import {
@@ -75,8 +74,6 @@ type RequestItem = {
     status?: string;
     deadline?: string;
 };
-
-// PendingUpdateItem type removed 2026-04-19 — doctor updates are direct on-chain.
 
 const SPRING = { damping: 18, stiffness: 120, mass: 0.8 };
 
@@ -167,8 +164,6 @@ const OutgoingRequestCard = React.memo(({ item, index }: { item: RequestItem; in
         </AnimatedCardWrapper>
     );
 });
-
-/* PendingUpdateCard removed 2026-04-19 — doctor updates are direct on-chain. */
 
 /* ── Main screen ── */
 export default function DoctorOutgoingScreen() {
