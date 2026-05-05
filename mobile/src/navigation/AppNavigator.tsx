@@ -25,9 +25,8 @@ import DoctorCreateUpdateScreen from '../screens/doctor/DoctorCreateUpdateScreen
 import DoctorDelegatableRecordsScreen from '../screens/doctor/DoctorDelegatableRecordsScreen';
 import DoctorDelegatedPatientsScreen from '../screens/doctor/DoctorDelegatedPatientsScreen';
 import DoctorOutgoingSharesScreen from '../screens/doctor/DoctorOutgoingSharesScreen';
-import DoctorEmergencyRequestScreen from '../screens/doctor/DoctorEmergencyRequestScreen';
-import DoctorActiveEmergenciesScreen from '../screens/doctor/DoctorActiveEmergenciesScreen';
-import EmergencyAccessLogScreen from '../screens/EmergencyAccessLogScreen';
+import EmergencyLookupScreen from '../screens/doctor/EmergencyLookupScreen';
+import TrustedContactsScreen from '../screens/TrustedContactsScreen';
 
 import OrgDashboardScreen from '../screens/org/OrgDashboardScreen';
 import OrgMembersScreen from '../screens/org/OrgMembersScreen';
@@ -241,19 +240,14 @@ function MainStackNavigator() {
                 options={{ title: 'Ch\u1EC9nh s\u1EEDa h\u1ED3 s\u01A1' }}
             />
             <Stack.Screen
-                name="DoctorEmergencyRequest"
-                component={DoctorEmergencyRequestScreen}
-                options={{ headerShown: false }}
+                name="TrustedContacts"
+                component={TrustedContactsScreen}
+                options={{ title: 'Người thân tin cậy' }}
             />
             <Stack.Screen
-                name="DoctorActiveEmergencies"
-                component={DoctorActiveEmergenciesScreen}
-                options={{ headerShown: false }}
-            />
-            <Stack.Screen
-                name="EmergencyAccessLog"
-                component={EmergencyAccessLogScreen}
-                options={{ headerShown: false }}
+                name="EmergencyLookup"
+                component={EmergencyLookupScreen}
+                options={{ title: 'Tra cứu cấp cứu' }}
             />
         </Stack.Navigator>
     );

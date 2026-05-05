@@ -29,6 +29,7 @@ import walletActionService from '../services/walletAction.service';
 import { getOrCreateEncryptionKeypair, encryptForRecipient } from '../services/nacl-crypto';
 import { normalizeBase64 } from '../utils/base64';
 import localRecordStore from '../services/localRecordStore';
+import { autoPreShareNewRecord } from '../services/trustedContact.service';
 import useAuthStore from '../store/authStore';
 import {
     EHR_ERROR,
@@ -457,6 +458,16 @@ export default function CreateRecordScreen({ navigation, route: navRoute }: any)
                 createdByDisplay: 'Bạn',
                 ownerAddress: user?.walletAddress,
             };
+
+            // TRUSTED CONTACT auto pre-share (S18): write a KeyShare row for
+            // every active Trusted Contact so the contact can decrypt the
+            // record from their own wallet during emergency. Fire-and-forget.
+            autoPreShareNewRecord({
+                cidHash,
+                cid,
+                aesKey,
+                patientAddress: user?.walletAddress || '',
+            }).catch((err) => console.warn('Trusted Contact pre-share failed (non-fatal):', err));
 
             // SELF-KEYSHARE: backup key to backend DB so patient can recover on
             // reinstall/device change. NaCl keypair is deterministic (derived from

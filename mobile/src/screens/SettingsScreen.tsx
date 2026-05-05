@@ -1,9 +1,10 @@
 ﻿import React, { useState } from 'react';
-import { Alert, Linking, ScrollView } from 'react-native';
+import { Alert, Linking, Pressable, ScrollView } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Wallet, Copy, ExternalLink, Shield, Info, Coins } from 'lucide-react-native';
+import { Wallet, Copy, ExternalLink, Shield, Info, Coins, Heart, ChevronRight } from 'lucide-react-native';
 import { YStack, XStack, Text, Button, View } from 'tamagui';
+import { useNavigation } from '@react-navigation/native';
 
 import useAuthStore from '../store/authStore';
 import {
@@ -23,6 +24,7 @@ import {
 
 export default function SettingsScreen() {
     const { user } = useAuthStore();
+    const navigation = useNavigation<any>();
     const [copied, setCopied] = useState(false);
 
     const walletAddress = user?.walletAddress || user?.address || '';
@@ -122,6 +124,31 @@ export default function SettingsScreen() {
                         </View>
                     </YStack>
                 </View>
+
+                <Pressable
+                    onPress={() => navigation.navigate('TrustedContacts')}
+                    style={{
+                        backgroundColor: EHR_SURFACE_LOWEST,
+                        borderColor: EHR_OUTLINE_VARIANT,
+                        borderWidth: 1,
+                        borderRadius: 20,
+                        padding: 14,
+                        marginBottom: 16,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                    }}
+                >
+                    <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: EHR_PRIMARY_FIXED, alignItems: 'center', justifyContent: 'center', marginRight: 12 }}>
+                        <Heart size={20} color={EHR_PRIMARY} />
+                    </View>
+                    <YStack style={{ flex: 1 }}>
+                        <Text fontSize="$5" fontWeight="700" color="$color12">Người thân tin cậy</Text>
+                        <Text fontSize="$3" color="$color10" style={{ lineHeight: 18 }}>
+                            Cấu hình người được giúp bạn trong tình huống cấp cứu
+                        </Text>
+                    </YStack>
+                    <ChevronRight size={20} color={EHR_ON_SURFACE_VARIANT} />
+                </Pressable>
 
                 <XStack style={{ backgroundColor: EHR_SURFACE_LOWEST, borderColor: EHR_OUTLINE_VARIANT, borderWidth: 1, borderRadius: 20, padding: 14, alignItems: 'flex-start' }}>
                     <Shield size={22} color={EHR_PRIMARY} />

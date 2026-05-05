@@ -720,51 +720,28 @@ export default function DoctorDashboardScreen() {
                             </YStack>
                         </Pressable>
 
-                        {/* Emergency access shortcuts */}
-                        <XStack style={{ gap: 8, marginBottom: 16 }}>
-                            <Pressable
-                                onPress={() => navigation.navigate('DoctorEmergencyRequest')}
-                                style={{
-                                    flex: 1,
-                                    backgroundColor: '#fef2f2',
-                                    borderWidth: 1,
-                                    borderColor: '#fca5a5',
-                                    borderRadius: 16,
-                                    padding: 12,
-                                    flexDirection: 'row',
-                                    alignItems: 'center',
-                                }}
-                            >
-                                <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: '#dc2626', alignItems: 'center', justifyContent: 'center', marginRight: 10 }}>
-                                    <Siren size={18} color="white" />
-                                </View>
-                                <YStack flex={1}>
-                                    <Text fontSize={13} fontWeight="800" color="#7f1d1d">Yêu cầu khẩn cấp</Text>
-                                    <Text fontSize={11} color="#991b1b">Quyền 24h</Text>
-                                </YStack>
-                            </Pressable>
-                            <Pressable
-                                onPress={() => navigation.navigate('DoctorActiveEmergencies')}
-                                style={{
-                                    flex: 1,
-                                    backgroundColor: '#fff7ed',
-                                    borderWidth: 1,
-                                    borderColor: '#fdba74',
-                                    borderRadius: 16,
-                                    padding: 12,
-                                    flexDirection: 'row',
-                                    alignItems: 'center',
-                                }}
-                            >
-                                <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: '#ea580c', alignItems: 'center', justifyContent: 'center', marginRight: 10 }}>
-                                    <AlertTriangle size={18} color="white" />
-                                </View>
-                                <YStack flex={1}>
-                                    <Text fontSize={13} fontWeight="800" color="#7c2d12">Quyền của tôi</Text>
-                                    <Text fontSize={11} color="#9a3412">Đang hoạt động</Text>
-                                </YStack>
-                            </Pressable>
-                        </XStack>
+                        {/* Emergency lookup (S18, replaces grantEmergencyAccess flow) */}
+                        <Pressable
+                            onPress={() => navigation.navigate('EmergencyLookup')}
+                            style={{
+                                backgroundColor: '#fef2f2',
+                                borderWidth: 1,
+                                borderColor: '#fca5a5',
+                                borderRadius: 16,
+                                padding: 14,
+                                marginBottom: 16,
+                                flexDirection: 'row',
+                                alignItems: 'center',
+                            }}
+                        >
+                            <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: '#dc2626', alignItems: 'center', justifyContent: 'center', marginRight: 12 }}>
+                                <Siren size={20} color="white" />
+                            </View>
+                            <YStack flex={1}>
+                                <Text fontSize={14} fontWeight="700" color="#7f1d1d">Tra cứu cấp cứu</Text>
+                                <Text fontSize={12} color="#991b1b">Tra CCCD bệnh nhân → liên hệ Người thân tin cậy</Text>
+                            </YStack>
+                        </Pressable>
 
                         {/* Shared records header */}
                         <Text style={s.sectionTitle}>Hồ sơ đã nhận ({sharedRecords.length})</Text>

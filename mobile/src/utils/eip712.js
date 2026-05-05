@@ -46,6 +46,21 @@ export const DELEGATION_PERMIT_TYPES = {
     ],
 };
 
+// EIP-712 Types - MUST match contract TRUSTED_CONTACT_PERMIT_TYPEHASH:
+//   TrustedContactPermit(address patient,address contact,string label,bool active,uint256 deadline,uint256 nonce)
+// Same `nonces[patient]` slot as ConsentPermit / DelegationPermit.
+// active=true → designate, active=false → revoke.
+export const TRUSTED_CONTACT_PERMIT_TYPES = {
+    TrustedContactPermit: [
+        { name: 'patient', type: 'address' },
+        { name: 'contact', type: 'address' },
+        { name: 'label', type: 'string' },
+        { name: 'active', type: 'bool' },
+        { name: 'deadline', type: 'uint256' },
+        { name: 'nonce', type: 'uint256' },
+    ],
+};
+
 /**
  * Sign a grant consent message using EIP-712
  * @param {object} walletClient - Viem WalletClient with signer
@@ -147,6 +162,45 @@ export async function signDelegationPermit(walletClient, params) {
 }
 
 /**
+ * Sign a TrustedContactPermit for patient → contact designation/revocation.
+ * Backend relays via ConsentLedger.setTrustedContactBySig.
+ *
+ * @param {object} walletClient
+ * @param {object} params
+ * @param {string} params.patient   - patient wallet (signer)
+ * @param {string} params.contact   - contact wallet
+ * @param {string} params.label     - "Vợ", "Con trai"... (kept short)
+ * @param {boolean} params.active   - true = set, false = revoke
+ * @param {number} params.deadline  - EIP-712 sig deadline (unix seconds)
+ * @param {number|bigint} params.nonce - patient's nonces[patient]
+ */
+export async function signTrustedContactPermit(walletClient, params) {
+    const { patient, contact, label, active, deadline, nonce } = params;
+
+    const account = walletClient.account;
+    if (!account) {
+        throw new Error('No local account found in walletClient');
+    }
+
+    const message = {
+        patient: patient.toLowerCase(),
+        contact: contact.toLowerCase(),
+        label: label || '',
+        active: Boolean(active),
+        deadline: BigInt(deadline),
+        nonce: BigInt(nonce),
+    };
+
+    return walletClient.signTypedData({
+        account,
+        domain: EIP712_DOMAIN,
+        types: TRUSTED_CONTACT_PERMIT_TYPES,
+        primaryType: 'TrustedContactPermit',
+        message,
+    });
+}
+
+/**
  * Compute cidHash from CID string
  */
 export function computeCidHash(cid) {
@@ -171,10 +225,12 @@ export function getDeadline(hours = 1) {
 export default {
     signGrantConsent,
     signDelegationPermit,
+    signTrustedContactPermit,
     computeCidHash,
     computeEncKeyHash,
     getDeadline,
     EIP712_DOMAIN,
     CONSENT_PERMIT_TYPES,
     DELEGATION_PERMIT_TYPES,
+    TRUSTED_CONTACT_PERMIT_TYPES,
 };
