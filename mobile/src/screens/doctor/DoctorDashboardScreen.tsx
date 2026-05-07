@@ -269,6 +269,8 @@ export default function DoctorDashboardScreen() {
         if (!accepted) return;
         setClaimingId(claim.requestId);
         try {
+            const { gateOrThrow } = await import('../../utils/biometricGate');
+            await gateOrThrow('Để xác nhận yêu cầu truy cập hồ sơ');
             const { walletClient } = await walletActionService.getWalletContext();
             const gasOpts = {
                 gas: BigInt(300000),

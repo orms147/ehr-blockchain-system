@@ -155,6 +155,8 @@ export default function DoctorRequestAccessScreen() {
             //    Backend was previously only writing to DB — that left chain empty and made
             //    later patient ConfirmRequest sign useless.
             const { walletClient } = await walletActionService.getWalletContext();
+            const { gateOrThrow } = await import('../../utils/biometricGate');
+            await gateOrThrow('Để gửi yêu cầu truy cập hồ sơ');
             // Smart contract requires uint40 hours, minimum 1.
             // For < 1h test chips we floor to 1 on-chain but keep DB deadline at the test value.
             const onChainHours = Math.max(1, Math.ceil(durationHours));

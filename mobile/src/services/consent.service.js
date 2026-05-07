@@ -2,6 +2,7 @@ import api from './api';
 import walletActionService from './walletAction.service';
 import { signGrantConsent, computeCidHash, computeEncKeyHash, getDeadline } from '../utils/eip712';
 import { withRpcRetry } from '../utils/rpcRetry';
+import { gateOrThrow } from '../utils/biometricGate';
 import { createPublicClient, http, keccak256, toBytes } from 'viem';
 import { arbitrumSepolia } from 'viem/chains';
 import { CONSENT_LEDGER_ABI } from '../abi/contractABI';
@@ -61,6 +62,9 @@ export async function delegateOnChain({
             retryCount: 0,
         }),
     });
+
+    // P4: biometric MFA before broadcasting on-chain delegation.
+    await gateOrThrow('Để uỷ quyền hồ sơ cho bác sĩ khác');
 
     // Both writeContract and waitForTransactionReceipt poll Alchemy and can
     // hit the 300 CU/sec rate limit during share bursts. withRpcRetry handles

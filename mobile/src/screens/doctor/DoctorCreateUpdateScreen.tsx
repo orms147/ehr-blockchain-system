@@ -305,6 +305,8 @@ export default function DoctorCreateUpdateScreen({ navigation, route }: any) {
             // doctor. Backend sync is patched (S9.1b) to ignore that value and
             // keep the save-only doctor-wallet value in DB.
             const { walletClient, address: myAddress } = await walletActionService.getWalletContext();
+            const { gateOrThrow } = await import('../../utils/biometricGate');
+            await gateOrThrow('Để lưu hồ sơ y tế lên blockchain');
             const txHash = await walletClient.writeContract({
                 address: DOCTOR_UPDATE_ADDRESS,
                 abi: DOCTOR_UPDATE_ABI,

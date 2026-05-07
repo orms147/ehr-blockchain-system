@@ -4,6 +4,7 @@ import { createPublicClient, http } from 'viem';
 import { arbitrumSepolia } from 'viem/chains';
 
 import { signDelegationPermit, getDeadline } from '../utils/eip712';
+import { gateOrThrow } from '../utils/biometricGate';
 import { CONSENT_LEDGER_ABI } from '../abi/contractABI';
 
 const CONSENT_LEDGER_ADDRESS = process.env.EXPO_PUBLIC_CONSENT_LEDGER_ADDRESS;
@@ -129,6 +130,7 @@ export async function revokeAuthority(delegateeAddress) {
         functionName: 'revokeDelegation',
         args: [delegatee],
     });
+    await gateOrThrow('Để thu hồi quyền uỷ quyền của bác sĩ');
     const hash = await walletClient.writeContract(request);
     await publicClient.waitForTransactionReceipt({ hash });
     return { txHash: hash };
@@ -179,6 +181,7 @@ export async function subDelegate({
             Boolean(allowFurther),
         ],
     });
+    await gateOrThrow('Để chuyển uỷ quyền cho bác sĩ khác');
     const hash = await walletClient.writeContract(request);
     await publicClient.waitForTransactionReceipt({ hash });
     return { txHash: hash };
@@ -204,6 +207,7 @@ export async function revokeSubDelegation(patientAddress, subDelegatee) {
         functionName: 'revokeSubDelegation',
         args: [patientAddress.toLowerCase(), subDelegatee.toLowerCase()],
     });
+    await gateOrThrow('Để thu hồi uỷ quyền đã chuyển');
     const hash = await walletClient.writeContract(request);
     await publicClient.waitForTransactionReceipt({ hash });
     return { txHash: hash };
@@ -249,6 +253,7 @@ export async function grantUsingDelegation({
             Boolean(allowDelegate),
         ],
     });
+    await gateOrThrow('Để cấp quyền hồ sơ cho bác sĩ khác');
     const hash = await walletClient.writeContract(request);
     await publicClient.waitForTransactionReceipt({ hash });
     return { txHash: hash };

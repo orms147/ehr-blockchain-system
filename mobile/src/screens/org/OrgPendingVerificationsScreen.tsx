@@ -147,6 +147,8 @@ export default function OrgPendingVerificationsScreen() {
                             return;
                         }
                         const { walletClient, account } = await walletActionService.getWalletContext();
+                        const { gateOrThrow } = await import('../../utils/biometricGate');
+                        await gateOrThrow('Để xác thực bác sĩ on-chain');
                         const [doctorAddr, credential] = contractCall.args;
                         const txHash = await walletClient.writeContract({
                             account,

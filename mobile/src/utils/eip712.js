@@ -2,6 +2,7 @@
 // This MUST match the domain and types in the ConsentLedger.sol contract
 
 import { keccak256, toBytes } from 'viem';
+import { gateOrThrow } from './biometricGate';
 
 // Contract address from environment
 const CONSENT_LEDGER_ADDRESS = process.env.EXPO_PUBLIC_CONSENT_LEDGER_ADDRESS;
@@ -100,6 +101,11 @@ export async function signGrantConsent(walletClient, params) {
         nonce: BigInt(nonce),
     };
 
+    // P4 (S18, TT 13/2025/TT-BYT Điều 3.2): biometric MFA before signing.
+    // The Web3Auth ECDSA signature is the technical primitive; biometric
+    // is the user-visible legal signing event.
+    await gateOrThrow('Để cấp quyền truy cập hồ sơ y tế');
+
     // Sign using EIP-712 with account
     const signature = await walletClient.signTypedData({
         account,
@@ -150,6 +156,8 @@ export async function signDelegationPermit(walletClient, params) {
         nonce: BigInt(nonce),
     };
 
+    await gateOrThrow('Để uỷ quyền cho bác sĩ');
+
     const signature = await walletClient.signTypedData({
         account,
         domain: EIP712_DOMAIN,
@@ -190,6 +198,12 @@ export async function signTrustedContactPermit(walletClient, params) {
         deadline: BigInt(deadline),
         nonce: BigInt(nonce),
     };
+
+    await gateOrThrow(
+        active
+            ? 'Để chỉ định người thân tin cậy'
+            : 'Để thu hồi người thân tin cậy'
+    );
 
     return walletClient.signTypedData({
         account,

@@ -1,12 +1,13 @@
-﻿import React, { useState } from 'react';
-import { Alert, Linking, Pressable, ScrollView } from 'react-native';
+﻿import React, { useEffect, useState } from 'react';
+import { Alert, Linking, Pressable, ScrollView, Switch } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Wallet, Copy, ExternalLink, Shield, Info, Coins, Heart, ChevronRight } from 'lucide-react-native';
+import { Wallet, Copy, ExternalLink, Shield, Info, Coins, Heart, ChevronRight, Fingerprint } from 'lucide-react-native';
 import { YStack, XStack, Text, Button, View } from 'tamagui';
 import { useNavigation } from '@react-navigation/native';
 
 import useAuthStore from '../store/authStore';
+import { isBiometricSigningEnabled, setBiometricSigningEnabled } from '../utils/biometricGate';
 import {
     EHR_ON_PRIMARY,
     EHR_ON_SURFACE,
@@ -26,6 +27,24 @@ export default function SettingsScreen() {
     const { user } = useAuthStore();
     const navigation = useNavigation<any>();
     const [copied, setCopied] = useState(false);
+    const [bioEnabled, setBioEnabled] = useState(true);
+
+    useEffect(() => {
+        isBiometricSigningEnabled().then(setBioEnabled).catch(() => setBioEnabled(true));
+    }, []);
+
+    const handleToggleBio = async (next: boolean) => {
+        // Optimistic update — flip immediately. The persisted value is only
+        // read at signing time, so a transient AsyncStorage write race won't
+        // accidentally bypass the gate.
+        setBioEnabled(next);
+        try {
+            await setBiometricSigningEnabled(next);
+        } catch (err) {
+            setBioEnabled(!next);
+            Alert.alert('Lỗi', 'Không lưu được thiết lập. Vui lòng thử lại.');
+        }
+    };
 
     const walletAddress = user?.walletAddress || user?.address || '';
 
@@ -149,6 +168,35 @@ export default function SettingsScreen() {
                     </YStack>
                     <ChevronRight size={20} color={EHR_ON_SURFACE_VARIANT} />
                 </Pressable>
+
+                <View style={{
+                    backgroundColor: EHR_SURFACE_LOWEST,
+                    borderColor: EHR_OUTLINE_VARIANT,
+                    borderWidth: 1,
+                    borderRadius: 20,
+                    padding: 14,
+                    marginBottom: 16,
+                }}>
+                    <XStack style={{ alignItems: 'center' }}>
+                        <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: EHR_PRIMARY_FIXED, alignItems: 'center', justifyContent: 'center', marginRight: 12 }}>
+                            <Fingerprint size={20} color={EHR_PRIMARY} />
+                        </View>
+                        <YStack style={{ flex: 1, marginRight: 8 }}>
+                            <Text fontSize="$5" fontWeight="700" color="$color12">Yêu cầu vân tay khi ký</Text>
+                            <Text fontSize="$2" color="$color10" style={{ lineHeight: 16, marginTop: 2 }}>
+                                Mỗi lần ký giao dịch (cấp quyền, uỷ quyền, tạo hồ sơ) sẽ yêu cầu xác thực sinh trắc học.
+                            </Text>
+                        </YStack>
+                        <Switch
+                            value={bioEnabled}
+                            onValueChange={handleToggleBio}
+                            trackColor={{ false: EHR_OUTLINE_VARIANT, true: EHR_PRIMARY }}
+                        />
+                    </XStack>
+                    <Text fontSize="$1" color="$color9" style={{ marginTop: 8, lineHeight: 14 }}>
+                        Theo TT 13/2025/TT-BYT, sinh trắc học là chữ ký pháp lý. Tắt nếu thiết bị không có vân tay/Face ID.
+                    </Text>
+                </View>
 
                 <XStack style={{ backgroundColor: EHR_SURFACE_LOWEST, borderColor: EHR_OUTLINE_VARIANT, borderWidth: 1, borderRadius: 20, padding: 14, alignItems: 'flex-start' }}>
                     <Shield size={22} color={EHR_PRIMARY} />
