@@ -1,51 +1,66 @@
-// Brand "ViEH" tokens — S18 redesign (2026-05-04, Tầng 2 pre-flight).
+// Brand "ViEH" tokens — Tầng 3 redesign port (2026-05-07).
 //
-// Dark mode is the design default. These constants are read by every screen
-// that pre-dates the redesign and the new screens-v2/ ports. When porting,
-// keep importing these names so a token tweak here propagates everywhere.
+// Source of truth: .design-bundle/project/tokens.jsx from Claude Design handoff
+// (qFVplj_v4ZzjFd8o6_lHqA). Hex values match exactly. When the design picks
+// new accents (jade for medical-green / clay for warm-data), they live here
+// so screens-v2/ ports compose against the same surface.
 //
-// Cinnabar #E63946 is reserved for moments of legal action (signing consent,
+// Cinnabar #D45A3F is reserved for moments of legal action (signing consent,
 // adding a Trusted Contact, calling an emergency contact). Don't apply it to
-// generic CTAs.
+// generic CTAs — the design intentionally lets neutral surfaces carry most
+// of the visual weight and reserves cinnabar for ~3% of pixel coverage.
+//
+// Dark mode is the default per the brand brief. Backwards-compatible export
+// names so screens that pre-date the redesign keep importing the same
+// constants and pick up the new look automatically.
 
-// ============ SURFACES (DARK PRIMARY) ============
-export const EHR_SURFACE = '#0D0D0D';            // root background
-export const EHR_SURFACE_LOWEST = '#141414';     // shallow card
-export const EHR_SURFACE_LOW = '#1A1A1A';        // standard card
-export const EHR_SURFACE_CONTAINER = '#212121';  // raised card
-export const EHR_SURFACE_HIGH = '#2A2A2A';       // input bg
-export const EHR_SURFACE_HIGHEST = '#363636';    // modal bg
-export const EHR_SURFACE_DIM = '#0A0A0A';        // pressed state
+// ============ SURFACES — ink (dark) ============
+export const EHR_SURFACE = '#0F1419';            // root bg ("ink")
+export const EHR_SURFACE_LOWEST = '#181E25';     // standard card surface
+export const EHR_SURFACE_LOW = '#181E25';        // alias for surface
+export const EHR_SURFACE_CONTAINER = '#222831';  // elevated card
+export const EHR_SURFACE_HIGH = '#222831';       // alias for elevated
+export const EHR_SURFACE_HIGHEST = '#2F3741';    // modal background
+export const EHR_SURFACE_DIM = '#0A0F14';        // pressed state
 
-// ============ PRIMARY — Cinnabar ============
-export const EHR_PRIMARY = '#E63946';            // legal-action accent
-export const EHR_PRIMARY_CONTAINER = '#7A1D24';  // pressed/hover
-export const EHR_PRIMARY_FIXED = '#3A1414';      // tinted surface for primary buttons in dark
-export const EHR_PRIMARY_FIXED_DIM = '#2A0E0E';
-export const EHR_ON_PRIMARY = '#FFFFFF';         // text on cinnabar
-export const EHR_ON_PRIMARY_CONTAINER = '#FFD9DB';
-export const EHR_ON_PRIMARY_FIXED_VARIANT = '#FFB3B7';
+// ============ PRIMARY — Cinnabar (legal-action accent) ============
+export const EHR_PRIMARY = '#D45A3F';            // cinnabar
+export const EHR_PRIMARY_CONTAINER = '#B84628';  // cinnabarDeep — pressed/hover
+export const EHR_PRIMARY_FIXED = '#3A1E18';      // tinted surface for cinnabar buttons in dark
+export const EHR_PRIMARY_FIXED_DIM = '#2A1410';
+export const EHR_ON_PRIMARY = '#FFFFFF';
+export const EHR_ON_PRIMARY_CONTAINER = '#FFD9D2';
+export const EHR_ON_PRIMARY_FIXED_VARIANT = '#FFB5A6';
 
-// ============ SECONDARY — Earth muted (used for secondary accents, low contrast) ============
-export const EHR_SECONDARY = '#B89478';          // warm tan accent
-export const EHR_SECONDARY_CONTAINER = '#3A2E26';
+// ============ SECONDARY — Clay (warm data accent, low contrast) ============
+export const EHR_SECONDARY = '#D4A87C';          // clay
+export const EHR_SECONDARY_CONTAINER = '#3A2E20';
 export const EHR_ON_SECONDARY_CONTAINER = '#F0E2D5';
 
-// ============ TERTIARY — Jade muted (used for verified/active states) ============
-export const EHR_TERTIARY = '#7A9985';
+// ============ TERTIARY — Jade (medical green, used for verified/active) ============
+export const EHR_TERTIARY = '#7BA88A';           // jade
 export const EHR_TERTIARY_FIXED = '#1F2C24';
 export const EHR_ON_TERTIARY_FIXED = '#D5EAD9';
 
 // ============ TEXT ============
-export const EHR_ON_SURFACE = '#EFF2EA';            // primary text
-export const EHR_ON_SURFACE_VARIANT = '#B0B0B0';    // secondary text, labels
-export const EHR_OUTLINE = '#5C5C5C';
-export const EHR_OUTLINE_VARIANT = '#363636';
+export const EHR_ON_SURFACE = '#EDE7D9';            // textPrimary — paper-on-ink
+export const EHR_ON_SURFACE_VARIANT = '#A09B8E';    // textSecondary
+export const EHR_OUTLINE = '#6B6760';               // textMuted (often outline)
+export const EHR_OUTLINE_VARIANT = '#2F3741';       // border
+export const EHR_OUTLINE_SOFT = '#252C35';          // borderSoft
 
-// ============ ERROR (different from cinnabar — error has yellower tint) ============
-export const EHR_ERROR = '#FF6B6B';
-export const EHR_ERROR_CONTAINER = '#3A1414';
+// ============ STATUS ============
+export const EHR_SUCCESS = '#7BA88A';   // jade — also success
+export const EHR_WARNING = '#D4A24C';
+export const EHR_DANGER = '#C94637';
+
+// ============ ERROR (alias for danger; kept for backwards compat) ============
+export const EHR_ERROR = '#C94637';
+export const EHR_ERROR_CONTAINER = '#3A1814';
+
+// ============ ACCENT (slate — for non-action info chips) ============
+export const EHR_SLATE = '#8B8FA3';
 
 // ============ SHADOWS ============
-export const EHR_SHADOW = 'rgba(0, 0, 0, 0.32)';
-export const EHR_SHADOW_SOFT = 'rgba(0, 0, 0, 0.16)';
+export const EHR_SHADOW = 'rgba(0, 0, 0, 0.40)';
+export const EHR_SHADOW_SOFT = 'rgba(0, 0, 0, 0.20)';

@@ -41,6 +41,9 @@ yarn-error.*
 # typescript
 *.tsbuildinfo
 
+# Claude Design handoff bundle — local reference only, can be re-fetched
+.design-bundle/
+
 # generated native folders
 /ios
 /android

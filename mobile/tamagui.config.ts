@@ -1,18 +1,22 @@
 import { defaultConfig } from '@tamagui/config/v5'
 import { createTamagui, createFont } from 'tamagui'
 
-// Brand "ViEH" — S18 redesign tokens (2026-05-04, Tầng 2 pre-flight).
+// Brand "ViEH" — Tầng 3 redesign tokens (2026-05-07).
 //
-// Cinnabar #E63946 is reserved for moments of legal action (signing consent,
-// adding a Trusted Contact, calling an emergency contact). Using it for
-// generic CTAs erodes its meaning, so screens default to neutral surfaces
-// and bring cinnabar in only at the action button.
+// Source: .design-bundle/project/tokens.jsx from Claude Design handoff
+// (qFVplj_v4ZzjFd8o6_lHqA). Hex values match exactly. Three semantic
+// accents — cinnabar for legal action, jade for medical-green, clay for
+// warm-data.
 //
-// Dark mode is the design default. Patient demographics skew young-pro and
-// the brand brief explicitly calls for it. We respect the system color
-// scheme as a light-mode override.
-export const CINNABAR = '#E63946'
-export const CINNABAR_FIXED = '#3A1414'  // surface tint for cinnabar buttons in dark mode
+// Cinnabar is reserved for moments of legal action (signing consent,
+// adding a Trusted Contact, calling an emergency contact). Don't apply it
+// to generic CTAs.
+export const CINNABAR = '#D45A3F'
+export const CINNABAR_DEEP = '#B84628'
+export const CINNABAR_FIXED = '#3A1E18'  // surface tint for cinnabar buttons in dark
+export const JADE = '#7BA88A'             // medical green — verified/active states
+export const CLAY = '#D4A87C'             // warm data accent
+export const SLATE = '#8B8FA3'            // info chips, non-action
 
 // ============ FONTS ============
 //
@@ -68,46 +72,52 @@ const bodyFont = createFont({
 
 const lightTheme = {
   ...defaultConfig.themes.light,
-  background: '#F8FAF3',
-  color: '#191C18',
-  borderColor: '#C5C8BE',
+  background: '#F5F2EC',
+  color: '#0F1419',
+  borderColor: '#DCD5C4',
   color1: '#FFFFFF',
-  color2: '#F2F4ED',
-  color3: '#ECEFE8',
-  color4: '#E7E9E2',
-  color5: '#E1E3DC',
-  color6: '#D8DBD4',
-  color7: '#C5C8BE',
-  color8: '#A4A298',
-  color9: '#757870',
-  color10: '#5E635A',
-  color11: '#444841',
-  color12: '#191C18',
+  color2: '#FBF8F1',
+  color3: '#F5F2EC',
+  color4: '#EFEBE0',
+  color5: '#E6DFCE',
+  color6: '#DCD5C4',
+  color7: '#C9C2AF',
+  color8: '#A89F87',
+  color9: '#8B8678',
+  color10: '#6B6760',
+  color11: '#3D3A33',
+  color12: '#0F1419',
   primary: CINNABAR,
   cinnabar: CINNABAR,
   cinnabarFixed: '#FCDDDF',
+  jade: JADE,
+  clay: CLAY,
+  slate: SLATE,
 }
 
 const darkTheme = {
   ...defaultConfig.themes.dark,
-  background: '#0D0D0D',
-  color: '#EFF2EA',
-  borderColor: '#2A2A2A',
-  color1: '#0D0D0D',
-  color2: '#141414',
-  color3: '#1A1A1A',
-  color4: '#212121',
-  color5: '#2A2A2A',
-  color6: '#363636',
-  color7: '#444444',
-  color8: '#5C5C5C',
-  color9: '#888888',
-  color10: '#B0B0B0',
-  color11: '#D4D4D4',
-  color12: '#EFF2EA',
+  background: '#0F1419',     // ink
+  color: '#EDE7D9',          // paper-on-ink
+  borderColor: '#2F3741',
+  color1: '#0F1419',
+  color2: '#181E25',         // surface
+  color3: '#1D2530',
+  color4: '#222831',         // elevated
+  color5: '#2A323D',
+  color6: '#2F3741',         // border
+  color7: '#3A4350',
+  color8: '#5C6470',
+  color9: '#6B6760',         // textMuted
+  color10: '#A09B8E',        // textSecondary
+  color11: '#D0CABA',
+  color12: '#EDE7D9',
   primary: CINNABAR,
   cinnabar: CINNABAR,
   cinnabarFixed: CINNABAR_FIXED,
+  jade: JADE,
+  clay: CLAY,
+  slate: SLATE,
 }
 
 export const tamaguiConfig = createTamagui({

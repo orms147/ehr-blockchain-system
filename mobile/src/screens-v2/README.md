@@ -60,6 +60,54 @@ The old screens encode behaviour we cannot regress:
 - **Auth + role gating**: `useAuthStore`, `requireOnChainRoles` middleware
   on the backend. Don't move role checks around when porting.
 
+## Status (Tầng 3 incremental port)
+
+| Source (`.design-bundle/project/`) | Target | Status |
+|---|---|---|
+| screens-patient.jsx → OnboardingScreen step 0 | `screens-v2/LandingScreen.tsx` | ✓ ported |
+| screens-patient.jsx → HomeScreen | `screens-v2/DashboardScreen.tsx` | TODO |
+| screens-patient.jsx → RecordsScreen | `screens-v2/RecordsScreen.tsx` | TODO |
+| screens-patient.jsx → RecordDetailScreen | `screens-v2/RecordDetailScreen.tsx` | TODO |
+| screens-patient.jsx → PermissionsScreen | `screens-v2/AccessLogScreen.tsx` (tab "Quyền") | TODO |
+| screens-patient.jsx → AuditScreen | `screens-v2/AccessLogScreen.tsx` (tab "Nhật ký") | TODO |
+| screens-patient.jsx → ProfileScreen | `screens-v2/ProfileScreen.tsx` | TODO |
+| screens-patient.jsx → ConsentSheet | reuse in RecordDetail / Requests | TODO |
+| screens-patient.jsx → ReceiptScreen | new component or modal | TODO |
+| screens-doctor.jsx → DoctorHomeScreen | `screens-v2/doctor/DoctorDashboardScreen.tsx` | TODO |
+| screens-doctor.jsx → RequestAccessScreen | `screens-v2/doctor/DoctorRequestAccessScreen.tsx` | TODO |
+| screens-doctor.jsx → CreateRecordScreen | `screens-v2/doctor/DoctorCreateUpdateScreen.tsx` | TODO |
+| screens-doctor.jsx → OrgScreen / MinistryScreen | stub variants | TODO |
+| screens-extras.jsx → DelegationScreen | `screens-v2/DelegationScreen.tsx` | TODO |
+| screens-extras.jsx → RequestsScreen | `screens-v2/RequestsScreen.tsx` | TODO |
+| screens-extras.jsx → PatientCreateRecordScreen | `screens-v2/CreateRecordScreen.tsx` | TODO |
+| screens-extras.jsx → EditProfileScreen | `screens-v2/EditProfileScreen.tsx` | TODO |
+| screens-extras.jsx → SettingsScreen | `screens-v2/SettingsScreen.tsx` | TODO |
+| screens-extras.jsx → DoctorOutgoingScreen | `screens-v2/doctor/DoctorOutgoingScreen.tsx` | TODO |
+| screens-extras.jsx → DoctorDelegatableRecordsScreen | `screens-v2/doctor/DoctorDelegatableRecordsScreen.tsx` | TODO |
+| screens-extras.jsx → DoctorDelegatedPatientsScreen | `screens-v2/doctor/DoctorDelegatedPatientsScreen.tsx` | TODO |
+| screens-emergency.jsx → TrustedContactsScreen | `screens-v2/TrustedContactsScreen.tsx` | TODO |
+
+### v2 primitives (`components-v2/`)
+
+- `ViButton.tsx` — primary / cinnabar / ghost / danger variants × sm / md / lg.
+- `ViCard.tsx` — surface card with optional press scale.
+- `ViChips.tsx` — `ViSectionLabel` / `ViModeChip` / `ViStatusChip` / `ViSourceChip`.
+- `ViWordmark.tsx` — "ViEH" brand logotype, mixed Fraunces italic + bold.
+
+### Token alignment
+
+`src/constants/uiColors.ts` and `tamagui.config.ts` already point at the
+exact Claude Design hex values from `.design-bundle/project/tokens.jsx`:
+- Cinnabar `#D45A3F`
+- Ink (root bg) `#0F1419`
+- Surface `#181E25`
+- Elevated `#222831`
+- Jade `#7BA88A`, Clay `#D4A87C`, Slate `#8B8FA3`
+
+When porting a screen, prefer the existing `EHR_*` exports — they already
+resolve to the correct hex. Add new tokens only when the design introduces
+something not yet covered.
+
 ## Pitfalls observed during P1-P5
 
 - Tamagui prop type warnings for `marginTop` / `backgroundColor` on

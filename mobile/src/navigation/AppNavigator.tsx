@@ -6,7 +6,7 @@ import { createBottomTabNavigator, type BottomTabNavigationOptions } from '@reac
 import { Home, FileText, Bell, User, Stethoscope, Send, Building2, Users, Landmark, Clock, Shield, Award, Plus } from 'lucide-react-native';
 
 import LoginScreen from '../screens/LoginScreen';
-import LandingScreen from '../screens/LandingScreen';
+import LandingScreen from '../screens-v2/LandingScreen';
 import DashboardScreen from '../screens/DashboardScreen';
 import RecordsScreen from '../screens/RecordsScreen';
 import RequestsScreen from '../screens/RequestsScreen';
