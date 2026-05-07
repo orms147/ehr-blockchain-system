@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ActivityIndicator, FlatList, RefreshControl, Alert, Pressable, StyleSheet } from 'react-native';
+import { ActivityIndicator, RefreshControl, Alert, Pressable, StyleSheet } from 'react-native';
+import { FlashList } from '@shopify/flash-list';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { FileText, Users, Clock3, Loader2, CheckCircle, Clock, Siren, AlertTriangle, FilePlus2, Share2 } from 'lucide-react-native';
@@ -477,7 +478,7 @@ export default function DoctorDashboardScreen() {
 
     return (
         <SafeAreaView style={{ flex: 1, backgroundColor: EHR_SURFACE }} edges={['top']}>
-            <FlatList
+            <FlashList
                 contentContainerStyle={{ padding: 20, paddingBottom: 100 }}
                 refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} colors={[EHR_PRIMARY]} />}
                 data={sharedRecords}

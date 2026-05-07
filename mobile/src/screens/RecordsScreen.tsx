@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { FlatList, Pressable, RefreshControl, StyleSheet } from 'react-native';
+import { Pressable, RefreshControl, StyleSheet } from 'react-native';
+import { FlashList } from '@shopify/flash-list';
 import { useQuery } from '@tanstack/react-query';
 import consentService from '../services/consent.service';
 import accessLogService from '../services/accessLog.service';
@@ -157,7 +158,7 @@ export default function RecordsScreen({ navigation }: any) {
                     onAction={handleCreateRecord}
                 />
             ) : (
-                <FlatList
+                <FlashList
                     data={isActivityView ? (activityLogs || []) : filteredRecords}
                     keyExtractor={(item: any, idx) =>
                         isActivityView ? (item.id || `log-${idx}`) : (item.cidHash || `record-${idx}`)
