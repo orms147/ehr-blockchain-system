@@ -723,6 +723,39 @@ router.get('/:cidHash', authenticate, async (req, res, next) => {
     }
 });
 
+// GET /api/records/:cidHash/meta — Lightweight, no-AccessLog metadata.
+// Used by mobile RecordChip when rendering long lists. Same record can be
+// chip-rendered dozens of times per screen (each share, each access log
+// entry, each request); going through GET /:cidHash would emit a
+// VIEW_METADATA AccessLog row for every chip render and pollute the audit
+// trail. This endpoint returns ONLY display-safe fields and skips the log.
+router.get('/:cidHash/meta', authenticate, async (req, res, next) => {
+    try {
+        const cidHash = normalizeHash(req.params.cidHash);
+        const record = await prisma.recordMetadata.findUnique({
+            where: { cidHash },
+            select: {
+                cidHash: true,
+                parentCidHash: true,
+                title: true,
+                description: true,
+                recordType: true,
+                ownerAddress: true,
+                createdBy: true,
+                createdAt: true,
+            },
+        });
+
+        if (!record) {
+            return res.status(404).json({ code: 'RECORD_NOT_FOUND' });
+        }
+
+        res.json(record);
+    } catch (error) {
+        next(error);
+    }
+});
+
 // DELETE /api/records/:cidHash/access/:address - Revoke someone's access to a record
 router.delete('/:cidHash/access/:address', authenticate, async (req, res, next) => {
     try {

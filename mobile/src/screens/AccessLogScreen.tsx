@@ -8,6 +8,8 @@ import EmptyState from '../components/EmptyState';
 import LoadingSpinner from '../components/LoadingSpinner';
 import consentService from '../services/consent.service';
 import useAuthStore from '../store/authStore';
+import UserChip from '../components/UserChip';
+import RecordChip from '../components/RecordChip';
 import { useDelegationAccessLogs, type DelegationAccessLogRow } from '../hooks/queries/useDelegations';
 import { formatExpiry, formatDate, getExpiryUrgency } from '../utils/dateFormatting';
 import {
@@ -490,11 +492,10 @@ export default function AccessLogScreen() {
                             const sourceLabel = item.source.type === 'direct' ? 'Trực tiếp' : 'Qua uỷ quyền';
                             return (
                                 <View style={{ backgroundColor: EHR_SURFACE_LOW, borderRadius: 14, borderWidth: 1, borderColor: EHR_OUTLINE_VARIANT, padding: 14, marginBottom: 12 }}>
-                                    <XStack style={{ alignItems: 'center', gap: 8, marginBottom: 6 }}>
-                                        <User size={16} color={EHR_PRIMARY} />
-                                        <Text fontWeight="700" fontSize="$4" color="$color12" style={{ flex: 1 }}>
-                                            {item.granteeAddress.slice(0, 10)}…{item.granteeAddress.slice(-6)}
-                                        </Text>
+                                    <XStack style={{ alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                                        <View style={{ flex: 1 }}>
+                                            <UserChip address={item.granteeAddress} expanded showAddress={false} />
+                                        </View>
                                         <View style={{
                                             paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999,
                                             backgroundColor: item.source.type === 'direct' ? EHR_PRIMARY_FIXED : '#fef3c7',
@@ -506,13 +507,21 @@ export default function AccessLogScreen() {
                                             </Text>
                                         </View>
                                     </XStack>
-                                    <Text fontSize="$3" color="$color11">
-                                        {item.recordTitle || `Hồ sơ ${item.cidHash.slice(0, 10)}…`}
-                                    </Text>
+                                    <View style={{ marginTop: 4, marginBottom: 4 }}>
+                                        <RecordChip cidHash={item.cidHash} fallbackTitle={item.recordTitle} />
+                                    </View>
                                     {item.source.type === 'via-delegate' ? (
-                                        <Text fontSize="$2" color="$color10" style={{ marginTop: 4 }}>
-                                            Cấp bởi: {item.source.byDelegatee.slice(0, 10)}…{item.source.byDelegatee.slice(-6)}
-                                        </Text>
+                                        <XStack style={{ alignItems: 'center', gap: 4, marginTop: 4 }}>
+                                            <Text fontSize="$2" color="$color10">Cấp bởi:</Text>
+                                            <View style={{ flex: 1 }}>
+                                                <UserChip
+                                                    address={item.source.byDelegatee}
+                                                    size="sm"
+                                                    showAddress={false}
+                                                    interactive={false}
+                                                />
+                                            </View>
+                                        </XStack>
                                     ) : null}
                                     {item.expiresAt ? (
                                         <Text fontSize="$2" color="$color10" style={{ marginTop: 2 }}>

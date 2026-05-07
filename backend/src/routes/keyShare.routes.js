@@ -1048,9 +1048,10 @@ router.get('/record/:cidHash', authenticate, async (req, res, next) => {
             });
         }
 
-        // Permission check — contract canAccess now walks record chain to the
-        // canonical root and enforces includeUpdates on-chain. A single call
-        // is sufficient; backend no longer walks anything.
+        // Permission check — contract canAccess walks the record chain to
+        // the canonical root and validates the consent (medical episode
+        // model, post-2026-04-19). A single call is sufficient; backend no
+        // longer walks anything.
         const isOwner = keyShare.record?.ownerAddress?.toLowerCase() === requesterAddress;
         const isCreator = keyShare.record?.createdBy?.toLowerCase() === requesterAddress;
 
@@ -1176,9 +1177,9 @@ router.post('/:id/claim', authenticate, async (req, res, next) => {
             return res.status(500).json({ code: 'INTERNAL_ERROR', error: 'Dữ liệu hồ sơ không đồng bộ. Vui lòng thử lại.' });
         }
 
-        // Revalidate on-chain consent at claim time. Contract's canAccess now
-        // walks the record chain to canonical root and enforces includeUpdates
-        // on-chain — a single call is the source of truth. No backend walk.
+        // Revalidate on-chain consent at claim time. Contract's canAccess
+        // walks the record chain to canonical root (medical episode model)
+        // and is the source of truth. No backend walk needed.
         const ownerAddress = keyShare.record.ownerAddress?.toLowerCase();
         if (ownerAddress) {
             const recipientLower = keyShare.recipientAddress.toLowerCase();
@@ -1217,11 +1218,11 @@ router.post('/:id/claim', authenticate, async (req, res, next) => {
                 }
 
                 // canAccess=false but doctor IS verified. Could be: genuinely
-                // revoked on-chain, chain RPC transient fail, contract/subgraph
-                // desync, or anchorCidHash mismatch for a `includeUpdates=false`
-                // consent. We USED TO mark the KeyShare row `revoked` here, but
-                // that destroyed data for cases (b)-(d) — a single transient
-                // failure permanently killed a valid share.
+                // revoked on-chain, chain RPC transient fail, or
+                // contract/subgraph desync. We USED TO mark the KeyShare row
+                // `revoked` here, but that destroyed data for cases (b)+(c)
+                // — a single transient failure permanently killed a valid
+                // share.
                 //
                 // Trust the event sync worker: when patient actually revokes
                 // on-chain, `ConsentRevoked` flows through consentLedgerSync

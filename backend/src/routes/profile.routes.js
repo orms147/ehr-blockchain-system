@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { keccak256, toBytes } from 'viem';
 import prisma from '../config/database.js';
 import { authenticate } from '../middleware/auth.js';
+import { getUserRole } from '../config/blockchain.js';
 
 const router = Router();
 
@@ -132,7 +133,14 @@ router.put('/me', authenticate, async (req, res, next) => {
     }
 });
 
-// GET /api/profile/:address — Get public profile of any user (no auth)
+// GET /api/profile/:address — Get public profile of any user (no auth).
+// Used by mobile UserChip to render "Trần Quốc Bảo · BS · BV Bạch Mai · Đã xác minh"
+// next to a wallet address. Returns ONLY public-safe fields — no phone,
+// email, dateOfBirth, allergies, bloodType, homeAddress.
+//
+// isVerifiedDoctor is read from the on-chain role cache (10min TTL,
+// invalidated by subgraphSync on DoctorVerified events) so the badge
+// refreshes within seconds of an org admin verifying.
 router.get('/:address', async (req, res, next) => {
     try {
         const address = req.params.address.toLowerCase();
@@ -145,7 +153,6 @@ router.get('/:address', async (req, res, next) => {
                 gender: true,
                 avatarUrl: true,
                 createdAt: true,
-                // Don't expose: phone, email, homeAddress, allergies, bloodType
             }
         });
 
@@ -153,7 +160,6 @@ router.get('/:address', async (req, res, next) => {
             return res.status(404).json({ error: 'User not found' });
         }
 
-        // Also check if this user has a doctor profile
         const doctorProfile = await prisma.doctorProfile.findUnique({
             where: { walletAddress: address },
             select: {
@@ -165,8 +171,24 @@ router.get('/:address', async (req, res, next) => {
             }
         });
 
+        // Surface verified-doctor flag so UserChip can render a "✓ XM" badge.
+        // getUserRole uses the 10min role cache (invalidated by subgraphSync
+        // on DoctorVerified events) so this endpoint stays cheap even when
+        // every chip in a long list calls it.
+        let isVerifiedDoctor = false;
+        let isDoctor = false;
+        try {
+            const role = await getUserRole(address);
+            isDoctor = role?.isDoctor === true;
+            isVerifiedDoctor = role?.isVerifiedDoctor === true;
+        } catch {
+            // Best-effort — if the read fails, fall back to false flags.
+        }
+
         res.json({
             ...user,
+            isDoctor,
+            isVerifiedDoctor,
             doctorProfile: doctorProfile || null,
         });
     } catch (error) {
