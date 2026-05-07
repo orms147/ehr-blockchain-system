@@ -43,6 +43,7 @@ import authService from '../services/auth.service';
 import walletActionService from '../services/walletAction.service';
 import { getOrCreateEncryptionKeypair } from '../services/nacl-crypto';
 import { deriveRolesFromUser } from '../utils/authRoles';
+import { Sentry } from '../lib/sentry';
 import {
     EHR_ON_PRIMARY,
     EHR_ON_PRIMARY_CONTAINER,
@@ -320,6 +321,21 @@ export default function LoginScreen({ navigation }: any) {
             }
 
             console.error('Web3Auth Login error:', error);
+            // Drop a Sentry breadcrumb so we can spot which provider tends
+            // to fail in the wild (esp. sms_passwordless OTP delivery).
+            try {
+                Sentry.addBreadcrumb({
+                    category: 'auth',
+                    level: 'error',
+                    message: 'Web3Auth login failed',
+                    data: {
+                        provider: providerToUse,
+                        errorCode: error?.code,
+                        message: String(error?.message || '').slice(0, 200),
+                    },
+                });
+                Sentry.captureException(error);
+            } catch {}
             let message = error?.message || 'Lỗi không xác định';
             if (error?.code === 'BACKEND_UNREACHABLE') {
                 message = 'Không kết nối được backend. Hãy bật backend và kiểm tra EXPO_PUBLIC_API_URL.';
