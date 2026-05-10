@@ -11,6 +11,7 @@ import {
     CONSENT_LEDGER_ABI,
 } from '../config/contractABI.js';
 import { withRpcRetry } from '../utils/rpcRetry.js';
+import { invalidateRoleCache } from '../config/blockchain.js';
 
 // Unified gas sponsorship quota — 100 signatures/month pool covering every
 // patient on-chain action (upload, update, grant/share, revoke, delegate).
@@ -339,6 +340,13 @@ export async function sponsorRegisterPatient(walletAddress) {
         create: { walletAddress: address, registrationSponsored: true },
     });
 
+    // Drop the cached "isPatient=false" so the next /auth/me call re-reads
+    // the chain and sees the freshly-registered patient role. Without this,
+    // mobile RoleSelectionScreen polls /auth/me three times within 7s, each
+    // hits the 10-min role cache and thinks the registration didn't sync —
+    // fires a "Đang đồng bộ" alert even though the on-chain tx confirmed.
+    invalidateRoleCache(address);
+
     return { txHash: hash, receipt };
 }
 
@@ -376,6 +384,10 @@ export async function sponsorRegisterDoctor(walletAddress) {
         update: { registrationSponsored: true },
         create: { walletAddress: address, registrationSponsored: true },
     });
+
+    // Same fix as sponsorRegisterPatient — drop role cache so /auth/me
+    // returns isDoctor=true on the next call without waiting 10 min TTL.
+    invalidateRoleCache(address);
 
     return { txHash: hash, receipt };
 }
