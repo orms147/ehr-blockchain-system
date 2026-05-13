@@ -7,7 +7,7 @@ import { Home, FileText, Bell, User, Stethoscope, Send, Building2, Users, Landma
 
 import LoginScreen from '../screens/LoginScreen';
 import LandingScreen from '../screens-v2/LandingScreen';
-import DashboardScreen from '../screens/DashboardScreen';
+import DashboardScreen from '../screens-v2/DashboardScreen';
 import RecordsScreen from '../screens/RecordsScreen';
 import RequestsScreen from '../screens/RequestsScreen';
 import ProfileScreen from '../screens/ProfileScreen';
