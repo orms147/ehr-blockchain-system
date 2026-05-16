@@ -1,0 +1,652 @@
+// TrustedContactsScreen v2 — port of .design-bundle/project/screens-emergency.jsx
+// TrustedContactsScreen. Cinnabar hero warning (this is the legal-action
+// surface — pre-shares keys to family) + tile rows + 2 primary CTAs +
+// CCCD enrol modal.
+//
+// Wiring preserved exactly:
+//   - useQuery trustedContacts/me + invalidate on mutation
+//   - trustedContactService.addContact / removeContact (calls EIP-712
+//     signTrustedContactPermit which gates biometric MFA)
+//   - PUT /api/profile/me/national-id (CCCD opt-in flow)
+//   - QrAddressScanner component for QR-based address paste
+//   - All Alert.alert prompts and error mapping (NATIONAL_ID_TAKEN)
+
+import React, { useState } from 'react';
+import {
+    Alert,
+    FlatList,
+    Modal,
+    Pressable,
+    RefreshControl,
+    ScrollView,
+    TextInput,
+    View,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { Text, XStack, YStack } from 'tamagui';
+import { Heart, AlertTriangle, ScanLine, IdCard } from 'lucide-react-native';
+
+import api from '../services/api';
+import trustedContactService from '../services/trustedContact.service';
+import QrAddressScanner from '../components/QrAddressScanner';
+import ViButton from '../components-v2/ViButton';
+import ViCard from '../components-v2/ViCard';
+import { ViSectionLabel } from '../components-v2/ViChips';
+import {
+    EHR_SURFACE,
+    EHR_SURFACE_LOWEST,
+    EHR_ON_SURFACE,
+    EHR_ON_SURFACE_VARIANT,
+    EHR_OUTLINE,
+    EHR_OUTLINE_SOFT,
+    EHR_OUTLINE_VARIANT,
+    EHR_PRIMARY,
+    EHR_PRIMARY_FIXED,
+} from '../constants/uiColors';
+
+const SERIF = 'Fraunces_400Regular';
+const SANS = 'DMSans_400Regular';
+const SANS_MEDIUM = 'DMSans_500Medium';
+const SANS_SEMI = 'DMSans_600SemiBold';
+
+type Contact = {
+    contactAddress: string;
+    label?: string | null;
+    fullName?: string | null;
+    phone?: string | null;
+    avatarUrl?: string | null;
+    setAt?: string;
+};
+
+const truncate = (addr?: string) => (addr ? `${addr.slice(0, 6)}…${addr.slice(-4)}` : '');
+
+export default function TrustedContactsScreen() {
+    const queryClient = useQueryClient();
+    const { data: contacts = [], isLoading, refetch, isRefetching } = useQuery<Contact[]>({
+        queryKey: ['trustedContacts', 'me'],
+        queryFn: () => trustedContactService.listMyContacts(),
+    });
+
+    const [addOpen, setAddOpen] = useState(false);
+    const [scannerOpen, setScannerOpen] = useState(false);
+    const [contactInput, setContactInput] = useState('');
+    const [labelInput, setLabelInput] = useState('');
+    const [adding, setAdding] = useState(false);
+    const [removingAddr, setRemovingAddr] = useState<string | null>(null);
+
+    const [cccdOpen, setCccdOpen] = useState(false);
+    const [cccdInput, setCccdInput] = useState('');
+    const [cccdSaving, setCccdSaving] = useState(false);
+
+    const resetAddModal = () => {
+        setContactInput('');
+        setLabelInput('');
+        setAddOpen(false);
+    };
+
+    const handleAdd = async () => {
+        const addr = contactInput.trim();
+        if (!/^0x[a-fA-F0-9]{40}$/.test(addr)) {
+            Alert.alert('Địa chỉ không hợp lệ', 'Vui lòng nhập địa chỉ ví hợp lệ (0x...) hoặc quét QR.');
+            return;
+        }
+        try {
+            setAdding(true);
+            const result = await trustedContactService.addContact({
+                contactAddress: addr,
+                label: labelInput.trim().slice(0, 120),
+            });
+            await queryClient.invalidateQueries({ queryKey: ['trustedContacts'] });
+            Alert.alert(
+                'Đã thêm Người thân tin cậy',
+                `Đã chia sẻ khoá ${result.preShareWritten} hồ sơ. Người thân có thể truy cập ngay khi đăng nhập app của họ.`,
+            );
+            resetAddModal();
+        } catch (err: any) {
+            const msg = err?.data?.error || err?.message || 'Không thể thêm Người thân tin cậy.';
+            Alert.alert('Lỗi', msg);
+        } finally {
+            setAdding(false);
+        }
+    };
+
+    const handleRemove = (item: Contact) => {
+        Alert.alert(
+            'Thu hồi Người thân tin cậy',
+            `${item.fullName || truncate(item.contactAddress)} sẽ KHÔNG còn truy cập được hồ sơ y tế của bạn.\n\nLưu ý: thu hồi xảy ra trên blockchain (gas miễn phí qua quota).`,
+            [
+                { text: 'Huỷ', style: 'cancel' },
+                {
+                    text: 'Thu hồi',
+                    style: 'destructive',
+                    onPress: async () => {
+                        try {
+                            setRemovingAddr(item.contactAddress);
+                            await trustedContactService.removeContact({
+                                contactAddress: item.contactAddress,
+                            });
+                            await queryClient.invalidateQueries({ queryKey: ['trustedContacts'] });
+                            Alert.alert('Đã thu hồi', 'Người thân không còn quyền truy cập hồ sơ.');
+                        } catch (err: any) {
+                            const msg = err?.data?.error || err?.message || 'Không thể thu hồi.';
+                            Alert.alert('Lỗi', msg);
+                        } finally {
+                            setRemovingAddr(null);
+                        }
+                    },
+                },
+            ]
+        );
+    };
+
+    const handleSaveCccd = async () => {
+        if (!/^\d{9,12}$/.test(cccdInput)) {
+            Alert.alert('CCCD không hợp lệ', 'Phải là 9-12 chữ số.');
+            return;
+        }
+        try {
+            setCccdSaving(true);
+            await api.put('/api/profile/me/national-id', { nationalId: cccdInput });
+            Alert.alert(
+                'Đã đăng ký',
+                'Bác sĩ cấp cứu có thể tra cứu địa chỉ ví của bạn qua CCCD.',
+            );
+            setCccdOpen(false);
+            setCccdInput('');
+        } catch (err: any) {
+            const code = err?.data?.code;
+            if (code === 'NATIONAL_ID_TAKEN') {
+                Alert.alert('CCCD đã tồn tại', err?.data?.error);
+            } else {
+                Alert.alert('Lỗi', err?.data?.error || err?.message || 'Không thể lưu.');
+            }
+        } finally {
+            setCccdSaving(false);
+        }
+    };
+
+    const handleUnregisterCccd = async () => {
+        try {
+            setCccdSaving(true);
+            await api.put('/api/profile/me/national-id', { nationalId: null });
+            Alert.alert('Đã huỷ đăng ký Mã định danh khẩn cấp.');
+            setCccdOpen(false);
+            setCccdInput('');
+        } catch (err: any) {
+            Alert.alert('Lỗi', err?.data?.error || err?.message || 'Không thể huỷ.');
+        } finally {
+            setCccdSaving(false);
+        }
+    };
+
+    const renderItem = ({ item }: { item: Contact }) => (
+        <View
+            style={{
+                paddingVertical: 14,
+                paddingHorizontal: 14,
+                backgroundColor: EHR_SURFACE_LOWEST,
+                borderWidth: 0.5,
+                borderColor: EHR_OUTLINE_SOFT,
+                borderRadius: 14,
+                marginBottom: 10,
+            }}
+        >
+            <XStack style={{ alignItems: 'center', gap: 12 }}>
+                <View
+                    style={{
+                        width: 40,
+                        height: 40,
+                        borderRadius: 20,
+                        backgroundColor: EHR_PRIMARY_FIXED,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                    }}
+                >
+                    <Heart size={18} color={EHR_PRIMARY} />
+                </View>
+                <YStack style={{ flex: 1, minWidth: 0 }}>
+                    <XStack style={{ alignItems: 'baseline', gap: 8 }}>
+                        <Text
+                            style={{
+                                fontFamily: SANS_MEDIUM,
+                                fontSize: 14.5,
+                                color: EHR_ON_SURFACE,
+                            }}
+                            numberOfLines={1}
+                        >
+                            {item.fullName || truncate(item.contactAddress)}
+                        </Text>
+                        {item.label ? (
+                            <Text
+                                style={{
+                                    fontSize: 11,
+                                    paddingHorizontal: 7,
+                                    paddingVertical: 2,
+                                    backgroundColor: EHR_SURFACE,
+                                    borderRadius: 4,
+                                    color: EHR_OUTLINE,
+                                    letterSpacing: 0.2,
+                                    fontFamily: SANS,
+                                }}
+                            >
+                                {item.label}
+                            </Text>
+                        ) : null}
+                    </XStack>
+                    <Text
+                        style={{
+                            marginTop: 3,
+                            fontFamily: 'monospace',
+                            fontSize: 11,
+                            color: EHR_OUTLINE,
+                        }}
+                        numberOfLines={1}
+                    >
+                        {truncate(item.contactAddress)}
+                    </Text>
+                </YStack>
+                <Pressable
+                    onPress={() => handleRemove(item)}
+                    disabled={removingAddr === item.contactAddress}
+                    style={({ pressed }) => ({
+                        paddingHorizontal: 12,
+                        paddingVertical: 6,
+                        borderRadius: 8,
+                        borderWidth: 0.5,
+                        borderColor: EHR_PRIMARY,
+                        opacity: pressed ? 0.6 : 1,
+                    })}
+                >
+                    <Text
+                        style={{
+                            fontFamily: SANS_MEDIUM,
+                            fontSize: 12,
+                            color: EHR_PRIMARY,
+                            fontWeight: '600',
+                        }}
+                    >
+                        {removingAddr === item.contactAddress ? 'Đang...' : 'Thu hồi'}
+                    </Text>
+                </Pressable>
+            </XStack>
+        </View>
+    );
+
+    return (
+        <SafeAreaView style={{ flex: 1, backgroundColor: EHR_SURFACE }}>
+            <ScrollView
+                contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 4, paddingBottom: 40 }}
+                refreshControl={
+                    <RefreshControl
+                        refreshing={isRefetching}
+                        onRefresh={refetch}
+                        tintColor={EHR_ON_SURFACE_VARIANT}
+                    />
+                }
+                showsVerticalScrollIndicator={false}
+            >
+                {/* ───────── Hero warning ───────── */}
+                <View
+                    style={{
+                        padding: 16,
+                        borderRadius: 16,
+                        backgroundColor: `${EHR_PRIMARY}14`,
+                        borderWidth: 0.5,
+                        borderColor: `${EHR_PRIMARY}40`,
+                        flexDirection: 'row',
+                        gap: 12,
+                        marginTop: 4,
+                    }}
+                >
+                    <View
+                        style={{
+                            width: 32,
+                            height: 32,
+                            borderRadius: 16,
+                            backgroundColor: `${EHR_PRIMARY}26`,
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                        }}
+                    >
+                        <AlertTriangle size={16} color={EHR_PRIMARY} />
+                    </View>
+                    <Text
+                        style={{
+                            flex: 1,
+                            fontFamily: SANS,
+                            fontSize: 13,
+                            color: EHR_ON_SURFACE,
+                            lineHeight: 20,
+                        }}
+                    >
+                        Khi bạn thêm người thân,{' '}
+                        <Text style={{ fontFamily: SANS_SEMI, fontWeight: '600' }}>toàn bộ hồ sơ</Text>{' '}
+                        sẽ tự động được chia sẻ cho ví của họ. Họ có thể xem mọi lúc — kể cả khi bạn không thể ký.
+                    </Text>
+                </View>
+
+                {/* ───────── List of contacts ───────── */}
+                <View style={{ marginTop: 22, marginHorizontal: -20 }}>
+                    <ViSectionLabel>Đang chia sẻ với ({contacts.length})</ViSectionLabel>
+                </View>
+
+                {isLoading ? (
+                    <Text
+                        style={{
+                            color: EHR_OUTLINE,
+                            textAlign: 'center',
+                            padding: 20,
+                            fontFamily: SANS,
+                            fontSize: 13,
+                        }}
+                    >
+                        Đang tải…
+                    </Text>
+                ) : contacts.length === 0 ? (
+                    <Text
+                        style={{
+                            color: EHR_OUTLINE,
+                            textAlign: 'center',
+                            padding: 32,
+                            fontFamily: SANS,
+                            fontSize: 13.5,
+                        }}
+                    >
+                        Chưa có người thân nào.
+                    </Text>
+                ) : (
+                    <FlatList
+                        data={contacts}
+                        keyExtractor={(item) => item.contactAddress}
+                        renderItem={renderItem}
+                        scrollEnabled={false}
+                    />
+                )}
+
+                {/* ───────── CTAs (cinnabar = legal-action) ───────── */}
+                <View style={{ height: 22 }} />
+                <ViButton variant="cinnabar" full onPress={() => setAddOpen(true)}>
+                    + Thêm Người thân tin cậy
+                </ViButton>
+                <View style={{ height: 10 }} />
+                <ViButton variant="ghost" full onPress={() => setCccdOpen(true)}>
+                    Đăng ký Mã định danh khẩn cấp
+                </ViButton>
+                <Text
+                    style={{
+                        marginTop: 12,
+                        fontFamily: SANS,
+                        fontSize: 11.5,
+                        color: EHR_OUTLINE,
+                        textAlign: 'center',
+                        lineHeight: 16,
+                    }}
+                >
+                    Mã định danh khẩn cấp giúp bác sĩ tra cứu ví của bạn qua CCCD trong tình huống cấp cứu.
+                </Text>
+            </ScrollView>
+
+            {/* ───────── Add Contact Modal ───────── */}
+            <Modal visible={addOpen} animationType="slide" transparent>
+                <View
+                    style={{
+                        flex: 1,
+                        backgroundColor: 'rgba(0,0,0,0.5)',
+                        justifyContent: 'flex-end',
+                    }}
+                >
+                    <View
+                        style={{
+                            backgroundColor: EHR_SURFACE_LOWEST,
+                            borderTopLeftRadius: 20,
+                            borderTopRightRadius: 20,
+                            padding: 22,
+                            paddingBottom: 40,
+                        }}
+                    >
+                        <Text
+                            style={{
+                                fontFamily: SERIF,
+                                fontSize: 22,
+                                color: EHR_ON_SURFACE,
+                                letterSpacing: -0.2,
+                            }}
+                        >
+                            Thêm Người thân
+                        </Text>
+                        <Text
+                            style={{
+                                marginTop: 6,
+                                fontFamily: SANS,
+                                fontSize: 13,
+                                color: EHR_ON_SURFACE_VARIANT,
+                                lineHeight: 19,
+                            }}
+                        >
+                            Quét QR ví hoặc dán địa chỉ. Sau khi ký, app tự mã hoá toàn bộ khoá hồ sơ cho ví của họ.
+                        </Text>
+
+                        <FieldLabel>Địa chỉ ví</FieldLabel>
+                        <XStack style={{ alignItems: 'center', gap: 8 }}>
+                            <TextInput
+                                value={contactInput}
+                                onChangeText={setContactInput}
+                                placeholder="0x..."
+                                placeholderTextColor={EHR_OUTLINE}
+                                autoCapitalize="none"
+                                autoCorrect={false}
+                                style={{
+                                    flex: 1,
+                                    borderWidth: 0.5,
+                                    borderColor: EHR_OUTLINE_SOFT,
+                                    borderRadius: 10,
+                                    paddingVertical: 12,
+                                    paddingHorizontal: 14,
+                                    color: EHR_ON_SURFACE,
+                                    backgroundColor: EHR_SURFACE,
+                                    fontFamily: 'monospace',
+                                    fontSize: 13,
+                                }}
+                            />
+                            <Pressable
+                                onPress={() => setScannerOpen(true)}
+                                style={({ pressed }) => ({
+                                    paddingVertical: 12,
+                                    paddingHorizontal: 14,
+                                    borderRadius: 10,
+                                    borderWidth: 0.5,
+                                    borderColor: EHR_OUTLINE_SOFT,
+                                    backgroundColor: EHR_PRIMARY_FIXED,
+                                    flexDirection: 'row',
+                                    alignItems: 'center',
+                                    gap: 6,
+                                    opacity: pressed ? 0.7 : 1,
+                                })}
+                            >
+                                <ScanLine size={16} color={EHR_PRIMARY} />
+                                <Text
+                                    style={{
+                                        fontFamily: SANS_MEDIUM,
+                                        fontSize: 13,
+                                        color: EHR_PRIMARY,
+                                    }}
+                                >
+                                    QR
+                                </Text>
+                            </Pressable>
+                        </XStack>
+
+                        <FieldLabel>Nhãn (Vợ, Con, Mẹ…)</FieldLabel>
+                        <TextInput
+                            value={labelInput}
+                            onChangeText={setLabelInput}
+                            placeholder="Vợ"
+                            placeholderTextColor={EHR_OUTLINE}
+                            maxLength={120}
+                            style={{
+                                borderWidth: 0.5,
+                                borderColor: EHR_OUTLINE_SOFT,
+                                borderRadius: 10,
+                                paddingVertical: 12,
+                                paddingHorizontal: 14,
+                                color: EHR_ON_SURFACE,
+                                backgroundColor: EHR_SURFACE,
+                                fontFamily: SANS,
+                                fontSize: 14,
+                            }}
+                        />
+
+                        <View style={{ height: 18 }} />
+                        <XStack style={{ gap: 10 }}>
+                            <View style={{ flex: 1 }}>
+                                <ViButton variant="ghost" full onPress={resetAddModal} disabled={adding}>
+                                    Huỷ
+                                </ViButton>
+                            </View>
+                            <View style={{ flex: 1 }}>
+                                <ViButton
+                                    variant="cinnabar"
+                                    full
+                                    loading={adding}
+                                    onPress={handleAdd}
+                                >
+                                    {adding ? 'Đang ký…' : 'Tiếp tục ký'}
+                                </ViButton>
+                            </View>
+                        </XStack>
+                        <Text
+                            style={{
+                                marginTop: 12,
+                                fontFamily: SANS,
+                                fontSize: 11,
+                                color: EHR_OUTLINE,
+                                textAlign: 'center',
+                                lineHeight: 16,
+                            }}
+                        >
+                            Bạn sẽ ký bằng vân tay để cấp quyền vĩnh viễn cho người này.
+                        </Text>
+                    </View>
+                </View>
+            </Modal>
+
+            <QrAddressScanner
+                visible={scannerOpen}
+                onClose={() => setScannerOpen(false)}
+                onScanned={(addr) => {
+                    setContactInput(addr);
+                    setScannerOpen(false);
+                }}
+            />
+
+            {/* ───────── CCCD Modal ───────── */}
+            <Modal visible={cccdOpen} animationType="slide" transparent>
+                <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
+                    <View
+                        style={{
+                            backgroundColor: EHR_SURFACE_LOWEST,
+                            borderTopLeftRadius: 20,
+                            borderTopRightRadius: 20,
+                            padding: 22,
+                            paddingBottom: 40,
+                        }}
+                    >
+                        <XStack style={{ alignItems: 'center', gap: 10 }}>
+                            <IdCard size={20} color={EHR_PRIMARY} />
+                            <Text
+                                style={{
+                                    fontFamily: SERIF,
+                                    fontSize: 22,
+                                    color: EHR_ON_SURFACE,
+                                    letterSpacing: -0.2,
+                                }}
+                            >
+                                Mã định danh khẩn cấp
+                            </Text>
+                        </XStack>
+                        <Text
+                            style={{
+                                marginTop: 8,
+                                fontFamily: SANS,
+                                fontSize: 13,
+                                color: EHR_ON_SURFACE_VARIANT,
+                                lineHeight: 20,
+                            }}
+                        >
+                            App sẽ tính <Text style={{ fontFamily: 'monospace' }}>keccak256(CCCD)</Text> và chỉ lưu hash. Bác sĩ cấp cứu nhập CCCD trên thẻ vật lý → tra cứu ví. Số CCCD gốc KHÔNG rời thiết bị này.
+                        </Text>
+
+                        <FieldLabel>Số CCCD/CMND (9-12 chữ số)</FieldLabel>
+                        <TextInput
+                            value={cccdInput}
+                            onChangeText={setCccdInput}
+                            placeholder="012345678901"
+                            placeholderTextColor={EHR_OUTLINE}
+                            keyboardType="number-pad"
+                            maxLength={12}
+                            secureTextEntry
+                            style={{
+                                borderWidth: 0.5,
+                                borderColor: EHR_OUTLINE_SOFT,
+                                borderRadius: 10,
+                                paddingVertical: 12,
+                                paddingHorizontal: 14,
+                                color: EHR_ON_SURFACE,
+                                backgroundColor: EHR_SURFACE,
+                                fontFamily: 'monospace',
+                                fontSize: 14,
+                            }}
+                        />
+
+                        <View style={{ height: 18 }} />
+                        <XStack style={{ gap: 10 }}>
+                            <View style={{ flex: 1 }}>
+                                <ViButton
+                                    variant="ghost"
+                                    full
+                                    onPress={handleUnregisterCccd}
+                                    disabled={cccdSaving}
+                                >
+                                    Huỷ đăng ký
+                                </ViButton>
+                            </View>
+                            <View style={{ flex: 1 }}>
+                                <ViButton
+                                    variant="cinnabar"
+                                    full
+                                    loading={cccdSaving}
+                                    onPress={handleSaveCccd}
+                                >
+                                    {cccdSaving ? 'Đang lưu…' : 'Lưu'}
+                                </ViButton>
+                            </View>
+                        </XStack>
+                    </View>
+                </View>
+            </Modal>
+        </SafeAreaView>
+    );
+}
+
+function FieldLabel({ children }: { children: React.ReactNode }) {
+    return (
+        <Text
+            style={{
+                fontFamily: SANS_SEMI,
+                fontSize: 11,
+                color: EHR_OUTLINE,
+                letterSpacing: 0.4,
+                fontWeight: '600',
+                textTransform: 'uppercase',
+                marginTop: 14,
+                marginBottom: 6,
+            }}
+        >
+            {children}
+        </Text>
+    );
+}
+
+// kept for backwards-compat — referenced by ViSectionLabel
+void EHR_OUTLINE_VARIANT;

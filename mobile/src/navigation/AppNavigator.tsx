@@ -26,14 +26,14 @@ import DoctorDelegatableRecordsScreen from '../screens/doctor/DoctorDelegatableR
 import DoctorDelegatedPatientsScreen from '../screens/doctor/DoctorDelegatedPatientsScreen';
 import DoctorOutgoingSharesScreen from '../screens/doctor/DoctorOutgoingSharesScreen';
 import EmergencyLookupScreen from '../screens/doctor/EmergencyLookupScreen';
-import TrustedContactsScreen from '../screens/TrustedContactsScreen';
+import TrustedContactsScreen from '../screens-v2/TrustedContactsScreen';
 
 import OrgDashboardScreen from '../screens/org/OrgDashboardScreen';
 import OrgMembersScreen from '../screens/org/OrgMembersScreen';
 import OrgPendingVerificationsScreen from '../screens/org/OrgPendingVerificationsScreen';
 
 import MinistryDashboardScreen from '../screens/ministry/MinistryDashboardScreen';
-import SettingsScreen from '../screens/SettingsScreen';
+import SettingsScreen from '../screens-v2/SettingsScreen';
 import EditProfileScreen from '../screens/EditProfileScreen';
 import RoleSelectionScreen from '../screens/RoleSelectionScreen';
 import useAuthStore from '../store/authStore';
