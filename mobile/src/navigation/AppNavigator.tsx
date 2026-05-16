@@ -11,7 +11,7 @@ import DashboardScreen from '../screens-v2/DashboardScreen';
 import RecordsScreen from '../screens/RecordsScreen';
 import RequestsScreen from '../screens/RequestsScreen';
 import ProfileScreen from '../screens/ProfileScreen';
-import RecordDetailScreen from '../screens/RecordDetailScreen';
+import RecordDetailScreen from '../screens-v2/RecordDetailScreen';
 import CreateRecordScreen from '../screens/CreateRecordScreen';
 import AccessLogScreen from '../screens-v2/AccessLogScreen';
 import DelegationScreen from '../screens/DelegationScreen';
