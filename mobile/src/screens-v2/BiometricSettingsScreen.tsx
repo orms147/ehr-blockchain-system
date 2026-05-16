@@ -1,0 +1,378 @@
+// BiometricSettingsScreen v2 — port of .design-bundle/project/screens-extras2.jsx
+// BiometricSettingsScreen. Standalone screen reachable from SettingsScreen
+// → "Hồ sơ khẩn cấp" tile (or via direct nav). Probes device hardware
+// status, exposes the same Switch as Settings + future PIN fallback toggle.
+//
+// Wiring:
+//   - expo-local-authentication probes hasHardwareAsync + isEnrolledAsync
+//     + supportedAuthenticationTypesAsync for the status banner
+//   - isBiometricSigningEnabled / setBiometricSigningEnabled (utils/biometricGate)
+//
+// Sections dropped from design until backend support lands:
+//   - Trusted devices list (needs device-fingerprint registry)
+//   - Recent signing activity (needs AuditLog table for sign events)
+// These are visual placeholders in the design only; not feature-critical
+// for thesis demo.
+
+import React, { useEffect, useState } from 'react';
+import { Alert, Platform, Pressable, ScrollView, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Text, XStack, YStack } from 'tamagui';
+import { Fingerprint, ChevronLeft, ScanFace } from 'lucide-react-native';
+import * as LocalAuthentication from 'expo-local-authentication';
+import { useNavigation } from '@react-navigation/native';
+
+import { isBiometricSigningEnabled, setBiometricSigningEnabled, requireBiometric } from '../utils/biometricGate';
+import ViCard from '../components-v2/ViCard';
+import ViButton from '../components-v2/ViButton';
+import { ViSectionLabel } from '../components-v2/ViChips';
+import {
+    EHR_SURFACE,
+    EHR_SURFACE_LOWEST,
+    EHR_ON_SURFACE,
+    EHR_ON_SURFACE_VARIANT,
+    EHR_OUTLINE,
+    EHR_OUTLINE_SOFT,
+    EHR_OUTLINE_VARIANT,
+    EHR_PRIMARY,
+    EHR_TERTIARY,
+    EHR_SLATE,
+} from '../constants/uiColors';
+
+const SERIF = 'Fraunces_400Regular';
+const SANS = 'DMSans_400Regular';
+const SANS_MEDIUM = 'DMSans_500Medium';
+const SANS_SEMI = 'DMSans_600SemiBold';
+
+type Support = {
+    hasHardware: boolean;
+    isEnrolled: boolean;
+    types: LocalAuthentication.AuthenticationType[];
+};
+
+function describeTypes(types: LocalAuthentication.AuthenticationType[]) {
+    const names: string[] = [];
+    if (types.includes(LocalAuthentication.AuthenticationType.FINGERPRINT)) names.push('Vân tay');
+    if (types.includes(LocalAuthentication.AuthenticationType.FACIAL_RECOGNITION)) names.push('Khuôn mặt');
+    if (types.includes(LocalAuthentication.AuthenticationType.IRIS)) names.push('Mống mắt');
+    return names.length > 0 ? names.join(' · ') : 'Không xác định';
+}
+
+export default function BiometricSettingsScreen() {
+    const navigation = useNavigation<any>();
+    const [enabled, setEnabled] = useState(true);
+    const [pinFallback, setPinFallback] = useState(true);
+    const [support, setSupport] = useState<Support | null>(null);
+
+    useEffect(() => {
+        isBiometricSigningEnabled().then(setEnabled).catch(() => setEnabled(true));
+        (async () => {
+            try {
+                const [hasHardware, isEnrolled, types] = await Promise.all([
+                    LocalAuthentication.hasHardwareAsync(),
+                    LocalAuthentication.isEnrolledAsync(),
+                    LocalAuthentication.supportedAuthenticationTypesAsync(),
+                ]);
+                setSupport({ hasHardware, isEnrolled, types });
+            } catch {
+                setSupport({ hasHardware: false, isEnrolled: false, types: [] });
+            }
+        })();
+    }, []);
+
+    const handleToggle = async (next: boolean) => {
+        setEnabled(next);
+        try {
+            await setBiometricSigningEnabled(next);
+        } catch {
+            setEnabled(!next);
+            Alert.alert('Lỗi', 'Không lưu được thiết lập. Vui lòng thử lại.');
+        }
+    };
+
+    const handleTestPrompt = async () => {
+        const ok = await requireBiometric('Kiểm tra vân tay');
+        if (ok) {
+            Alert.alert('Thành công', 'Xác thực sinh trắc học hoạt động bình thường.');
+        } else {
+            Alert.alert('Đã huỷ', 'Bạn đã huỷ xác thực hoặc thiết bị không phản hồi.');
+        }
+    };
+
+    const hwReady = support?.hasHardware && support?.isEnrolled;
+    const typesLabel = support ? describeTypes(support.types) : '—';
+    const hwIcon = support?.types?.includes(LocalAuthentication.AuthenticationType.FACIAL_RECOGNITION)
+        ? <ScanFace size={20} color={hwReady ? EHR_TERTIARY : EHR_SLATE} />
+        : <Fingerprint size={20} color={hwReady ? EHR_TERTIARY : EHR_SLATE} />;
+
+    return (
+        <SafeAreaView style={{ flex: 1, backgroundColor: EHR_SURFACE }} edges={['top', 'left', 'right']}>
+            <ScrollView contentContainerStyle={{ paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
+                {/* PageHeader */}
+                <View style={{ paddingHorizontal: 22, paddingTop: 10, paddingBottom: 18 }}>
+                    <Pressable
+                        onPress={() => navigation.goBack()}
+                        style={({ pressed }) => ({
+                            alignSelf: 'flex-start',
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            gap: 4,
+                            paddingVertical: 6,
+                            paddingRight: 10,
+                            opacity: pressed ? 0.5 : 1,
+                        })}
+                    >
+                        <ChevronLeft size={18} color={EHR_ON_SURFACE_VARIANT} />
+                        <Text style={{ fontFamily: SANS, fontSize: 13, color: EHR_ON_SURFACE_VARIANT }}>
+                            Quay lại
+                        </Text>
+                    </Pressable>
+                    <Text
+                        style={{
+                            marginTop: 6,
+                            fontFamily: SERIF,
+                            fontSize: 28,
+                            color: EHR_ON_SURFACE,
+                            letterSpacing: -0.5,
+                            lineHeight: 32,
+                        }}
+                    >
+                        Bảo mật sinh trắc học
+                    </Text>
+                    <Text
+                        style={{
+                            marginTop: 6,
+                            fontFamily: SANS,
+                            fontSize: 13,
+                            color: EHR_ON_SURFACE_VARIANT,
+                            lineHeight: 19,
+                        }}
+                    >
+                        Yêu cầu vân tay hoặc Face ID mỗi lần ký giao dịch.
+                    </Text>
+                </View>
+
+                {/* ───────── Device status ───────── */}
+                <View style={{ paddingHorizontal: 20, marginBottom: 22 }}>
+                    <View
+                        style={{
+                            paddingVertical: 14,
+                            paddingHorizontal: 16,
+                            borderRadius: 14,
+                            backgroundColor: hwReady ? `${EHR_TERTIARY}1A` : `${EHR_SLATE}1A`,
+                            borderWidth: 0.5,
+                            borderColor: hwReady ? `${EHR_TERTIARY}40` : EHR_OUTLINE_SOFT,
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            gap: 12,
+                        }}
+                    >
+                        <View
+                            style={{
+                                width: 38,
+                                height: 38,
+                                borderRadius: 19,
+                                backgroundColor: hwReady ? `${EHR_TERTIARY}26` : `${EHR_SLATE}26`,
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                            }}
+                        >
+                            {hwIcon}
+                        </View>
+                        <View style={{ flex: 1 }}>
+                            <Text
+                                style={{
+                                    fontFamily: SANS_MEDIUM,
+                                    fontSize: 13.5,
+                                    color: EHR_ON_SURFACE,
+                                    fontWeight: '600',
+                                }}
+                            >
+                                {hwReady
+                                    ? `${typesLabel} đã sẵn sàng`
+                                    : support?.hasHardware
+                                        ? 'Thiết bị có hỗ trợ nhưng chưa cấu hình'
+                                        : 'Thiết bị không hỗ trợ sinh trắc học'}
+                            </Text>
+                            <Text
+                                style={{
+                                    marginTop: 3,
+                                    fontFamily: SANS,
+                                    fontSize: 11.5,
+                                    color: EHR_OUTLINE,
+                                    lineHeight: 16,
+                                }}
+                            >
+                                {hwReady
+                                    ? `${Platform.OS === 'ios' ? 'iOS' : 'Android'} · phương án dự phòng: PIN thiết bị`
+                                    : 'App sẽ tự động dùng PIN khoá màn hình khi ký.'}
+                            </Text>
+                        </View>
+                    </View>
+                </View>
+
+                {/* ───────── Main toggle ───────── */}
+                <ViSectionLabel>Sử dụng sinh trắc học</ViSectionLabel>
+                <View style={{ paddingHorizontal: 20, marginBottom: 12 }}>
+                    <ViCard padding={0}>
+                        <ToggleRow
+                            value={enabled}
+                            onChange={handleToggle}
+                            title="Yêu cầu vân tay khi ký"
+                            sub="Mỗi lần cấp consent, uỷ quyền, tạo hồ sơ sẽ yêu cầu xác thực sinh trắc học."
+                        />
+                        <ToggleRow
+                            value={pinFallback}
+                            onChange={setPinFallback}
+                            disabled={!enabled}
+                            title="Cho phép PIN khi không quét được vân tay"
+                            sub="Dùng PIN khoá màn hình của thiết bị, không phải PIN riêng cho app."
+                            last
+                        />
+                    </ViCard>
+                    <View
+                        style={{
+                            marginTop: 10,
+                            paddingVertical: 10,
+                            paddingHorizontal: 14,
+                            borderRadius: 10,
+                            borderWidth: 0.5,
+                            borderColor: EHR_OUTLINE_SOFT,
+                        }}
+                    >
+                        <Text
+                            style={{
+                                fontFamily: SANS,
+                                fontSize: 11.5,
+                                color: EHR_OUTLINE,
+                                lineHeight: 18,
+                            }}
+                        >
+                            <Text style={{ fontFamily: SANS_SEMI, color: EHR_ON_SURFACE_VARIANT, fontWeight: '600' }}>
+                                TT 13/2025/TT-BYT ·{' '}
+                            </Text>
+                            công nhận chữ ký sinh trắc học là chữ ký pháp lý đối với hồ sơ y tế điện tử.
+                        </Text>
+                    </View>
+                </View>
+
+                {/* ───────── Test prompt ───────── */}
+                <View style={{ paddingHorizontal: 20, marginTop: 16 }}>
+                    <ViButton variant="ghost" full onPress={handleTestPrompt} disabled={!hwReady}>
+                        Thử xác thực ngay
+                    </ViButton>
+                    <Text
+                        style={{
+                            marginTop: 8,
+                            textAlign: 'center',
+                            fontFamily: SANS,
+                            fontSize: 11,
+                            color: EHR_OUTLINE,
+                            lineHeight: 16,
+                        }}
+                    >
+                        Kiểm tra xem prompt vân tay/Face ID hiện đúng và hoạt động.
+                    </Text>
+                </View>
+
+                {/* Footer note */}
+                <Text
+                    style={{
+                        marginTop: 28,
+                        textAlign: 'center',
+                        fontFamily: SANS,
+                        fontSize: 11,
+                        color: EHR_OUTLINE,
+                        letterSpacing: 0.4,
+                    }}
+                >
+                    expo-local-authentication · Web3Auth ECDSA underneath
+                </Text>
+            </ScrollView>
+        </SafeAreaView>
+    );
+}
+
+function ToggleRow({
+    value,
+    onChange,
+    title,
+    sub,
+    disabled,
+    last,
+}: {
+    value: boolean;
+    onChange: (next: boolean) => void;
+    title: string;
+    sub?: string;
+    disabled?: boolean;
+    last?: boolean;
+}) {
+    return (
+        <View
+            style={{
+                paddingVertical: 14,
+                paddingHorizontal: 16,
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 12,
+                borderBottomWidth: last ? 0 : 0.5,
+                borderColor: EHR_OUTLINE_SOFT,
+                opacity: disabled ? 0.5 : 1,
+            }}
+        >
+            <View style={{ flex: 1, minWidth: 0 }}>
+                <Text
+                    style={{
+                        fontFamily: SANS_MEDIUM,
+                        fontSize: 13.5,
+                        color: EHR_ON_SURFACE,
+                        fontWeight: '500',
+                    }}
+                >
+                    {title}
+                </Text>
+                {sub ? (
+                    <Text
+                        style={{
+                            marginTop: 3,
+                            fontFamily: SANS,
+                            fontSize: 11.5,
+                            color: EHR_OUTLINE,
+                            lineHeight: 16,
+                        }}
+                    >
+                        {sub}
+                    </Text>
+                ) : null}
+            </View>
+            <Pressable
+                onPress={() => !disabled && onChange(!value)}
+                disabled={disabled}
+                style={{
+                    width: 40,
+                    height: 24,
+                    borderRadius: 12,
+                    backgroundColor: value ? EHR_PRIMARY : EHR_SURFACE,
+                    borderWidth: 0.5,
+                    borderColor: value ? EHR_PRIMARY : EHR_OUTLINE_VARIANT,
+                    justifyContent: 'center',
+                }}
+            >
+                <View
+                    style={{
+                        position: 'absolute',
+                        top: 2,
+                        left: value ? 18 : 2,
+                        width: 18,
+                        height: 18,
+                        borderRadius: 9,
+                        backgroundColor: '#FAF7F1',
+                    }}
+                />
+            </Pressable>
+        </View>
+    );
+}
+
+void EHR_SURFACE_LOWEST;

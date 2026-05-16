@@ -36,6 +36,9 @@ import MinistryDashboardScreen from '../screens/ministry/MinistryDashboardScreen
 import SettingsScreen from '../screens-v2/SettingsScreen';
 import EditProfileScreen from '../screens/EditProfileScreen';
 import RoleSelectionScreen from '../screens/RoleSelectionScreen';
+import BiometricSettingsScreen from '../screens-v2/BiometricSettingsScreen';
+import EmergencyProfileScreen from '../screens-v2/EmergencyProfileScreen';
+import ReceiptStandaloneScreen from '../screens-v2/ReceiptStandaloneScreen';
 import useAuthStore from '../store/authStore';
 import { healLocalRecordCache } from '../services/localRecordHealer.service';
 import {
@@ -248,6 +251,21 @@ function MainStackNavigator() {
                 name="EmergencyLookup"
                 component={EmergencyLookupScreen}
                 options={{ title: 'Tra cứu cấp cứu' }}
+            />
+            <Stack.Screen
+                name="BiometricSettings"
+                component={BiometricSettingsScreen}
+                options={{ headerShown: false }}
+            />
+            <Stack.Screen
+                name="EmergencyProfile"
+                component={EmergencyProfileScreen}
+                options={{ headerShown: false }}
+            />
+            <Stack.Screen
+                name="Receipt"
+                component={ReceiptStandaloneScreen}
+                options={{ headerShown: false }}
             />
         </Stack.Navigator>
     );
