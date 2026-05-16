@@ -13,11 +13,11 @@ import RequestsScreen from '../screens/RequestsScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 import RecordDetailScreen from '../screens/RecordDetailScreen';
 import CreateRecordScreen from '../screens/CreateRecordScreen';
-import AccessLogScreen from '../screens/AccessLogScreen';
+import AccessLogScreen from '../screens-v2/AccessLogScreen';
 import DelegationScreen from '../screens/DelegationScreen';
 import LoadingSpinner from '../components/LoadingSpinner';
 
-import DoctorDashboardScreen from '../screens/doctor/DoctorDashboardScreen';
+import DoctorDashboardScreen from '../screens-v2/doctor/DoctorDashboardScreen';
 import DoctorOutgoingScreen from '../screens/doctor/DoctorOutgoingScreen';
 import DoctorRequestAccessScreen from '../screens/doctor/DoctorRequestAccessScreen';
 import DoctorExpiredRecordsScreen from '../screens/doctor/DoctorExpiredRecordsScreen';
