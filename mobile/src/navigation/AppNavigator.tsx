@@ -5,11 +5,11 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator, type BottomTabNavigationOptions } from '@react-navigation/bottom-tabs';
 import { Home, FileText, Bell, User, Stethoscope, Send, Building2, Users, Landmark, Clock, Shield, Award, Plus } from 'lucide-react-native';
 
-import LoginScreen from '../screens/LoginScreen';
+import LoginScreen from '../screens-v2/LoginScreen';
 import LandingScreen from '../screens-v2/LandingScreen';
 import DashboardScreen from '../screens-v2/DashboardScreen';
-import RecordsScreen from '../screens/RecordsScreen';
-import RequestsScreen from '../screens/RequestsScreen';
+import RecordsScreen from '../screens-v2/RecordsScreen';
+import RequestsScreen from '../screens-v2/RequestsScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 import RecordDetailScreen from '../screens-v2/RecordDetailScreen';
 import CreateRecordScreen from '../screens/CreateRecordScreen';
