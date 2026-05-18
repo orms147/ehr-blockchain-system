@@ -28,11 +28,11 @@ import DoctorOutgoingSharesScreen from '../screens-v2/doctor/DoctorOutgoingShare
 import EmergencyLookupScreen from '../screens-v2/doctor/EmergencyLookupScreen';
 import TrustedContactsScreen from '../screens-v2/TrustedContactsScreen';
 
-import OrgDashboardScreen from '../screens/org/OrgDashboardScreen';
-import OrgMembersScreen from '../screens/org/OrgMembersScreen';
-import OrgPendingVerificationsScreen from '../screens/org/OrgPendingVerificationsScreen';
+import OrgDashboardScreen from '../screens-v2/org/OrgDashboardScreen';
+import OrgMembersScreen from '../screens-v2/org/OrgMembersScreen';
+import OrgPendingVerificationsScreen from '../screens-v2/org/OrgPendingVerificationsScreen';
 
-import MinistryDashboardScreen from '../screens/ministry/MinistryDashboardScreen';
+import MinistryDashboardScreen from '../screens-v2/ministry/MinistryDashboardScreen';
 import SettingsScreen from '../screens-v2/SettingsScreen';
 import EditProfileScreen from '../screens-v2/EditProfileScreen';
 import RoleSelectionScreen from '../screens-v2/RoleSelectionScreen';
