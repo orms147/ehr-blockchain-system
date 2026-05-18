@@ -14,13 +14,13 @@ import ProfileScreen from '../screens-v2/ProfileScreen';
 import RecordDetailScreen from '../screens-v2/RecordDetailScreen';
 import CreateRecordScreen from '../screens-v2/CreateRecordScreen';
 import AccessLogScreen from '../screens-v2/AccessLogScreen';
-import DelegationScreen from '../screens/DelegationScreen';
+import DelegationScreen from '../screens-v2/DelegationScreen';
 import LoadingSpinner from '../components/LoadingSpinner';
 
 import DoctorDashboardScreen from '../screens-v2/doctor/DoctorDashboardScreen';
 import DoctorOutgoingScreen from '../screens/doctor/DoctorOutgoingScreen';
 import DoctorRequestAccessScreen from '../screens-v2/doctor/DoctorRequestAccessScreen';
-import DoctorExpiredRecordsScreen from '../screens/doctor/DoctorExpiredRecordsScreen';
+import DoctorExpiredRecordsScreen from '../screens-v2/doctor/DoctorExpiredRecordsScreen';
 import DoctorCreateUpdateScreen from '../screens-v2/doctor/DoctorCreateUpdateScreen';
 import DoctorDelegatableRecordsScreen from '../screens/doctor/DoctorDelegatableRecordsScreen';
 import DoctorDelegatedPatientsScreen from '../screens/doctor/DoctorDelegatedPatientsScreen';
@@ -35,7 +35,7 @@ import OrgPendingVerificationsScreen from '../screens/org/OrgPendingVerification
 import MinistryDashboardScreen from '../screens/ministry/MinistryDashboardScreen';
 import SettingsScreen from '../screens-v2/SettingsScreen';
 import EditProfileScreen from '../screens-v2/EditProfileScreen';
-import RoleSelectionScreen from '../screens/RoleSelectionScreen';
+import RoleSelectionScreen from '../screens-v2/RoleSelectionScreen';
 import BiometricSettingsScreen from '../screens-v2/BiometricSettingsScreen';
 import EmergencyProfileScreen from '../screens-v2/EmergencyProfileScreen';
 import ReceiptStandaloneScreen from '../screens-v2/ReceiptStandaloneScreen';
