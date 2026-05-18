@@ -23,7 +23,7 @@ import DoctorRequestAccessScreen from '../screens-v2/doctor/DoctorRequestAccessS
 import DoctorExpiredRecordsScreen from '../screens-v2/doctor/DoctorExpiredRecordsScreen';
 import DoctorCreateUpdateScreen from '../screens-v2/doctor/DoctorCreateUpdateScreen';
 import DoctorDelegatableRecordsScreen from '../screens-v2/doctor/DoctorDelegatableRecordsScreen';
-import DoctorDelegatedPatientsScreen from '../screens/doctor/DoctorDelegatedPatientsScreen';
+import DoctorDelegatedPatientsScreen from '../screens-v2/doctor/DoctorDelegatedPatientsScreen';
 import DoctorOutgoingSharesScreen from '../screens-v2/doctor/DoctorOutgoingSharesScreen';
 import EmergencyLookupScreen from '../screens-v2/doctor/EmergencyLookupScreen';
 import TrustedContactsScreen from '../screens-v2/TrustedContactsScreen';
