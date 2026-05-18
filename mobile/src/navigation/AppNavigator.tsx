@@ -10,7 +10,7 @@ import LandingScreen from '../screens-v2/LandingScreen';
 import DashboardScreen from '../screens-v2/DashboardScreen';
 import RecordsScreen from '../screens-v2/RecordsScreen';
 import RequestsScreen from '../screens-v2/RequestsScreen';
-import ProfileScreen from '../screens/ProfileScreen';
+import ProfileScreen from '../screens-v2/ProfileScreen';
 import RecordDetailScreen from '../screens-v2/RecordDetailScreen';
 import CreateRecordScreen from '../screens-v2/CreateRecordScreen';
 import AccessLogScreen from '../screens-v2/AccessLogScreen';
@@ -25,7 +25,7 @@ import DoctorCreateUpdateScreen from '../screens-v2/doctor/DoctorCreateUpdateScr
 import DoctorDelegatableRecordsScreen from '../screens/doctor/DoctorDelegatableRecordsScreen';
 import DoctorDelegatedPatientsScreen from '../screens/doctor/DoctorDelegatedPatientsScreen';
 import DoctorOutgoingSharesScreen from '../screens/doctor/DoctorOutgoingSharesScreen';
-import EmergencyLookupScreen from '../screens/doctor/EmergencyLookupScreen';
+import EmergencyLookupScreen from '../screens-v2/doctor/EmergencyLookupScreen';
 import TrustedContactsScreen from '../screens-v2/TrustedContactsScreen';
 
 import OrgDashboardScreen from '../screens/org/OrgDashboardScreen';
@@ -34,7 +34,7 @@ import OrgPendingVerificationsScreen from '../screens/org/OrgPendingVerification
 
 import MinistryDashboardScreen from '../screens/ministry/MinistryDashboardScreen';
 import SettingsScreen from '../screens-v2/SettingsScreen';
-import EditProfileScreen from '../screens/EditProfileScreen';
+import EditProfileScreen from '../screens-v2/EditProfileScreen';
 import RoleSelectionScreen from '../screens/RoleSelectionScreen';
 import BiometricSettingsScreen from '../screens-v2/BiometricSettingsScreen';
 import EmergencyProfileScreen from '../screens-v2/EmergencyProfileScreen';
