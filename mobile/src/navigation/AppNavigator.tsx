@@ -18,13 +18,13 @@ import DelegationScreen from '../screens-v2/DelegationScreen';
 import LoadingSpinner from '../components/LoadingSpinner';
 
 import DoctorDashboardScreen from '../screens-v2/doctor/DoctorDashboardScreen';
-import DoctorOutgoingScreen from '../screens/doctor/DoctorOutgoingScreen';
+import DoctorOutgoingScreen from '../screens-v2/doctor/DoctorOutgoingScreen';
 import DoctorRequestAccessScreen from '../screens-v2/doctor/DoctorRequestAccessScreen';
 import DoctorExpiredRecordsScreen from '../screens-v2/doctor/DoctorExpiredRecordsScreen';
 import DoctorCreateUpdateScreen from '../screens-v2/doctor/DoctorCreateUpdateScreen';
-import DoctorDelegatableRecordsScreen from '../screens/doctor/DoctorDelegatableRecordsScreen';
+import DoctorDelegatableRecordsScreen from '../screens-v2/doctor/DoctorDelegatableRecordsScreen';
 import DoctorDelegatedPatientsScreen from '../screens/doctor/DoctorDelegatedPatientsScreen';
-import DoctorOutgoingSharesScreen from '../screens/doctor/DoctorOutgoingSharesScreen';
+import DoctorOutgoingSharesScreen from '../screens-v2/doctor/DoctorOutgoingSharesScreen';
 import EmergencyLookupScreen from '../screens-v2/doctor/EmergencyLookupScreen';
 import TrustedContactsScreen from '../screens-v2/TrustedContactsScreen';
 
