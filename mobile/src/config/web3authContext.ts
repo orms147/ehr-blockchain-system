@@ -14,6 +14,11 @@ if (!clientId) {
   );
 }
 
+// DIAG: trace Web3Auth module load + config at startup
+console.log('[Web3AuthCtx] Module loading. clientId prefix:', clientId.slice(0, 12), '... length:', clientId.length);
+console.log('[Web3AuthCtx] Constants.appOwnership:', Constants.appOwnership);
+console.log('[Web3AuthCtx] EXPO_PUBLIC_RPC_URL:', process.env.EXPO_PUBLIC_RPC_URL || '(not set, using public)');
+
 const resolveWeb3AuthRedirect = (): string => {
   const fromEnv = process.env.EXPO_PUBLIC_WEB3AUTH_REDIRECT_URL?.trim();
   if (fromEnv) {
@@ -57,6 +62,10 @@ if (typeof maybeCompatProvider.setKeyExportFlag !== 'function') {
 
 const redirectUrl = resolveWeb3AuthRedirect();
 
+console.log('[Web3AuthCtx] Resolved redirectUrl:', redirectUrl);
+console.log('[Web3AuthCtx] Network: SAPPHIRE_DEVNET');
+console.log('[Web3AuthCtx] Creating Web3Auth instance...');
+
 const web3auth = new Web3Auth(WebBrowser, SecureStore, {
   clientId,
   network: WEB3AUTH_NETWORK.SAPPHIRE_DEVNET,
@@ -66,6 +75,8 @@ const web3auth = new Web3Auth(WebBrowser, SecureStore, {
     appName: 'EHR Chain',
   },
 });
+
+console.log('[Web3AuthCtx] Web3Auth instance created. Has init fn:', typeof (web3auth as any).init, '· Has login fn:', typeof (web3auth as any).login, '· ready:', (web3auth as any).ready);
 
 export { redirectUrl, clientId, privateKeyProvider };
 export default web3auth;

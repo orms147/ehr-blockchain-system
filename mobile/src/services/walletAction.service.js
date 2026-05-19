@@ -8,8 +8,12 @@ import { arbitrumSepolia } from 'viem/chains';
 // when set; fall back to public for local dev convenience.
 const ARBITRUM_SEPOLIA_RPC = process.env.EXPO_PUBLIC_RPC_URL || 'https://sepolia-rollup.arbitrum.io/rpc';
 const SIGN_RETRY_COUNT = 1;
-const INIT_TIMEOUT_MS = 15000;
-const LOGIN_TIMEOUT_MS = 90000;
+// Bumped from 15s → 30s for slower mobile networks (VN 4G/WiFi sometimes
+// takes >15s for Web3Auth Sapphire Devnet handshake). If still timing out,
+// real root cause is likely redirect URL not whitelisted in Web3Auth
+// Dashboard (https://dashboard.web3auth.io) — must add `erhsystem://auth`.
+const INIT_TIMEOUT_MS = 30000;
+const LOGIN_TIMEOUT_MS = 120000;
 
 let cachedWeb3Auth = web3auth;
 let initPromise = null;
@@ -110,20 +114,39 @@ async function getWeb3Auth() {
 
 async function initializeWeb3Auth() {
     if (!initPromise) {
+        console.log('[InitWeb3Auth] STEP 1 — start. cachedWeb3Auth valid:', validateWeb3AuthInstance(cachedWeb3Auth));
         initPromise = (async () => {
+            const startTs = Date.now();
+            console.log('[InitWeb3Auth] STEP 2 — getWeb3Auth...');
             const web3authInstance = await getWeb3Auth();
+            console.log('[InitWeb3Auth] STEP 3 — got instance. ready:', web3authInstance.ready, '· provider:', !!web3authInstance.provider);
             if (!web3authInstance.ready) {
-                await withTimeout(
-                    web3authInstance.init(),
-                    INIT_TIMEOUT_MS,
-                    'Khởi tạo Web3Auth quá thời gian. Vui lòng thử lại.'
-                );
+                console.log('[InitWeb3Auth] STEP 4 — calling web3auth.init() with timeout', INIT_TIMEOUT_MS, 'ms');
+                try {
+                    const initRaw = web3authInstance.init();
+                    console.log('[InitWeb3Auth] STEP 4a — init() invoked, type:', typeof initRaw, '· thenable:', !!(initRaw && typeof initRaw.then === 'function'));
+                    await withTimeout(
+                        initRaw,
+                        INIT_TIMEOUT_MS,
+                        'Khởi tạo Web3Auth quá thời gian. Vui lòng thử lại.'
+                    );
+                    console.log('[InitWeb3Auth] STEP 5 — init() resolved in', Date.now() - startTs, 'ms · ready now:', web3authInstance.ready);
+                } catch (initErr) {
+                    console.log('[InitWeb3Auth] STEP 5x — init() FAILED after', Date.now() - startTs, 'ms · message:', String(initErr?.message || initErr).slice(0, 200));
+                    throw initErr;
+                }
+            } else {
+                console.log('[InitWeb3Auth] STEP 4 — already ready=true, skip init()');
             }
+            console.log('[InitWeb3Auth] STEP 6 — done in', Date.now() - startTs, 'ms');
             return web3authInstance;
         })().catch((error) => {
+            console.log('[InitWeb3Auth] OUTER CATCH:', String(error?.message || error).slice(0, 200));
             initPromise = null;
             throw error;
         });
+    } else {
+        console.log('[InitWeb3Auth] reusing in-flight initPromise');
     }
 
     return initPromise;
