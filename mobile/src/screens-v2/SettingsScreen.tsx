@@ -27,12 +27,17 @@ import {
     HelpCircle,
     LogOut,
     ChevronRight,
+    Sun,
+    Moon,
+    Smartphone,
+    Check,
 } from 'lucide-react-native';
 
 import useAuthStore from '../store/authStore';
 import { isBiometricSigningEnabled, setBiometricSigningEnabled } from '../utils/biometricGate';
 import { ViSectionLabel } from '../components-v2/ViChips';
 import ViCard from '../components-v2/ViCard';
+import { useThemePreference, type ThemePreference } from '../constants/themeContext';
 import {
     EHR_SURFACE,
     EHR_SURFACE_LOWEST,
@@ -56,6 +61,7 @@ const truncate = (s?: string, head = 6, tail = 4) =>
 export default function SettingsScreen() {
     const { user, logout } = useAuthStore();
     const navigation = useNavigation<any>();
+    const { preference: themePref, setPreference: setThemePref } = useThemePreference();
     const [copied, setCopied] = useState(false);
     const [bioEnabled, setBioEnabled] = useState(true);
 
@@ -242,6 +248,35 @@ export default function SettingsScreen() {
                     </ViCard>
                 </View>
 
+                {/* ───────── Giao diện ───────── */}
+                <ViSectionLabel>Giao diện</ViSectionLabel>
+                <View style={{ paddingHorizontal: 20, marginBottom: 18 }}>
+                    <ViCard padding={0}>
+                        <ThemeRow
+                            icon={<Smartphone size={18} color={EHR_ON_SURFACE_VARIANT} />}
+                            title="Tự động"
+                            sub="Theo cài đặt hệ thống"
+                            selected={themePref === 'auto'}
+                            onPress={() => setThemePref('auto')}
+                        />
+                        <ThemeRow
+                            icon={<Sun size={18} color={EHR_ON_SURFACE_VARIANT} />}
+                            title="Sáng"
+                            sub="Giấy gạo · ban ngày"
+                            selected={themePref === 'light'}
+                            onPress={() => setThemePref('light')}
+                        />
+                        <ThemeRow
+                            icon={<Moon size={18} color={EHR_ON_SURFACE_VARIANT} />}
+                            title="Tối"
+                            sub="Mực đen · mặc định thương hiệu"
+                            selected={themePref === 'dark'}
+                            onPress={() => setThemePref('dark')}
+                            last
+                        />
+                    </ViCard>
+                </View>
+
                 {/* ───────── Hỗ trợ ───────── */}
                 <ViSectionLabel>Hỗ trợ</ViSectionLabel>
                 <View style={{ paddingHorizontal: 20, marginBottom: 18 }}>
@@ -410,6 +445,76 @@ function BioToggleTile({
                 thumbColor="#FAF7F1"
             />
         </View>
+    );
+}
+
+// ───────── ThemeRow (radio-style row for Auto/Light/Dark) ─────────
+function ThemeRow({
+    icon,
+    title,
+    sub,
+    selected,
+    onPress,
+    last,
+}: {
+    icon: React.ReactNode;
+    title: string;
+    sub: string;
+    selected: boolean;
+    onPress: () => void;
+    last?: boolean;
+}) {
+    return (
+        <Pressable
+            onPress={onPress}
+            style={({ pressed }) => ({
+                flexDirection: 'row',
+                alignItems: 'center',
+                paddingVertical: 14,
+                paddingHorizontal: 16,
+                borderBottomWidth: last ? 0 : 0.5,
+                borderColor: EHR_OUTLINE_SOFT,
+                opacity: pressed ? 0.6 : 1,
+            })}
+        >
+            <View style={{ width: 20, alignItems: 'center' }}>{icon}</View>
+            <View style={{ flex: 1, marginLeft: 12 }}>
+                <Text
+                    style={{
+                        fontFamily: SANS_MEDIUM,
+                        fontSize: 14,
+                        color: EHR_ON_SURFACE,
+                    }}
+                >
+                    {title}
+                </Text>
+                <Text
+                    style={{
+                        marginTop: 2,
+                        fontFamily: SANS,
+                        fontSize: 11.5,
+                        color: EHR_OUTLINE,
+                        lineHeight: 16,
+                    }}
+                >
+                    {sub}
+                </Text>
+            </View>
+            <View
+                style={{
+                    width: 22,
+                    height: 22,
+                    borderRadius: 11,
+                    borderWidth: selected ? 0 : 1.5,
+                    borderColor: EHR_OUTLINE,
+                    backgroundColor: selected ? EHR_PRIMARY : 'transparent',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                }}
+            >
+                {selected ? <Check size={14} color="#FBF8F1" strokeWidth={2.5} /> : null}
+            </View>
+        </Pressable>
     );
 }
 

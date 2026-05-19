@@ -1,9 +1,22 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { DefaultTheme, NavigationContainer } from '@react-navigation/native';
 import { navigationRef } from '../lib/navigationRef';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator, type BottomTabNavigationOptions } from '@react-navigation/bottom-tabs';
-import { Home, FileText, Bell, User, Stethoscope, Send, Building2, Users, Landmark, Clock, Shield, Award, Plus } from 'lucide-react-native';
+import {
+    Home,
+    Files,
+    ShieldCheck,
+    CircleUser,
+    Stethoscope,
+    Inbox,
+    Users,
+    Share2,
+    Building2,
+    LayoutDashboard,
+    Award,
+    Landmark,
+} from 'lucide-react-native';
 
 import LoginScreen from '../screens-v2/LoginScreen';
 import LandingScreen from '../screens-v2/LandingScreen';
@@ -41,132 +54,145 @@ import EmergencyProfileScreen from '../screens-v2/EmergencyProfileScreen';
 import ReceiptStandaloneScreen from '../screens-v2/ReceiptStandaloneScreen';
 import useAuthStore from '../store/authStore';
 import { healLocalRecordCache } from '../services/localRecordHealer.service';
-import {
-    EHR_ON_SURFACE,
-    EHR_ON_SURFACE_VARIANT,
-    EHR_OUTLINE_VARIANT,
-    EHR_PRIMARY,
-    EHR_SECONDARY,
-    EHR_SURFACE,
-    EHR_SURFACE_LOWEST,
-} from '../constants/uiColors';
+import { useEhrPalette } from '../constants/uiColors';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
 
-const navigationTheme = {
-    ...DefaultTheme,
-    colors: {
-        ...DefaultTheme.colors,
-        primary: EHR_PRIMARY,
-        background: EHR_SURFACE,
-        card: EHR_SURFACE_LOWEST,
-        text: EHR_ON_SURFACE,
-        border: EHR_OUTLINE_VARIANT,
-        notification: EHR_SECONDARY,
-    },
-};
+function useNavigationTheme() {
+    const palette = useEhrPalette();
+    return useMemo(() => ({
+        ...DefaultTheme,
+        dark: palette.EHR_SURFACE === '#0F1419',
+        colors: {
+            ...DefaultTheme.colors,
+            primary: palette.EHR_PRIMARY,
+            background: palette.EHR_SURFACE,
+            card: palette.EHR_SURFACE_LOWEST,
+            text: palette.EHR_ON_SURFACE,
+            border: palette.EHR_OUTLINE_VARIANT,
+            notification: palette.EHR_SECONDARY,
+        },
+    }), [palette]);
+}
 
-const sharedTabOptions: BottomTabNavigationOptions = {
-    tabBarStyle: {
-        paddingBottom: 8,
-        paddingTop: 8,
-        height: 68,
-        backgroundColor: EHR_SURFACE_LOWEST,
-        borderTopWidth: 1,
-        borderTopColor: EHR_OUTLINE_VARIANT,
-    },
-    headerShown: true,
-    headerStyle: { backgroundColor: EHR_SURFACE, elevation: 0, shadowOpacity: 0, borderBottomWidth: 1, borderBottomColor: EHR_OUTLINE_VARIANT },
-    headerTitleStyle: { fontWeight: '700', color: EHR_ON_SURFACE },
-    tabBarActiveTintColor: EHR_PRIMARY,
-    tabBarInactiveTintColor: EHR_ON_SURFACE_VARIANT,
-};
+function useSharedTabOptions(): BottomTabNavigationOptions {
+    const palette = useEhrPalette();
+    return useMemo(() => ({
+        tabBarStyle: {
+            paddingBottom: 8,
+            paddingTop: 8,
+            height: 68,
+            backgroundColor: palette.EHR_SURFACE_LOWEST,
+            borderTopWidth: 0.5,
+            borderTopColor: palette.EHR_OUTLINE_VARIANT,
+        },
+        tabBarLabelStyle: {
+            fontSize: 10.5,
+            letterSpacing: 0.2,
+            fontWeight: '500' as const,
+        },
+        tabBarActiveTintColor: palette.EHR_PRIMARY,
+        tabBarInactiveTintColor: palette.EHR_ON_SURFACE_VARIANT,
+        headerShown: true,
+        headerStyle: {
+            backgroundColor: palette.EHR_SURFACE,
+            elevation: 0,
+            shadowOpacity: 0,
+            borderBottomWidth: 0.5,
+            borderBottomColor: palette.EHR_OUTLINE_VARIANT,
+        },
+        headerTitleStyle: { fontWeight: '700' as const, color: palette.EHR_ON_SURFACE },
+        headerTintColor: palette.EHR_ON_SURFACE,
+    }), [palette]);
+}
 
 function PatientTabs() {
+    const sharedTabOptions = useSharedTabOptions();
     return (
         <Tab.Navigator
             screenOptions={({ route }) => ({
                 tabBarIcon: ({ color, size }) => {
-                    if (route.name === 'Dashboard') return <Home color={color} size={size} />;
-                    if (route.name === 'Records') return <FileText color={color} size={size} />;
-                    if (route.name === 'AccessLog') return <Shield color={color} size={size} />;
-                    if (route.name === 'Requests') return <Bell color={color} size={size} />;
-                    if (route.name === 'Profile') return <User color={color} size={size} />;
+                    if (route.name === 'Dashboard') return <Home color={color} size={size} strokeWidth={1.75} />;
+                    if (route.name === 'Records') return <Files color={color} size={size} strokeWidth={1.75} />;
+                    if (route.name === 'AccessLog') return <ShieldCheck color={color} size={size} strokeWidth={1.75} />;
+                    if (route.name === 'Profile') return <CircleUser color={color} size={size} strokeWidth={1.75} />;
                     return null;
                 },
                 ...sharedTabOptions,
             })}
         >
-            <Tab.Screen name="Dashboard" component={DashboardScreen} options={{ title: 'T\u1ED5ng quan', headerShown: false }} />
-            <Tab.Screen name="Records" component={RecordsScreen} options={{ title: 'H\u1ED3 s\u01A1' }} />
-            <Tab.Screen name="AccessLog" component={AccessLogScreen} options={{ title: 'Truy c\u1EADp' }} />
-            <Tab.Screen name="Requests" component={RequestsScreen} options={{ title: 'Y\u00EAu c\u1EA7u' }} />
-            <Tab.Screen name="Profile" component={ProfileScreen} options={{ title: 'C\u00E1 nh\u00E2n' }} />
+            <Tab.Screen name="Dashboard" component={DashboardScreen} options={{ title: 'Hôm nay', headerShown: false }} />
+            <Tab.Screen name="Records" component={RecordsScreen} options={{ title: 'Hồ sơ' }} />
+            <Tab.Screen name="AccessLog" component={AccessLogScreen} options={{ title: 'Quyền' }} />
+            <Tab.Screen name="Profile" component={ProfileScreen} options={{ title: 'Cá nhân' }} />
         </Tab.Navigator>
     );
 }
 
 function DoctorTabs() {
+    const sharedTabOptions = useSharedTabOptions();
     return (
         <Tab.Navigator
             screenOptions={({ route }) => ({
                 tabBarIcon: ({ color, size }) => {
-                    if (route.name === 'DoctorDashboard') return <Stethoscope color={color} size={size} />;
-                    if (route.name === 'Expired') return <Clock color={color} size={size} />;
-                    if (route.name === 'RequestAccess') return <Plus color={color} size={size} />;
-                    if (route.name === 'Outgoing') return <Send color={color} size={size} />;
-                    if (route.name === 'Profile') return <User color={color} size={size} />;
+                    if (route.name === 'DoctorDashboard') return <Home color={color} size={size} strokeWidth={1.75} />;
+                    if (route.name === 'RequestAccess') return <Inbox color={color} size={size} strokeWidth={1.75} />;
+                    if (route.name === 'DoctorOutgoing') return <Users color={color} size={size} strokeWidth={1.75} />;
+                    if (route.name === 'DoctorOutgoingShares') return <Share2 color={color} size={size} strokeWidth={1.75} />;
+                    if (route.name === 'Profile') return <CircleUser color={color} size={size} strokeWidth={1.75} />;
                     return null;
                 },
                 ...sharedTabOptions,
             })}
         >
-            <Tab.Screen name="DoctorDashboard" component={DoctorDashboardScreen} options={{ title: 'H\u1ED3 s\u01A1', headerShown: false }} />
-            <Tab.Screen name="Expired" component={DoctorExpiredRecordsScreen} options={{ title: 'H\u1EBFt h\u1EA1n' }} />
-            <Tab.Screen name="RequestAccess" component={DoctorRequestAccessScreen} options={{ title: 'Y\u00EAu c\u1EA7u' }} />
-            <Tab.Screen name="Outgoing" component={DoctorOutgoingScreen} options={{ title: '\u0110\u00E3 g\u1EEDi' }} />
-            <Tab.Screen name="Profile" component={ProfileScreen} options={{ title: 'C\u00E1 nh\u00E2n' }} />
+            <Tab.Screen name="DoctorDashboard" component={DoctorDashboardScreen} options={{ title: 'Hôm nay', headerShown: false }} />
+            <Tab.Screen name="RequestAccess" component={DoctorRequestAccessScreen} options={{ title: 'Yêu cầu' }} />
+            <Tab.Screen name="DoctorOutgoing" component={DoctorOutgoingScreen} options={{ title: 'Bệnh nhân' }} />
+            <Tab.Screen name="DoctorOutgoingShares" component={DoctorOutgoingSharesScreen} options={{ title: 'Chia sẻ' }} />
+            <Tab.Screen name="Profile" component={ProfileScreen} options={{ title: 'Cá nhân' }} />
         </Tab.Navigator>
     );
 }
 
 function OrgTabs() {
+    const sharedTabOptions = useSharedTabOptions();
     return (
         <Tab.Navigator
             screenOptions={({ route }) => ({
                 tabBarIcon: ({ color, size }) => {
-                    if (route.name === 'OrgDashboard') return <Building2 color={color} size={size} />;
-                    if (route.name === 'Members') return <Users color={color} size={size} />;
-                    if (route.name === 'Verifications') return <Award color={color} size={size} />;
-                    if (route.name === 'Profile') return <User color={color} size={size} />;
+                    if (route.name === 'OrgDashboard') return <LayoutDashboard color={color} size={size} strokeWidth={1.75} />;
+                    if (route.name === 'Members') return <Stethoscope color={color} size={size} strokeWidth={1.75} />;
+                    if (route.name === 'Verifications') return <Award color={color} size={size} strokeWidth={1.75} />;
+                    if (route.name === 'Profile') return <CircleUser color={color} size={size} strokeWidth={1.75} />;
                     return null;
                 },
                 ...sharedTabOptions,
             })}
         >
-            <Tab.Screen name="OrgDashboard" component={OrgDashboardScreen} options={{ title: 'T\u1ED5 ch\u1EE9c', headerShown: false }} />
-            <Tab.Screen name="Members" component={OrgMembersScreen} options={{ title: 'Th\u00E0nh vi\u00EAn' }} />
-            <Tab.Screen name="Verifications" component={OrgPendingVerificationsScreen} options={{ title: 'X\u00E1c th\u1EF1c' }} />
-            <Tab.Screen name="Profile" component={ProfileScreen} options={{ title: 'C\u00E1 nh\u00E2n' }} />
+            <Tab.Screen name="OrgDashboard" component={OrgDashboardScreen} options={{ title: 'Tổng quan', headerShown: false }} />
+            <Tab.Screen name="Members" component={OrgMembersScreen} options={{ title: 'Bác sĩ' }} />
+            <Tab.Screen name="Verifications" component={OrgPendingVerificationsScreen} options={{ title: 'Xác thực' }} />
+            <Tab.Screen name="Profile" component={ProfileScreen} options={{ title: 'Cá nhân' }} />
         </Tab.Navigator>
     );
 }
 
 function MinistryTabs() {
+    const sharedTabOptions = useSharedTabOptions();
     return (
         <Tab.Navigator
             screenOptions={({ route }) => ({
                 tabBarIcon: ({ color, size }) => {
-                    if (route.name === 'MinistryDashboard') return <Landmark color={color} size={size} />;
-                    if (route.name === 'Profile') return <User color={color} size={size} />;
+                    if (route.name === 'MinistryDashboard') return <Landmark color={color} size={size} strokeWidth={1.75} />;
+                    if (route.name === 'Profile') return <CircleUser color={color} size={size} strokeWidth={1.75} />;
                     return null;
                 },
                 ...sharedTabOptions,
             })}
         >
-            <Tab.Screen name="MinistryDashboard" component={MinistryDashboardScreen} options={{ title: 'B\u1ED9 Y t\u1EBF', headerShown: false }} />
-            <Tab.Screen name="Profile" component={ProfileScreen} options={{ title: 'C\u00E1 nh\u00E2n' }} />
+            <Tab.Screen name="MinistryDashboard" component={MinistryDashboardScreen} options={{ title: 'Tổng quan', headerShown: false }} />
+            <Tab.Screen name="Profile" component={ProfileScreen} options={{ title: 'Cá nhân' }} />
         </Tab.Navigator>
     );
 }
@@ -200,47 +226,52 @@ function MainStackNavigator() {
             <Stack.Screen
                 name="CreateRecord"
                 component={CreateRecordScreen}
-                options={{ title: 'T\u1EA1o h\u1ED3 s\u01A1 m\u1EDBi' }}
+                options={{ title: 'Tạo hồ sơ mới' }}
             />
             <Stack.Screen
                 name="RecordDetail"
                 component={RecordDetailScreen}
-                options={{ title: 'Chi ti\u1EBFt h\u1ED3 s\u01A1' }}
+                options={{ title: 'Chi tiết hồ sơ' }}
             />
             <Stack.Screen
                 name="Settings"
                 component={SettingsScreen}
-                options={{ title: 'C\u00E0i \u0111\u1EB7t' }}
+                options={{ title: 'Cài đặt' }}
+            />
+            <Stack.Screen
+                name="Requests"
+                component={RequestsScreen}
+                options={{ title: 'Yêu cầu truy cập' }}
             />
             <Stack.Screen
                 name="DoctorCreateUpdate"
                 component={DoctorCreateUpdateScreen}
-                options={{ title: 'C\u1EADp nh\u1EADt h\u1ED3 s\u01A1' }}
+                options={{ title: 'Cập nhật hồ sơ' }}
             />
             <Stack.Screen
                 name="Delegation"
                 component={DelegationScreen}
-                options={{ title: '\u1EE6y quy\u1EC1n' }}
+                options={{ title: 'Ủy quyền' }}
             />
             <Stack.Screen
                 name="DoctorDelegatableRecords"
                 component={DoctorDelegatableRecordsScreen}
-                options={{ title: 'H\u1ED3 s\u01A1 \u1EE7y quy\u1EC1n' }}
+                options={{ title: 'Hồ sơ ủy quyền' }}
             />
             <Stack.Screen
                 name="DoctorDelegatedPatients"
                 component={DoctorDelegatedPatientsScreen}
-                options={{ title: 'B\u1EC7nh nh\u00E2n \u1EE7y quy\u1EC1n' }}
+                options={{ title: 'Bệnh nhân ủy quyền' }}
             />
             <Stack.Screen
-                name="DoctorOutgoingShares"
-                component={DoctorOutgoingSharesScreen}
-                options={{ title: 'H\u1ED3 s\u01A1 \u0111\u00E3 chia s\u1EBB l\u1EA1i' }}
+                name="DoctorExpiredRecords"
+                component={DoctorExpiredRecordsScreen}
+                options={{ title: 'Hồ sơ hết hạn' }}
             />
             <Stack.Screen
                 name="EditProfile"
                 component={EditProfileScreen}
-                options={{ title: 'Ch\u1EC9nh s\u1EEDa h\u1ED3 s\u01A1' }}
+                options={{ title: 'Chỉnh sửa hồ sơ' }}
             />
             <Stack.Screen
                 name="TrustedContacts"
@@ -273,6 +304,7 @@ function MainStackNavigator() {
 
 export default function AppNavigator() {
     const { isAuthenticated, isLoading, needsRoleSelection, needsRoleRegistration } = useAuthStore();
+    const navigationTheme = useNavigationTheme();
 
     // Run the root-walk migration healer once after login. Idempotent — subsequent
     // calls noop via AsyncStorage flag.
@@ -283,7 +315,7 @@ export default function AppNavigator() {
     }, [isAuthenticated]);
 
     if (isLoading) {
-        return <LoadingSpinner message={'\u0110ang kh\u00F4i ph\u1EE5c phi\u00EAn \u0111\u0103ng nh\u1EADp...'} />;
+        return <LoadingSpinner message={'Đang khôi phục phiên đăng nhập...'} />;
     }
 
     return (

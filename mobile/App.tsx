@@ -34,6 +34,7 @@ import LoadingSpinner from './src/components/LoadingSpinner';
 import QueryProvider from './src/providers/QueryProvider';
 import { initSentry, Sentry } from './src/lib/sentry';
 import { setupNotificationListeners } from './src/lib/notifications';
+import { ThemeProvider, useThemePreference } from './src/constants/themeContext';
 
 initSentry();
 
@@ -58,8 +59,9 @@ initSentry();
   };
 }
 
-function App() {
+function AppInner() {
   const colorScheme = useColorScheme();
+  const { preference } = useThemePreference();
   const { loadToken, isLoading } = useAuthStore();
 
   // Load brand fonts (Fraunces serif headings + DM Sans body) and Vietnamese
@@ -98,10 +100,11 @@ function App() {
     return cleanup;
   }, [loadToken]);
 
-  // Brand brief mandates dark mode default. We respect the system color
-  // scheme as an override (light mode if user has explicitly set system
-  // light theme), but fall back to dark when the system reports neither.
-  const themeName = colorScheme === 'light' ? 'light' : 'dark';
+  // Resolve effective theme from user preference (auto/light/dark) combined
+  // with OS color scheme. Default 'auto' follows OS; 'auto' + no OS hint
+  // falls back to dark (brand default).
+  const effective = preference === 'auto' ? (colorScheme ?? 'dark') : preference;
+  const themeName: 'light' | 'dark' = effective === 'light' ? 'light' : 'dark';
 
   return (
     <QueryProvider>
@@ -118,6 +121,14 @@ function App() {
         </SafeAreaProvider>
       </TamaguiProvider>
     </QueryProvider>
+  );
+}
+
+function App() {
+  return (
+    <ThemeProvider>
+      <AppInner />
+    </ThemeProvider>
   );
 }
 

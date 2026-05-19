@@ -771,6 +771,59 @@ export default function DoctorDashboardScreen() {
                             </Pressable>
                         </View>
 
+                        {/* ───────── Expired records shortcut ───────── */}
+                        <View style={{ paddingHorizontal: 22, marginBottom: 22 }}>
+                            <Pressable
+                                onPress={() => navigation.navigate('DoctorExpiredRecords')}
+                                style={({ pressed }) => ({
+                                    flexDirection: 'row',
+                                    alignItems: 'center',
+                                    gap: 12,
+                                    paddingVertical: 12,
+                                    paddingHorizontal: 14,
+                                    borderRadius: 14,
+                                    backgroundColor: EHR_SURFACE_LOWEST,
+                                    borderWidth: 0.5,
+                                    borderColor: EHR_OUTLINE_SOFT,
+                                    opacity: pressed ? 0.7 : 1,
+                                })}
+                            >
+                                <View
+                                    style={{
+                                        width: 36,
+                                        height: 36,
+                                        borderRadius: 18,
+                                        backgroundColor: `${EHR_OUTLINE}40`,
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                    }}
+                                >
+                                    <Clock size={18} color={EHR_ON_SURFACE_VARIANT} />
+                                </View>
+                                <YStack style={{ flex: 1 }}>
+                                    <Text
+                                        style={{
+                                            fontFamily: SANS_MEDIUM,
+                                            fontSize: 13.5,
+                                            color: EHR_ON_SURFACE,
+                                        }}
+                                    >
+                                        Hồ sơ hết hạn
+                                    </Text>
+                                    <Text
+                                        style={{
+                                            fontFamily: SANS,
+                                            fontSize: 11.5,
+                                            color: EHR_OUTLINE,
+                                            marginTop: 2,
+                                        }}
+                                    >
+                                        Xem các quyền truy cập đã hết hạn
+                                    </Text>
+                                </YStack>
+                            </Pressable>
+                        </View>
+
                         {/* ───────── Pending claims (cinnabar = legal action) ───────── */}
                         {pendingClaims.length > 0 ? (
                             <View style={{ marginBottom: 22 }}>
