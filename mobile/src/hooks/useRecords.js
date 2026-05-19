@@ -50,6 +50,10 @@ const transformRecords = (data) => {
             syncStatus: record.syncStatus || 'confirmed',
             syncError: record.syncError || null,
             isLocalDraft: false,
+            // G.1.b — backend aggregates via recursive CTE on /api/records/my;
+            // 1 = no prior versions, N>1 means show "v·N" chip per Backend
+            // Reconciliation §matrix decision 4.
+            versionCount: Number(record.versionCount) || 1,
         };
     });
 

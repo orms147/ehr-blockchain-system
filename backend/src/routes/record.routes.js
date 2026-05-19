@@ -502,6 +502,12 @@ router.post('/save-only', authenticate, async (req, res, next) => {
 });
 
 // GET /api/records/my - Get user's records (owned or created)
+//
+// G.1.b — augments each record with `versionCount` (1 + descendant count)
+// so RecordRow can render "v·N" chip when chain has >1 versions per Backend
+// Reconciliation §matrix decision 4. Single $queryRaw aggregates in one DB
+// trip; Prisma's relation count would issue N+1 since we don't have an
+// `ancestors`/`descendants` self-relation modeled.
 router.get('/my', authenticate, async (req, res, next) => {
     try {
         const walletAddress = normalizeAddress(req.user.walletAddress);
@@ -516,7 +522,53 @@ router.get('/my', authenticate, async (req, res, next) => {
             orderBy: { createdAt: 'desc' },
         });
 
-        res.json(records);
+        // Compute versionCount per record via recursive CTE walking UP the
+        // parentCidHash chain to root. mobile useRecords already filters list
+        // to leaf records (those with no children pointing at them), so each
+        // record IS a chain leaf — the depth from leaf back to root tells us
+        // total versions in the chain. Single roundtrip vs N+1.
+        if (records.length === 0) {
+            return res.json(records);
+        }
+
+        const cidHashes = records.map((r) => r.cidHash);
+        const counts = await prisma.$queryRaw`
+            WITH RECURSIVE chain AS (
+                SELECT
+                    "cidHash" AS leaf,
+                    "cidHash" AS current,
+                    "parentCidHash",
+                    1 AS depth
+                FROM "RecordMetadata"
+                WHERE "cidHash" = ANY(${cidHashes}::text[])
+                  AND "syncStatus" = ${RECORD_SYNC_STATUS.CONFIRMED}
+
+                UNION ALL
+
+                SELECT
+                    c.leaf,
+                    r."cidHash",
+                    r."parentCidHash",
+                    c.depth + 1
+                FROM chain c
+                INNER JOIN "RecordMetadata" r ON c."parentCidHash" = r."cidHash"
+                WHERE r."syncStatus" = ${RECORD_SYNC_STATUS.CONFIRMED}
+                  AND c.depth < 50
+            )
+            SELECT leaf, MAX(depth)::int AS "versionCount"
+            FROM chain
+            GROUP BY leaf
+        `;
+        const versionByLeaf = new Map(
+            (counts || []).map((row) => [String(row.leaf).toLowerCase(), Number(row.versionCount) || 1])
+        );
+
+        const augmented = records.map((r) => ({
+            ...r,
+            versionCount: versionByLeaf.get(String(r.cidHash).toLowerCase()) || 1,
+        }));
+
+        res.json(augmented);
     } catch (error) {
         next(error);
     }

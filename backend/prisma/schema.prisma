@@ -285,9 +285,22 @@ model Consent {
   expiresAt      DateTime
   status         String   @default("active") // active, revoked, expired
 
+  // Links an extension consent to the original it extends. Set when patient
+  // taps "Gia hạn" on an existing consent — new row inherits granteeAddress
+  // + cidHash + allowDelegate from old, gets fresh expiresAt, points back
+  // via parentConsentId. Old row stays for audit; UI hides it from active list.
+  //
+  // Also drives the "Bạn trực tiếp ký" vs "Qua uỷ quyền" signing badge
+  // derivation per Backend Reconciliation §matrix decision 6:
+  //   parentConsentId === null → patient signed directly
+  //   parentConsentId !== null → consent came from another consent's extension
+  //     (resolve parent's granteeAddress via UserChip for "Qua uỷ quyền X")
+  parentConsentId String? @db.VarChar(36)
+
   @@unique([patientAddress, granteeAddress, cidHash])
   @@index([patientAddress])
   @@index([granteeAddress])
+  @@index([parentConsentId])
 }
 
 // Doctor Verification Request - for Ministry/Org to verify doctors
