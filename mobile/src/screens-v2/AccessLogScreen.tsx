@@ -183,23 +183,15 @@ const GroupCard = React.memo(function GroupCard({
 
     return (
         <ViCard padding={16} style={{ marginBottom: 10 }}>
-            <XStack style={{ alignItems: 'baseline', justifyContent: 'space-between', gap: 8 }}>
-                <Text
-                    style={{
-                        fontFamily: SANS_MEDIUM,
-                        fontSize: 15,
-                        color: EHR_ON_SURFACE,
-                        flex: 1,
-                    }}
-                    numberOfLines={1}
-                >
-                    {truncate(group.grantee)}
-                </Text>
+            {/* G.2 — resolve grantee wallet → name + specialty + hospital + verified badge */}
+            <XStack style={{ alignItems: 'flex-start', justifyContent: 'space-between', gap: 8, marginBottom: 8 }}>
+                <View style={{ flex: 1 }}>
+                    <UserChip address={group.grantee} expanded showAddress={false} />
+                </View>
                 <ViStatusChip status={statusToken} />
             </XStack>
             <Text
                 style={{
-                    marginTop: 4,
                     fontFamily: SANS,
                     fontSize: 12.5,
                     color: EHR_OUTLINE,
@@ -223,7 +215,7 @@ const GroupCard = React.memo(function GroupCard({
                     gap: 6,
                 }}
             >
-                <KV label="Hồ sơ gốc" value={`${group.rootCidHash.slice(0, 10)}…`} />
+                <KV label="Hồ sơ" value={<RecordChip cidHash={group.rootCidHash} />} />
                 {group.firstCreatedAt ? <KV label="Chia sẻ" value={formatDate(group.firstCreatedAt)} /> : null}
                 <KV label="Hết hạn" value={formatExpiry(group.latestExpiresAt)} />
             </View>

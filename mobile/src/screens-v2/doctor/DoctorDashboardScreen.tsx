@@ -42,6 +42,7 @@ import SharedRecordCard from '../../components/SharedRecordCard';
 import RoleSwitcher from '../../components/RoleSwitcher';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import LiabilityConfirmModal from '../../components/LiabilityConfirmModal';
+import { useUserProfile } from '../../components/UserChip';
 import ViCard from '../../components-v2/ViCard';
 import { ViSectionLabel } from '../../components-v2/ViChips';
 import keyShareService from '../../services/keyShare.service';
@@ -126,6 +127,25 @@ function formatViDateTop(d: Date) {
 }
 
 const truncate = (addr?: string) => (addr ? `${addr.slice(0, 6)}…${addr.slice(-4)}`.toUpperCase() : '0X00…0000');
+
+// G.2 — resolve patient wallet → real fullName for cinnabar pending claim
+// card. UserChip can't be used directly here because its built-in avatar +
+// dark-mode tokens don't compose against the cinnabar gradient. Inline-only
+// custom render via the same useUserProfile hook UserChip uses, so the
+// resolution call is dedupe'd if the same patient appears elsewhere.
+function PatientNameInline({
+    address,
+    style,
+    fallback,
+}: {
+    address?: string;
+    style: any;
+    fallback: string;
+}) {
+    const { data: profile } = useUserProfile(address);
+    const displayName = profile?.fullName ? `BN. ${profile.fullName}` : fallback;
+    return <Text style={style}>{displayName}</Text>;
+}
 
 function firstName(fullName?: string) {
     if (!fullName) return 'Bạn';
@@ -776,15 +796,15 @@ export default function DoctorDashboardScreen() {
                                                         opacity: 0.6,
                                                     }}
                                                 >
-                                                    <Text
+                                                    <PatientNameInline
+                                                        address={claim.patientAddress}
+                                                        fallback={`BN: ${truncate(claim.patientAddress)}`}
                                                         style={{
                                                             fontFamily: SANS_MEDIUM,
                                                             fontSize: 14,
                                                             color: EHR_ON_SURFACE,
                                                         }}
-                                                    >
-                                                        BN: {truncate(claim.patientAddress)}
-                                                    </Text>
+                                                    />
                                                     <Text
                                                         style={{
                                                             marginTop: 4,
@@ -820,16 +840,16 @@ export default function DoctorDashboardScreen() {
                                                         }}
                                                     >
                                                         <YStack style={{ flex: 1 }}>
-                                                            <Text
+                                                            <PatientNameInline
+                                                                address={claim.patientAddress}
+                                                                fallback={truncate(claim.patientAddress)}
                                                                 style={{
                                                                     fontFamily: SERIF_MEDIUM,
                                                                     fontSize: 17,
                                                                     color: '#FAF7F1',
                                                                     letterSpacing: -0.2,
                                                                 }}
-                                                            >
-                                                                {truncate(claim.patientAddress)}
-                                                            </Text>
+                                                            />
                                                             <Text
                                                                 style={{
                                                                     marginTop: 4,

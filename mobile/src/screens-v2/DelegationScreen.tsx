@@ -29,6 +29,7 @@ import { Info, QrCode, Trash2, UserPlus, Users, X } from 'lucide-react-native';
 
 import LoadingSpinner from '../components/LoadingSpinner';
 import QrAddressScanner from '../components/QrAddressScanner';
+import UserChip from '../components/UserChip';
 import {
     useGrantAuthority,
     useMyDelegates,
@@ -84,34 +85,27 @@ function DelegationCard({
 
     return (
         <ViCard padding={16} style={{ marginBottom: 10 }}>
-            <XStack style={{ alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 10 }}>
-                <YStack style={{ flex: 1, paddingRight: 10 }}>
-                    <Text
-                        style={{
-                            fontFamily: 'monospace',
-                            fontSize: 13,
-                            color: EHR_ON_SURFACE,
-                            fontWeight: '600',
-                            marginBottom: 4,
-                        }}
-                    >
-                        {truncate(item.delegateeAddress)}
-                    </Text>
-                    <Text style={{ fontFamily: SANS, fontSize: 12, color: EHR_OUTLINE }}>
+            <XStack style={{ alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 10, gap: 8 }}>
+                <View style={{ flex: 1 }}>
+                    {/* G.2 — delegatee wallet → UserChip resolves doctor name + specialty + hospital */}
+                    <UserChip address={item.delegateeAddress} expanded showAddress={false} />
+                    <Text style={{ fontFamily: SANS, fontSize: 12, color: EHR_OUTLINE, marginTop: 6 }}>
                         {item.chainDepth === 1
                             ? 'Uỷ quyền trực tiếp'
                             : `Chuỗi uỷ quyền ${item.chainDepth} cấp`}
                         {item.allowSubDelegate ? ' · cho phép uỷ quyền tiếp' : ''}
                     </Text>
-                </YStack>
+                </View>
                 <ViStatusChip status={token} />
             </XStack>
 
             {item.parentDelegator ? (
-                <Text style={{ fontFamily: SANS, fontSize: 11.5, color: EHR_OUTLINE, marginBottom: 4 }}>
-                    Từ:{' '}
-                    <Text style={{ fontFamily: 'monospace' }}>{truncate(item.parentDelegator)}</Text>
-                </Text>
+                <View style={{ marginBottom: 6 }}>
+                    <Text style={{ fontFamily: SANS, fontSize: 11.5, color: EHR_OUTLINE, marginBottom: 4 }}>
+                        Uỷ quyền từ:
+                    </Text>
+                    <UserChip address={item.parentDelegator} showAddress={false} size="sm" interactive={false} />
+                </View>
             ) : null}
             <Text style={{ fontFamily: SANS, fontSize: 11.5, color: EHR_OUTLINE, marginBottom: 4 }}>
                 Hết hạn: {formatExpiry(item.expiresAt)}

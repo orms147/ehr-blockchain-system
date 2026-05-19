@@ -42,6 +42,7 @@ import { createPublicClient, http } from 'viem';
 import { arbitrumSepolia } from 'viem/chains';
 
 import LoadingSpinner from '../../components/LoadingSpinner';
+import UserChip from '../../components/UserChip';
 import localRecordStore from '../../services/localRecordStore';
 import api from '../../services/api';
 import recordService from '../../services/record.service';
@@ -730,20 +731,13 @@ function PatientRecordsDrawer({
                         borderColor: EHR_OUTLINE_SOFT,
                     }}
                 >
-                    <YStack style={{ flex: 1 }}>
+                    <View style={{ flex: 1 }}>
+                        {patient ? (
+                            <UserChip address={patient.patientAddress} expanded showAddress={false} />
+                        ) : null}
                         <Text
                             style={{
-                                fontFamily: SERIF,
-                                fontSize: 18,
-                                color: EHR_ON_SURFACE,
-                                letterSpacing: -0.2,
-                            }}
-                        >
-                            BN {patient ? truncate(patient.patientAddress) : ''}
-                        </Text>
-                        <Text
-                            style={{
-                                marginTop: 2,
+                                marginTop: 6,
                                 fontFamily: SANS,
                                 fontSize: 11.5,
                                 color: EHR_OUTLINE,
@@ -752,7 +746,7 @@ function PatientRecordsDrawer({
                             Hết hạn: {patient ? formatExpiry(patient.expiresAt) : ''}
                             {patient?.allowSubDelegate ? ' · uỷ quyền tiếp được' : ''}
                         </Text>
-                    </YStack>
+                    </View>
                     <Pressable onPress={onClose} hitSlop={8}>
                         <X size={20} color={EHR_OUTLINE} />
                     </Pressable>
@@ -857,32 +851,23 @@ export default function DoctorDelegatedPatientsScreen() {
                 style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
             >
                 <ViCard padding={16} style={{ marginBottom: 10, opacity: isExpired ? 0.6 : 1 }}>
-                    <XStack style={{ alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 6 }}>
-                        <YStack style={{ flex: 1, paddingRight: 10 }}>
-                            <XStack style={{ alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                                <Stethoscope size={13} color={EHR_PRIMARY} />
-                                <Text
-                                    style={{
-                                        fontFamily: 'monospace',
-                                        fontSize: 13,
-                                        color: EHR_ON_SURFACE,
-                                        fontWeight: '700',
-                                    }}
-                                >
-                                    {truncate(item.patientAddress)}
-                                </Text>
-                            </XStack>
-                            <Text style={{ fontFamily: SANS, fontSize: 12, color: EHR_OUTLINE }}>
+                    <XStack style={{ alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 6, gap: 8 }}>
+                        <View style={{ flex: 1 }}>
+                            {/* G.2 — patient wallet → UserChip resolves real name + nationalId tag */}
+                            <UserChip address={item.patientAddress} expanded showAddress={false} />
+                            <Text style={{ fontFamily: SANS, fontSize: 12, color: EHR_OUTLINE, marginTop: 6 }}>
                                 {item.chainDepth === 1
                                     ? 'Uỷ quyền trực tiếp từ bệnh nhân'
                                     : `Chuỗi uỷ quyền cấp ${item.chainDepth}`}
                                 {item.allowSubDelegate ? ' · uỷ quyền tiếp được' : ''}
                             </Text>
                             {item.parentDelegator ? (
-                                <Text style={{ fontFamily: SANS, fontSize: 11, color: EHR_OUTLINE, marginTop: 3 }}>
-                                    Từ bác sĩ:{' '}
-                                    <Text style={{ fontFamily: 'monospace' }}>{truncate(item.parentDelegator)}</Text>
-                                </Text>
+                                <View style={{ marginTop: 6 }}>
+                                    <Text style={{ fontFamily: SANS, fontSize: 11, color: EHR_OUTLINE, marginBottom: 3 }}>
+                                        Uỷ quyền từ bác sĩ:
+                                    </Text>
+                                    <UserChip address={item.parentDelegator} showAddress={false} size="sm" interactive={false} />
+                                </View>
                             ) : null}
                             <Text style={{ fontFamily: SANS, fontSize: 11, color: EHR_OUTLINE, marginTop: 3 }}>
                                 Hết hạn: {formatExpiry(item.expiresAt)}
@@ -895,7 +880,7 @@ export default function DoctorDelegatedPatientsScreen() {
                                     Phạm vi: {item.scopeNote}
                                 </Text>
                             ) : null}
-                        </YStack>
+                        </View>
                         <ViStatusChip status={isExpired ? 'expired' : 'active'} />
                     </XStack>
                     {!isExpired ? (

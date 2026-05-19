@@ -13,6 +13,7 @@ import { Send, Clock, CheckCircle, XCircle, ShieldCheck } from 'lucide-react-nat
 import { useQuery } from '@tanstack/react-query';
 
 import LoadingSpinner from '../../components/LoadingSpinner';
+import UserChip from '../../components/UserChip';
 import useAuthStore from '../../store/authStore';
 import api from '../../services/api';
 import ViCard from '../../components-v2/ViCard';
@@ -67,34 +68,14 @@ function OutgoingRow({ item }: { item: RequestItem }) {
     const cfg = getStatusConfig(item.status);
     return (
         <ViCard padding={14} style={{ marginBottom: 10 }}>
-            <XStack style={{ alignItems: 'center', gap: 10, marginBottom: 6 }}>
-                <View
-                    style={{
-                        width: 36,
-                        height: 36,
-                        borderRadius: 18,
-                        backgroundColor: `${EHR_PRIMARY}1A`,
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                    }}
-                >
-                    <Send size={14} color={EHR_PRIMARY} />
-                </View>
-                <YStack style={{ flex: 1 }}>
-                    <Text
-                        style={{
-                            fontFamily: SANS_SEMI,
-                            fontSize: 13.5,
-                            color: EHR_ON_SURFACE,
-                            fontWeight: '700',
-                        }}
-                    >
-                        BN: {truncate(item.patientAddress)}
-                    </Text>
-                    <Text style={{ fontFamily: SANS, fontSize: 11.5, color: EHR_OUTLINE, marginTop: 2 }}>
+            <XStack style={{ alignItems: 'flex-start', gap: 10, marginBottom: 6 }}>
+                <View style={{ flex: 1 }}>
+                    {/* G.2 — patient wallet → UserChip (no expanded, single line for tight row) */}
+                    <UserChip address={item.patientAddress} showAddress={false} />
+                    <Text style={{ fontFamily: SANS, fontSize: 11.5, color: EHR_OUTLINE, marginTop: 4 }}>
                         {formatDate(item.createdAt)}
                     </Text>
-                </YStack>
+                </View>
                 <View
                     style={{
                         flexDirection: 'row',

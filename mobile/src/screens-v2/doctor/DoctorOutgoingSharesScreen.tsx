@@ -14,6 +14,7 @@ import { Text, XStack, YStack } from 'tamagui';
 import { ShieldOff, Share2, FileText, Clock } from 'lucide-react-native';
 
 import keyShareService from '../../services/keyShare.service';
+import UserChip from '../../components/UserChip';
 import ViCard from '../../components-v2/ViCard';
 import ViButton from '../../components-v2/ViButton';
 import {
@@ -174,7 +175,13 @@ export default function DoctorOutgoingSharesScreen() {
                     ) : null}
                 </XStack>
 
-                <KV label="Người nhận" value={truncate(recipient)} mono />
+                <YStack style={{ marginVertical: 4 }}>
+                    <Text style={kvLabelStyle}>Người nhận</Text>
+                    <View style={{ marginTop: 4 }}>
+                        {/* G.2 — recipient wallet → UserChip resolves name + role + verified */}
+                        <UserChip address={recipient} showAddress={false} expanded interactive={false} />
+                    </View>
+                </YStack>
                 <XStack style={{ gap: 14, marginTop: 8 }}>
                     <YStack style={{ flex: 1 }}>
                         <Text style={kvLabelStyle}>Hết hạn</Text>

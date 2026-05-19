@@ -21,6 +21,7 @@ import { Bell, Check, X, Clock, User, FilePlus2 } from 'lucide-react-native';
 import { Text, XStack, YStack } from 'tamagui';
 
 import LoadingSpinner from '../components/LoadingSpinner';
+import UserChip from '../components/UserChip';
 import useRequests from '../hooks/useRequests';
 import requestService from '../services/request.service';
 import authService from '../services/auth.service';
@@ -161,29 +162,11 @@ const RequestRow = React.memo(function RequestRow({
 
     return (
         <ViCard padding={16} style={{ marginBottom: 12 }}>
-            <XStack style={{ alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 10 }}>
-                <YStack style={{ flex: 1, paddingRight: 10 }}>
-                    <Text
-                        style={{
-                            fontFamily: SANS_SEMI,
-                            fontSize: 14.5,
-                            color: EHR_ON_SURFACE,
-                            fontWeight: '700',
-                            marginBottom: 4,
-                        }}
-                    >
-                        Yêu cầu truy cập hồ sơ
-                    </Text>
-                    <XStack style={{ alignItems: 'center', gap: 6 }}>
-                        <User size={13} color={EHR_OUTLINE} />
-                        <Text
-                            style={{ fontFamily: 'monospace', fontSize: 12, color: EHR_OUTLINE }}
-                            numberOfLines={1}
-                        >
-                            {truncate(item.requesterAddress)}
-                        </Text>
-                    </XStack>
-                </YStack>
+            <XStack style={{ alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 10, gap: 8 }}>
+                <View style={{ flex: 1 }}>
+                    {/* G.2 — requester wallet → UserChip resolves name + specialty + hospital + verified badge */}
+                    <UserChip address={item.requesterAddress} expanded showAddress={false} />
+                </View>
                 <ViStatusChip status={statusToken(normalizedStatus)} />
             </XStack>
 
