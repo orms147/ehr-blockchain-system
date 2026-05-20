@@ -26,6 +26,10 @@ import {
     UserCheck,
     QrCode,
     Siren,
+    Sun,
+    Moon,
+    Smartphone,
+    Check,
 } from 'lucide-react-native';
 
 import LoadingSpinner from '../components/LoadingSpinner';
@@ -38,6 +42,7 @@ import useAuthStore from '../store/authStore';
 import ViCard from '../components-v2/ViCard';
 import { ViSectionLabel } from '../components-v2/ViChips';
 import { useEhrPalette } from '../constants/uiColors';
+import { useThemePreference, type ThemePreference } from '../constants/themeContext';
 
 const SERIF = 'Fraunces_400Regular';
 const SERIF_MEDIUM = 'Fraunces_500Medium';
@@ -57,6 +62,7 @@ export default function ProfileScreen() {
     const palette = useEhrPalette();
     const navigation = useNavigation<any>();
     const { user, logout, token } = useAuthStore();
+    const { preference: themePref, setPreference: setThemePref } = useThemePreference();
     const [profile, setProfile] = useState<any>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [addressModalOpen, setAddressModalOpen] = useState(false);
@@ -260,6 +266,38 @@ export default function ProfileScreen() {
                     </ViCard>
                 </View>
 
+                {/* G.12 — Giao diện section per user request: theme toggle visible on Profile tab */}
+                <ViSectionLabel>Giao diện</ViSectionLabel>
+                <View style={{ paddingHorizontal: 20, marginBottom: 18 }}>
+                    <ViCard padding={0}>
+                        <ThemeRow
+                            icon={<Smartphone size={18} color={palette.EHR_ON_SURFACE_VARIANT} />}
+                            title="Tự động"
+                            sub="Theo cài đặt hệ thống"
+                            selected={themePref === 'auto'}
+                            onPress={() => setThemePref('auto')}
+                            palette={palette}
+                        />
+                        <ThemeRow
+                            icon={<Sun size={18} color={palette.EHR_ON_SURFACE_VARIANT} />}
+                            title="Sáng"
+                            sub="Giấy gạo · ban ngày"
+                            selected={themePref === 'light'}
+                            onPress={() => setThemePref('light')}
+                            palette={palette}
+                        />
+                        <ThemeRow
+                            icon={<Moon size={18} color={palette.EHR_ON_SURFACE_VARIANT} />}
+                            title="Tối"
+                            sub="Mực đen · mặc định thương hiệu"
+                            selected={themePref === 'dark'}
+                            onPress={() => setThemePref('dark')}
+                            palette={palette}
+                            last
+                        />
+                    </ViCard>
+                </View>
+
                 <ViSectionLabel>Hỗ trợ</ViSectionLabel>
                 <View style={{ paddingHorizontal: 20, marginBottom: 14 }}>
                     <ViCard padding={0}>
@@ -398,6 +436,78 @@ function MenuRow({
                 {label}
             </Text>
             {!danger ? <ChevronRight size={16} color={palette.EHR_TEXT_MUTED} /> : null}
+        </Pressable>
+    );
+}
+
+// ───────── ThemeRow (3-radio choice for theme preference) ─────────
+function ThemeRow({
+    icon,
+    title,
+    sub,
+    selected,
+    onPress,
+    palette,
+    last,
+}: {
+    icon: React.ReactNode;
+    title: string;
+    sub: string;
+    selected: boolean;
+    onPress: () => void;
+    palette: ReturnType<typeof useEhrPalette>;
+    last?: boolean;
+}) {
+    return (
+        <Pressable
+            onPress={onPress}
+            style={({ pressed }) => ({
+                flexDirection: 'row',
+                alignItems: 'center',
+                paddingVertical: 14,
+                paddingHorizontal: 16,
+                borderBottomWidth: last ? 0 : 0.5,
+                borderColor: palette.EHR_OUTLINE_SOFT,
+                opacity: pressed ? 0.6 : 1,
+            })}
+        >
+            <View style={{ width: 20, alignItems: 'center' }}>{icon}</View>
+            <View style={{ flex: 1, marginLeft: 12 }}>
+                <Text
+                    style={{
+                        fontFamily: SANS_MEDIUM,
+                        fontSize: 14,
+                        color: palette.EHR_ON_SURFACE,
+                    }}
+                >
+                    {title}
+                </Text>
+                <Text
+                    style={{
+                        marginTop: 2,
+                        fontFamily: SANS,
+                        fontSize: 11.5,
+                        color: palette.EHR_TEXT_MUTED,
+                        lineHeight: 16,
+                    }}
+                >
+                    {sub}
+                </Text>
+            </View>
+            <View
+                style={{
+                    width: 22,
+                    height: 22,
+                    borderRadius: 11,
+                    borderWidth: selected ? 0 : 1.5,
+                    borderColor: palette.EHR_OUTLINE,
+                    backgroundColor: selected ? palette.EHR_PRIMARY : 'transparent',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                }}
+            >
+                {selected ? <Check size={14} color="#FBF8F1" strokeWidth={2.5} /> : null}
+            </View>
         </Pressable>
     );
 }
