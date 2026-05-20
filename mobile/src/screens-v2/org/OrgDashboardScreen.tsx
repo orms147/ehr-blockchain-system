@@ -19,6 +19,7 @@ import {
     EHR_ON_SURFACE_VARIANT,
     EHR_OUTLINE,
     EHR_OUTLINE_SOFT,
+    EHR_OUTLINE_VARIANT,
     EHR_PRIMARY,
     EHR_TERTIARY,
     EHR_WARNING,
@@ -299,10 +300,21 @@ export default function OrgDashboardScreen() {
                             </Text>
                         </ViCard>
 
-                        <XStack style={{ gap: 10, marginBottom: 16 }}>
-                            <StatTile icon={<Users size={16} color={EHR_PRIMARY} />} value={members.length} label="Thành viên" tint={EHR_PRIMARY} />
-                            <StatTile icon={<Shield size={16} color={EHR_TERTIARY} />} value={verifiedCount} label="Đã xác thực" tint={EHR_TERTIARY} />
-                        </XStack>
+                        {/* G.5 — inline hairline stats (no ViCard wrap) */}
+                        <View
+                            style={{
+                                marginBottom: 16,
+                                borderTopWidth: 0.5,
+                                borderBottomWidth: 0.5,
+                                borderColor: EHR_OUTLINE_VARIANT,
+                            }}
+                        >
+                            <XStack>
+                                <StatTile icon={<Users size={16} color={EHR_PRIMARY} />} value={members.length} label="Thành viên" tint={EHR_PRIMARY} />
+                                <View style={{ width: 0.5, alignSelf: 'stretch', backgroundColor: EHR_OUTLINE_SOFT }} />
+                                <StatTile icon={<Shield size={16} color={EHR_TERTIARY} />} value={verifiedCount} label="Đã xác thực" tint={EHR_TERTIARY} />
+                            </XStack>
+                        </View>
 
                         <Text
                             style={{
@@ -346,8 +358,10 @@ function StatTile({
     label: string;
     tint: string;
 }) {
+    // G.5 — inline cell, 14×14 padding meets 60pt min touch target. No card wrap.
+    void tint;
     return (
-        <ViCard padding={12} style={{ flex: 1, alignItems: 'center' }}>
+        <YStack style={{ flex: 1, alignItems: 'center', paddingVertical: 14, paddingHorizontal: 14 }}>
             {icon}
             <Text
                 style={{
@@ -373,7 +387,7 @@ function StatTile({
             >
                 {label}
             </Text>
-        </ViCard>
+        </YStack>
     );
 }
 

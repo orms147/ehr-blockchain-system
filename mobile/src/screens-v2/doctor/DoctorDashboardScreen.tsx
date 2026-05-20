@@ -60,6 +60,7 @@ import {
     EHR_ON_SURFACE_VARIANT,
     EHR_OUTLINE,
     EHR_OUTLINE_SOFT,
+    EHR_OUTLINE_VARIANT,
     EHR_PRIMARY,
     EHR_PRIMARY_CONTAINER,
     EHR_TERTIARY,
@@ -663,25 +664,31 @@ export default function DoctorDashboardScreen() {
                             </XStack>
                         </View>
 
-                        {/* ───────── Stats strip ───────── */}
-                        <View style={{ paddingHorizontal: 22, marginBottom: 22 }}>
-                            <ViCard padding={16}>
-                                <XStack>
-                                    <DocStat
-                                        n={pendingClaims.length}
-                                        label="Chờ nhận"
-                                        accent={EHR_PRIMARY}
-                                    />
-                                    <Divider />
-                                    <DocStat n={uniquePatients} label="Bệnh nhân" />
-                                    <Divider />
-                                    <DocStat
-                                        n={sharedRecords.length}
-                                        label="Hồ sơ"
-                                        accent={EHR_TERTIARY}
-                                    />
-                                </XStack>
-                            </ViCard>
+                        {/* ───────── Stats strip — inline hairline per G.5 ───────── */}
+                        <View
+                            style={{
+                                marginHorizontal: 22,
+                                marginBottom: 22,
+                                borderTopWidth: 0.5,
+                                borderBottomWidth: 0.5,
+                                borderColor: EHR_OUTLINE_VARIANT,
+                            }}
+                        >
+                            <XStack>
+                                <DocStat
+                                    n={pendingClaims.length}
+                                    label="Chờ nhận"
+                                    accent={EHR_PRIMARY}
+                                />
+                                <Divider />
+                                <DocStat n={uniquePatients} label="Bệnh nhân" />
+                                <Divider />
+                                <DocStat
+                                    n={sharedRecords.length}
+                                    label="Hồ sơ"
+                                    accent={EHR_TERTIARY}
+                                />
+                            </XStack>
                         </View>
 
                         {/* ───────── Quick actions — 2x2 grid ───────── */}
@@ -1033,8 +1040,9 @@ export default function DoctorDashboardScreen() {
 
 // ───────── DocStat (centered stat column inside strip) ─────────
 function DocStat({ n, label, accent }: { n: number | string; label: string; accent?: string }) {
+    // G.5 — inline cell: 14×14 padding meets 60pt min touch target.
     return (
-        <YStack style={{ flex: 1, alignItems: 'center' }}>
+        <YStack style={{ flex: 1, alignItems: 'center', paddingVertical: 14, paddingHorizontal: 14 }}>
             <Text
                 style={{
                     fontFamily: SERIF_MEDIUM,

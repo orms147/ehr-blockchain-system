@@ -29,6 +29,7 @@ import {
     EHR_ON_SURFACE_VARIANT,
     EHR_OUTLINE,
     EHR_OUTLINE_SOFT,
+    EHR_OUTLINE_VARIANT,
     EHR_PRIMARY,
     EHR_TERTIARY,
     EHR_WARNING,
@@ -176,26 +177,38 @@ export default function MinistryDashboardScreen() {
                     <RoleSwitcher />
                 </XStack>
 
-                <XStack style={{ gap: 8, marginBottom: 16 }}>
-                    <StatTile
-                        icon={<Landmark size={16} color={EHR_PRIMARY} />}
-                        value={organizations.length}
-                        label="Tổ chức"
-                        tint={EHR_PRIMARY}
-                    />
-                    <StatTile
-                        icon={<ShieldCheck size={16} color={EHR_TERTIARY} />}
-                        value={verifiedCount}
-                        label="Đã duyệt"
-                        tint={EHR_TERTIARY}
-                    />
-                    <StatTile
-                        icon={<Hourglass size={16} color={EHR_WARNING} />}
-                        value={pendingApps.length}
-                        label="Chờ duyệt"
-                        tint={EHR_WARNING}
-                    />
-                </XStack>
+                {/* G.5 — inline hairline stats (no ViCard wrap) */}
+                <View
+                    style={{
+                        marginBottom: 16,
+                        borderTopWidth: 0.5,
+                        borderBottomWidth: 0.5,
+                        borderColor: EHR_OUTLINE_VARIANT,
+                    }}
+                >
+                    <XStack>
+                        <StatTile
+                            icon={<Landmark size={16} color={EHR_PRIMARY} />}
+                            value={organizations.length}
+                            label="Tổ chức"
+                            tint={EHR_PRIMARY}
+                        />
+                        <View style={{ width: 0.5, alignSelf: 'stretch', backgroundColor: EHR_OUTLINE_SOFT }} />
+                        <StatTile
+                            icon={<ShieldCheck size={16} color={EHR_TERTIARY} />}
+                            value={verifiedCount}
+                            label="Đã duyệt"
+                            tint={EHR_TERTIARY}
+                        />
+                        <View style={{ width: 0.5, alignSelf: 'stretch', backgroundColor: EHR_OUTLINE_SOFT }} />
+                        <StatTile
+                            icon={<Hourglass size={16} color={EHR_WARNING} />}
+                            value={pendingApps.length}
+                            label="Chờ duyệt"
+                            tint={EHR_WARNING}
+                        />
+                    </XStack>
+                </View>
 
                 {/* Tab switcher */}
                 <View style={{ flexDirection: 'row', gap: 6, marginBottom: 14 }}>
@@ -403,8 +416,10 @@ function StatTile({
     label: string;
     tint: string;
 }) {
+    // G.5 — inline cell, 14×14 padding meets 60pt min touch target. No card wrap.
+    void tint;
     return (
-        <ViCard padding={12} style={{ flex: 1, alignItems: 'center' }}>
+        <YStack style={{ flex: 1, alignItems: 'center', paddingVertical: 14, paddingHorizontal: 14 }}>
             {icon}
             <Text
                 style={{
@@ -430,6 +445,6 @@ function StatTile({
             >
                 {label}
             </Text>
-        </ViCard>
+        </YStack>
     );
 }
