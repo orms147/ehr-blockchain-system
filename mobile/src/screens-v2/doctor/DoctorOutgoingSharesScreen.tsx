@@ -1,28 +1,39 @@
-// DoctorOutgoingSharesScreen v2 — port of screens/doctor.
-// Doctor xem hồ sơ đã re-share cho bác sĩ khác + revoke.
+// DoctorOutgoingSharesScreen v2 — G.12.m text-rhythm row per Claude Design
+// `viehp-doctor-extras.html#L262-317` OutgoingShareRow:
+//
+// Row anatomy:
+//   Title (ink bold 14.5pt)
+//   của <patient> (secondary 12pt)
+//   Trao cho ↗ BS. X · BV Y  (mono caps "Trao cho" + arrow + recipient resolved)
+//   ● status-color  "Còn Nd" / "Sắp hết · còn Nd" / "Đã thu hồi · DD" / "Hết hạn · DD"  · mode  [Thu hồi cinnabar outline pill if live]
+//   ─────────────  bottom hairline
+//   Dead rows: opacity 0.58
+//
+// Filter chips: Đang mở / Hết hạn / Đã thu hồi / Tất cả (with counts)
+// Footer legal note about on-chain trail.
 //
 // Wiring preserved:
 //   - keyShareService.getSentKeys + revokeKey
 //   - Dedupe by (rootCidHash, recipient) tuple
-//   - Cascade revoke flips DB encryptedPayload to null (DB-level off-chain)
+//   - UserChip resolution for recipient name + hospital
 
 import React, { useMemo, useState } from 'react';
-import { Alert, FlatList, RefreshControl, View } from 'react-native';
+import { Alert, FlatList, Pressable, RefreshControl, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Text, XStack, YStack } from 'tamagui';
-import { ShieldOff, Share2, FileText, Clock } from 'lucide-react-native';
+import { Share2 } from 'lucide-react-native';
 
 import keyShareService from '../../services/keyShare.service';
-import UserChip from '../../components/UserChip';
-import ViCard from '../../components-v2/ViCard';
-import ViButton from '../../components-v2/ViButton';
+import { useUserProfile } from '../../components/UserChip';
 import { useEhrPalette } from '../../constants/uiColors';
 
 const SERIF = 'Fraunces_400Regular';
+const SERIF_ITALIC = 'Fraunces_400Regular_Italic';
 const SANS = 'DMSans_400Regular';
 const SANS_MEDIUM = 'DMSans_500Medium';
 const SANS_SEMI = 'DMSans_600SemiBold';
+const MONO = 'monospace';
 
 type SentShare = {
     id: string;
@@ -33,33 +44,47 @@ type SentShare = {
     allowDelegate?: boolean;
     expiresAt?: string | null;
     createdAt?: string;
+    revokedAt?: string | null;
     parentCidHash?: string | null;
     rootCidHash?: string;
-    record?: { cidHash?: string; parentCidHash?: string | null; title?: string };
+    record?: { cidHash?: string; parentCidHash?: string | null; title?: string; ownerAddress?: string };
     recipient?: { walletAddress?: string };
 };
 
 const truncate = (addr: string) => (addr ? `${addr.slice(0, 6)}…${addr.slice(-4)}` : '?');
 
-const formatExpiry = (iso?: string | null) => {
-    if (!iso) return 'Vĩnh viễn';
-    const d = new Date(iso);
-    if (Number.isNaN(d.getTime())) return '?';
-    return d.toLocaleString('vi-VN', {
-        day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit',
-    });
-};
+function formatVnDate(iso?: string | null): string {
+    if (!iso) return '—';
+    try {
+        const d = new Date(iso);
+        const dd = String(d.getDate()).padStart(2, '0');
+        const mm = String(d.getMonth() + 1).padStart(2, '0');
+        return `${dd}·${mm}·${d.getFullYear()}`;
+    } catch {
+        return '—';
+    }
+}
 
-const isInactive = (s: SentShare) => {
+function daysLeft(iso?: string | null): number | null {
+    if (!iso) return null;
+    const ms = new Date(iso).getTime() - Date.now();
+    if (ms <= 0) return 0;
+    return Math.ceil(ms / (24 * 60 * 60 * 1000));
+}
+
+type ShareStatus = 'active' | 'expired' | 'revoked';
+function classify(s: SentShare): ShareStatus {
     const status = (s.status || '').toLowerCase();
-    if (status === 'revoked' || status === 'rejected' || status === 'expired') return true;
-    if (s.expiresAt && new Date(s.expiresAt).getTime() < Date.now()) return true;
-    return false;
-};
+    if (status === 'revoked' || status === 'rejected') return 'revoked';
+    if (status === 'expired') return 'expired';
+    if (s.expiresAt && new Date(s.expiresAt).getTime() < Date.now()) return 'expired';
+    return 'active';
+}
 
 export default function DoctorOutgoingSharesScreen() {
     const palette = useEhrPalette();
     const queryClient = useQueryClient();
+    const [filter, setFilter] = useState<ShareStatus | 'all'>('active');
     const [revokingId, setRevokingId] = useState<string | null>(null);
 
     const { data = [], isLoading, refetch, isRefetching } = useQuery<SentShare[]>({
@@ -86,21 +111,25 @@ export default function DoctorOutgoingSharesScreen() {
         return Array.from(byKey.values());
     }, [data]);
 
-    const { active, inactive } = useMemo(() => {
-        const a: SentShare[] = [];
-        const i: SentShare[] = [];
+    const counts = useMemo(() => {
+        const c = { all: grouped.length, active: 0, expired: 0, revoked: 0 };
         for (const s of grouped) {
-            (isInactive(s) ? i : a).push(s);
+            const cls = classify(s);
+            c[cls] += 1;
         }
-        return { active: a, inactive: i };
+        return c;
     }, [grouped]);
+
+    const filtered = useMemo(() => {
+        if (filter === 'all') return grouped;
+        return grouped.filter((s) => classify(s) === filter);
+    }, [grouped, filter]);
 
     const handleRevoke = (item: SentShare) => {
         const recipient = item.recipient?.walletAddress || item.recipientAddress;
         Alert.alert(
             'Thu hồi quyền truy cập',
-            `Bác sĩ ${truncate(recipient)} sẽ KHÔNG còn đọc được hồ sơ "${item.record?.title || truncate(item.cidHash)}".\n\n` +
-            'Lưu ý: thu hồi tức thì ở mức ứng dụng (xoá khoá chia sẻ). Quyền on-chain do bệnh nhân quản lý.',
+            `Bác sĩ ${truncate(recipient)} sẽ KHÔNG còn đọc được hồ sơ.\n\nLưu ý: thu hồi tức thì ở mức ứng dụng.`,
             [
                 { text: 'Huỷ', style: 'cancel' },
                 {
@@ -125,135 +154,12 @@ export default function DoctorOutgoingSharesScreen() {
         );
     };
 
-    const renderItem = ({ item }: { item: SentShare }) => {
-        const inactiveRow = isInactive(item);
-        const recipient = item.recipient?.walletAddress || item.recipientAddress;
-        const title = item.record?.title || `Hồ sơ ${truncate(item.cidHash)}`;
-        return (
-            <ViCard padding={14} style={{ marginBottom: 10, opacity: inactiveRow ? 0.65 : 1 }}>
-                <XStack style={{ alignItems: 'center', justifyContent: 'space-between', marginBottom: 8, gap: 8 }}>
-                    <XStack style={{ alignItems: 'center', flex: 1, gap: 8 }}>
-                        <FileText size={14} color={palette.EHR_PRIMARY} />
-                        <Text
-                            style={{
-                                fontFamily: SANS_SEMI,
-                                fontSize: 14,
-                                color: palette.EHR_ON_SURFACE,
-                                fontWeight: '700',
-                                flex: 1,
-                            }}
-                            numberOfLines={1}
-                        >
-                            {title}
-                        </Text>
-                    </XStack>
-                    {item.allowDelegate ? (
-                        <View
-                            style={{
-                                flexDirection: 'row',
-                                alignItems: 'center',
-                                gap: 4,
-                                paddingHorizontal: 8,
-                                paddingVertical: 3,
-                                borderRadius: 999,
-                                backgroundColor: palette.EHR_PRIMARY_FIXED,
-                            }}
-                        >
-                            <Share2 size={10} color={palette.EHR_PRIMARY} />
-                            <Text style={{ fontFamily: SANS_SEMI, fontSize: 10, color: palette.EHR_PRIMARY, fontWeight: '700' }}>
-                                Chia sẻ lại
-                            </Text>
-                        </View>
-                    ) : null}
-                </XStack>
-
-                <YStack style={{ marginVertical: 4 }}>
-                    <Text style={{ fontFamily: SANS_SEMI, fontSize: 10.5, color: palette.EHR_TEXT_MUTED, letterSpacing: 0.4, textTransform: 'uppercase' as const, fontWeight: '600' as const, marginBottom: 2 }}>Người nhận</Text>
-                    <View style={{ marginTop: 4 }}>
-                        {/* G.2 — recipient wallet → UserChip resolves name + role + verified */}
-                        <UserChip address={recipient} showAddress={false} expanded interactive={false} />
-                    </View>
-                </YStack>
-                <XStack style={{ gap: 14, marginTop: 8 }}>
-                    <YStack style={{ flex: 1 }}>
-                        <Text style={{ fontFamily: SANS_SEMI, fontSize: 10.5, color: palette.EHR_TEXT_MUTED, letterSpacing: 0.4, textTransform: 'uppercase' as const, fontWeight: '600' as const, marginBottom: 2 }}>Hết hạn</Text>
-                        <XStack style={{ alignItems: 'center', gap: 4 }}>
-                            <Clock size={11} color={palette.EHR_TEXT_MUTED} />
-                            <Text style={{ fontFamily: SANS_MEDIUM, fontSize: 12.5, color: palette.EHR_ON_SURFACE, fontWeight: '600' as const }}>{formatExpiry(item.expiresAt)}</Text>
-                        </XStack>
-                    </YStack>
-                    <YStack style={{ flex: 1 }}>
-                        <Text style={{ fontFamily: SANS_SEMI, fontSize: 10.5, color: palette.EHR_TEXT_MUTED, letterSpacing: 0.4, textTransform: 'uppercase' as const, fontWeight: '600' as const, marginBottom: 2 }}>Trạng thái</Text>
-                        <Text
-                            style={[
-                                { fontFamily: SANS_MEDIUM, fontSize: 12.5, color: palette.EHR_ON_SURFACE, fontWeight: '600' as const },
-                                inactiveRow ? { color: palette.EHR_DANGER } : null,
-                            ]}
-                        >
-                            {(() => {
-                                const s = String(item.status || '').toLowerCase();
-                                if (s === 'revoked') return 'Đã thu hồi';
-                                if (s === 'rejected') return 'BS từ chối';
-                                if (s === 'expired') return 'Hết hạn';
-                                if (item.expiresAt && new Date(item.expiresAt).getTime() < Date.now()) return 'Hết hạn';
-                                return 'Đang hoạt động';
-                            })()}
-                        </Text>
-                    </YStack>
-                </XStack>
-
-                {!inactiveRow ? (
-                    <View style={{ marginTop: 12 }}>
-                        <ViButton
-                            variant="danger"
-                            full
-                            size="sm"
-                            loading={revokingId === item.id}
-                            onPress={() => handleRevoke(item)}
-                            leftIcon={<ShieldOff size={14} color={palette.EHR_DANGER} />}
-                        >
-                            {revokingId === item.id ? 'Đang thu hồi…' : 'Thu hồi quyền'}
-                        </ViButton>
-                    </View>
-                ) : null}
-            </ViCard>
-        );
-    };
-
-    const list = [...active, ...inactive];
-
     return (
         <SafeAreaView style={{ flex: 1, backgroundColor: palette.EHR_SURFACE }}>
-            <View style={{ paddingHorizontal: 20, paddingTop: 14, paddingBottom: 12 }}>
-                <Text
-                    style={{
-                        fontFamily: SERIF,
-                        fontSize: 26,
-                        color: palette.EHR_ON_SURFACE,
-                        letterSpacing: -0.4,
-                        lineHeight: 30,
-                    }}
-                >
-                    Đã chia sẻ lại
-                </Text>
-                <Text
-                    style={{
-                        marginTop: 4,
-                        fontFamily: SANS,
-                        fontSize: 13,
-                        color: palette.EHR_ON_SURFACE_VARIANT,
-                        lineHeight: 19,
-                    }}
-                >
-                    Hồ sơ bạn đã uỷ quyền cho bác sĩ khác. Bấm "Thu hồi" để chấm dứt.
-                </Text>
-            </View>
-
             <FlatList
-                data={list}
+                data={filtered}
                 keyExtractor={(item) => item.id}
-                renderItem={renderItem}
-                contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 32 }}
+                contentContainerStyle={{ paddingBottom: 32 }}
                 refreshControl={
                     <RefreshControl
                         refreshing={isRefetching}
@@ -261,53 +167,338 @@ export default function DoctorOutgoingSharesScreen() {
                         tintColor={palette.EHR_ON_SURFACE_VARIANT}
                     />
                 }
+                ListHeaderComponent={
+                    <>
+                        {/* Editorial header */}
+                        <View style={{ paddingHorizontal: 22, paddingTop: 14, paddingBottom: 18 }}>
+                            <Text
+                                style={{
+                                    fontFamily: SANS_SEMI,
+                                    fontSize: 10,
+                                    color: palette.EHR_TEXT_MUTED,
+                                    letterSpacing: 1.4,
+                                    textTransform: 'uppercase',
+                                    fontWeight: '700',
+                                    marginBottom: 8,
+                                }}
+                            >
+                                Uỷ quyền · Hồ sơ ↗ đồng nghiệp
+                            </Text>
+                            <Text
+                                style={{
+                                    fontFamily: SERIF,
+                                    fontSize: 26,
+                                    color: palette.EHR_ON_SURFACE,
+                                    letterSpacing: -0.4,
+                                    lineHeight: 30,
+                                }}
+                            >
+                                Hồ sơ đã{' '}
+                                <Text style={{ fontFamily: SERIF_ITALIC, fontStyle: 'italic', color: palette.EHR_PRIMARY }}>
+                                    chia sẻ lại.
+                                </Text>
+                            </Text>
+                            <Text
+                                style={{
+                                    marginTop: 8,
+                                    fontFamily: SANS,
+                                    fontSize: 13,
+                                    color: palette.EHR_ON_SURFACE_VARIANT,
+                                    lineHeight: 19,
+                                }}
+                            >
+                                Các hồ sơ bạn được uỷ quyền và đã chuyển tiếp cho bác sĩ khác. Bạn có thể thu hồi sớm bất kỳ lúc nào.
+                            </Text>
+                        </View>
+
+                        {/* Filter chips */}
+                        <FilterChips
+                            value={filter}
+                            onChange={setFilter}
+                            options={[
+                                ['active', `Đang mở (${counts.active})`],
+                                ['expired', `Hết hạn (${counts.expired})`],
+                                ['revoked', `Đã thu hồi (${counts.revoked})`],
+                                ['all', `Tất cả (${counts.all})`],
+                            ]}
+                        />
+                    </>
+                }
+                renderItem={({ item, index }) => (
+                    <OutgoingShareRow
+                        item={item}
+                        last={index === filtered.length - 1}
+                        revoking={revokingId === item.id}
+                        onRevoke={() => handleRevoke(item)}
+                    />
+                )}
                 ListEmptyComponent={
-                    <View style={{ paddingTop: 30, alignItems: 'center' }}>
+                    <View style={{ paddingHorizontal: 30, paddingTop: 60, alignItems: 'center' }}>
                         <Share2 size={28} color={palette.EHR_TEXT_MUTED} />
                         <Text
                             style={{
-                                marginTop: 12,
-                                fontFamily: SANS,
-                                fontSize: 13,
-                                color: palette.EHR_TEXT_MUTED,
+                                marginTop: 14,
+                                fontFamily: SERIF,
+                                fontSize: 18,
+                                color: palette.EHR_ON_SURFACE,
                                 textAlign: 'center',
-                                maxWidth: 280,
-                                lineHeight: 19,
                             }}
                         >
-                            {isLoading ? 'Đang tải…' : 'Bạn chưa chia sẻ hồ sơ nào cho bác sĩ khác.'}
+                            {isLoading ? 'Đang tải…' : 'Chưa có hồ sơ chia sẻ lại'}
+                        </Text>
+                        <Text
+                            style={{
+                                marginTop: 10,
+                                fontFamily: SANS,
+                                fontSize: 12.5,
+                                color: palette.EHR_ON_SURFACE_VARIANT,
+                                textAlign: 'center',
+                                lineHeight: 19,
+                                maxWidth: 280,
+                            }}
+                        >
+                            Khi bạn uỷ quyền lại hồ sơ cho đồng nghiệp, danh sách sẽ hiển thị tại đây.
                         </Text>
                     </View>
+                }
+                ListFooterComponent={
+                    filtered.length > 0 ? (
+                        <View style={{ paddingHorizontal: 22, paddingTop: 20 }}>
+                            <Text
+                                style={{
+                                    fontFamily: SANS,
+                                    fontSize: 11,
+                                    color: palette.EHR_TEXT_MUTED,
+                                    lineHeight: 17,
+                                }}
+                            >
+                                Mỗi lần chia sẻ lại đều ghi sổ on-chain. Bệnh nhân thấy toàn bộ chuỗi:{' '}
+                                <Text style={{ color: palette.EHR_ON_SURFACE_VARIANT }}>
+                                    bệnh nhân → bạn → người nhận
+                                </Text>
+                                .
+                            </Text>
+                        </View>
+                    ) : null
                 }
             />
         </SafeAreaView>
     );
 }
 
-function KV({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
+// ──────── Filter chip row ────────
+function FilterChips({
+    value,
+    onChange,
+    options,
+}: {
+    value: ShareStatus | 'all';
+    onChange: (v: ShareStatus | 'all') => void;
+    options: [ShareStatus | 'all', string][];
+}) {
     const palette = useEhrPalette();
-    const kvLabelStyle = {
-        fontFamily: SANS_SEMI,
-        fontSize: 10.5,
-        color: palette.EHR_TEXT_MUTED,
-        letterSpacing: 0.4,
-        textTransform: 'uppercase' as const,
-        fontWeight: '600' as const,
-        marginBottom: 2,
-    };
-    const kvValueStyle = {
-        fontFamily: SANS_MEDIUM,
-        fontSize: 12.5,
-        color: palette.EHR_ON_SURFACE,
-        fontWeight: '600' as const,
-    };
     return (
-        <YStack>
-            <Text style={{ fontFamily: SANS_SEMI, fontSize: 10.5, color: palette.EHR_TEXT_MUTED, letterSpacing: 0.4, textTransform: 'uppercase' as const, fontWeight: '600' as const, marginBottom: 2 }}>{label}</Text>
-            <Text style={[kvValueStyle, mono ? { fontFamily: 'monospace', fontSize: 12 } : null]}>
-                {value}
-            </Text>
-        </YStack>
+        <View
+            style={{
+                paddingHorizontal: 22,
+                paddingBottom: 18,
+                flexDirection: 'row',
+                flexWrap: 'wrap',
+                gap: 6,
+            }}
+        >
+            {options.map(([key, label]) => {
+                const active = value === key;
+                return (
+                    <Pressable
+                        key={key}
+                        onPress={() => onChange(key)}
+                        style={({ pressed }) => ({
+                            paddingHorizontal: 13,
+                            paddingVertical: 7,
+                            borderRadius: 999,
+                            borderWidth: 0.5,
+                            borderColor: active ? palette.EHR_ON_SURFACE : palette.EHR_OUTLINE,
+                            backgroundColor: active ? palette.EHR_ON_SURFACE : 'transparent',
+                            opacity: pressed ? 0.7 : 1,
+                        })}
+                    >
+                        <Text
+                            style={{
+                                fontFamily: SANS_MEDIUM,
+                                fontSize: 12,
+                                color: active ? palette.EHR_SURFACE : palette.EHR_ON_SURFACE_VARIANT,
+                                fontWeight: '600',
+                            }}
+                        >
+                            {label}
+                        </Text>
+                    </Pressable>
+                );
+            })}
+        </View>
     );
 }
 
+// ──────── Outgoing share row ────────
+function OutgoingShareRow({
+    item,
+    last,
+    revoking,
+    onRevoke,
+}: {
+    item: SentShare;
+    last: boolean;
+    revoking: boolean;
+    onRevoke: () => void;
+}) {
+    const palette = useEhrPalette();
+    const recipient = item.recipient?.walletAddress || item.recipientAddress;
+    const patientAddress = item.record?.ownerAddress;
+    const { data: recipientProfile } = useUserProfile(recipient);
+    const { data: patientProfile } = useUserProfile(patientAddress);
+
+    const status = classify(item);
+    const isLive = status === 'active';
+    const isRevoked = status === 'revoked';
+
+    const dLeft = daysLeft(item.expiresAt);
+    const statusColor = isLive
+        ? (dLeft !== null && dLeft < 14 ? palette.EHR_WARNING : palette.EHR_TERTIARY)
+        : isRevoked
+            ? palette.EHR_PRIMARY
+            : palette.EHR_TEXT_MUTED;
+    const statusLabel = isLive
+        ? (dLeft !== null && dLeft < 14 ? `Sắp hết · còn ${dLeft} ngày` : `Còn ${dLeft ?? '∞'} ngày`)
+        : isRevoked
+            ? `Đã thu hồi · ${formatVnDate(item.revokedAt)}`
+            : `Hết hạn · ${formatVnDate(item.expiresAt)}`;
+
+    const title = item.record?.title || `Hồ sơ ${truncate(item.cidHash)}`;
+    const patientName = patientProfile?.fullName || (patientAddress ? truncate(patientAddress) : '—');
+    const recipientName = recipientProfile?.fullName
+        ? `BS. ${recipientProfile.fullName}`
+        : truncate(recipient);
+    const recipientOrg = recipientProfile?.doctorProfile?.hospitalName || null;
+    const mode = item.allowDelegate ? 'Đọc · Uỷ quyền' : 'Đọc · Cập nhật';
+
+    return (
+        <View
+            style={{
+                paddingHorizontal: 22,
+                paddingVertical: 16,
+                borderBottomWidth: last ? 0 : 0.5,
+                borderColor: palette.EHR_OUTLINE_VARIANT,
+                opacity: isLive ? 1 : 0.58,
+            }}
+        >
+            {/* Title */}
+            <Text
+                style={{
+                    fontFamily: SANS_SEMI,
+                    fontSize: 14.5,
+                    fontWeight: '700',
+                    color: palette.EHR_ON_SURFACE,
+                    letterSpacing: -0.1,
+                }}
+                numberOfLines={1}
+            >
+                {title}
+            </Text>
+
+            {/* Patient */}
+            <Text
+                style={{
+                    fontSize: 12,
+                    color: palette.EHR_ON_SURFACE_VARIANT,
+                    marginTop: 2,
+                    fontFamily: SANS,
+                }}
+                numberOfLines={1}
+            >
+                của <Text style={{ color: palette.EHR_ON_SURFACE }}>{patientName}</Text>
+            </Text>
+
+            {/* Chain arrow line */}
+            <XStack style={{ marginTop: 10, alignItems: 'center', gap: 7, flexWrap: 'wrap' }}>
+                <Text
+                    style={{
+                        fontFamily: MONO,
+                        fontSize: 10,
+                        letterSpacing: 1,
+                        color: palette.EHR_TEXT_MUTED,
+                        textTransform: 'uppercase',
+                        fontWeight: '700',
+                    }}
+                >
+                    Trao cho
+                </Text>
+                <Text style={{ color: palette.EHR_ON_SURFACE_VARIANT, fontSize: 12 }}>↗</Text>
+                <Text
+                    style={{
+                        color: palette.EHR_ON_SURFACE,
+                        fontSize: 12.5,
+                        fontFamily: SANS_MEDIUM,
+                        fontWeight: '500',
+                    }}
+                >
+                    {recipientName}
+                </Text>
+                {recipientOrg ? (
+                    <>
+                        <Text style={{ color: palette.EHR_TEXT_MUTED }}>·</Text>
+                        <Text style={{ color: palette.EHR_TEXT_MUTED, fontSize: 11.5, fontFamily: SANS }}>
+                            {recipientOrg}
+                        </Text>
+                    </>
+                ) : null}
+            </XStack>
+
+            {/* Meta strip */}
+            <XStack style={{ marginTop: 10, alignItems: 'center', gap: 12 }}>
+                <XStack style={{ alignItems: 'center', gap: 5 }}>
+                    <View
+                        style={{
+                            width: 5,
+                            height: 5,
+                            borderRadius: 3,
+                            backgroundColor: statusColor,
+                        }}
+                    />
+                    <Text style={{ fontFamily: SANS_MEDIUM, fontSize: 11, color: statusColor, fontWeight: '500' }}>
+                        {statusLabel}
+                    </Text>
+                </XStack>
+                <View style={{ width: 2, height: 2, borderRadius: 1, backgroundColor: palette.EHR_TEXT_MUTED }} />
+                <Text style={{ fontFamily: MONO, fontSize: 11, color: palette.EHR_TEXT_MUTED }}>{mode}</Text>
+                <View style={{ flex: 1 }} />
+                {isLive ? (
+                    <Pressable
+                        onPress={onRevoke}
+                        disabled={revoking}
+                        style={({ pressed }) => ({
+                            paddingHorizontal: 11,
+                            paddingVertical: 5,
+                            borderRadius: 999,
+                            borderWidth: 0.5,
+                            borderColor: `${palette.EHR_PRIMARY}80`,
+                            opacity: pressed ? 0.6 : revoking ? 0.4 : 1,
+                        })}
+                    >
+                        <Text
+                            style={{
+                                fontFamily: SANS_SEMI,
+                                fontSize: 11.5,
+                                color: palette.EHR_PRIMARY,
+                                fontWeight: '600',
+                                letterSpacing: 0.2,
+                            }}
+                        >
+                            {revoking ? 'Đang thu hồi…' : 'Thu hồi'}
+                        </Text>
+                    </Pressable>
+                ) : null}
+            </XStack>
+        </View>
+    );
+}

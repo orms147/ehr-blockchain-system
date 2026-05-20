@@ -42,7 +42,7 @@ import { createPublicClient, http } from 'viem';
 import { arbitrumSepolia } from 'viem/chains';
 
 import LoadingSpinner from '../../components/LoadingSpinner';
-import UserChip from '../../components/UserChip';
+import UserChip, { useUserProfile } from '../../components/UserChip';
 import localRecordStore from '../../services/localRecordStore';
 import api from '../../services/api';
 import recordService from '../../services/record.service';
@@ -827,6 +827,58 @@ function PatientRecordsDrawer({
 }
 
 // ───────────────────────────────────────────────────────────────────
+//  G.12.m — text-rhythm row helpers
+// ───────────────────────────────────────────────────────────────────
+function PatientAvatar({ address, palette }: { address: string; palette: ReturnType<typeof useEhrPalette> }) {
+    const { data: profile } = useUserProfile(address);
+    const initial = (profile?.fullName?.split(' ').slice(-1)[0]?.[0] || '?').toUpperCase();
+    return (
+        <View
+            style={{
+                width: 40,
+                height: 40,
+                flexShrink: 0,
+                borderRadius: 20,
+                backgroundColor: palette.EHR_SURFACE_CONTAINER,
+                borderWidth: 0.5,
+                borderColor: palette.EHR_OUTLINE,
+                alignItems: 'center',
+                justifyContent: 'center',
+            }}
+        >
+            <Text
+                style={{
+                    fontFamily: SERIF,
+                    fontSize: 16,
+                    fontWeight: '600',
+                    color: palette.EHR_ON_SURFACE_VARIANT,
+                }}
+            >
+                {initial}
+            </Text>
+        </View>
+    );
+}
+
+function PatientName({ address, palette }: { address: string; palette: ReturnType<typeof useEhrPalette> }) {
+    const { data: profile } = useUserProfile(address);
+    return (
+        <Text
+            style={{
+                fontFamily: SANS_SEMI,
+                fontSize: 14.5,
+                fontWeight: '600',
+                color: palette.EHR_ON_SURFACE,
+                flex: 1,
+            }}
+            numberOfLines={1}
+        >
+            {profile?.fullName || truncate(address)}
+        </Text>
+    );
+}
+
+// ───────────────────────────────────────────────────────────────────
 //  Main screen
 // ───────────────────────────────────────────────────────────────────
 export default function DoctorDelegatedPatientsScreen() {
@@ -834,82 +886,93 @@ export default function DoctorDelegatedPatientsScreen() {
     const { data: delegations = [], isLoading, isFetching, refetch } = useDelegatedToMe();
     const [selected, setSelected] = useState<DelegationRow | null>(null);
 
-    const renderItem = ({ item }: { item: DelegationRow }) => {
+    // G.12.m — text-rhythm row per viehp-doctor-extras.html DelegatedPatientRow.
+    const renderItem = ({ item, index }: { item: DelegationRow; index: number }) => {
         const isExpired = item.expiresAt && new Date(item.expiresAt) < new Date();
+        const direct = item.chainDepth === 1;
+        const isLast = index === delegations.length - 1;
+        const dLeft = item.expiresAt ? Math.max(0, Math.ceil((new Date(item.expiresAt).getTime() - Date.now()) / 86400000)) : null;
+
         return (
             <Pressable
                 onPress={() => !isExpired && setSelected(item)}
                 disabled={!!isExpired}
-                style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
+                style={({ pressed }) => ({
+                    flexDirection: 'row',
+                    gap: 14,
+                    paddingHorizontal: 22,
+                    paddingVertical: 14,
+                    borderBottomWidth: isLast ? 0 : 0.5,
+                    borderColor: palette.EHR_OUTLINE_VARIANT,
+                    opacity: isExpired ? 0.55 : (pressed ? 0.7 : 1),
+                })}
             >
-                <ViCard padding={16} style={{ marginBottom: 10, opacity: isExpired ? 0.6 : 1 }}>
-                    {/* G.7 — chain-depth chip on row header, not buried in subtitle */}
-                    <View
-                        style={{
-                            alignSelf: 'flex-start',
-                            paddingHorizontal: 8,
-                            paddingVertical: 3,
-                            borderRadius: 6,
-                            backgroundColor: item.chainDepth === 1 ? `${palette.EHR_TERTIARY}26` : `${palette.EHR_SECONDARY}26`,
-                            marginBottom: 8,
-                        }}
-                    >
-                        <Text
-                            style={{
-                                fontFamily: SANS_SEMI,
-                                fontSize: 10.5,
-                                color: item.chainDepth === 1 ? palette.EHR_TERTIARY : palette.EHR_SECONDARY,
-                                fontWeight: '700',
-                                letterSpacing: 0.3,
-                                textTransform: 'uppercase',
-                            }}
-                        >
-                            {item.chainDepth === 1 ? 'Trực tiếp' : `Cấp ${item.chainDepth}`}
-                            {item.allowSubDelegate ? ' · uỷ quyền tiếp' : ''}
-                        </Text>
-                    </View>
-                    <XStack style={{ alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 6, gap: 8 }}>
-                        <View style={{ flex: 1 }}>
-                            {/* G.2 — patient wallet → UserChip resolves real name + nationalId tag */}
-                            <UserChip address={item.patientAddress} expanded showAddress={false} />
-                            {item.parentDelegator ? (
-                                <View style={{ marginTop: 8 }}>
-                                    <Text style={{ fontFamily: SANS, fontSize: 11, color: palette.EHR_TEXT_MUTED, marginBottom: 3 }}>
-                                        Qua bác sĩ:
-                                    </Text>
-                                    <UserChip address={item.parentDelegator} showAddress={false} size="sm" interactive={false} />
-                                </View>
-                            ) : null}
-                            <Text style={{ fontFamily: SANS, fontSize: 11, color: palette.EHR_TEXT_MUTED, marginTop: 3 }}>
-                                Hết hạn: {formatExpiry(item.expiresAt)}
-                            </Text>
-                            {item.scopeNote ? (
-                                <Text
-                                    style={{ fontFamily: SANS, fontSize: 11, color: palette.EHR_TEXT_MUTED, marginTop: 3 }}
-                                    numberOfLines={2}
-                                >
-                                    Phạm vi: {item.scopeNote}
-                                </Text>
-                            ) : null}
-                        </View>
-                        <ViStatusChip status={isExpired ? 'expired' : 'active'} />
+                {/* 40px serif-initial avatar */}
+                <PatientAvatar address={item.patientAddress} palette={palette} />
+
+                <YStack style={{ flex: 1, minWidth: 0 }}>
+                    {/* Name row + mono "N hồ sơ" */}
+                    <XStack style={{ alignItems: 'baseline', justifyContent: 'space-between', gap: 8 }}>
+                        <PatientName address={item.patientAddress} palette={palette} />
                     </XStack>
-                    {!isExpired ? (
-                        <XStack style={{ alignItems: 'center', marginTop: 10, justifyContent: 'flex-end', gap: 4 }}>
-                            <Text
+
+                    {/* Chain depth signal — jade dot "Trực tiếp" OR cinnabar pill "↻ Qua BS. X" */}
+                    <XStack style={{ marginTop: 9, alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                        {direct ? (
+                            <XStack style={{ alignItems: 'center', gap: 5 }}>
+                                <View
+                                    style={{
+                                        width: 5,
+                                        height: 5,
+                                        borderRadius: 3,
+                                        backgroundColor: palette.EHR_TERTIARY,
+                                    }}
+                                />
+                                <Text style={{ fontFamily: SANS_MEDIUM, fontSize: 11, color: palette.EHR_TERTIARY, fontWeight: '600', letterSpacing: 0.2 }}>
+                                    Trực tiếp
+                                </Text>
+                            </XStack>
+                        ) : (
+                            <View
                                 style={{
-                                    fontFamily: SANS_SEMI,
-                                    fontSize: 12,
-                                    color: palette.EHR_PRIMARY,
-                                    fontWeight: '600',
+                                    paddingHorizontal: 8,
+                                    paddingVertical: 2,
+                                    borderRadius: 4,
+                                    backgroundColor: `${palette.EHR_PRIMARY}14`,
+                                    borderWidth: 0.5,
+                                    borderColor: `${palette.EHR_PRIMARY}40`,
                                 }}
                             >
-                                Xem hồ sơ
-                            </Text>
-                            <ChevronRight size={14} color={palette.EHR_PRIMARY} />
-                        </XStack>
+                                <Text style={{ fontFamily: SANS_SEMI, fontSize: 10.5, color: palette.EHR_PRIMARY, fontWeight: '600', letterSpacing: 0.2 }}>
+                                    ↻ Cấp {item.chainDepth}
+                                </Text>
+                            </View>
+                        )}
+                        <View style={{ width: 2, height: 2, borderRadius: 1, backgroundColor: palette.EHR_TEXT_MUTED }} />
+                        <Text style={{ fontFamily: 'monospace', fontSize: 11, color: palette.EHR_TEXT_MUTED }}>
+                            đến {formatExpiry(item.expiresAt)}
+                            {dLeft !== null ? ` · còn ${dLeft}d` : ''}
+                        </Text>
+                    </XStack>
+
+                    {/* Sub-delegate affordance */}
+                    {item.allowSubDelegate ? (
+                        <Text
+                            style={{
+                                marginTop: 10,
+                                fontFamily: SANS_SEMI,
+                                fontSize: 10.5,
+                                color: palette.EHR_ON_SURFACE_VARIANT,
+                                letterSpacing: 0.3,
+                                textTransform: 'uppercase',
+                                fontWeight: '700',
+                            }}
+                        >
+                            <Text style={{ color: palette.EHR_PRIMARY }}>→</Text> Có thể uỷ quyền lại
+                        </Text>
                     ) : null}
-                </ViCard>
+                </YStack>
+                <Text style={{ alignSelf: 'center', color: palette.EHR_TEXT_MUTED, fontSize: 18 }}>›</Text>
             </Pressable>
         );
     };
@@ -918,65 +981,15 @@ export default function DoctorDelegatedPatientsScreen() {
         return <LoadingSpinner message="Đang tải danh sách bệnh nhân..." />;
     }
 
+    const totalRecords = 0; // backend doesn't aggregate per-patient record count yet
+    const indirectCount = delegations.filter((d) => d.chainDepth !== 1).length;
+
     return (
         <SafeAreaView style={{ flex: 1, backgroundColor: palette.EHR_SURFACE }} edges={['top']}>
-            <View style={{ paddingHorizontal: 20, paddingTop: 14, paddingBottom: 12 }}>
-                <Text
-                    style={{
-                        fontFamily: SERIF,
-                        fontSize: 26,
-                        color: palette.EHR_ON_SURFACE,
-                        letterSpacing: -0.4,
-                        lineHeight: 30,
-                    }}
-                >
-                    Bệnh nhân uỷ quyền
-                </Text>
-                <Text
-                    style={{
-                        marginTop: 4,
-                        fontFamily: SANS,
-                        fontSize: 13,
-                        color: palette.EHR_ON_SURFACE_VARIANT,
-                        lineHeight: 19,
-                    }}
-                >
-                    Bệnh nhân đã trao bạn toàn quyền chia sẻ hồ sơ thay họ.
-                </Text>
-            </View>
-
-            <View
-                style={{
-                    marginHorizontal: 20,
-                    marginBottom: 12,
-                    paddingVertical: 11,
-                    paddingHorizontal: 14,
-                    backgroundColor: `${palette.EHR_TERTIARY}1A`,
-                    borderRadius: 12,
-                    borderWidth: 0.5,
-                    borderColor: `${palette.EHR_TERTIARY}50`,
-                    flexDirection: 'row',
-                    gap: 8,
-                }}
-            >
-                <Shield size={14} color={palette.EHR_TERTIARY} style={{ marginTop: 2 }} />
-                <Text
-                    style={{
-                        flex: 1,
-                        fontFamily: SANS,
-                        fontSize: 11.5,
-                        color: palette.EHR_ON_SURFACE,
-                        lineHeight: 17,
-                    }}
-                >
-                    Mỗi truy cập sẽ kiểm tra epoch on-chain. Bệnh nhân hoặc bác sĩ cấp trên thu hồi → các consent bạn đã cấp tự bị vô hiệu.
-                </Text>
-            </View>
-
             <FlatList
                 data={delegations}
                 keyExtractor={(item) => item.id}
-                contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 80 }}
+                contentContainerStyle={{ paddingBottom: 80 }}
                 refreshControl={
                     <RefreshControl
                         refreshing={isFetching && !isLoading}
@@ -984,40 +997,165 @@ export default function DoctorDelegatedPatientsScreen() {
                         tintColor={palette.EHR_ON_SURFACE_VARIANT}
                     />
                 }
+                ListHeaderComponent={
+                    <>
+                        {/* Editorial header */}
+                        <View style={{ paddingHorizontal: 22, paddingTop: 14, paddingBottom: 18 }}>
+                            <Text
+                                style={{
+                                    fontFamily: SANS_SEMI,
+                                    fontSize: 10,
+                                    color: palette.EHR_TEXT_MUTED,
+                                    letterSpacing: 1.4,
+                                    textTransform: 'uppercase',
+                                    fontWeight: '700',
+                                    marginBottom: 8,
+                                }}
+                            >
+                                Toàn quyền · Tin cậy tuyệt đối
+                            </Text>
+                            <Text
+                                style={{
+                                    fontFamily: SERIF,
+                                    fontSize: 26,
+                                    color: palette.EHR_ON_SURFACE,
+                                    letterSpacing: -0.4,
+                                    lineHeight: 30,
+                                }}
+                            >
+                                Bệnh nhân{' '}
+                                <Text style={{ fontFamily: 'Fraunces_400Regular_Italic', fontStyle: 'italic', color: palette.EHR_PRIMARY }}>
+                                    uỷ quyền.
+                                </Text>
+                            </Text>
+                            <Text
+                                style={{
+                                    marginTop: 8,
+                                    fontFamily: SANS,
+                                    fontSize: 13,
+                                    color: palette.EHR_ON_SURFACE_VARIANT,
+                                    lineHeight: 19,
+                                }}
+                            >
+                                Những người đã trao bạn toàn quyền xem và quản lý hồ sơ. Bạn có thể uỷ quyền lại cho đồng nghiệp khi được phép.
+                            </Text>
+                        </View>
+
+                        {/* Stat strip per design */}
+                        <View
+                            style={{
+                                marginHorizontal: 22,
+                                marginBottom: 18,
+                                paddingVertical: 12,
+                                paddingHorizontal: 14,
+                                backgroundColor: palette.EHR_SURFACE_CONTAINER,
+                                borderWidth: 0.5,
+                                borderColor: palette.EHR_OUTLINE_VARIANT,
+                                borderRadius: 12,
+                                flexDirection: 'row',
+                            }}
+                        >
+                            <Stat n={delegations.length} label="Bệnh nhân" palette={palette} />
+                            <View style={{ width: 0.5, backgroundColor: palette.EHR_OUTLINE_VARIANT }} />
+                            <Stat n={totalRecords || delegations.length} label="Hồ sơ" palette={palette} />
+                            <View style={{ width: 0.5, backgroundColor: palette.EHR_OUTLINE_VARIANT }} />
+                            <Stat n={indirectCount} label="Qua uỷ quyền" palette={palette} warn />
+                        </View>
+                    </>
+                }
                 ListEmptyComponent={
-                    <View style={{ paddingTop: 30, alignItems: 'center' }}>
+                    <View style={{ paddingHorizontal: 30, paddingTop: 80, alignItems: 'center' }}>
                         <Users size={28} color={palette.EHR_TEXT_MUTED} />
                         <Text
                             style={{
-                                marginTop: 12,
+                                marginTop: 16,
                                 fontFamily: SERIF,
-                                fontSize: 18,
+                                fontSize: 19,
+                                fontWeight: '500',
                                 color: palette.EHR_ON_SURFACE,
-                                textAlign: 'center',
+                                letterSpacing: -0.2,
                             }}
                         >
-                            Chưa có uỷ quyền
+                            Chưa có bệnh nhân uỷ quyền
                         </Text>
                         <Text
                             style={{
                                 marginTop: 8,
                                 fontFamily: SANS,
-                                fontSize: 13,
-                                color: palette.EHR_TEXT_MUTED,
-                                textAlign: 'center',
-                                maxWidth: 280,
+                                fontSize: 12.5,
+                                color: palette.EHR_ON_SURFACE_VARIANT,
                                 lineHeight: 19,
+                                maxWidth: 240,
+                                textAlign: 'center',
                             }}
                         >
-                            Bạn chưa nhận được uỷ quyền từ bệnh nhân nào.
+                            Uỷ quyền toàn bộ là quyết định nhạy cảm — bệnh nhân phải chủ động ký từ phía họ. Không có cách "yêu cầu" từ bác sĩ.
                         </Text>
                     </View>
                 }
                 renderItem={renderItem}
+                ListFooterComponent={
+                    delegations.length > 0 ? (
+                        <View style={{ paddingHorizontal: 22, paddingTop: 20 }}>
+                            <Text
+                                style={{
+                                    fontFamily: SANS,
+                                    fontSize: 11,
+                                    color: palette.EHR_TEXT_MUTED,
+                                    lineHeight: 17,
+                                }}
+                            >
+                                Uỷ quyền lại (sub-delegation) chỉ khả dụng khi bệnh nhân cho phép tường minh trong lúc ký đồng ý ban đầu.
+                            </Text>
+                        </View>
+                    ) : null
+                }
             />
 
             <PatientRecordsDrawer patient={selected} onClose={() => setSelected(null)} />
         </SafeAreaView>
+    );
+}
+
+function Stat({
+    n,
+    label,
+    palette,
+    warn,
+}: {
+    n: number;
+    label: string;
+    palette: ReturnType<typeof useEhrPalette>;
+    warn?: boolean;
+}) {
+    return (
+        <View style={{ flex: 1, alignItems: 'center' }}>
+            <Text
+                style={{
+                    fontFamily: SERIF,
+                    fontSize: 26,
+                    fontWeight: '500',
+                    color: warn ? palette.EHR_PRIMARY : palette.EHR_ON_SURFACE,
+                    lineHeight: 30,
+                    letterSpacing: -0.5,
+                }}
+            >
+                {n}
+            </Text>
+            <Text
+                style={{
+                    marginTop: 6,
+                    fontSize: 9.5,
+                    color: palette.EHR_TEXT_MUTED,
+                    letterSpacing: 1,
+                    textTransform: 'uppercase',
+                    fontWeight: '700',
+                    fontFamily: SANS_SEMI,
+                }}
+            >
+                {label}
+            </Text>
+        </View>
     );
 }
 
