@@ -221,7 +221,7 @@ export default function EmergencyLookupScreen() {
                                     marginTop: 4,
                                     fontFamily: 'monospace',
                                     fontSize: 11,
-                                    color: palette.EHR_OUTLINE,
+                                    color: palette.EHR_TEXT_MUTED,
                                 }}
                                 numberOfLines={1}
                             >
@@ -362,7 +362,7 @@ export default function EmergencyLookupScreen() {
                                 style={{
                                     fontFamily: SANS,
                                     fontSize: 13,
-                                    color: palette.EHR_OUTLINE,
+                                    color: palette.EHR_TEXT_MUTED,
                                     padding: 14,
                                     textAlign: 'center',
                                 }}
@@ -402,7 +402,7 @@ export default function EmergencyLookupScreen() {
                                                     style={{
                                                         fontFamily: SANS,
                                                         fontSize: 11.5,
-                                                        color: palette.EHR_OUTLINE,
+                                                        color: palette.EHR_TEXT_MUTED,
                                                     }}
                                                 >
                                                     {c.label}
@@ -425,7 +425,7 @@ export default function EmergencyLookupScreen() {
                                             style={{
                                                 fontFamily: SANS,
                                                 fontSize: 11.5,
-                                                color: palette.EHR_OUTLINE,
+                                                color: palette.EHR_TEXT_MUTED,
                                                 fontStyle: 'italic',
                                             }}
                                         >
@@ -449,7 +449,7 @@ function FieldLabel({ children }: { children: React.ReactNode }) {
             style={{
                 fontFamily: SANS_SEMI,
                 fontSize: 11.5,
-                color: palette.EHR_OUTLINE,
+                color: palette.EHR_TEXT_MUTED,
                 marginBottom: 8,
                 letterSpacing: 0.4,
                 textTransform: 'uppercase',

@@ -168,7 +168,7 @@ export default function DoctorOutgoingSharesScreen() {
                 </XStack>
 
                 <YStack style={{ marginVertical: 4 }}>
-                    <Text style={{ fontFamily: SANS_SEMI, fontSize: 10.5, color: palette.EHR_OUTLINE, letterSpacing: 0.4, textTransform: 'uppercase' as const, fontWeight: '600' as const, marginBottom: 2 }}>Người nhận</Text>
+                    <Text style={{ fontFamily: SANS_SEMI, fontSize: 10.5, color: palette.EHR_TEXT_MUTED, letterSpacing: 0.4, textTransform: 'uppercase' as const, fontWeight: '600' as const, marginBottom: 2 }}>Người nhận</Text>
                     <View style={{ marginTop: 4 }}>
                         {/* G.2 — recipient wallet → UserChip resolves name + role + verified */}
                         <UserChip address={recipient} showAddress={false} expanded interactive={false} />
@@ -176,14 +176,14 @@ export default function DoctorOutgoingSharesScreen() {
                 </YStack>
                 <XStack style={{ gap: 14, marginTop: 8 }}>
                     <YStack style={{ flex: 1 }}>
-                        <Text style={{ fontFamily: SANS_SEMI, fontSize: 10.5, color: palette.EHR_OUTLINE, letterSpacing: 0.4, textTransform: 'uppercase' as const, fontWeight: '600' as const, marginBottom: 2 }}>Hết hạn</Text>
+                        <Text style={{ fontFamily: SANS_SEMI, fontSize: 10.5, color: palette.EHR_TEXT_MUTED, letterSpacing: 0.4, textTransform: 'uppercase' as const, fontWeight: '600' as const, marginBottom: 2 }}>Hết hạn</Text>
                         <XStack style={{ alignItems: 'center', gap: 4 }}>
-                            <Clock size={11} color={palette.EHR_OUTLINE} />
+                            <Clock size={11} color={palette.EHR_TEXT_MUTED} />
                             <Text style={{ fontFamily: SANS_MEDIUM, fontSize: 12.5, color: palette.EHR_ON_SURFACE, fontWeight: '600' as const }}>{formatExpiry(item.expiresAt)}</Text>
                         </XStack>
                     </YStack>
                     <YStack style={{ flex: 1 }}>
-                        <Text style={{ fontFamily: SANS_SEMI, fontSize: 10.5, color: palette.EHR_OUTLINE, letterSpacing: 0.4, textTransform: 'uppercase' as const, fontWeight: '600' as const, marginBottom: 2 }}>Trạng thái</Text>
+                        <Text style={{ fontFamily: SANS_SEMI, fontSize: 10.5, color: palette.EHR_TEXT_MUTED, letterSpacing: 0.4, textTransform: 'uppercase' as const, fontWeight: '600' as const, marginBottom: 2 }}>Trạng thái</Text>
                         <Text
                             style={[
                                 { fontFamily: SANS_MEDIUM, fontSize: 12.5, color: palette.EHR_ON_SURFACE, fontWeight: '600' as const },
@@ -263,13 +263,13 @@ export default function DoctorOutgoingSharesScreen() {
                 }
                 ListEmptyComponent={
                     <View style={{ paddingTop: 30, alignItems: 'center' }}>
-                        <Share2 size={28} color={palette.EHR_OUTLINE} />
+                        <Share2 size={28} color={palette.EHR_TEXT_MUTED} />
                         <Text
                             style={{
                                 marginTop: 12,
                                 fontFamily: SANS,
                                 fontSize: 13,
-                                color: palette.EHR_OUTLINE,
+                                color: palette.EHR_TEXT_MUTED,
                                 textAlign: 'center',
                                 maxWidth: 280,
                                 lineHeight: 19,
@@ -289,7 +289,7 @@ function KV({ label, value, mono }: { label: string; value: string; mono?: boole
     const kvLabelStyle = {
         fontFamily: SANS_SEMI,
         fontSize: 10.5,
-        color: palette.EHR_OUTLINE,
+        color: palette.EHR_TEXT_MUTED,
         letterSpacing: 0.4,
         textTransform: 'uppercase' as const,
         fontWeight: '600' as const,
@@ -303,7 +303,7 @@ function KV({ label, value, mono }: { label: string; value: string; mono?: boole
     };
     return (
         <YStack>
-            <Text style={{ fontFamily: SANS_SEMI, fontSize: 10.5, color: palette.EHR_OUTLINE, letterSpacing: 0.4, textTransform: 'uppercase' as const, fontWeight: '600' as const, marginBottom: 2 }}>{label}</Text>
+            <Text style={{ fontFamily: SANS_SEMI, fontSize: 10.5, color: palette.EHR_TEXT_MUTED, letterSpacing: 0.4, textTransform: 'uppercase' as const, fontWeight: '600' as const, marginBottom: 2 }}>{label}</Text>
             <Text style={[kvValueStyle, mono ? { fontFamily: 'monospace', fontSize: 12 } : null]}>
                 {value}
             </Text>

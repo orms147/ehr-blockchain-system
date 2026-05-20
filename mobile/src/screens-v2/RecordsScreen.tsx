@@ -239,7 +239,7 @@ export default function RecordsScreen({ navigation }: any) {
                 renderItem={({ item }) => {
                     if (isActivityView) {
                         const meta =
-                            ACTION_LABELS[item.action] || { label: item.action || 'Hoạt động', color: palette.EHR_OUTLINE };
+                            ACTION_LABELS[item.action] || { label: item.action || 'Hoạt động', color: palette.EHR_TEXT_MUTED };
                         return (
                             <ViCard padding={14} style={{ marginBottom: 10 }}>
                                 <View
@@ -275,7 +275,7 @@ export default function RecordsScreen({ navigation }: any) {
                                         style={{
                                             fontFamily: SANS,
                                             fontSize: 11,
-                                            color: palette.EHR_OUTLINE,
+                                            color: palette.EHR_TEXT_MUTED,
                                         }}
                                     >
                                         {formatActivityDate(item.createdAt)}
@@ -286,7 +286,7 @@ export default function RecordsScreen({ navigation }: any) {
                                         style={{
                                             fontFamily: 'monospace',
                                             fontSize: 11,
-                                            color: palette.EHR_OUTLINE,
+                                            color: palette.EHR_TEXT_MUTED,
                                         }}
                                         numberOfLines={1}
                                     >
@@ -475,7 +475,7 @@ export default function RecordsScreen({ navigation }: any) {
                                 style={{
                                     fontFamily: SANS,
                                     fontSize: 11.5,
-                                    color: palette.EHR_OUTLINE,
+                                    color: palette.EHR_TEXT_MUTED,
                                 }}
                             >
                                 Mã hoá + IPFS + on-chain
@@ -500,7 +500,7 @@ export default function RecordsScreen({ navigation }: any) {
                                 marginTop: 8,
                                 fontFamily: SANS,
                                 fontSize: 13,
-                                color: palette.EHR_OUTLINE,
+                                color: palette.EHR_TEXT_MUTED,
                                 textAlign: 'center',
                                 lineHeight: 19,
                                 maxWidth: 280,
@@ -567,7 +567,7 @@ export default function RecordsScreen({ navigation }: any) {
                                     style={{
                                         fontFamily: SANS_SEMI,
                                         fontSize: 10,
-                                        color: palette.EHR_OUTLINE,
+                                        color: palette.EHR_TEXT_MUTED,
                                         letterSpacing: 1.2,
                                         textTransform: 'uppercase',
                                         fontWeight: '700',
@@ -615,7 +615,7 @@ export default function RecordsScreen({ navigation }: any) {
                                     style={{
                                         fontFamily: SANS_SEMI,
                                         fontSize: 10,
-                                        color: palette.EHR_OUTLINE,
+                                        color: palette.EHR_TEXT_MUTED,
                                         letterSpacing: 1.2,
                                         textTransform: 'uppercase',
                                         fontWeight: '700',

@@ -443,7 +443,7 @@ export default function LoginScreen({ navigation }: any) {
                             style={{
                                 fontFamily: SANS_SEMI,
                                 fontSize: 10,
-                                color: palette.EHR_OUTLINE,
+                                color: palette.EHR_TEXT_MUTED,
                                 letterSpacing: 1.2,
                                 fontWeight: '700',
                             }}
@@ -520,7 +520,7 @@ export default function LoginScreen({ navigation }: any) {
                             style={{
                                 fontFamily: SANS_SEMI,
                                 fontSize: 10.5,
-                                color: palette.EHR_OUTLINE,
+                                color: palette.EHR_TEXT_MUTED,
                                 letterSpacing: 1.2,
                                 textTransform: 'uppercase',
                                 fontWeight: '600',
@@ -629,7 +629,7 @@ function FieldLabel({ children }: { children: React.ReactNode }) {
             style={{
                 fontFamily: SANS_SEMI,
                 fontSize: 11,
-                color: palette.EHR_OUTLINE,
+                color: palette.EHR_TEXT_MUTED,
                 letterSpacing: 1,
                 textTransform: 'uppercase',
                 fontWeight: '600',
@@ -691,7 +691,7 @@ function PasswordlessRow({
                 <Text style={{ fontFamily: SANS_MEDIUM, fontSize: 14, color: palette.EHR_ON_SURFACE, fontWeight: '500' }}>
                     {title}
                 </Text>
-                <Text style={{ marginTop: 2, fontFamily: SANS, fontSize: 11.5, color: palette.EHR_OUTLINE }}>
+                <Text style={{ marginTop: 2, fontFamily: SANS, fontSize: 11.5, color: palette.EHR_TEXT_MUTED }}>
                     {subtitle}
                 </Text>
             </View>
@@ -711,7 +711,7 @@ function PasswordlessRow({
                     </Text>
                 </View>
             ) : (
-                <ChevronRight size={16} color={palette.EHR_OUTLINE} />
+                <ChevronRight size={16} color={palette.EHR_TEXT_MUTED} />
             )}
         </Pressable>
     );

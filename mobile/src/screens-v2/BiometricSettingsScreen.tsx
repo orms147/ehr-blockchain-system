@@ -189,7 +189,7 @@ export default function BiometricSettingsScreen() {
                                     marginTop: 3,
                                     fontFamily: SANS,
                                     fontSize: 11.5,
-                                    color: palette.EHR_OUTLINE,
+                                    color: palette.EHR_TEXT_MUTED,
                                     lineHeight: 16,
                                 }}
                             >
@@ -234,7 +234,7 @@ export default function BiometricSettingsScreen() {
                             style={{
                                 fontFamily: SANS,
                                 fontSize: 11.5,
-                                color: palette.EHR_OUTLINE,
+                                color: palette.EHR_TEXT_MUTED,
                                 lineHeight: 18,
                             }}
                         >
@@ -257,7 +257,7 @@ export default function BiometricSettingsScreen() {
                             textAlign: 'center',
                             fontFamily: SANS,
                             fontSize: 11,
-                            color: palette.EHR_OUTLINE,
+                            color: palette.EHR_TEXT_MUTED,
                             lineHeight: 16,
                         }}
                     >
@@ -272,7 +272,7 @@ export default function BiometricSettingsScreen() {
                         textAlign: 'center',
                         fontFamily: SANS,
                         fontSize: 11,
-                        color: palette.EHR_OUTLINE,
+                        color: palette.EHR_TEXT_MUTED,
                         letterSpacing: 0.4,
                     }}
                 >
@@ -329,7 +329,7 @@ function ToggleRow({
                             marginTop: 3,
                             fontFamily: SANS,
                             fontSize: 11.5,
-                            color: palette.EHR_OUTLINE,
+                            color: palette.EHR_TEXT_MUTED,
                             lineHeight: 16,
                         }}
                     >

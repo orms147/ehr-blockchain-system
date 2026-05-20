@@ -96,7 +96,7 @@ export default function RecordCard({ record, onPress }: RecordCardProps) {
                     style={{
                         fontFamily: MONO,
                         fontSize: 11,
-                        color: palette.EHR_OUTLINE,
+                        color: palette.EHR_TEXT_MUTED,
                         letterSpacing: 0.4,
                     }}
                 >
@@ -152,16 +152,16 @@ export default function RecordCard({ record, onPress }: RecordCardProps) {
                     </Text>
                 ) : null}
                 <XStack style={{ gap: 10, marginTop: 6, flexWrap: 'wrap' }}>
-                    <Text style={{ fontFamily: SANS, fontSize: 11, color: palette.EHR_OUTLINE }}>
+                    <Text style={{ fontFamily: SANS, fontSize: 11, color: palette.EHR_TEXT_MUTED }}>
                         {typeLabel}
                     </Text>
                     {attachmentsCount > 0 ? (
-                        <Text style={{ fontFamily: SANS, fontSize: 11, color: palette.EHR_OUTLINE }}>
+                        <Text style={{ fontFamily: SANS, fontSize: 11, color: palette.EHR_TEXT_MUTED }}>
                             · {attachmentsCount} đính kèm
                         </Text>
                     ) : null}
                     {versionCount > 1 ? (
-                        <Text style={{ fontFamily: SANS, fontSize: 11, color: palette.EHR_OUTLINE }}>
+                        <Text style={{ fontFamily: SANS, fontSize: 11, color: palette.EHR_TEXT_MUTED }}>
                             · {versionCount} phiên bản
                         </Text>
                     ) : null}

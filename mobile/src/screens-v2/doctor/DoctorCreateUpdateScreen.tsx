@@ -406,7 +406,7 @@ export default function DoctorCreateUpdateScreen({ navigation, route }: any) {
         options: { multiline?: boolean; placeholder?: string; keyboardType?: KeyboardTypeOptions } = {},
     ) => (
         <YStack style={{ marginBottom: 12 }}>
-            <Text style={{ fontFamily: SANS_SEMI, fontSize: 12, color: palette.EHR_OUTLINE, marginBottom: 6, letterSpacing: 0.3, textTransform: 'uppercase', fontWeight: '600' }}>
+            <Text style={{ fontFamily: SANS_SEMI, fontSize: 12, color: palette.EHR_TEXT_MUTED, marginBottom: 6, letterSpacing: 0.3, textTransform: 'uppercase', fontWeight: '600' }}>
                 {label}
             </Text>
             <TextInput
@@ -473,7 +473,7 @@ export default function DoctorCreateUpdateScreen({ navigation, route }: any) {
                             style={{
                                 fontFamily: SANS_SEMI,
                                 fontSize: 11.5,
-                                color: palette.EHR_OUTLINE,
+                                color: palette.EHR_TEXT_MUTED,
                                 marginBottom: 6,
                                 letterSpacing: 0.4,
                                 textTransform: 'uppercase',
@@ -551,7 +551,7 @@ export default function DoctorCreateUpdateScreen({ navigation, route }: any) {
                     {renderInput('Mô tả ngắn', description, setDescription, { placeholder: 'Tóm tắt kết quả khám…', multiline: true })}
 
                     <YStack style={{ marginBottom: 12 }}>
-                        <Text style={{ fontFamily: SANS_SEMI, fontSize: 12, color: palette.EHR_OUTLINE, marginBottom: 6, letterSpacing: 0.3, textTransform: 'uppercase', fontWeight: '600' }}>
+                        <Text style={{ fontFamily: SANS_SEMI, fontSize: 12, color: palette.EHR_TEXT_MUTED, marginBottom: 6, letterSpacing: 0.3, textTransform: 'uppercase', fontWeight: '600' }}>
                             Chẩn đoán (ICD-10)
                         </Text>
                         {icd10Codes.length > 0 ? (
@@ -682,8 +682,8 @@ export default function DoctorCreateUpdateScreen({ navigation, route }: any) {
                         <View style={{ flex: 1 }}>{renderInput('Chiều cao (cm)', heightCm, setHeightCm, { placeholder: '165', keyboardType: 'numeric' })}</View>
                     </XStack>
                     <XStack style={{ alignItems: 'center', gap: 6, marginTop: -4 }}>
-                        <Activity size={13} color={palette.EHR_OUTLINE} />
-                        <Text style={{ fontFamily: SANS, fontSize: 11, color: palette.EHR_OUTLINE }}>
+                        <Activity size={13} color={palette.EHR_TEXT_MUTED} />
+                        <Text style={{ fontFamily: SANS, fontSize: 11, color: palette.EHR_TEXT_MUTED }}>
                             BMI được tính tự động.
                         </Text>
                     </XStack>
@@ -742,7 +742,7 @@ export default function DoctorCreateUpdateScreen({ navigation, route }: any) {
                         textAlign: 'center',
                         fontFamily: SANS,
                         fontSize: 11,
-                        color: palette.EHR_OUTLINE,
+                        color: palette.EHR_TEXT_MUTED,
                         lineHeight: 16,
                     }}
                 >

@@ -433,7 +433,7 @@ export default function EmergencyProfileScreen() {
                                         opacity: pressed ? 0.6 : 1,
                                     })}
                                 >
-                                    <Text style={{ fontFamily: SANS, fontSize: 10.5, color: palette.EHR_OUTLINE }}>
+                                    <Text style={{ fontFamily: SANS, fontSize: 10.5, color: palette.EHR_TEXT_MUTED }}>
                                         + {a}
                                     </Text>
                                 </Pressable>
@@ -461,7 +461,7 @@ export default function EmergencyProfileScreen() {
                                     gap: 10,
                                 }}
                             >
-                                <AlertTriangle size={14} color={palette.EHR_OUTLINE} style={{ marginTop: 2 }} />
+                                <AlertTriangle size={14} color={palette.EHR_TEXT_MUTED} style={{ marginTop: 2 }} />
                                 <Text
                                     style={{
                                         flex: 1,
@@ -514,7 +514,7 @@ export default function EmergencyProfileScreen() {
                                                     marginTop: 1,
                                                     fontFamily: SANS,
                                                     fontSize: 10.5,
-                                                    color: palette.EHR_OUTLINE,
+                                                    color: palette.EHR_TEXT_MUTED,
                                                 }}
                                                 numberOfLines={1}
                                             >
@@ -552,7 +552,7 @@ export default function EmergencyProfileScreen() {
                         style={{
                             fontFamily: SANS,
                             fontSize: 11,
-                            color: palette.EHR_OUTLINE,
+                            color: palette.EHR_TEXT_MUTED,
                             lineHeight: 17,
                         }}
                     >
@@ -681,7 +681,7 @@ function ERPreviewCard({
                     <Text
                         style={{
                             fontSize: 9,
-                            color: palette.EHR_OUTLINE,
+                            color: palette.EHR_TEXT_MUTED,
                             letterSpacing: 0.8,
                             textTransform: 'uppercase',
                             fontWeight: '700',
@@ -706,7 +706,7 @@ function ERPreviewCard({
                     <Text
                         style={{
                             fontSize: 9,
-                            color: palette.EHR_OUTLINE,
+                            color: palette.EHR_TEXT_MUTED,
                             letterSpacing: 0.8,
                             textTransform: 'uppercase',
                             fontWeight: '700',
@@ -720,7 +720,7 @@ function ERPreviewCard({
                                 style={{
                                     fontFamily: SANS,
                                     fontSize: 12,
-                                    color: palette.EHR_OUTLINE,
+                                    color: palette.EHR_TEXT_MUTED,
                                     fontStyle: 'italic',
                                 }}
                             >
@@ -773,7 +773,7 @@ function ERPreviewCard({
                     <Text
                         style={{
                             fontSize: 9,
-                            color: palette.EHR_OUTLINE,
+                            color: palette.EHR_TEXT_MUTED,
                             letterSpacing: 0.8,
                             textTransform: 'uppercase',
                             fontWeight: '700',
@@ -792,7 +792,7 @@ function ERPreviewCard({
                     >
                         {firstContact.fullName || truncate(firstContact.contactAddress)}
                         {firstContact.label ? (
-                            <Text style={{ color: palette.EHR_OUTLINE }}> · {firstContact.label}</Text>
+                            <Text style={{ color: palette.EHR_TEXT_MUTED }}> · {firstContact.label}</Text>
                         ) : null}
                     </Text>
                 </View>
@@ -873,7 +873,7 @@ function SectionRow({
                             style={{
                                 fontFamily: SANS,
                                 fontSize: 11.5,
-                                color: palette.EHR_OUTLINE,
+                                color: palette.EHR_TEXT_MUTED,
                             }}
                         >
                             {trailing}
@@ -888,7 +888,7 @@ function SectionRow({
                         marginTop: 8,
                         fontFamily: SANS,
                         fontSize: 11,
-                        color: palette.EHR_OUTLINE,
+                        color: palette.EHR_TEXT_MUTED,
                         lineHeight: 16,
                         fontStyle: 'italic',
                     }}

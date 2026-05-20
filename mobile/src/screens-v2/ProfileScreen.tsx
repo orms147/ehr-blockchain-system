@@ -226,7 +226,7 @@ export default function ProfileScreen() {
                             style={{
                                 fontFamily: SANS_SEMI,
                                 fontSize: 10.5,
-                                color: palette.EHR_OUTLINE,
+                                color: palette.EHR_TEXT_MUTED,
                                 letterSpacing: 0.6,
                                 textTransform: 'uppercase',
                                 fontWeight: '600',
@@ -333,7 +333,7 @@ function HealthItem({
                 style={{
                     fontFamily: SANS_SEMI,
                     fontSize: 10,
-                    color: palette.EHR_OUTLINE,
+                    color: palette.EHR_TEXT_MUTED,
                     letterSpacing: 0.6,
                     textTransform: 'uppercase',
                     fontWeight: '600',
@@ -397,7 +397,7 @@ function MenuRow({
             >
                 {label}
             </Text>
-            {!danger ? <ChevronRight size={16} color={palette.EHR_OUTLINE} /> : null}
+            {!danger ? <ChevronRight size={16} color={palette.EHR_TEXT_MUTED} /> : null}
         </Pressable>
     );
 }

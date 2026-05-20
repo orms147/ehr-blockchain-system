@@ -673,14 +673,14 @@ export default function RecordDetailScreen({ route, navigation }: any) {
                         {record.title || record.type || 'Hồ sơ y tế không tên'}
                     </Text>
                     <XStack style={{ alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                        <Clock size={13} color={palette.EHR_OUTLINE} />
-                        <Text style={{ fontFamily: SANS, fontSize: 13, color: palette.EHR_OUTLINE }}>
+                        <Clock size={13} color={palette.EHR_TEXT_MUTED} />
+                        <Text style={{ fontFamily: SANS, fontSize: 13, color: palette.EHR_TEXT_MUTED }}>
                             {record.date || 'Không có ngày'}
                         </Text>
                     </XStack>
                     <XStack style={{ alignItems: 'center', gap: 8 }}>
-                        <User size={13} color={palette.EHR_OUTLINE} />
-                        <Text style={{ fontFamily: SANS, fontSize: 13, color: palette.EHR_OUTLINE }}>
+                        <User size={13} color={palette.EHR_TEXT_MUTED} />
+                        <Text style={{ fontFamily: SANS, fontSize: 13, color: palette.EHR_TEXT_MUTED }}>
                             {record.createdByDisplay || 'Người tạo không rõ'}
                         </Text>
                     </XStack>
@@ -893,7 +893,7 @@ export default function RecordDetailScreen({ route, navigation }: any) {
                                                                 style={{
                                                                     fontFamily: SANS,
                                                                     fontSize: 11,
-                                                                    color: palette.EHR_OUTLINE,
+                                                                    color: palette.EHR_TEXT_MUTED,
                                                                 }}
                                                             >
                                                                 {new Date(v.createdAt).toLocaleDateString('vi-VN')}
@@ -904,7 +904,7 @@ export default function RecordDetailScreen({ route, navigation }: any) {
                                                                 marginTop: 2,
                                                                 fontFamily: 'monospace',
                                                                 fontSize: 10,
-                                                                color: palette.EHR_OUTLINE,
+                                                                color: palette.EHR_TEXT_MUTED,
                                                             }}
                                                             numberOfLines={1}
                                                         >
@@ -914,7 +914,7 @@ export default function RecordDetailScreen({ route, navigation }: any) {
                                                 </Pressable>
                                                 {idx < all.length - 1 ? (
                                                     <View style={{ alignSelf: 'center', marginRight: 10 }}>
-                                                        <Text style={{ color: palette.EHR_OUTLINE, fontSize: 16 }}>→</Text>
+                                                        <Text style={{ color: palette.EHR_TEXT_MUTED, fontSize: 16 }}>→</Text>
                                                     </View>
                                                 ) : null}
                                             </React.Fragment>
@@ -973,7 +973,7 @@ export default function RecordDetailScreen({ route, navigation }: any) {
                             <Text style={{ fontFamily: SANS_MEDIUM, fontSize: 14, color: palette.EHR_ON_SURFACE, fontWeight: '500' }}>
                                 Tạo phiên bản mới
                             </Text>
-                            <Text style={{ fontFamily: SANS, fontSize: 11.5, color: palette.EHR_OUTLINE, lineHeight: 16, marginTop: 2 }}>
+                            <Text style={{ fontFamily: SANS, fontSize: 11.5, color: palette.EHR_TEXT_MUTED, lineHeight: 16, marginTop: 2 }}>
                                 {iAmOwner
                                     ? 'Liên kết với hồ sơ gốc; bên đã chia sẻ vẫn truy cập được.'
                                     : 'Key mới sẽ cascade tới mọi người đang có quyền.'}
@@ -1035,7 +1035,7 @@ export default function RecordDetailScreen({ route, navigation }: any) {
                             <Text style={{ fontFamily: SANS_MEDIUM, fontSize: 14, color: palette.EHR_ON_SURFACE, fontWeight: '500' }}>
                                 Chia sẻ qua địa chỉ ví
                             </Text>
-                            <Text style={{ fontFamily: SANS, fontSize: 11.5, color: palette.EHR_OUTLINE, marginTop: 2 }}>
+                            <Text style={{ fontFamily: SANS, fontSize: 11.5, color: palette.EHR_TEXT_MUTED, marginTop: 2 }}>
                                 Cấp quyền on-chain cho bác sĩ
                             </Text>
                         </YStack>
@@ -1072,7 +1072,7 @@ export default function RecordDetailScreen({ route, navigation }: any) {
                             <Text style={{ fontFamily: SANS_MEDIUM, fontSize: 14, color: palette.EHR_ON_SURFACE, fontWeight: '500' }}>
                                 Hiển thị mã CID
                             </Text>
-                            <Text style={{ fontFamily: SANS, fontSize: 11.5, color: palette.EHR_OUTLINE, marginTop: 2 }}>
+                            <Text style={{ fontFamily: SANS, fontSize: 11.5, color: palette.EHR_TEXT_MUTED, marginTop: 2 }}>
                                 Cho bác sĩ nhập CID Hash để tìm hồ sơ
                             </Text>
                         </YStack>
@@ -1188,7 +1188,7 @@ function DecryptedContent({
 
             {decryptedImage ? (
                 <YStack style={{ marginBottom: 12 }}>
-                    <Text style={{ fontFamily: SANS_SEMI, fontSize: 11, color: palette.EHR_OUTLINE, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8, fontWeight: '700' }}>
+                    <Text style={{ fontFamily: SANS_SEMI, fontSize: 11, color: palette.EHR_TEXT_MUTED, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8, fontWeight: '700' }}>
                         Ảnh đính kèm
                     </Text>
                     <Pressable onPress={onOpenImage}>
@@ -1200,7 +1200,7 @@ function DecryptedContent({
                             />
                         </View>
                     </Pressable>
-                    <Text style={{ marginTop: 6, fontFamily: SANS, fontSize: 11, color: palette.EHR_OUTLINE }}>
+                    <Text style={{ marginTop: 6, fontFamily: SANS, fontSize: 11, color: palette.EHR_TEXT_MUTED }}>
                         {decryptedImage.fileName || 'Ảnh đính kèm'} • Chạm để xem toàn màn hình
                     </Text>
                 </YStack>
@@ -1212,7 +1212,7 @@ function DecryptedContent({
                     <KV label="Loại" value={data.meta.type || '—'} />
                     {data.meta.description ? (
                         <YStack style={{ marginTop: 6 }}>
-                            <Text style={{ fontFamily: SANS, fontSize: 11, color: palette.EHR_OUTLINE, marginBottom: 2 }}>Mô tả</Text>
+                            <Text style={{ fontFamily: SANS, fontSize: 11, color: palette.EHR_TEXT_MUTED, marginBottom: 2 }}>Mô tả</Text>
                             <Text style={{ fontFamily: SANS, fontSize: 13, color: palette.EHR_ON_SURFACE, lineHeight: 20 }}>
                                 {data.meta.description}
                             </Text>
@@ -1250,7 +1250,7 @@ function DecryptedContent({
                                 borderColor: palette.EHR_OUTLINE_SOFT,
                             }}
                         >
-                            <Text style={{ fontFamily: SANS, fontSize: 13, color: palette.EHR_OUTLINE, textTransform: 'capitalize' }}>
+                            <Text style={{ fontFamily: SANS, fontSize: 13, color: palette.EHR_TEXT_MUTED, textTransform: 'capitalize' }}>
                                 {key}
                             </Text>
                             <View
@@ -1303,7 +1303,7 @@ function DecryptedContent({
                             </Text>
                             <XStack style={{ gap: 12, marginTop: 4 }}>
                                 {p.dosage ? (
-                                    <Text style={{ fontFamily: SANS, fontSize: 12, color: palette.EHR_OUTLINE }}>
+                                    <Text style={{ fontFamily: SANS, fontSize: 12, color: palette.EHR_TEXT_MUTED }}>
                                         Liều:{' '}
                                         <Text style={{ fontFamily: SANS_SEMI, color: palette.EHR_ON_SURFACE, fontWeight: '700' }}>
                                             {p.dosage}
@@ -1311,7 +1311,7 @@ function DecryptedContent({
                                     </Text>
                                 ) : null}
                                 {p.frequency ? (
-                                    <Text style={{ fontFamily: SANS, fontSize: 12, color: palette.EHR_OUTLINE }}>
+                                    <Text style={{ fontFamily: SANS, fontSize: 12, color: palette.EHR_TEXT_MUTED }}>
                                         Tần suất:{' '}
                                         <Text style={{ fontFamily: SANS_SEMI, color: palette.EHR_ON_SURFACE, fontWeight: '700' }}>
                                             {p.frequency}
@@ -1368,7 +1368,7 @@ function KV({ label, value }: { label: string; value: string }) {
     const palette = useEhrPalette();
     return (
         <XStack style={{ justifyContent: 'space-between', alignItems: 'baseline', marginVertical: 3 }}>
-            <Text style={{ fontFamily: SANS, fontSize: 12.5, color: palette.EHR_OUTLINE }}>{label}</Text>
+            <Text style={{ fontFamily: SANS, fontSize: 12.5, color: palette.EHR_TEXT_MUTED }}>{label}</Text>
             <Text
                 style={{
                     fontFamily: SANS_SEMI,
@@ -1448,7 +1448,7 @@ function ShareModal(props: {
                             Chia sẻ hồ sơ
                         </Text>
                         <Pressable onPress={onClose} hitSlop={10}>
-                            <X size={20} color={palette.EHR_OUTLINE} />
+                            <X size={20} color={palette.EHR_TEXT_MUTED} />
                         </Pressable>
                     </XStack>
                     <ScrollView showsVerticalScrollIndicator={false}>
@@ -1476,7 +1476,7 @@ function ShareModal(props: {
                             }}
                         />
 
-                        <Text style={{ fontFamily: SANS_SEMI, fontSize: 11, color: palette.EHR_OUTLINE, marginBottom: 8, letterSpacing: 0.4, textTransform: 'uppercase', fontWeight: '600' }}>
+                        <Text style={{ fontFamily: SANS_SEMI, fontSize: 11, color: palette.EHR_TEXT_MUTED, marginBottom: 8, letterSpacing: 0.4, textTransform: 'uppercase', fontWeight: '600' }}>
                             Loại quyền truy cập
                         </Text>
                         <YStack style={{ gap: 8, marginBottom: 16 }}>
@@ -1520,7 +1520,7 @@ function ShareModal(props: {
                                                     </Text>
                                                     <ViModeChip mode={opt.value} />
                                                 </XStack>
-                                                <Text style={{ fontFamily: SANS, fontSize: 11.5, color: palette.EHR_OUTLINE, marginTop: 4 }}>
+                                                <Text style={{ fontFamily: SANS, fontSize: 11.5, color: palette.EHR_TEXT_MUTED, marginTop: 4 }}>
                                                     {opt.sub}
                                                 </Text>
                                             </YStack>
@@ -1530,7 +1530,7 @@ function ShareModal(props: {
                             })}
                         </YStack>
 
-                        <Text style={{ fontFamily: SANS_SEMI, fontSize: 11, color: palette.EHR_OUTLINE, marginBottom: 8, letterSpacing: 0.4, textTransform: 'uppercase', fontWeight: '600' }}>
+                        <Text style={{ fontFamily: SANS_SEMI, fontSize: 11, color: palette.EHR_TEXT_MUTED, marginBottom: 8, letterSpacing: 0.4, textTransform: 'uppercase', fontWeight: '600' }}>
                             Thời hạn truy cập
                         </Text>
                         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
@@ -1676,7 +1676,7 @@ function ShareModal(props: {
                                 marginTop: 10,
                                 fontFamily: SANS,
                                 fontSize: 11,
-                                color: palette.EHR_OUTLINE,
+                                color: palette.EHR_TEXT_MUTED,
                                 textAlign: 'center',
                                 lineHeight: 16,
                             }}
@@ -1706,7 +1706,7 @@ function QrModal({ visible, onClose, cidHash }: { visible: boolean; onClose: () 
                                 CID Hash hồ sơ
                             </Text>
                             <Pressable onPress={onClose} hitSlop={10}>
-                                <X size={20} color={palette.EHR_OUTLINE} />
+                                <X size={20} color={palette.EHR_TEXT_MUTED} />
                             </Pressable>
                         </XStack>
                         <Text style={{ fontFamily: SANS, fontSize: 13, color: palette.EHR_ON_SURFACE_VARIANT, marginBottom: 12, lineHeight: 18 }}>

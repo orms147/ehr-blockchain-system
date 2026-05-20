@@ -517,7 +517,7 @@ export default function DoctorDashboardScreen() {
                                     style={{
                                         fontFamily: SANS_SEMI,
                                         fontSize: 11,
-                                        color: palette.EHR_OUTLINE,
+                                        color: palette.EHR_TEXT_MUTED,
                                         letterSpacing: 1.2,
                                         textTransform: 'uppercase',
                                         fontWeight: '700',
@@ -632,7 +632,7 @@ export default function DoctorDashboardScreen() {
                                     style={{
                                         fontFamily: SANS_SEMI,
                                         fontSize: 10,
-                                        color: palette.EHR_OUTLINE,
+                                        color: palette.EHR_TEXT_MUTED,
                                         letterSpacing: 1.2,
                                         textTransform: 'uppercase',
                                         fontWeight: '700',
@@ -756,7 +756,7 @@ export default function DoctorDashboardScreen() {
                                         style={{
                                             fontFamily: SANS,
                                             fontSize: 11.5,
-                                            color: palette.EHR_OUTLINE,
+                                            color: palette.EHR_TEXT_MUTED,
                                             marginTop: 2,
                                         }}
                                     >
@@ -809,7 +809,7 @@ export default function DoctorDashboardScreen() {
                                         style={{
                                             fontFamily: SANS,
                                             fontSize: 11.5,
-                                            color: palette.EHR_OUTLINE,
+                                            color: palette.EHR_TEXT_MUTED,
                                             marginTop: 2,
                                         }}
                                     >
@@ -858,7 +858,7 @@ export default function DoctorDashboardScreen() {
                                                             marginTop: 4,
                                                             fontFamily: SANS,
                                                             fontSize: 11,
-                                                            color: palette.EHR_OUTLINE,
+                                                            color: palette.EHR_TEXT_MUTED,
                                                         }}
                                                     >
                                                         Yêu cầu đã hết hạn ·{' '}
@@ -981,7 +981,7 @@ export default function DoctorDashboardScreen() {
                 }
                 ListEmptyComponent={
                     <View style={{ paddingHorizontal: 22, paddingTop: 24, alignItems: 'center' }}>
-                        <FileText size={28} color={palette.EHR_OUTLINE} />
+                        <FileText size={28} color={palette.EHR_TEXT_MUTED} />
                         <Text
                             style={{
                                 marginTop: 12,
@@ -998,7 +998,7 @@ export default function DoctorDashboardScreen() {
                                 marginTop: 8,
                                 fontFamily: SANS,
                                 fontSize: 13,
-                                color: palette.EHR_OUTLINE,
+                                color: palette.EHR_TEXT_MUTED,
                                 textAlign: 'center',
                                 lineHeight: 19,
                                 maxWidth: 260,
@@ -1048,7 +1048,7 @@ function DocStat({ n, label, accent }: { n: number | string; label: string; acce
                     marginTop: 6,
                     fontFamily: SANS_SEMI,
                     fontSize: 10,
-                    color: palette.EHR_OUTLINE,
+                    color: palette.EHR_TEXT_MUTED,
                     letterSpacing: 1,
                     textTransform: 'uppercase',
                     fontWeight: '700',
@@ -1138,7 +1138,7 @@ function ActionTile({
                     marginTop: 2,
                     fontFamily: SANS,
                     fontSize: 11,
-                    color: palette.EHR_OUTLINE,
+                    color: palette.EHR_TEXT_MUTED,
                     lineHeight: 15,
                 }}
                 numberOfLines={2}

@@ -77,14 +77,14 @@ function PendingRow({
                         {item.fullName || 'Bác sĩ'}
                     </Text>
                     {item.specialty ? (
-                        <Text style={{ fontFamily: SANS, fontSize: 12, color: palette.EHR_OUTLINE, marginTop: 2 }}>
+                        <Text style={{ fontFamily: SANS, fontSize: 12, color: palette.EHR_TEXT_MUTED, marginTop: 2 }}>
                             {item.specialty}
                         </Text>
                     ) : null}
-                    <Text style={{ fontFamily: 'monospace', fontSize: 11, color: palette.EHR_OUTLINE, marginTop: 3 }}>
+                    <Text style={{ fontFamily: 'monospace', fontSize: 11, color: palette.EHR_TEXT_MUTED, marginTop: 3 }}>
                         {truncate(item.doctorAddress || item.address || item.walletAddress)}
                     </Text>
-                    <Text style={{ fontFamily: SANS, fontSize: 11, color: palette.EHR_OUTLINE, marginTop: 3 }}>
+                    <Text style={{ fontFamily: SANS, fontSize: 11, color: palette.EHR_TEXT_MUTED, marginTop: 3 }}>
                         Yêu cầu: {new Date(item.requestedAt || item.createdAt || Date.now()).toLocaleDateString('vi-VN')}
                     </Text>
                 </YStack>
@@ -97,7 +97,7 @@ function PendingRow({
                         size="sm"
                         onPress={() => onReject(item)}
                         disabled={processing}
-                        leftIcon={<X size={14} color={palette.EHR_OUTLINE} />}
+                        leftIcon={<X size={14} color={palette.EHR_TEXT_MUTED} />}
                     >
                         Từ chối
                     </ViButton>
@@ -254,7 +254,7 @@ export default function OrgPendingVerificationsScreen() {
 
             {pending.length === 0 ? (
                 <View style={{ paddingHorizontal: 22, paddingTop: 30, alignItems: 'center' }}>
-                    <Award size={28} color={palette.EHR_OUTLINE} />
+                    <Award size={28} color={palette.EHR_TEXT_MUTED} />
                     <Text
                         style={{
                             marginTop: 12,
@@ -271,7 +271,7 @@ export default function OrgPendingVerificationsScreen() {
                             marginTop: 8,
                             fontFamily: SANS,
                             fontSize: 13,
-                            color: palette.EHR_OUTLINE,
+                            color: palette.EHR_TEXT_MUTED,
                             textAlign: 'center',
                             maxWidth: 280,
                             lineHeight: 19,

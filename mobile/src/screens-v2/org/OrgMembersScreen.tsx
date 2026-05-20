@@ -59,11 +59,11 @@ function MemberRow({ item }: { item: Member }) {
                         {item.fullName || 'Bác sĩ'}
                     </Text>
                     {item.specialty ? (
-                        <Text style={{ fontFamily: SANS, fontSize: 12, color: palette.EHR_OUTLINE, marginTop: 2 }}>
+                        <Text style={{ fontFamily: SANS, fontSize: 12, color: palette.EHR_TEXT_MUTED, marginTop: 2 }}>
                             {item.specialty}
                         </Text>
                     ) : null}
-                    <Text style={{ fontFamily: 'monospace', fontSize: 11, color: palette.EHR_OUTLINE, marginTop: 3 }}>
+                    <Text style={{ fontFamily: 'monospace', fontSize: 11, color: palette.EHR_TEXT_MUTED, marginTop: 3 }}>
                         {truncate(item.address || item.walletAddress)}
                     </Text>
                 </YStack>
@@ -181,7 +181,7 @@ export default function OrgMembersScreen() {
                         paddingHorizontal: 12,
                     }}
                 >
-                    <Search size={15} color={palette.EHR_OUTLINE} />
+                    <Search size={15} color={palette.EHR_TEXT_MUTED} />
                     <TextInput
                         value={searchTerm}
                         onChangeText={setSearchTerm}
@@ -214,13 +214,13 @@ export default function OrgMembersScreen() {
                 }
                 ListEmptyComponent={
                     <View style={{ paddingTop: 30, alignItems: 'center' }}>
-                        <Users size={26} color={palette.EHR_OUTLINE} />
+                        <Users size={26} color={palette.EHR_TEXT_MUTED} />
                         <Text
                             style={{
                                 marginTop: 10,
                                 fontFamily: SANS,
                                 fontSize: 13,
-                                color: palette.EHR_OUTLINE,
+                                color: palette.EHR_TEXT_MUTED,
                                 textAlign: 'center',
                             }}
                         >

@@ -187,10 +187,10 @@ export default function DoctorDelegatableRecordsScreen() {
                     >
                         {item.record?.title || 'Hồ sơ y tế'}
                     </Text>
-                    <Text style={{ fontFamily: SANS, fontSize: 12, color: palette.EHR_OUTLINE, marginTop: 2 }}>
+                    <Text style={{ fontFamily: SANS, fontSize: 12, color: palette.EHR_TEXT_MUTED, marginTop: 2 }}>
                         {item.record?.recordType || 'medical_record'}
                     </Text>
-                    <Text style={{ fontFamily: 'monospace', fontSize: 11, color: palette.EHR_OUTLINE, marginTop: 2 }}>
+                    <Text style={{ fontFamily: 'monospace', fontSize: 11, color: palette.EHR_TEXT_MUTED, marginTop: 2 }}>
                         BN: {item.record?.ownerAddress?.slice(0, 10)}…
                     </Text>
                 </YStack>
@@ -251,7 +251,7 @@ export default function DoctorDelegatableRecordsScreen() {
                 ListEmptyComponent={
                     !isLoading ? (
                         <View style={{ paddingTop: 30, alignItems: 'center' }}>
-                            <Users size={28} color={palette.EHR_OUTLINE} />
+                            <Users size={28} color={palette.EHR_TEXT_MUTED} />
                             <Text
                                 style={{
                                     marginTop: 12,
@@ -268,7 +268,7 @@ export default function DoctorDelegatableRecordsScreen() {
                                     marginTop: 8,
                                     fontFamily: SANS,
                                     fontSize: 13,
-                                    color: palette.EHR_OUTLINE,
+                                    color: palette.EHR_TEXT_MUTED,
                                     textAlign: 'center',
                                     maxWidth: 280,
                                     lineHeight: 19,
@@ -310,7 +310,7 @@ export default function DoctorDelegatableRecordsScreen() {
                                 Uỷ quyền hồ sơ
                             </Text>
                             <Pressable onPress={closeModal} hitSlop={8}>
-                                <X size={18} color={palette.EHR_OUTLINE} />
+                                <X size={18} color={palette.EHR_TEXT_MUTED} />
                             </Pressable>
                         </XStack>
                         <Text style={{ fontFamily: SANS, fontSize: 13, color: palette.EHR_ON_SURFACE_VARIANT, marginBottom: 16 }}>
@@ -377,7 +377,7 @@ function FieldLabel({ children }: { children: React.ReactNode }) {
             style={{
                 fontFamily: SANS_SEMI,
                 fontSize: 11.5,
-                color: palette.EHR_OUTLINE,
+                color: palette.EHR_TEXT_MUTED,
                 marginBottom: 6,
                 letterSpacing: 0.4,
                 textTransform: 'uppercase',

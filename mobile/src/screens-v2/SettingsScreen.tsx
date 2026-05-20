@@ -160,7 +160,7 @@ export default function SettingsScreen() {
                             sheetTitle="Địa chỉ ví đầy đủ"
                         />
                     ) : (
-                        <Text style={{ fontFamily: SANS, fontSize: 12, color: palette.EHR_OUTLINE }}>
+                        <Text style={{ fontFamily: SANS, fontSize: 12, color: palette.EHR_TEXT_MUTED }}>
                             Chưa kết nối ví.
                         </Text>
                     )}
@@ -175,7 +175,7 @@ export default function SettingsScreen() {
                             marginTop: 12,
                             fontFamily: SANS,
                             fontSize: 11,
-                            color: palette.EHR_OUTLINE,
+                            color: palette.EHR_TEXT_MUTED,
                             lineHeight: 16,
                         }}
                     >
@@ -276,7 +276,7 @@ export default function SettingsScreen() {
                         textAlign: 'center',
                         fontFamily: SANS,
                         fontSize: 11,
-                        color: palette.EHR_OUTLINE,
+                        color: palette.EHR_TEXT_MUTED,
                         letterSpacing: 0.4,
                     }}
                 >
@@ -341,7 +341,7 @@ function Tile({
                                 marginTop: 2,
                                 fontFamily: SANS,
                                 fontSize: 11.5,
-                                color: palette.EHR_OUTLINE,
+                                color: palette.EHR_TEXT_MUTED,
                                 lineHeight: 16,
                             }}
                             numberOfLines={2}
@@ -352,7 +352,7 @@ function Tile({
                 </View>
             </View>
             {!danger && onPress ? (
-                <ChevronRight size={16} color={palette.EHR_OUTLINE} />
+                <ChevronRight size={16} color={palette.EHR_TEXT_MUTED} />
             ) : null}
         </Pressable>
     );
@@ -398,7 +398,7 @@ function BioToggleTile({
                         marginTop: 2,
                         fontFamily: SANS,
                         fontSize: 11.5,
-                        color: palette.EHR_OUTLINE,
+                        color: palette.EHR_TEXT_MUTED,
                         lineHeight: 16,
                     }}
                 >
@@ -461,7 +461,7 @@ function ThemeRow({
                         marginTop: 2,
                         fontFamily: SANS,
                         fontSize: 11.5,
-                        color: palette.EHR_OUTLINE,
+                        color: palette.EHR_TEXT_MUTED,
                         lineHeight: 16,
                     }}
                 >

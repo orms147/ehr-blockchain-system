@@ -154,7 +154,7 @@ function DelegationCard({
                         style={{
                             fontFamily: SANS_SEMI,
                             fontSize: 9,
-                            color: palette.EHR_OUTLINE,
+                            color: palette.EHR_TEXT_MUTED,
                             letterSpacing: 1,
                             textTransform: 'uppercase',
                             fontWeight: '700',
@@ -178,7 +178,7 @@ function DelegationCard({
                             marginTop: 12,
                             fontFamily: SANS,
                             fontSize: 11.5,
-                            color: palette.EHR_OUTLINE,
+                            color: palette.EHR_TEXT_MUTED,
                             lineHeight: 16,
                             fontStyle: 'italic',
                         }}
@@ -200,7 +200,7 @@ function DelegationCard({
                         justifyContent: 'space-between',
                     }}
                 >
-                    <Text style={{ fontFamily: SANS, fontSize: 11, color: palette.EHR_OUTLINE }}>
+                    <Text style={{ fontFamily: SANS, fontSize: 11, color: palette.EHR_TEXT_MUTED }}>
                         Đến hạn{' '}
                         <Text
                             style={{
@@ -313,7 +313,7 @@ function Power({ label, sub, on }: { label: string; sub: string; on: boolean }) 
                         marginTop: 2,
                         fontFamily: SANS,
                         fontSize: 10.5,
-                        color: palette.EHR_OUTLINE,
+                        color: palette.EHR_TEXT_MUTED,
                     }}
                 >
                     {sub}
@@ -407,7 +407,7 @@ function GrantAuthorityModal({
                             }}
                             hitSlop={8}
                         >
-                            <X size={18} color={palette.EHR_OUTLINE} />
+                            <X size={18} color={palette.EHR_TEXT_MUTED} />
                         </Pressable>
                     </XStack>
 
@@ -476,7 +476,7 @@ function GrantAuthorityModal({
                             onChangeText={setDays}
                             keyboardType="number-pad"
                         />
-                        <Text style={{ fontFamily: SANS, fontSize: 11, color: palette.EHR_OUTLINE, marginTop: 4 }}>
+                        <Text style={{ fontFamily: SANS, fontSize: 11, color: palette.EHR_TEXT_MUTED, marginTop: 4 }}>
                             Tối thiểu 1 ngày, tối đa 1825 (5 năm).
                         </Text>
 
@@ -508,7 +508,7 @@ function GrantAuthorityModal({
                                         marginTop: 2,
                                         fontFamily: SANS,
                                         fontSize: 11.5,
-                                        color: palette.EHR_OUTLINE,
+                                        color: palette.EHR_TEXT_MUTED,
                                         lineHeight: 16,
                                     }}
                                 >
@@ -564,7 +564,7 @@ function GrantAuthorityModal({
                                 textAlign: 'center',
                                 fontFamily: SANS,
                                 fontSize: 11,
-                                color: palette.EHR_OUTLINE,
+                                color: palette.EHR_TEXT_MUTED,
                                 lineHeight: 16,
                             }}
                         >
@@ -729,7 +729,7 @@ function ExtendSheet({
                             marginBottom: 18,
                         }}
                     >
-                        <Text style={{ fontFamily: SANS, fontSize: 11.5, color: palette.EHR_OUTLINE }}>
+                        <Text style={{ fontFamily: SANS, fontSize: 11.5, color: palette.EHR_TEXT_MUTED }}>
                             Hạn mới sẽ là{' '}
                             <Text style={{ fontFamily: 'monospace', color: palette.EHR_ON_SURFACE, fontWeight: '700' }}>
                                 {formatExpiryDate(newExpiry)}
@@ -762,7 +762,7 @@ function ExtendSheet({
                             textAlign: 'center',
                             fontFamily: SANS,
                             fontSize: 10.5,
-                            color: palette.EHR_OUTLINE,
+                            color: palette.EHR_TEXT_MUTED,
                             lineHeight: 15,
                             fontStyle: 'italic',
                         }}
@@ -782,7 +782,7 @@ function FieldLabel({ children }: { children: React.ReactNode }) {
             style={{
                 fontFamily: SANS_SEMI,
                 fontSize: 11.5,
-                color: palette.EHR_OUTLINE,
+                color: palette.EHR_TEXT_MUTED,
                 marginBottom: 6,
                 letterSpacing: 0.4,
                 textTransform: 'uppercase',
@@ -943,7 +943,7 @@ export default function DelegationScreen() {
                                     marginTop: 22,
                                     fontFamily: SANS_SEMI,
                                     fontSize: 10,
-                                    color: palette.EHR_OUTLINE,
+                                    color: palette.EHR_TEXT_MUTED,
                                     letterSpacing: 1.2,
                                     textTransform: 'uppercase',
                                     fontWeight: '700',
@@ -959,7 +959,7 @@ export default function DelegationScreen() {
                 }
                 ListEmptyComponent={
                     <View style={{ paddingTop: 14, alignItems: 'center' }}>
-                        <Users size={32} color={palette.EHR_OUTLINE} />
+                        <Users size={32} color={palette.EHR_TEXT_MUTED} />
                         <Text
                             style={{
                                 marginTop: 14,
@@ -976,7 +976,7 @@ export default function DelegationScreen() {
                                 marginTop: 8,
                                 fontFamily: SANS,
                                 fontSize: 13,
-                                color: palette.EHR_OUTLINE,
+                                color: palette.EHR_TEXT_MUTED,
                                 textAlign: 'center',
                                 maxWidth: 280,
                                 lineHeight: 19,
@@ -1031,7 +1031,7 @@ export default function DelegationScreen() {
                                 textAlign: 'center',
                                 fontFamily: SANS,
                                 fontSize: 10.5,
-                                color: palette.EHR_OUTLINE,
+                                color: palette.EHR_TEXT_MUTED,
                                 lineHeight: 16,
                                 fontStyle: 'italic',
                             }}
@@ -1054,13 +1054,13 @@ export default function DelegationScreen() {
                                 gap: 8,
                             }}
                         >
-                            <Info size={13} color={palette.EHR_OUTLINE} style={{ marginTop: 2 }} />
+                            <Info size={13} color={palette.EHR_TEXT_MUTED} style={{ marginTop: 2 }} />
                             <Text
                                 style={{
                                     flex: 1,
                                     fontFamily: SANS,
                                     fontSize: 11,
-                                    color: palette.EHR_OUTLINE,
+                                    color: palette.EHR_TEXT_MUTED,
                                     lineHeight: 16,
                                 }}
                             >

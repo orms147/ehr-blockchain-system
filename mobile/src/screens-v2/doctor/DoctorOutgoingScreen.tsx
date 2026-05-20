@@ -43,7 +43,7 @@ function getStatusConfig(status: string | undefined, palette: ReturnType<typeof 
         case 'rejected':
             return { label: 'Bị từ chối', color: palette.EHR_DANGER, Icon: XCircle };
         case 'expired':
-            return { label: 'Hết hạn', color: palette.EHR_OUTLINE, Icon: Clock };
+            return { label: 'Hết hạn', color: palette.EHR_TEXT_MUTED, Icon: Clock };
         case 'claimed':
             return { label: 'Đã xác nhận', color: palette.EHR_TERTIARY, Icon: CheckCircle };
         default:
@@ -62,7 +62,7 @@ function OutgoingRow({ item }: { item: RequestItem }) {
                 <View style={{ flex: 1 }}>
                     {/* G.2 — patient wallet → UserChip (no expanded, single line for tight row) */}
                     <UserChip address={item.patientAddress} showAddress={false} />
-                    <Text style={{ fontFamily: SANS, fontSize: 11.5, color: palette.EHR_OUTLINE, marginTop: 4 }}>
+                    <Text style={{ fontFamily: SANS, fontSize: 11.5, color: palette.EHR_TEXT_MUTED, marginTop: 4 }}>
                         {formatDate(item.createdAt)}
                     </Text>
                 </View>
@@ -104,7 +104,7 @@ function OutgoingRow({ item }: { item: RequestItem }) {
                 >
                     <ShieldCheck size={11} color={palette.EHR_PRIMARY} />
                     <Text
-                        style={{ fontFamily: 'monospace', fontSize: 11, color: palette.EHR_OUTLINE }}
+                        style={{ fontFamily: 'monospace', fontSize: 11, color: palette.EHR_TEXT_MUTED }}
                         numberOfLines={1}
                     >
                         CID: {item.cidHash.slice(0, 22)}…
@@ -184,7 +184,7 @@ export default function DoctorOutgoingScreen() {
                         Theo dõi trạng thái các yêu cầu truy cập bạn đã gửi.
                     </Text>
                     <View style={{ paddingTop: 40, alignItems: 'center' }}>
-                        <Send size={28} color={palette.EHR_OUTLINE} />
+                        <Send size={28} color={palette.EHR_TEXT_MUTED} />
                         <Text
                             style={{
                                 marginTop: 12,
@@ -201,7 +201,7 @@ export default function DoctorOutgoingScreen() {
                                 marginTop: 8,
                                 fontFamily: SANS,
                                 fontSize: 13,
-                                color: palette.EHR_OUTLINE,
+                                color: palette.EHR_TEXT_MUTED,
                                 textAlign: 'center',
                                 lineHeight: 19,
                                 maxWidth: 280,

@@ -108,13 +108,13 @@ export default function OrgDashboardScreen() {
                         <Text style={{ fontFamily: SANS, fontSize: 14, color: palette.EHR_ON_SURFACE_VARIANT, marginBottom: 8, lineHeight: 20 }}>
                             Đơn đăng ký "{application.orgName || 'Tổ chức'}" đang được Bộ Y tế xem xét.
                         </Text>
-                        <Text style={{ fontFamily: SANS, fontSize: 12, color: palette.EHR_OUTLINE }}>
+                        <Text style={{ fontFamily: SANS, fontSize: 12, color: palette.EHR_TEXT_MUTED }}>
                             Ngày nộp:{' '}
                             {application.createdAt
                                 ? new Date(application.createdAt).toLocaleDateString('vi-VN')
                                 : ''}
                         </Text>
-                        <Text style={{ fontFamily: SANS, fontSize: 12, color: palette.EHR_OUTLINE }}>
+                        <Text style={{ fontFamily: SANS, fontSize: 12, color: palette.EHR_TEXT_MUTED }}>
                             Email: {application.contactEmail || '—'}
                         </Text>
                     </ViCard>
@@ -134,7 +134,7 @@ export default function OrgDashboardScreen() {
                         <RoleSwitcher />
                     </XStack>
                     <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-                        <Building2 size={28} color={palette.EHR_OUTLINE} />
+                        <Building2 size={28} color={palette.EHR_TEXT_MUTED} />
                         <Text
                             style={{
                                 marginTop: 12,
@@ -151,7 +151,7 @@ export default function OrgDashboardScreen() {
                                 marginTop: 8,
                                 fontFamily: SANS,
                                 fontSize: 13,
-                                color: palette.EHR_OUTLINE,
+                                color: palette.EHR_TEXT_MUTED,
                                 textAlign: 'center',
                                 maxWidth: 280,
                                 lineHeight: 19,
@@ -208,7 +208,7 @@ export default function OrgDashboardScreen() {
                                     >
                                         {item.fullName || 'Bác sĩ'}
                                     </Text>
-                                    <Text style={{ fontFamily: 'monospace', fontSize: 11, color: palette.EHR_OUTLINE, marginTop: 2 }}>
+                                    <Text style={{ fontFamily: 'monospace', fontSize: 11, color: palette.EHR_TEXT_MUTED, marginTop: 2 }}>
                                         {truncate(item.address || item.walletAddress)}
                                     </Text>
                                 </YStack>
@@ -282,10 +282,10 @@ export default function OrgDashboardScreen() {
                                     {org.name || 'Tổ chức'}
                                 </Text>
                             </XStack>
-                            <Text style={{ fontFamily: SANS, fontSize: 12, color: palette.EHR_OUTLINE }}>
+                            <Text style={{ fontFamily: SANS, fontSize: 12, color: palette.EHR_TEXT_MUTED }}>
                                 Loại: {org.orgType === 'hospital' ? 'Bệnh viện' : 'Phòng khám'}
                             </Text>
-                            <Text style={{ fontFamily: 'monospace', fontSize: 11, color: palette.EHR_OUTLINE, marginTop: 3 }}>
+                            <Text style={{ fontFamily: 'monospace', fontSize: 11, color: palette.EHR_TEXT_MUTED, marginTop: 3 }}>
                                 Ví: {truncate(org.address)}
                             </Text>
                         </ViCard>
@@ -321,13 +321,13 @@ export default function OrgDashboardScreen() {
                 }
                 ListEmptyComponent={
                     <View style={{ paddingTop: 24, alignItems: 'center' }}>
-                        <Users size={26} color={palette.EHR_OUTLINE} />
+                        <Users size={26} color={palette.EHR_TEXT_MUTED} />
                         <Text
                             style={{
                                 marginTop: 10,
                                 fontFamily: SANS,
                                 fontSize: 13,
-                                color: palette.EHR_OUTLINE,
+                                color: palette.EHR_TEXT_MUTED,
                             }}
                         >
                             Chưa có thành viên nào
@@ -370,7 +370,7 @@ function StatTile({
                     marginTop: 2,
                     fontFamily: SANS_SEMI,
                     fontSize: 10.5,
-                    color: palette.EHR_OUTLINE,
+                    color: palette.EHR_TEXT_MUTED,
                     letterSpacing: 0.4,
                     textTransform: 'uppercase',
                     fontWeight: '600',

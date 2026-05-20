@@ -226,8 +226,8 @@ export default function MinistryDashboardScreen() {
                 {activeTab === 'orgs' ? (
                     organizations.length === 0 ? (
                         <View style={{ paddingTop: 20, alignItems: 'center' }}>
-                            <Building2 size={26} color={palette.EHR_OUTLINE} />
-                            <Text style={{ marginTop: 10, fontFamily: SANS, fontSize: 13, color: palette.EHR_OUTLINE }}>
+                            <Building2 size={26} color={palette.EHR_TEXT_MUTED} />
+                            <Text style={{ marginTop: 10, fontFamily: SANS, fontSize: 13, color: palette.EHR_TEXT_MUTED }}>
                                 Chưa có tổ chức nào đăng ký.
                             </Text>
                         </View>
@@ -258,13 +258,13 @@ export default function MinistryDashboardScreen() {
                                         >
                                             {org.name || org.orgName || 'Tổ chức'}
                                         </Text>
-                                        <Text style={{ fontFamily: 'monospace', fontSize: 11, color: palette.EHR_OUTLINE, marginTop: 2 }}>
+                                        <Text style={{ fontFamily: 'monospace', fontSize: 11, color: palette.EHR_TEXT_MUTED, marginTop: 2 }}>
                                             {truncate(org.address)}
                                         </Text>
                                     </YStack>
                                     <ViStatusChip status="verified" />
                                 </XStack>
-                                <Text style={{ fontFamily: SANS, fontSize: 11.5, color: palette.EHR_OUTLINE }}>
+                                <Text style={{ fontFamily: SANS, fontSize: 11.5, color: palette.EHR_TEXT_MUTED }}>
                                     {org.orgType === 'hospital' ? 'Bệnh viện' : 'Phòng khám'} · {org.doctorCount || 0} bác sĩ
                                 </Text>
                             </ViCard>
@@ -275,8 +275,8 @@ export default function MinistryDashboardScreen() {
                 {activeTab === 'pending' ? (
                     pendingApps.length === 0 ? (
                         <View style={{ paddingTop: 20, alignItems: 'center' }}>
-                            <Clock size={26} color={palette.EHR_OUTLINE} />
-                            <Text style={{ marginTop: 10, fontFamily: SANS, fontSize: 13, color: palette.EHR_OUTLINE }}>
+                            <Clock size={26} color={palette.EHR_TEXT_MUTED} />
+                            <Text style={{ marginTop: 10, fontFamily: SANS, fontSize: 13, color: palette.EHR_TEXT_MUTED }}>
                                 Không có đơn chờ.
                             </Text>
                         </View>
@@ -293,13 +293,13 @@ export default function MinistryDashboardScreen() {
                                 >
                                     {app.orgName || 'Tổ chức'}
                                 </Text>
-                                <Text style={{ marginTop: 4, fontFamily: SANS, fontSize: 12, color: palette.EHR_OUTLINE }}>
+                                <Text style={{ marginTop: 4, fontFamily: SANS, fontSize: 12, color: palette.EHR_TEXT_MUTED }}>
                                     {app.orgType === 'hospital' ? 'Bệnh viện' : 'Phòng khám'} ·{' '}
                                     <Text style={{ fontFamily: 'monospace' }}>
                                         {truncate(app.applicantAddress || app.address)}
                                     </Text>
                                 </Text>
-                                <Text style={{ marginTop: 3, fontFamily: SANS, fontSize: 11, color: palette.EHR_OUTLINE }}>
+                                <Text style={{ marginTop: 3, fontFamily: SANS, fontSize: 11, color: palette.EHR_TEXT_MUTED }}>
                                     Ngày nộp:{' '}
                                     {app.createdAt ? new Date(app.createdAt).toLocaleDateString('vi-VN') : ''}
                                 </Text>
@@ -310,7 +310,7 @@ export default function MinistryDashboardScreen() {
                                             full
                                             size="sm"
                                             onPress={() => handleReject(app)}
-                                            leftIcon={<X size={14} color={palette.EHR_OUTLINE} />}
+                                            leftIcon={<X size={14} color={palette.EHR_TEXT_MUTED} />}
                                         >
                                             Từ chối
                                         </ViButton>
@@ -428,7 +428,7 @@ function StatTile({
                     marginTop: 2,
                     fontFamily: SANS_SEMI,
                     fontSize: 10,
-                    color: palette.EHR_OUTLINE,
+                    color: palette.EHR_TEXT_MUTED,
                     letterSpacing: 0.4,
                     textTransform: 'uppercase',
                     fontWeight: '600',

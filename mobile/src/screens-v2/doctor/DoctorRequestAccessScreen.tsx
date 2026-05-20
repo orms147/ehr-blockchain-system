@@ -361,7 +361,7 @@ export default function DoctorRequestAccessScreen() {
                             gap: 10,
                         }}
                     >
-                        <AlertCircle size={16} color={palette.EHR_OUTLINE} style={{ marginTop: 2 }} />
+                        <AlertCircle size={16} color={palette.EHR_TEXT_MUTED} style={{ marginTop: 2 }} />
                         <Text
                             style={{
                                 flex: 1,
@@ -394,7 +394,7 @@ export default function DoctorRequestAccessScreen() {
                             marginBottom: 6,
                         }}
                     >
-                        <User size={15} color={palette.EHR_OUTLINE} />
+                        <User size={15} color={palette.EHR_TEXT_MUTED} />
                         <TextInput
                             value={patientAddress}
                             onChangeText={setPatientAddress}
@@ -415,7 +415,7 @@ export default function DoctorRequestAccessScreen() {
                             <QrCode size={18} color={palette.EHR_PRIMARY} />
                         </Pressable>
                     </View>
-                    <Text style={{ fontFamily: SANS, fontSize: 11, color: palette.EHR_OUTLINE, marginBottom: 14 }}>
+                    <Text style={{ fontFamily: SANS, fontSize: 11, color: palette.EHR_TEXT_MUTED, marginBottom: 14 }}>
                         Bấm biểu tượng QR để quét từ điện thoại bệnh nhân.
                     </Text>
 
@@ -436,7 +436,7 @@ export default function DoctorRequestAccessScreen() {
                             opacity: selectedType === 1 ? 0.5 : 1,
                         }}
                     >
-                        <FileText size={15} color={palette.EHR_OUTLINE} />
+                        <FileText size={15} color={palette.EHR_TEXT_MUTED} />
                         <TextInput
                             value={selectedType === 1 ? '' : cidHash}
                             onChangeText={setCidHash}
@@ -466,7 +466,7 @@ export default function DoctorRequestAccessScreen() {
                             <QrCode size={18} color={palette.EHR_PRIMARY} />
                         </Pressable>
                     </View>
-                    <Text style={{ fontFamily: SANS, fontSize: 11, color: palette.EHR_OUTLINE, marginBottom: 18 }}>
+                    <Text style={{ fontFamily: SANS, fontSize: 11, color: palette.EHR_TEXT_MUTED, marginBottom: 18 }}>
                         {selectedType === 1
                             ? 'Uỷ quyền toàn bộ áp dụng mọi hồ sơ — không chọn CID cụ thể.'
                             : 'Bấm QR để quét mã CID trên màn hình bệnh nhân.'}
@@ -648,14 +648,14 @@ export default function DoctorRequestAccessScreen() {
                                     backgroundColor: palette.EHR_SURFACE_LOWEST,
                                 }}
                             />
-                            <Text style={{ fontFamily: SANS, fontSize: 10.5, color: palette.EHR_OUTLINE }}>
+                            <Text style={{ fontFamily: SANS, fontSize: 10.5, color: palette.EHR_TEXT_MUTED }}>
                                 Contract làm tròn lên 1 giờ tối thiểu. Lựa chọn dưới 1 giờ chỉ phục vụ test UI.
                             </Text>
                         </YStack>
                     ) : null}
 
                     {durationHours === 0 ? (
-                        <Text style={{ fontFamily: SANS, fontSize: 11, color: palette.EHR_OUTLINE, marginBottom: 14, lineHeight: 16 }}>
+                        <Text style={{ fontFamily: SANS, fontSize: 11, color: palette.EHR_TEXT_MUTED, marginBottom: 14, lineHeight: 16 }}>
                             "Mặc định" = {selectedType === 1 ? '365 ngày' : '30 ngày'}. Bệnh nhân có thể thu hồi bất kỳ lúc nào.
                         </Text>
                     ) : <View style={{ height: 6 }} />}

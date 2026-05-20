@@ -126,7 +126,7 @@ function KV({ label, value }: { label: string; value: React.ReactNode }) {
                 style={{
                     fontFamily: SANS_SEMI,
                     fontSize: 11.5,
-                    color: palette.EHR_OUTLINE,
+                    color: palette.EHR_TEXT_MUTED,
                     letterSpacing: 0.3,
                     textTransform: 'uppercase',
                     fontWeight: '600',
@@ -184,7 +184,7 @@ const GroupCard = React.memo(function GroupCard({
                 style={{
                     fontFamily: SANS,
                     fontSize: 12.5,
-                    color: palette.EHR_OUTLINE,
+                    color: palette.EHR_TEXT_MUTED,
                 }}
                 numberOfLines={1}
             >
@@ -267,7 +267,7 @@ function AllGranteeCard({
                         style={{
                             fontFamily: SANS,
                             fontSize: 12,
-                            color: palette.EHR_OUTLINE,
+                            color: palette.EHR_TEXT_MUTED,
                         }}
                     >
                         Cấp bởi:
@@ -288,7 +288,7 @@ function AllGranteeCard({
                         marginTop: 6,
                         fontFamily: SANS,
                         fontSize: 12,
-                        color: palette.EHR_OUTLINE,
+                        color: palette.EHR_TEXT_MUTED,
                     }}
                 >
                     Hết hạn:{' '}
@@ -459,7 +459,7 @@ function TimelineEventRow({
                 style={{
                     fontFamily: 'monospace',
                     fontSize: 11,
-                    color: palette.EHR_OUTLINE,
+                    color: palette.EHR_TEXT_MUTED,
                     letterSpacing: 0.3,
                 }}
             >
@@ -508,7 +508,7 @@ function TimelineDateSection({
                 style={{
                     fontFamily: SANS_SEMI,
                     fontSize: 11,
-                    color: palette.EHR_OUTLINE,
+                    color: palette.EHR_TEXT_MUTED,
                     letterSpacing: 1.2,
                     textTransform: 'uppercase',
                     fontWeight: '600',
@@ -813,7 +813,7 @@ export default function AccessLogScreen() {
                                     marginBottom: 12,
                                 }}
                             >
-                                <Text style={{ fontFamily: SANS, fontSize: 12.5, color: palette.EHR_OUTLINE }}>
+                                <Text style={{ fontFamily: SANS, fontSize: 12.5, color: palette.EHR_TEXT_MUTED }}>
                                     {groupedConsents.length} quyền
                                 </Text>
                                 <Text
@@ -859,7 +859,7 @@ export default function AccessLogScreen() {
                             );
                         }}
                         ListHeaderComponent={
-                            <Text style={{ fontFamily: SANS, fontSize: 12.5, color: palette.EHR_OUTLINE, marginBottom: 12 }}>
+                            <Text style={{ fontFamily: SANS, fontSize: 12.5, color: palette.EHR_TEXT_MUTED, marginBottom: 12 }}>
                                 {allGrantees.length} người đang có quyền
                             </Text>
                         }
@@ -914,10 +914,10 @@ export default function AccessLogScreen() {
                                             marginBottom: 18,
                                         }}
                                     >
-                                        <Text style={{ fontFamily: SANS, fontSize: 12.5, color: palette.EHR_OUTLINE }}>
+                                        <Text style={{ fontFamily: SANS, fontSize: 12.5, color: palette.EHR_TEXT_MUTED }}>
                                             {delegationLogs.length} bản ghi
                                         </Text>
-                                        <Text style={{ fontFamily: SANS, fontSize: 11, color: palette.EHR_OUTLINE }}>
+                                        <Text style={{ fontFamily: SANS, fontSize: 11, color: palette.EHR_TEXT_MUTED }}>
                                             Audit on-chain
                                         </Text>
                                     </XStack>

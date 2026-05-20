@@ -216,7 +216,7 @@ export default function TrustedContactsScreen() {
                                     paddingVertical: 2,
                                     backgroundColor: palette.EHR_SURFACE,
                                     borderRadius: 4,
-                                    color: palette.EHR_OUTLINE,
+                                    color: palette.EHR_TEXT_MUTED,
                                     letterSpacing: 0.2,
                                     fontFamily: SANS,
                                 }}
@@ -230,7 +230,7 @@ export default function TrustedContactsScreen() {
                             marginTop: 3,
                             fontFamily: 'monospace',
                             fontSize: 11,
-                            color: palette.EHR_OUTLINE,
+                            color: palette.EHR_TEXT_MUTED,
                         }}
                         numberOfLines={1}
                     >
@@ -312,7 +312,7 @@ export default function TrustedContactsScreen() {
                 {isLoading ? (
                     <Text
                         style={{
-                            color: palette.EHR_OUTLINE,
+                            color: palette.EHR_TEXT_MUTED,
                             textAlign: 'center',
                             padding: 20,
                             fontFamily: SANS,
@@ -324,7 +324,7 @@ export default function TrustedContactsScreen() {
                 ) : contacts.length === 0 ? (
                     <Text
                         style={{
-                            color: palette.EHR_OUTLINE,
+                            color: palette.EHR_TEXT_MUTED,
                             textAlign: 'center',
                             padding: 32,
                             fontFamily: SANS,
@@ -356,7 +356,7 @@ export default function TrustedContactsScreen() {
                         marginTop: 12,
                         fontFamily: SANS,
                         fontSize: 11.5,
-                        color: palette.EHR_OUTLINE,
+                        color: palette.EHR_TEXT_MUTED,
                         textAlign: 'center',
                         lineHeight: 16,
                     }}
@@ -498,7 +498,7 @@ export default function TrustedContactsScreen() {
                                 marginTop: 12,
                                 fontFamily: SANS,
                                 fontSize: 11,
-                                color: palette.EHR_OUTLINE,
+                                color: palette.EHR_TEXT_MUTED,
                                 textAlign: 'center',
                                 lineHeight: 16,
                             }}
@@ -614,7 +614,7 @@ function FieldLabel({ children }: { children: React.ReactNode }) {
             style={{
                 fontFamily: SANS_SEMI,
                 fontSize: 11,
-                color: palette.EHR_OUTLINE,
+                color: palette.EHR_TEXT_MUTED,
                 letterSpacing: 0.4,
                 fontWeight: '600',
                 textTransform: 'uppercase',

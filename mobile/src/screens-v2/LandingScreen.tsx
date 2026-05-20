@@ -118,7 +118,7 @@ export default function LandingScreen({ navigation }: any) {
                         style={{
                             fontFamily: 'DMSans_400Regular',
                             fontSize: 11.5,
-                            color: palette.EHR_OUTLINE,
+                            color: palette.EHR_TEXT_MUTED,
                             textAlign: 'center',
                             lineHeight: 18,
                             paddingHorizontal: 12,

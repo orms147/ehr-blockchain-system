@@ -196,7 +196,7 @@ export default function ReceiptStandaloneScreen() {
                                     marginTop: 4,
                                     fontFamily: SANS_SEMI,
                                     fontSize: 10.5,
-                                    color: palette.EHR_OUTLINE,
+                                    color: palette.EHR_TEXT_MUTED,
                                     letterSpacing: 0.4,
                                     textTransform: 'uppercase',
                                     fontWeight: '600',
@@ -225,7 +225,7 @@ export default function ReceiptStandaloneScreen() {
                                                 marginTop: 2,
                                                 fontFamily: SANS,
                                                 fontSize: 12,
-                                                color: palette.EHR_OUTLINE,
+                                                color: palette.EHR_TEXT_MUTED,
                                             }}
                                         >
                                             {receipt.org}
@@ -273,7 +273,7 @@ export default function ReceiptStandaloneScreen() {
                                         >
                                             {txShort}
                                         </Text>
-                                        <ExternalLink size={11} color={palette.EHR_OUTLINE} />
+                                        <ExternalLink size={11} color={palette.EHR_TEXT_MUTED} />
                                     </XStack>
                                 </Pressable>
                             </KVRow>
@@ -295,7 +295,7 @@ export default function ReceiptStandaloneScreen() {
                             style={{
                                 fontFamily: SANS,
                                 fontSize: 11.5,
-                                color: palette.EHR_OUTLINE,
+                                color: palette.EHR_TEXT_MUTED,
                                 lineHeight: 17,
                             }}
                         >
@@ -341,7 +341,7 @@ function KVRow({ k, children }: { k: string; children: React.ReactNode }) {
                     width: 100,
                     fontFamily: SANS_SEMI,
                     fontSize: 10.5,
-                    color: palette.EHR_OUTLINE,
+                    color: palette.EHR_TEXT_MUTED,
                     letterSpacing: 0.4,
                     textTransform: 'uppercase',
                     fontWeight: '600',

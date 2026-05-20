@@ -284,7 +284,7 @@ function ShareRecordModal({
                             }}
                             hitSlop={8}
                         >
-                            <X size={18} color={palette.EHR_OUTLINE} />
+                            <X size={18} color={palette.EHR_TEXT_MUTED} />
                         </Pressable>
                     </XStack>
 
@@ -344,7 +344,7 @@ function ShareRecordModal({
                             onChangeText={setDays}
                             keyboardType="number-pad"
                         />
-                        <Text style={{ fontFamily: SANS, fontSize: 11, color: palette.EHR_OUTLINE, marginTop: 4 }}>
+                        <Text style={{ fontFamily: SANS, fontSize: 11, color: palette.EHR_TEXT_MUTED, marginTop: 4 }}>
                             Sẽ bị cắt về thời hạn uỷ quyền gốc nếu lớn hơn.
                         </Text>
 
@@ -496,7 +496,7 @@ function SubDelegateModal({
                             }}
                             hitSlop={8}
                         >
-                            <X size={18} color={palette.EHR_OUTLINE} />
+                            <X size={18} color={palette.EHR_TEXT_MUTED} />
                         </Pressable>
                     </XStack>
 
@@ -585,7 +585,7 @@ function SubDelegateModal({
                             />
                         ) : null}
 
-                        <Text style={{ fontFamily: SANS, fontSize: 11, color: palette.EHR_OUTLINE, marginTop: 6, lineHeight: 16 }}>
+                        <Text style={{ fontFamily: SANS, fontSize: 11, color: palette.EHR_TEXT_MUTED, marginTop: 6, lineHeight: 16 }}>
                             Contract tự động cắt về thời hạn uỷ quyền gốc nếu lớn hơn.
                             {remainingTooShort ? '\n⚠️ Thời hạn còn lại dưới 1 giờ — bác sĩ nhận có thể không kịp sử dụng.' : ''}
                         </Text>
@@ -618,7 +618,7 @@ function SubDelegateModal({
                                         marginTop: 2,
                                         fontFamily: SANS,
                                         fontSize: 11.5,
-                                        color: palette.EHR_OUTLINE,
+                                        color: palette.EHR_TEXT_MUTED,
                                         lineHeight: 16,
                                     }}
                                 >
@@ -698,13 +698,13 @@ function PatientRecordsDrawer({
                                 marginTop: 2,
                                 fontFamily: SANS,
                                 fontSize: 11.5,
-                                color: palette.EHR_OUTLINE,
+                                color: palette.EHR_TEXT_MUTED,
                             }}
                         >
                             {item.recordType || 'medical_record'} · {formatDate(item.createdAt)}
                         </Text>
                     </YStack>
-                    <Send size={14} color={palette.EHR_OUTLINE} />
+                    <Send size={14} color={palette.EHR_TEXT_MUTED} />
                 </XStack>
             </ViCard>
         </Pressable>
@@ -731,7 +731,7 @@ function PatientRecordsDrawer({
                                 marginTop: 6,
                                 fontFamily: SANS,
                                 fontSize: 11.5,
-                                color: palette.EHR_OUTLINE,
+                                color: palette.EHR_TEXT_MUTED,
                             }}
                         >
                             Hết hạn: {patient ? formatExpiry(patient.expiresAt) : ''}
@@ -739,7 +739,7 @@ function PatientRecordsDrawer({
                         </Text>
                     </View>
                     <Pressable onPress={onClose} hitSlop={8}>
-                        <X size={20} color={palette.EHR_OUTLINE} />
+                        <X size={20} color={palette.EHR_TEXT_MUTED} />
                     </Pressable>
                 </XStack>
 
@@ -773,7 +773,7 @@ function PatientRecordsDrawer({
                         }
                         ListEmptyComponent={
                             <View style={{ paddingTop: 30, alignItems: 'center' }}>
-                                <FileText size={28} color={palette.EHR_OUTLINE} />
+                                <FileText size={28} color={palette.EHR_TEXT_MUTED} />
                                 <Text
                                     style={{
                                         marginTop: 12,
@@ -790,7 +790,7 @@ function PatientRecordsDrawer({
                                         marginTop: 8,
                                         fontFamily: SANS,
                                         fontSize: 13,
-                                        color: palette.EHR_OUTLINE,
+                                        color: palette.EHR_TEXT_MUTED,
                                         textAlign: 'center',
                                         maxWidth: 280,
                                     }}
@@ -874,18 +874,18 @@ export default function DoctorDelegatedPatientsScreen() {
                             <UserChip address={item.patientAddress} expanded showAddress={false} />
                             {item.parentDelegator ? (
                                 <View style={{ marginTop: 8 }}>
-                                    <Text style={{ fontFamily: SANS, fontSize: 11, color: palette.EHR_OUTLINE, marginBottom: 3 }}>
+                                    <Text style={{ fontFamily: SANS, fontSize: 11, color: palette.EHR_TEXT_MUTED, marginBottom: 3 }}>
                                         Qua bác sĩ:
                                     </Text>
                                     <UserChip address={item.parentDelegator} showAddress={false} size="sm" interactive={false} />
                                 </View>
                             ) : null}
-                            <Text style={{ fontFamily: SANS, fontSize: 11, color: palette.EHR_OUTLINE, marginTop: 3 }}>
+                            <Text style={{ fontFamily: SANS, fontSize: 11, color: palette.EHR_TEXT_MUTED, marginTop: 3 }}>
                                 Hết hạn: {formatExpiry(item.expiresAt)}
                             </Text>
                             {item.scopeNote ? (
                                 <Text
-                                    style={{ fontFamily: SANS, fontSize: 11, color: palette.EHR_OUTLINE, marginTop: 3 }}
+                                    style={{ fontFamily: SANS, fontSize: 11, color: palette.EHR_TEXT_MUTED, marginTop: 3 }}
                                     numberOfLines={2}
                                 >
                                     Phạm vi: {item.scopeNote}
@@ -986,7 +986,7 @@ export default function DoctorDelegatedPatientsScreen() {
                 }
                 ListEmptyComponent={
                     <View style={{ paddingTop: 30, alignItems: 'center' }}>
-                        <Users size={28} color={palette.EHR_OUTLINE} />
+                        <Users size={28} color={palette.EHR_TEXT_MUTED} />
                         <Text
                             style={{
                                 marginTop: 12,
@@ -1003,7 +1003,7 @@ export default function DoctorDelegatedPatientsScreen() {
                                 marginTop: 8,
                                 fontFamily: SANS,
                                 fontSize: 13,
-                                color: palette.EHR_OUTLINE,
+                                color: palette.EHR_TEXT_MUTED,
                                 textAlign: 'center',
                                 maxWidth: 280,
                                 lineHeight: 19,
@@ -1040,7 +1040,7 @@ function FieldLabel({ children }: { children: React.ReactNode }) {
             style={{
                 fontFamily: SANS_SEMI,
                 fontSize: 11.5,
-                color: palette.EHR_OUTLINE,
+                color: palette.EHR_TEXT_MUTED,
                 marginBottom: 6,
                 letterSpacing: 0.4,
                 textTransform: 'uppercase',

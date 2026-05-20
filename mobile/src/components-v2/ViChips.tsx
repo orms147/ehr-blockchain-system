@@ -30,14 +30,14 @@ export function ViSectionLabel({
                     fontSize: 11,
                     fontWeight: '600',
                     letterSpacing: 1.2,
-                    color: palette.EHR_OUTLINE,
+                    color: palette.EHR_TEXT_MUTED,
                     textTransform: 'uppercase',
                 }}
             >
                 {children}
             </Text>
             {trailing ? (
-                <Text style={{ fontSize: 12, color: palette.EHR_OUTLINE }}>{trailing}</Text>
+                <Text style={{ fontSize: 12, color: palette.EHR_TEXT_MUTED }}>{trailing}</Text>
             ) : null}
         </XStack>
     );
@@ -96,11 +96,11 @@ export function ViStatusChip({ status }: { status: ViStatus | string }) {
     const map: Record<string, { label: string; color: string }> = {
         active: { label: 'Còn hiệu lực', color: palette.EHR_SUCCESS },
         expiring: { label: 'Sắp hết hạn', color: palette.EHR_WARNING },
-        expired: { label: 'Đã hết hạn', color: palette.EHR_OUTLINE },
+        expired: { label: 'Đã hết hạn', color: palette.EHR_TEXT_MUTED },
         verified: { label: 'Đã xác minh', color: palette.EHR_SUCCESS },
         pending: { label: 'Chờ duyệt', color: palette.EHR_WARNING },
         revoked: { label: 'Đã thu hồi', color: palette.EHR_DANGER },
-        rejected: { label: 'Đã từ chối', color: palette.EHR_OUTLINE },
+        rejected: { label: 'Đã từ chối', color: palette.EHR_TEXT_MUTED },
     };
     const m = map[status];
     if (!m) return null;

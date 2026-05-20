@@ -247,12 +247,12 @@ const RequestRow = React.memo(function RequestRow({
                             </View>
                         ) : null}
                         {item.recordCreatedAt ? (
-                            <Text style={{ fontFamily: SANS, fontSize: 10.5, color: palette.EHR_OUTLINE }}>
+                            <Text style={{ fontFamily: SANS, fontSize: 10.5, color: palette.EHR_TEXT_MUTED }}>
                                 {formatDate(item.recordCreatedAt)}
                             </Text>
                         ) : null}
                         {item.parentCidHash ? (
-                            <Text style={{ fontFamily: SANS, fontSize: 10.5, color: palette.EHR_OUTLINE }}>
+                            <Text style={{ fontFamily: SANS, fontSize: 10.5, color: palette.EHR_TEXT_MUTED }}>
                                 · Bản cập nhật
                             </Text>
                         ) : null}
@@ -271,11 +271,11 @@ const RequestRow = React.memo(function RequestRow({
             >
                 <ViModeChip mode={item.requestType === 2 ? 'read-delegate' : 'read-update'} />
                 {formatDuration(item) ? (
-                    <Text style={{ fontFamily: SANS_MEDIUM, fontSize: 11.5, color: palette.EHR_OUTLINE }}>
+                    <Text style={{ fontFamily: SANS_MEDIUM, fontSize: 11.5, color: palette.EHR_TEXT_MUTED }}>
                         {formatDuration(item)}
                     </Text>
                 ) : null}
-                <Text style={{ fontFamily: SANS, fontSize: 11, color: palette.EHR_OUTLINE }}>
+                <Text style={{ fontFamily: SANS, fontSize: 11, color: palette.EHR_TEXT_MUTED }}>
                     {formatDate(item.createdAt)}
                 </Text>
                 {item.deadline && isPending ? (() => {
@@ -337,7 +337,7 @@ const RequestRow = React.memo(function RequestRow({
                             size="sm"
                             onPress={() => onArchive(item)}
                             disabled={isApproving}
-                            leftIcon={<X size={14} color={palette.EHR_OUTLINE} />}
+                            leftIcon={<X size={14} color={palette.EHR_TEXT_MUTED} />}
                         >
                             Ẩn
                         </ViButton>
@@ -698,7 +698,7 @@ export default function RequestsScreen() {
 
             {filteredRequests.length === 0 ? (
                 <View style={{ paddingHorizontal: 22, paddingTop: 30, alignItems: 'center' }}>
-                    <Bell size={28} color={palette.EHR_OUTLINE} />
+                    <Bell size={28} color={palette.EHR_TEXT_MUTED} />
                     <Text
                         style={{
                             marginTop: 12,
@@ -715,7 +715,7 @@ export default function RequestsScreen() {
                             marginTop: 8,
                             fontFamily: SANS,
                             fontSize: 13,
-                            color: palette.EHR_OUTLINE,
+                            color: palette.EHR_TEXT_MUTED,
                             textAlign: 'center',
                             lineHeight: 19,
                             maxWidth: 280,

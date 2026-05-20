@@ -316,7 +316,7 @@ function FieldLabel({ children }: { children: React.ReactNode }) {
             style={{
                 fontFamily: SANS_SEMI,
                 fontSize: 11.5,
-                color: palette.EHR_OUTLINE,
+                color: palette.EHR_TEXT_MUTED,
                 marginBottom: 6,
                 letterSpacing: 0.4,
                 textTransform: 'uppercase',

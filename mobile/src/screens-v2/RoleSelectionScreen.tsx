@@ -248,7 +248,7 @@ export default function RoleSelectionScreen() {
                             <Check size={13} color="#FAF7F1" strokeWidth={3} />
                         </View>
                     ) : (
-                        <ChevronRight size={18} color={palette.EHR_OUTLINE} />
+                        <ChevronRight size={18} color={palette.EHR_TEXT_MUTED} />
                     )}
                 </XStack>
                 {isBusy ? (
@@ -396,7 +396,7 @@ export default function RoleSelectionScreen() {
                             textAlign: 'center',
                             fontFamily: SANS,
                             fontSize: 11.5,
-                            color: palette.EHR_OUTLINE,
+                            color: palette.EHR_TEXT_MUTED,
                             lineHeight: 17,
                         }}
                     >
@@ -442,7 +442,7 @@ export default function RoleSelectionScreen() {
                                 </Text>
                             </XStack>
                             <Pressable onPress={() => setConsentVisible(false)} hitSlop={8}>
-                                <X size={18} color={palette.EHR_OUTLINE} />
+                                <X size={18} color={palette.EHR_TEXT_MUTED} />
                             </Pressable>
                         </XStack>
 
@@ -521,7 +521,7 @@ export default function RoleSelectionScreen() {
                                     textAlign: 'center',
                                     fontFamily: SANS,
                                     fontSize: 11,
-                                    color: palette.EHR_OUTLINE,
+                                    color: palette.EHR_TEXT_MUTED,
                                     lineHeight: 17,
                                 }}
                             >

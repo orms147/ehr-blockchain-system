@@ -75,7 +75,7 @@ export default function HexRow({
                             style={{
                                 fontFamily: SANS_SEMI,
                                 fontSize: 10.5,
-                                color: palette.EHR_OUTLINE,
+                                color: palette.EHR_TEXT_MUTED,
                                 letterSpacing: 0.4,
                                 textTransform: 'uppercase',
                                 fontWeight: '600',
@@ -97,7 +97,7 @@ export default function HexRow({
                         {truncateHex(value, head, tail)}
                     </Text>
                 </YStack>
-                <Copy size={14} color={palette.EHR_OUTLINE} />
+                <Copy size={14} color={palette.EHR_TEXT_MUTED} />
             </Pressable>
 
             <HexFullSheet
@@ -184,7 +184,7 @@ function HexFullSheet({ open, onClose, title, value, showQr }: HexFullSheetProps
                             {title}
                         </Text>
                         <Pressable onPress={onClose} hitSlop={8}>
-                            <X size={18} color={palette.EHR_OUTLINE} />
+                            <X size={18} color={palette.EHR_TEXT_MUTED} />
                         </Pressable>
                     </XStack>
 
@@ -205,7 +205,7 @@ function HexFullSheet({ open, onClose, title, value, showQr }: HexFullSheetProps
                                     marginTop: 14,
                                     fontFamily: SANS,
                                     fontSize: 11,
-                                    color: palette.EHR_OUTLINE,
+                                    color: palette.EHR_TEXT_MUTED,
                                     textAlign: 'center',
                                 }}
                             >

@@ -115,7 +115,7 @@ export default function SharedRecordCard({ record, onView, onCreateUpdate }: Sha
                     style={{
                         fontFamily: MONO,
                         fontSize: 11,
-                        color: palette.EHR_OUTLINE,
+                        color: palette.EHR_TEXT_MUTED,
                         letterSpacing: 0.4,
                     }}
                 >
@@ -169,11 +169,11 @@ export default function SharedRecordCard({ record, onView, onCreateUpdate }: Sha
                     {subtitleLine}
                 </Text>
                 <XStack style={{ gap: 10, marginTop: 6, flexWrap: 'wrap' }}>
-                    <Text style={{ fontFamily: SANS, fontSize: 11, color: palette.EHR_OUTLINE }}>
+                    <Text style={{ fontFamily: SANS, fontSize: 11, color: palette.EHR_TEXT_MUTED }}>
                         {typeLabel}
                     </Text>
                     {versionCount > 1 ? (
-                        <Text style={{ fontFamily: SANS, fontSize: 11, color: palette.EHR_OUTLINE }}>
+                        <Text style={{ fontFamily: SANS, fontSize: 11, color: palette.EHR_TEXT_MUTED }}>
                             · v{versionCount}
                         </Text>
                     ) : null}

@@ -141,7 +141,7 @@ export default function DashboardScreen({ navigation }: any) {
                             style={{
                                 fontFamily: SANS_SEMI,
                                 fontSize: 11,
-                                color: palette.EHR_OUTLINE,
+                                color: palette.EHR_TEXT_MUTED,
                                 letterSpacing: 1.6,
                                 textTransform: 'uppercase',
                             }}
@@ -161,7 +161,7 @@ export default function DashboardScreen({ navigation }: any) {
                                 style={{
                                     fontFamily: 'monospace',
                                     fontSize: 9.5,
-                                    color: palette.EHR_OUTLINE,
+                                    color: palette.EHR_TEXT_MUTED,
                                     letterSpacing: 1.2,
                                 }}
                             >
@@ -500,7 +500,7 @@ export default function DashboardScreen({ navigation }: any) {
                             style={{
                                 fontFamily: SANS_SEMI,
                                 fontSize: 10.5,
-                                color: palette.EHR_OUTLINE,
+                                color: palette.EHR_TEXT_MUTED,
                                 letterSpacing: 1.4,
                                 textTransform: 'uppercase',
                                 fontWeight: '700',
@@ -516,7 +516,7 @@ export default function DashboardScreen({ navigation }: any) {
                             }}
                         >
                             {signaturesUsed}{' '}
-                            <Text style={{ color: palette.EHR_OUTLINE }}>/ {signaturesLimit}</Text>
+                            <Text style={{ color: palette.EHR_TEXT_MUTED }}>/ {signaturesLimit}</Text>
                         </Text>
                     </XStack>
                     <View
@@ -541,7 +541,7 @@ export default function DashboardScreen({ navigation }: any) {
                                 marginTop: 8,
                                 fontFamily: SANS,
                                 fontSize: 11,
-                                color: palette.EHR_OUTLINE,
+                                color: palette.EHR_TEXT_MUTED,
                             }}
                         >
                             {quota.message}
@@ -609,7 +609,7 @@ function HomeStat({
                     marginTop: 6,
                     fontFamily: SANS_SEMI,
                     fontSize: 11,
-                    color: palette.EHR_OUTLINE,
+                    color: palette.EHR_TEXT_MUTED,
                     letterSpacing: 1.2,
                     textTransform: 'uppercase',
                     fontWeight: '600',
@@ -644,7 +644,7 @@ function RecordRow({ record, onPress }: { record: any; onPress: () => void }) {
                     style={{
                         fontFamily: 'monospace',
                         fontSize: 11,
-                        color: palette.EHR_OUTLINE,
+                        color: palette.EHR_TEXT_MUTED,
                         letterSpacing: 0.4,
                     }}
                 >

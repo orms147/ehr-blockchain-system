@@ -494,7 +494,7 @@ export default function CreateRecordScreen({ navigation, route: navRoute }: any)
         options: { multiline?: boolean; placeholder?: string; keyboardType?: KeyboardTypeOptions } = {},
     ) => (
         <YStack style={{ marginBottom: 12 }}>
-            <Text style={{ fontFamily: SANS_SEMI, fontSize: 12, color: palette.EHR_OUTLINE, marginBottom: 6, letterSpacing: 0.3, textTransform: 'uppercase', fontWeight: '600' }}>
+            <Text style={{ fontFamily: SANS_SEMI, fontSize: 12, color: palette.EHR_TEXT_MUTED, marginBottom: 6, letterSpacing: 0.3, textTransform: 'uppercase', fontWeight: '600' }}>
                 {label}
             </Text>
             <TextInput
@@ -612,7 +612,7 @@ export default function CreateRecordScreen({ navigation, route: navRoute }: any)
                                     <Text style={{ fontFamily: SANS_SEMI, fontSize: 13.5, color: simpleMode ? palette.EHR_PRIMARY : palette.EHR_ON_SURFACE, fontWeight: '700' }}>
                                         Nhanh
                                     </Text>
-                                    <Text style={{ fontFamily: SANS, fontSize: 11, color: palette.EHR_OUTLINE }}>
+                                    <Text style={{ fontFamily: SANS, fontSize: 11, color: palette.EHR_TEXT_MUTED }}>
                                         Tiêu đề + ảnh
                                     </Text>
                                 </YStack>
@@ -636,7 +636,7 @@ export default function CreateRecordScreen({ navigation, route: navRoute }: any)
                                     <Text style={{ fontFamily: SANS_SEMI, fontSize: 13.5, color: !simpleMode ? palette.EHR_PRIMARY : palette.EHR_ON_SURFACE, fontWeight: '700' }}>
                                         Đầy đủ
                                     </Text>
-                                    <Text style={{ fontFamily: SANS, fontSize: 11, color: palette.EHR_OUTLINE }}>
+                                    <Text style={{ fontFamily: SANS, fontSize: 11, color: palette.EHR_TEXT_MUTED }}>
                                         Toàn bộ trường (ICD-10, Rx…)
                                     </Text>
                                 </YStack>
@@ -718,7 +718,7 @@ export default function CreateRecordScreen({ navigation, route: navRoute }: any)
                                 style={{
                                     fontFamily: SANS_SEMI,
                                     fontSize: 12,
-                                    color: palette.EHR_OUTLINE,
+                                    color: palette.EHR_TEXT_MUTED,
                                     marginBottom: 6,
                                     letterSpacing: 0.3,
                                     textTransform: 'uppercase',
@@ -814,7 +814,7 @@ export default function CreateRecordScreen({ navigation, route: navRoute }: any)
                                     resizeMode="cover"
                                 />
                             </View>
-                            <Text style={{ marginTop: 6, fontFamily: SANS, fontSize: 11, color: palette.EHR_OUTLINE }}>
+                            <Text style={{ marginTop: 6, fontFamily: SANS, fontSize: 11, color: palette.EHR_TEXT_MUTED }}>
                                 {selectedImage.fileName}
                             </Text>
                         </View>
@@ -843,7 +843,7 @@ export default function CreateRecordScreen({ navigation, route: navRoute }: any)
                             </ViButton>
                         ) : null}
                     </XStack>
-                    <Text style={{ marginTop: 8, fontFamily: SANS, fontSize: 11, color: palette.EHR_OUTLINE, lineHeight: 16 }}>
+                    <Text style={{ marginTop: 8, fontFamily: SANS, fontSize: 11, color: palette.EHR_TEXT_MUTED, lineHeight: 16 }}>
                         Ảnh sẽ được mã hoá cùng nội dung trước khi upload lên IPFS.
                     </Text>
                 </ViCard>
@@ -862,7 +862,7 @@ export default function CreateRecordScreen({ navigation, route: navRoute }: any)
                         >
                             Dấu hiệu sinh tồn
                         </Text>
-                        <Text style={{ fontFamily: SANS, fontSize: 11, color: palette.EHR_OUTLINE, marginBottom: 12 }}>
+                        <Text style={{ fontFamily: SANS, fontSize: 11, color: palette.EHR_TEXT_MUTED, marginBottom: 12 }}>
                             Theo chuẩn bệnh án điện tử (TT 46/2018/TT-BYT)
                         </Text>
                         <XStack style={{ gap: 10 }}>
@@ -882,8 +882,8 @@ export default function CreateRecordScreen({ navigation, route: navRoute }: any)
                             <View style={{ flex: 1 }}>{renderInput('Chiều cao (cm)', height, setHeight, { placeholder: '165', keyboardType: 'numeric' })}</View>
                         </XStack>
                         <XStack style={{ alignItems: 'center', gap: 6, marginTop: -4 }}>
-                            <Activity size={13} color={palette.EHR_OUTLINE} />
-                            <Text style={{ fontFamily: SANS, fontSize: 11, color: palette.EHR_OUTLINE }}>
+                            <Activity size={13} color={palette.EHR_TEXT_MUTED} />
+                            <Text style={{ fontFamily: SANS, fontSize: 11, color: palette.EHR_TEXT_MUTED }}>
                                 BMI được tính tự động từ cân nặng và chiều cao.
                             </Text>
                         </XStack>
@@ -904,7 +904,7 @@ export default function CreateRecordScreen({ navigation, route: navRoute }: any)
                         >
                             Đơn thuốc
                         </Text>
-                        <Text style={{ fontFamily: SANS, fontSize: 11, color: palette.EHR_OUTLINE, marginBottom: 12 }}>
+                        <Text style={{ fontFamily: SANS, fontSize: 11, color: palette.EHR_TEXT_MUTED, marginBottom: 12 }}>
                             Theo chuẩn đơn thuốc điện tử (TT 04/2022/TT-BYT)
                         </Text>
                         {renderInput('Tên thuốc / hoạt chất', medication, setMedication, { placeholder: 'Paracetamol 500mg' })}
@@ -919,8 +919,8 @@ export default function CreateRecordScreen({ navigation, route: navRoute }: any)
                         {renderInput('Số lượng kê', quantity, setQuantity, { placeholder: '10 viên' })}
                         {renderInput('Lời dặn bác sĩ', instruction, setInstruction, { placeholder: 'Uống sau ăn, tránh rượu bia…', multiline: true })}
                         <XStack style={{ alignItems: 'flex-start', gap: 6, marginTop: -4 }}>
-                            <Pill size={13} color={palette.EHR_OUTLINE} style={{ marginTop: 2 }} />
-                            <Text style={{ flex: 1, fontFamily: SANS, fontSize: 11, color: palette.EHR_OUTLINE, lineHeight: 16 }}>
+                            <Pill size={13} color={palette.EHR_TEXT_MUTED} style={{ marginTop: 2 }} />
+                            <Text style={{ flex: 1, fontFamily: SANS, fontSize: 11, color: palette.EHR_TEXT_MUTED, lineHeight: 16 }}>
                                 Nếu để trống, hồ sơ vẫn được tạo mà không có đơn thuốc.
                             </Text>
                         </XStack>
@@ -962,7 +962,7 @@ export default function CreateRecordScreen({ navigation, route: navRoute }: any)
                         textAlign: 'center',
                         fontFamily: SANS,
                         fontSize: 11,
-                        color: palette.EHR_OUTLINE,
+                        color: palette.EHR_TEXT_MUTED,
                         lineHeight: 16,
                     }}
                 >
