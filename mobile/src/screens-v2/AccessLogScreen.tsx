@@ -316,83 +316,216 @@ function AllGranteeCard({
     );
 }
 
-// ─────────── Delegation log row (audit-style) ───────────
-function DelegationLogItem({ item }: { item: DelegationAccessLogRow }) {
+// ─────────── Audit event row — timeline pattern per design AuditScreen (G.12.b) ───────────
+//
+// Mỗi event hiện trong cột:
+//   ● (colored dot per kind)   12:34
+//      Action title (serif 14pt 500)
+//      Detail line (12.5pt secondary)
+//
+// Spine vertical 0.5px nối các dot trong cùng date group.
+type AuditEventKind = 'sign' | 'grant' | 'request' | 'read' | 'expire' | 'create' | 'delegate';
+
+interface TimelineEvent {
+    id: string;
+    kind: AuditEventKind;
+    timeLabel: string;
+    action: string;
+    detail: string;
+}
+
+function eventDotColor(palette: ReturnType<typeof useEhrPalette>, kind: AuditEventKind): string {
+    switch (kind) {
+        case 'sign': return palette.EHR_PRIMARY;       // cinnabar — legal action
+        case 'grant': return palette.EHR_TERTIARY;     // jade — effective
+        case 'request': return palette.EHR_WARNING;    // amber — pending action
+        case 'read': return palette.EHR_SLATE;         // slate — read-only
+        case 'expire': return palette.EHR_WARNING;     // amber — time-bound
+        case 'create': return palette.EHR_SECONDARY;   // clay — new
+        case 'delegate': return palette.EHR_PRIMARY;   // cinnabar — chain transition
+        default: return palette.EHR_OUTLINE;
+    }
+}
+
+function formatTimeShort(iso?: string): string {
+    if (!iso) return '';
+    try {
+        const d = new Date(iso);
+        const h = String(d.getHours()).padStart(2, '0');
+        const m = String(d.getMinutes()).padStart(2, '0');
+        return `${h}:${m}`;
+    } catch { return ''; }
+}
+
+function formatDateGroup(iso?: string): string {
+    if (!iso) return '—';
+    try {
+        const d = new Date(iso);
+        const dd = String(d.getDate()).padStart(2, '0');
+        const mm = String(d.getMonth() + 1).padStart(2, '0');
+        const yy = String(d.getFullYear()).slice(-2);
+        return `${dd}·${mm}·${yy}`;
+    } catch { return '—'; }
+}
+
+function delegationLogsToEvents(logs: DelegationAccessLogRow[]): TimelineEvent[] {
+    return logs.map((log) => ({
+        id: log.id,
+        kind: 'delegate' as AuditEventKind,
+        timeLabel: formatTimeShort(log.createdAt),
+        action: 'Cấp quyền qua chuỗi uỷ quyền',
+        detail: `${truncate(log.byDelegatee)} → ${truncate(log.newGrantee)} · Hồ sơ ${log.rootCidHash.slice(0, 10)}…`,
+    }));
+}
+
+function groupEventsByDate(events: TimelineEvent[], logs: DelegationAccessLogRow[]): Array<{ date: string; events: TimelineEvent[] }> {
+    const byDate = new Map<string, TimelineEvent[]>();
+    events.forEach((evt, idx) => {
+        const date = formatDateGroup(logs[idx]?.createdAt);
+        if (!byDate.has(date)) byDate.set(date, []);
+        byDate.get(date)!.push(evt);
+    });
+    return Array.from(byDate.entries()).map(([date, events]) => ({ date, events }));
+}
+
+// Single timeline event row (renders dot + spine + content).
+function TimelineEventRow({
+    event,
+    isFirst,
+    isLast,
+}: {
+    event: TimelineEvent;
+    isFirst: boolean;
+    isLast: boolean;
+}) {
     const palette = useEhrPalette();
+    const dotColor = eventDotColor(palette, event.kind);
+
     return (
-        <ViCard padding={14} style={{ marginBottom: 10 }}>
-            <XStack style={{ alignItems: 'center', gap: 6, marginBottom: 8 }}>
+        <View style={{ position: 'relative', paddingLeft: 18, paddingBottom: isLast ? 0 : 18 }}>
+            {/* Spine — vertical 0.5px hairline */}
+            {!isLast ? (
                 <View
                     style={{
-                        width: 8,
-                        height: 8,
-                        borderRadius: 4,
-                        backgroundColor: palette.EHR_PRIMARY,
+                        position: 'absolute',
+                        left: 5,
+                        top: isFirst ? 12 : 0,
+                        bottom: 0,
+                        width: 0.5,
+                        backgroundColor: palette.EHR_OUTLINE_VARIANT,
                     }}
                 />
-                <Text
+            ) : null}
+            {/* Top spine continuation if not first */}
+            {!isFirst ? (
+                <View
                     style={{
-                        fontFamily: SANS_SEMI,
-                        fontSize: 11,
-                        color: palette.EHR_PRIMARY,
-                        letterSpacing: 1.2,
-                        textTransform: 'uppercase',
-                        fontWeight: '700',
+                        position: 'absolute',
+                        left: 5,
+                        top: 0,
+                        height: 6,
+                        width: 0.5,
+                        backgroundColor: palette.EHR_OUTLINE_VARIANT,
                     }}
-                >
-                    Cấp quyền qua chuỗi uỷ quyền
-                </Text>
-            </XStack>
-            <XStack style={{ alignItems: 'center', marginTop: 4 }}>
-                <YStack style={{ flex: 1 }}>
-                    <Text style={{ fontFamily: SANS, fontSize: 11, color: palette.EHR_OUTLINE }}>
-                        Người uỷ quyền
-                    </Text>
-                    <Text style={{ fontFamily: 'monospace', fontSize: 12.5, color: palette.EHR_ON_SURFACE }}>
-                        {truncate(item.byDelegatee)}
-                    </Text>
-                </YStack>
-                <Text
-                    style={{
-                        fontFamily: SANS_MEDIUM,
-                        fontSize: 14,
-                        color: palette.EHR_OUTLINE,
-                        marginHorizontal: 8,
-                    }}
-                >
-                    →
-                </Text>
-                <YStack style={{ flex: 1 }}>
-                    <Text style={{ fontFamily: SANS, fontSize: 11, color: palette.EHR_OUTLINE }}>
-                        Người nhận
-                    </Text>
-                    <Text style={{ fontFamily: 'monospace', fontSize: 12.5, color: palette.EHR_ON_SURFACE }}>
-                        {truncate(item.newGrantee)}
-                    </Text>
-                </YStack>
-            </XStack>
+                />
+            ) : null}
+            {/* Dot — outer ring + inner fill */}
             <View
                 style={{
-                    marginTop: 12,
-                    paddingTop: 10,
-                    borderTopWidth: 0.5,
-                    borderColor: palette.EHR_OUTLINE_SOFT,
-                    borderStyle: 'dashed',
+                    position: 'absolute',
+                    left: 0,
+                    top: 6,
+                    width: 11,
+                    height: 11,
+                    borderRadius: 6,
+                    backgroundColor: palette.EHR_SURFACE,
+                    borderWidth: 0.75,
+                    borderColor: dotColor,
+                    alignItems: 'center',
+                    justifyContent: 'center',
                 }}
             >
-                <Text
-                    style={{ fontFamily: SANS, fontSize: 12, color: palette.EHR_OUTLINE }}
-                    numberOfLines={1}
-                >
-                    Hồ sơ: {item.rootCidHash.slice(0, 24)}…
-                </Text>
-                <Text
-                    style={{ marginTop: 3, fontFamily: SANS, fontSize: 12, color: palette.EHR_OUTLINE }}
-                >
-                    {formatDate(item.createdAt)}
-                </Text>
+                <View
+                    style={{
+                        width: 5,
+                        height: 5,
+                        borderRadius: 3,
+                        backgroundColor: dotColor,
+                    }}
+                />
             </View>
-        </ViCard>
+            {/* Content */}
+            <Text
+                style={{
+                    fontFamily: 'monospace',
+                    fontSize: 11,
+                    color: palette.EHR_OUTLINE,
+                    letterSpacing: 0.3,
+                }}
+            >
+                {event.timeLabel}
+            </Text>
+            <Text
+                style={{
+                    marginTop: 2,
+                    fontFamily: SANS_MEDIUM,
+                    fontSize: 14,
+                    color: palette.EHR_ON_SURFACE,
+                    fontWeight: '500',
+                    lineHeight: 19,
+                }}
+            >
+                {event.action}
+            </Text>
+            <Text
+                style={{
+                    marginTop: 2,
+                    fontFamily: SANS,
+                    fontSize: 12.5,
+                    color: palette.EHR_ON_SURFACE_VARIANT,
+                    lineHeight: 18,
+                }}
+                numberOfLines={2}
+            >
+                {event.detail}
+            </Text>
+        </View>
+    );
+}
+
+// Section: date header + grouped events
+function TimelineDateSection({
+    date,
+    events,
+}: {
+    date: string;
+    events: TimelineEvent[];
+}) {
+    const palette = useEhrPalette();
+    return (
+        <View style={{ marginBottom: 22 }}>
+            <Text
+                style={{
+                    fontFamily: SANS_SEMI,
+                    fontSize: 11,
+                    color: palette.EHR_OUTLINE,
+                    letterSpacing: 1.2,
+                    textTransform: 'uppercase',
+                    fontWeight: '600',
+                    marginBottom: 10,
+                }}
+            >
+                {date}
+            </Text>
+            {events.map((evt, i) => (
+                <TimelineEventRow
+                    key={evt.id}
+                    event={evt}
+                    isFirst={i === 0}
+                    isLast={i === events.length - 1}
+                />
+            ))}
+        </View>
     );
 }
 
@@ -739,35 +872,59 @@ export default function AccessLogScreen() {
                         description="Khi bác sĩ trong chuỗi uỷ quyền cấp truy cập hồ sơ của bạn cho bác sĩ khác, lịch sử sẽ hiển thị tại đây."
                     />
                 ) : (
-                    <FlatList
-                        data={delegationLogs}
-                        keyExtractor={(item) => item.id}
-                        renderItem={({ item }) => <DelegationLogItem item={item} />}
-                        contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 32 }}
-                        refreshControl={
-                            <RefreshControl
-                                refreshing={isRefreshing || delegationLogsQuery.isFetching}
-                                onRefresh={handleRefresh}
-                                tintColor={palette.EHR_ON_SURFACE_VARIANT}
+                    (() => {
+                        // G.12.b — group delegation logs by date for timeline display
+                        const eventsWithDate = delegationLogs.map((log) => ({
+                            event: {
+                                id: log.id,
+                                kind: 'delegate' as AuditEventKind,
+                                timeLabel: formatTimeShort(log.createdAt),
+                                action: 'Cấp quyền qua chuỗi uỷ quyền',
+                                detail: `${truncate(log.byDelegatee)} → ${truncate(log.newGrantee)} · Hồ sơ ${log.rootCidHash.slice(0, 10)}…`,
+                            } as TimelineEvent,
+                            dateKey: formatDateGroup(log.createdAt),
+                        }));
+                        const dateGroups = new Map<string, TimelineEvent[]>();
+                        eventsWithDate.forEach(({ event, dateKey }) => {
+                            if (!dateGroups.has(dateKey)) dateGroups.set(dateKey, []);
+                            dateGroups.get(dateKey)!.push(event);
+                        });
+                        const groupedSections = Array.from(dateGroups.entries()).map(([date, events]) => ({ date, events }));
+
+                        return (
+                            <FlatList
+                                data={groupedSections}
+                                keyExtractor={(section) => section.date}
+                                renderItem={({ item }) => (
+                                    <TimelineDateSection date={item.date} events={item.events} />
+                                )}
+                                contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 32 }}
+                                refreshControl={
+                                    <RefreshControl
+                                        refreshing={isRefreshing || delegationLogsQuery.isFetching}
+                                        onRefresh={handleRefresh}
+                                        tintColor={palette.EHR_ON_SURFACE_VARIANT}
+                                    />
+                                }
+                                ListHeaderComponent={
+                                    <XStack
+                                        style={{
+                                            alignItems: 'baseline',
+                                            justifyContent: 'space-between',
+                                            marginBottom: 18,
+                                        }}
+                                    >
+                                        <Text style={{ fontFamily: SANS, fontSize: 12.5, color: palette.EHR_OUTLINE }}>
+                                            {delegationLogs.length} bản ghi
+                                        </Text>
+                                        <Text style={{ fontFamily: SANS, fontSize: 11, color: palette.EHR_OUTLINE }}>
+                                            Audit on-chain
+                                        </Text>
+                                    </XStack>
+                                }
                             />
-                        }
-                        ListHeaderComponent={
-                            <XStack
-                                style={{
-                                    alignItems: 'baseline',
-                                    justifyContent: 'space-between',
-                                    marginBottom: 12,
-                                }}
-                            >
-                                <Text style={{ fontFamily: SANS, fontSize: 12.5, color: palette.EHR_OUTLINE }}>
-                                    {delegationLogs.length} bản ghi
-                                </Text>
-                                <Text style={{ fontFamily: SANS, fontSize: 11, color: palette.EHR_OUTLINE }}>
-                                    Audit on-chain
-                                </Text>
-                            </XStack>
-                        }
-                    />
+                        );
+                    })()
                 )
             )}
         </SafeAreaView>

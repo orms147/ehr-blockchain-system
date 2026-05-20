@@ -1,15 +1,25 @@
-import React, { useEffect } from 'react';
-import { Pressable, StyleSheet } from 'react-native';
-import { FileText, Eye, Clock, FilePlus2, ShieldCheck, Lock, XCircle } from 'lucide-react-native';
-import { XStack, YStack, Text, Button, View } from 'tamagui';
-import Animated, {
-    useSharedValue,
-    useAnimatedStyle,
-    withSpring,
-    interpolate,
-} from 'react-native-reanimated';
+// SharedRecordCard — text-rhythm row for doctor-side "Hồ sơ đã nhận" (G.12.a).
+// Mirror pattern of RecordCard with sender resolution + expiry status + inline
+// "Cập nhật" link (instead of large button).
+//
+// Visual contract:
+//   [Date 2-line]  | [Hairline]  Title (serif 15pt 550)
+//    18 (mono)     |             BN. <patient name> · <hospital> (12.5pt secondary)
+//    04 (serif)    |             Type · vN · Hết hạn DD/MM
+//                  |             [Cập nhật version →] inline link if action available
+//                  |             [Đã thu hồi / Hết hạn] meta tag if inactive
+//   ─────────────────────────────────────  bottom 0.5px hairline
+//
+// Inactive rows render with opacity 0.6 and no press handler.
+
+import React from 'react';
+import { Pressable, View } from 'react-native';
+import { XStack, YStack, Text } from 'tamagui';
+import { FilePlus2 } from 'lucide-react-native';
+
 import { useEhrPalette } from '../constants/uiColors';
-import { formatDate, formatExpiry, getExpiryUrgency } from '../utils/dateFormatting';
+import { useUserProfile } from './UserChip';
+import { formatExpiry, getExpiryUrgency } from '../utils/dateFormatting';
 
 interface SharedRecordCardProps {
     record: any;
@@ -17,199 +27,211 @@ interface SharedRecordCardProps {
     onCreateUpdate?: (record: any) => void;
 }
 
-const PRESS_SPRING = { damping: 15, stiffness: 200, mass: 0.6 };
-const MOUNT_SPRING = { damping: 18, stiffness: 120, mass: 0.8 };
+const SERIF = 'Fraunces_400Regular';
+const SERIF_MEDIUM = 'Fraunces_500Medium';
+const SANS = 'DMSans_400Regular';
+const SANS_SEMI = 'DMSans_600SemiBold';
+const MONO = 'monospace';
+
+const TYPE_LABEL: Record<string, string> = {
+    checkup: 'Khám tổng quát',
+    diagnosis: 'Khám chuyên khoa',
+    prescription: 'Đơn thuốc',
+    lab_result: 'Xét nghiệm',
+    imaging: 'Chẩn đoán hình ảnh',
+    vaccination: 'Tiêm chủng',
+    vital_signs: 'Chỉ số sinh tồn',
+};
+
+function splitDate(input?: string): { day: string; month: string } {
+    if (!input) return { day: '—', month: '' };
+    const dm = input.match(/^(\d{1,2})\/(\d{1,2})\//);
+    if (dm) return { day: dm[1].padStart(2, '0'), month: dm[2].padStart(2, '0') };
+    try {
+        const d = new Date(input);
+        if (Number.isNaN(d.getTime())) return { day: '—', month: '' };
+        return {
+            day: String(d.getDate()).padStart(2, '0'),
+            month: String(d.getMonth() + 1).padStart(2, '0'),
+        };
+    } catch {
+        return { day: '—', month: '' };
+    }
+}
 
 export default function SharedRecordCard({ record, onView, onCreateUpdate }: SharedRecordCardProps) {
     const palette = useEhrPalette();
-    const s = StyleSheet.create({
-        cardInactive: { opacity: 0.7, borderLeftWidth: 4, borderLeftColor: palette.EHR_OUTLINE_VARIANT },
-        statusBadgeRevoked: { backgroundColor: '#fde0e0', borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3 },
-        statusBadgeExpired: { backgroundColor: `${palette.EHR_OUTLINE_VARIANT}40`, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3 },
-        statusBadgeText: { fontSize: 9, fontWeight: '700' as const, color: palette.EHR_ON_SURFACE_VARIANT, textTransform: 'uppercase' as const, letterSpacing: 0.3 },
-        card: { backgroundColor: palette.EHR_SURFACE_LOWEST, borderRadius: 16, padding: 16, marginBottom: 12, shadowColor: palette.EHR_SHADOW, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 1, shadowRadius: 16, elevation: 2 },
-        topRow: { alignItems: 'center' as const, gap: 12 },
-        iconWrap: { width: 48, height: 48, borderRadius: 14, alignItems: 'center' as const, justifyContent: 'center' as const },
-        title: { fontSize: 15, fontWeight: '700' as const, color: palette.EHR_ON_SURFACE, lineHeight: 20 },
-        subtitle: { fontSize: 12, color: palette.EHR_ON_SURFACE_VARIANT, marginTop: 2 },
-        rightInfo: { alignItems: 'flex-end' as const, gap: 4 },
-        verifiedBadge: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 3 },
-        verifiedText: { fontSize: 9, fontWeight: '700' as const, color: palette.EHR_PRIMARY, textTransform: 'uppercase' as const, letterSpacing: 0.3 },
-        dateText: { fontSize: 10, color: palette.EHR_ON_SURFACE_VARIANT },
-        metaRow: { marginTop: 10, gap: 8, alignItems: 'center' as const },
-        versionBadge: { backgroundColor: palette.EHR_PRIMARY_FIXED, borderRadius: 6, paddingVertical: 3, paddingHorizontal: 8 },
-        versionText: { fontSize: 11, color: palette.EHR_PRIMARY, fontWeight: '600' as const },
-        expiryBadge: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 4, backgroundColor: palette.EHR_SURFACE_LOW, borderRadius: 6, paddingVertical: 3, paddingHorizontal: 8 },
-        expiryText: { fontSize: 11, color: palette.EHR_ON_SURFACE_VARIANT },
-        readOnlyBadge: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 6, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12, borderWidth: 1, borderColor: palette.EHR_OUTLINE_VARIANT, backgroundColor: palette.EHR_SURFACE_LOW },
-        readOnlyText: { fontSize: 12, fontWeight: '700' as const, color: palette.EHR_ON_SURFACE_VARIANT },
-    });
-    const isPending = record?.status === 'pending';
+
+    // Patient is the OWNER of the record (whose record was shared with the doctor).
+    const patientAddress = record?.record?.ownerAddress || record?.senderAddress;
+    const { data: patientProfile } = useUserProfile(patientAddress);
+
+    const { day, month } = splitDate(record?.createdAt);
+    const recordType = record?.record?.recordType || record?.recordType || record?.type;
+    const typeKey = String(recordType || '').toLowerCase();
+    const typeLabel = TYPE_LABEL[typeKey] || (typeKey ? typeKey : 'Hồ sơ y tế');
+    const title = record?.record?.title || `CID ${String(record?.cidHash || '').slice(0, 10)}…`;
+
     const statusLower = String(record?.status || '').toLowerCase();
     const isRevoked = statusLower === 'revoked' || statusLower === 'rejected';
     const isExpiredByTime = !!record?.expiresAt && new Date(record.expiresAt).getTime() < Date.now();
     const isExpired = statusLower === 'expired' || isExpiredByTime;
     const isInactive = record?.active === false || isRevoked || isExpired;
-    // 2026-04-19: "Chỉ đọc" mode removed (medical episode model).
-    // All active shares can create updates.
-    const truncateAddr = (addr: string) => (addr ? `${addr.substring(0, 8)}...${addr.slice(-4)}` : '???');
+    const isPending = record?.status === 'pending';
 
-    const mountProgress = useSharedValue(0);
-    const pressScale = useSharedValue(1);
-    const pressRotate = useSharedValue(0);
+    const patientName = patientProfile?.fullName
+        ? `BN. ${patientProfile.fullName}`
+        : (patientAddress ? `${patientAddress.slice(0, 6)}…${patientAddress.slice(-4)}` : '—');
+    const subtitleLine = patientName;
 
-    useEffect(() => {
-        mountProgress.value = withSpring(1, MOUNT_SPRING);
-    }, []);
-
-    const handlePressIn = () => {
-        pressScale.value = withSpring(0.97, PRESS_SPRING);
-        pressRotate.value = withSpring(-1.2, PRESS_SPRING);
-    };
-
-    const handlePressOut = () => {
-        pressScale.value = withSpring(1, PRESS_SPRING);
-        pressRotate.value = withSpring(0, PRESS_SPRING);
-    };
-
-    const mountStyle = useAnimatedStyle(() => ({
-        opacity: interpolate(mountProgress.value, [0, 0.3, 1], [0, 0.5, 1]),
-        transform: [
-            { perspective: 800 },
-            { translateY: interpolate(mountProgress.value, [0, 1], [16, 0]) },
-            { scale: interpolate(mountProgress.value, [0, 1], [0.96, 1]) },
-            { rotateX: `${interpolate(mountProgress.value, [0, 1], [6, 0])}deg` },
-        ],
-    }));
-
-    const pressStyle = useAnimatedStyle(() => ({
-        transform: [
-            { perspective: 1000 },
-            { scale: pressScale.value },
-            { rotateY: `${pressRotate.value}deg` },
-        ],
-    }));
-
-    const iconColors = [
-        { bg: `${palette.EHR_PRIMARY}15`, color: palette.EHR_PRIMARY },
-        { bg: `${palette.EHR_SECONDARY}15`, color: palette.EHR_SECONDARY },
-        { bg: `${palette.EHR_TERTIARY}15`, color: palette.EHR_TERTIARY },
-    ];
-    // Deterministic color based on cidHash
-    const colorIdx = record?.cidHash ? record.cidHash.charCodeAt(4) % 3 : 0;
-    const { bg: iconBg, color: iconColor } = iconColors[colorIdx];
+    const versionCount = Number(record?.versionCount) || 1;
+    const urgency = getExpiryUrgency(record?.expiresAt);
+    const isUrgent = urgency === 'urgent' || urgency === 'soon';
+    const expiryColor = isExpired || isRevoked
+        ? palette.EHR_OUTLINE
+        : (isUrgent ? palette.EHR_DANGER : palette.EHR_OUTLINE);
+    const expiryLabel = isRevoked
+        ? 'Đã thu hồi'
+        : isExpired ? 'Đã hết hạn' : `Hết hạn ${formatExpiry(record?.expiresAt)}`;
 
     return (
-        <Animated.View style={mountStyle}>
-            <Pressable onPress={isInactive ? undefined : () => onView?.(record)} onPressIn={isInactive ? undefined : handlePressIn} onPressOut={isInactive ? undefined : handlePressOut} disabled={isInactive}>
-                <Animated.View style={pressStyle}>
-                    <View style={[s.card, isInactive && s.cardInactive]}>
-                        {/* Top row: icon + info + status */}
-                        <XStack style={s.topRow}>
-                            <View style={[s.iconWrap, { backgroundColor: iconBg }]}>
-                                <FileText size={20} color={iconColor} />
-                            </View>
+        <Pressable
+            onPress={isInactive ? undefined : () => onView?.(record)}
+            disabled={isInactive}
+            style={({ pressed }) => ({
+                flexDirection: 'row',
+                alignItems: 'flex-start',
+                gap: 14,
+                paddingVertical: 14,
+                paddingHorizontal: 0,
+                borderBottomWidth: 0.5,
+                borderColor: palette.EHR_OUTLINE_VARIANT,
+                opacity: isInactive ? 0.55 : (pressed ? 0.55 : 1),
+            })}
+        >
+            {/* Date stamp 2-line */}
+            <YStack style={{ width: 42, alignItems: 'flex-end', marginTop: 4 }}>
+                <Text
+                    style={{
+                        fontFamily: MONO,
+                        fontSize: 11,
+                        color: palette.EHR_OUTLINE,
+                        letterSpacing: 0.4,
+                    }}
+                >
+                    {day}
+                </Text>
+                <Text
+                    style={{
+                        fontFamily: SERIF,
+                        fontSize: 13,
+                        color: palette.EHR_ON_SURFACE_VARIANT,
+                        marginTop: 1,
+                    }}
+                >
+                    {month}
+                </Text>
+            </YStack>
 
-                            <YStack style={{ flex: 1 }}>
-                                <Text style={s.title} numberOfLines={1}>
-                                    {record?.record?.title || (record?.cidHash ? `CID: ${record.cidHash.substring(0, 16)}...` : 'N/A')}
-                                </Text>
-                                <Text style={s.subtitle}>
-                                    BN: {truncateAddr(record?.record?.ownerAddress || record?.senderAddress)}
-                                </Text>
-                            </YStack>
+            {/* Hairline divider */}
+            <View
+                style={{
+                    width: 1,
+                    alignSelf: 'stretch',
+                    backgroundColor: palette.EHR_OUTLINE_VARIANT,
+                    marginTop: 2,
+                }}
+            />
 
-                            <YStack style={s.rightInfo}>
-                                {isRevoked ? (
-                                    <View style={s.statusBadgeRevoked}>
-                                        <Text style={s.statusBadgeText}>Đã thu hồi</Text>
-                                    </View>
-                                ) : isExpired ? (
-                                    <View style={s.statusBadgeExpired}>
-                                        <Text style={s.statusBadgeText}>Hết hạn</Text>
-                                    </View>
-                                ) : (
-                                    <XStack style={s.verifiedBadge}>
-                                        <ShieldCheck size={10} color={palette.EHR_PRIMARY} />
-                                        <Text style={s.verifiedText}>Đã xác minh</Text>
-                                    </XStack>
-                                )}
-                                <Text style={s.dateText}>
-                                    {formatDate(record?.createdAt)}
-                                </Text>
-                            </YStack>
-                        </XStack>
+            {/* Content */}
+            <YStack style={{ flex: 1, minWidth: 0 }}>
+                <Text
+                    style={{
+                        fontFamily: SERIF_MEDIUM,
+                        fontSize: 15,
+                        fontWeight: '500',
+                        color: palette.EHR_ON_SURFACE,
+                        letterSpacing: -0.1,
+                    }}
+                    numberOfLines={1}
+                >
+                    {title}
+                </Text>
+                <Text
+                    style={{
+                        fontFamily: SANS,
+                        fontSize: 12.5,
+                        color: palette.EHR_ON_SURFACE_VARIANT,
+                        marginTop: 3,
+                    }}
+                    numberOfLines={1}
+                >
+                    {subtitleLine}
+                </Text>
+                <XStack style={{ gap: 10, marginTop: 6, flexWrap: 'wrap' }}>
+                    <Text style={{ fontFamily: SANS, fontSize: 11, color: palette.EHR_OUTLINE }}>
+                        {typeLabel}
+                    </Text>
+                    {versionCount > 1 ? (
+                        <Text style={{ fontFamily: SANS, fontSize: 11, color: palette.EHR_OUTLINE }}>
+                            · v{versionCount}
+                        </Text>
+                    ) : null}
+                    <Text
+                        style={{
+                            fontFamily: SANS_SEMI,
+                            fontSize: 11,
+                            color: expiryColor,
+                            fontWeight: isUrgent ? '700' : '400',
+                        }}
+                    >
+                        · {expiryLabel}
+                    </Text>
+                    {isPending ? (
+                        <Text
+                            style={{
+                                fontFamily: SANS_SEMI,
+                                fontSize: 11,
+                                color: palette.EHR_WARNING,
+                                fontWeight: '700',
+                            }}
+                        >
+                            · Cần nhận
+                        </Text>
+                    ) : null}
+                </XStack>
 
-                        {/* Meta row: time + version + expiry */}
-                        <XStack style={s.metaRow}>
-                            {record?.versionCount > 1 ? (
-                                <View style={s.versionBadge}>
-                                    <Text style={s.versionText}>v{record.versionCount}</Text>
-                                </View>
-                            ) : null}
-                            {(() => {
-                                const urgency = getExpiryUrgency(record?.expiresAt);
-                                const isUrgent = urgency === 'urgent' || urgency === 'soon';
-                                return (
-                                    <XStack style={[s.expiryBadge, isUrgent && { backgroundColor: '#FEF2F2', borderColor: '#FCA5A5', borderWidth: 1 }]}>
-                                        <Clock size={10} color={isUrgent ? '#DC2626' : palette.EHR_ON_SURFACE_VARIANT} />
-                                        <Text style={[s.expiryText, isUrgent && { color: '#DC2626', fontWeight: '700' }]}>
-                                            Hết hạn: {formatExpiry(record?.expiresAt)}
-                                        </Text>
-                                    </XStack>
-                                );
-                            })()}
-                        </XStack>
-
-                        {/* Action buttons / status text */}
-                        <XStack style={{ gap: 10, marginTop: 14 }}>
-                            {isInactive ? (
-                                <View style={{
-                                    flex: 1, borderRadius: 12, paddingVertical: 10,
-                                    backgroundColor: palette.EHR_SURFACE_LOW, alignItems: 'center',
-                                    flexDirection: 'row', justifyContent: 'center', gap: 6,
-                                }}>
-                                    <XCircle size={14} color={palette.EHR_ON_SURFACE_VARIANT} />
-                                    <Text color={palette.EHR_ON_SURFACE_VARIANT} fontWeight="700" fontSize="$3">
-                                        {isRevoked ? 'Đã thu hồi' : 'Hết hạn'}
-                                    </Text>
-                                </View>
-                            ) : (
-                                <Button
-                                    flex={1}
-                                    size="$3"
-                                    background={palette.EHR_PRIMARY}
-                                    pressStyle={{ background: palette.EHR_PRIMARY_CONTAINER }}
-                                    icon={<Eye size={15} color={palette.EHR_ON_PRIMARY} />}
-                                    onPress={() => onView?.(record)}
-                                    style={{ borderRadius: 12 }}
-                                >
-                                    <Text color={palette.EHR_ON_PRIMARY} fontWeight="700" fontSize="$3">
-                                        {isPending ? 'Nhận và xem' : 'Xem hồ sơ'}
-                                    </Text>
-                                </Button>
-                            )}
-
-                            {!isInactive && onCreateUpdate ? (
-                                <Button
-                                    size="$3"
-                                    variant="outlined"
-                                    borderColor={palette.EHR_OUTLINE_VARIANT}
-                                    pressStyle={{ background: palette.EHR_SURFACE_LOW }}
-                                    icon={<FilePlus2 size={15} color={palette.EHR_TERTIARY} />}
-                                    onPress={() => onCreateUpdate(record)}
-                                    style={{ borderRadius: 12 }}
-                                >
-                                    <Text fontWeight="700" style={{ color: palette.EHR_TERTIARY }} fontSize="$3">
-                                        Cập nhật
-                                    </Text>
-                                </Button>
-                            ) : null}
-                        </XStack>
-                    </View>
-                </Animated.View>
-            </Pressable>
-        </Animated.View>
+                {/* Inline "Cập nhật" link (replaces large button) */}
+                {!isInactive && onCreateUpdate ? (
+                    <Pressable
+                        onPress={(e) => {
+                            e.stopPropagation();
+                            onCreateUpdate(record);
+                        }}
+                        hitSlop={4}
+                        style={({ pressed }) => ({
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            gap: 5,
+                            marginTop: 8,
+                            alignSelf: 'flex-start',
+                            opacity: pressed ? 0.55 : 1,
+                        })}
+                    >
+                        <FilePlus2 size={12} color={palette.EHR_TERTIARY} />
+                        <Text
+                            style={{
+                                fontFamily: SANS_SEMI,
+                                fontSize: 12,
+                                color: palette.EHR_TERTIARY,
+                                fontWeight: '600',
+                            }}
+                        >
+                            Cập nhật version →
+                        </Text>
+                    </Pressable>
+                ) : null}
+            </YStack>
+        </Pressable>
     );
 }
-

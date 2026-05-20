@@ -37,6 +37,7 @@ import useAuthStore from '../store/authStore';
 import { isBiometricSigningEnabled, setBiometricSigningEnabled } from '../utils/biometricGate';
 import { ViSectionLabel } from '../components-v2/ViChips';
 import ViCard from '../components-v2/ViCard';
+import HexRow from '../components/HexRow';
 import { useThemePreference, type ThemePreference } from '../constants/themeContext';
 import { useEhrPalette } from '../constants/uiColors';
 
@@ -147,66 +148,39 @@ export default function SettingsScreen() {
                     </ViCard>
                 </View>
 
-                {/* ───────── Ví Blockchain ───────── */}
+                {/* ───────── Ví Blockchain ───────── G.12.c — HexRow pattern */}
                 <ViSectionLabel>Ví blockchain</ViSectionLabel>
                 <View style={{ paddingHorizontal: 20, marginBottom: 18 }}>
-                    <ViCard padding={16}>
-                        <Text
-                            style={{
-                                fontFamily: SANS_MEDIUM,
-                                fontSize: 13.5,
-                                color: palette.EHR_ON_SURFACE,
-                                marginBottom: 8,
-                            }}
-                        >
-                            Địa chỉ ví (Arbitrum Sepolia)
+                    {walletAddress ? (
+                        <HexRow
+                            label="Địa chỉ ví (Arbitrum Sepolia)"
+                            value={walletAddress}
+                            head={8}
+                            tail={6}
+                            sheetTitle="Địa chỉ ví đầy đủ"
+                        />
+                    ) : (
+                        <Text style={{ fontFamily: SANS, fontSize: 12, color: palette.EHR_OUTLINE }}>
+                            Chưa kết nối ví.
                         </Text>
-                        <View
-                            style={{
-                                flexDirection: 'row',
-                                alignItems: 'center',
-                                justifyContent: 'space-between',
-                                paddingVertical: 10,
-                                paddingHorizontal: 12,
-                                borderWidth: 0.5,
-                                borderColor: palette.EHR_OUTLINE_SOFT,
-                                borderRadius: 10,
-                                backgroundColor: palette.EHR_SURFACE,
-                            }}
-                        >
-                            <Text
-                                style={{
-                                    flex: 1,
-                                    fontFamily: 'monospace',
-                                    fontSize: 12,
-                                    color: palette.EHR_ON_SURFACE,
-                                }}
-                                numberOfLines={1}
-                            >
-                                {walletAddress ? truncate(walletAddress, 8, 6) : 'Chưa kết nối'}
-                            </Text>
-                        </View>
-                        <XStack style={{ marginTop: 10, gap: 8 }}>
-                            <SmallButton onPress={copyAddress} disabled={!walletAddress}>
-                                {copied ? 'Đã copy' : 'Copy'}
-                            </SmallButton>
-                            <SmallButton onPress={openExplorer} disabled={!walletAddress}>
-                                Arbiscan ↗
-                            </SmallButton>
-                            <SmallButton onPress={openFaucet}>Faucet ↗</SmallButton>
-                        </XStack>
-                        <Text
-                            style={{
-                                marginTop: 12,
-                                fontFamily: SANS,
-                                fontSize: 11,
-                                color: palette.EHR_OUTLINE,
-                                lineHeight: 16,
-                            }}
-                        >
-                            Khoá riêng do Web3Auth quản lý. ViEH không có quyền truy cập khoá.
-                        </Text>
-                    </ViCard>
+                    )}
+                    <XStack style={{ marginTop: 10, gap: 8 }}>
+                        <SmallButton onPress={openExplorer} disabled={!walletAddress}>
+                            Arbiscan ↗
+                        </SmallButton>
+                        <SmallButton onPress={openFaucet}>Faucet ↗</SmallButton>
+                    </XStack>
+                    <Text
+                        style={{
+                            marginTop: 12,
+                            fontFamily: SANS,
+                            fontSize: 11,
+                            color: palette.EHR_OUTLINE,
+                            lineHeight: 16,
+                        }}
+                    >
+                        Khoá riêng do Web3Auth quản lý. ViEH không có quyền truy cập khoá.
+                    </Text>
                 </View>
 
                 {/* ───────── Bảo mật & uỷ quyền ───────── */}

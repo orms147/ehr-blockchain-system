@@ -32,6 +32,7 @@ import LoadingSpinner from '../components/LoadingSpinner';
 import MyAddressModal from '../components/MyAddressModal';
 import RoleSwitcher from '../components/RoleSwitcher';
 import UserChip from '../components/UserChip';
+import HexRow from '../components/HexRow';
 import profileService from '../services/profile.service';
 import useAuthStore from '../store/authStore';
 import ViCard from '../components-v2/ViCard';
@@ -145,33 +146,18 @@ export default function ProfileScreen() {
                     >
                         {userData.fullName || 'Chưa cập nhật tên'}
                     </Text>
-                    <Pressable
-                        onPress={() => setAddressModalOpen(true)}
-                        style={({ pressed }) => ({
-                            marginTop: 10,
-                            flexDirection: 'row',
-                            alignItems: 'center',
-                            gap: 6,
-                            paddingHorizontal: 12,
-                            paddingVertical: 5,
-                            borderRadius: 999,
-                            borderWidth: 0.5,
-                            borderColor: palette.EHR_OUTLINE_SOFT,
-                            backgroundColor: palette.EHR_SURFACE_LOWEST,
-                            opacity: pressed ? 0.7 : 1,
-                        })}
-                    >
-                        <Text
-                            style={{
-                                fontFamily: 'monospace',
-                                fontSize: 11,
-                                color: palette.EHR_ON_SURFACE_VARIANT,
-                            }}
-                        >
-                            {truncate(userData.walletAddress || (userData as any).address)}
-                        </Text>
-                        <QrCode size={11} color={palette.EHR_PRIMARY} />
-                    </Pressable>
+                    {/* G.12.c — HexRow replaces inline wallet pill */}
+                    {userData.walletAddress || (userData as any).address ? (
+                        <View style={{ marginTop: 14, alignSelf: 'stretch' }}>
+                            <HexRow
+                                label="Mã ví của bạn"
+                                value={userData.walletAddress || (userData as any).address}
+                                head={6}
+                                tail={4}
+                                sheetTitle="Mã ví đầy đủ"
+                            />
+                        </View>
+                    ) : null}
                     {/* Canonical identity card — same UserChip used everywhere else
                         (Design G.7: replace hard-coded role line with UserChip(self)) */}
                     <View

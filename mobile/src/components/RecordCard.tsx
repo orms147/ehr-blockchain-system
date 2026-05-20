@@ -1,151 +1,196 @@
-import React, { useEffect } from 'react';
-import { Pressable, StyleSheet } from 'react-native';
-import { FileText, ChevronRight, Activity, Stethoscope, FileSearch, ShieldCheck } from 'lucide-react-native';
-import { XStack, YStack, Text, View } from 'tamagui';
-import Animated, {
-    useSharedValue,
-    useAnimatedStyle,
-    withSpring,
-    withTiming,
-    interpolate,
-} from 'react-native-reanimated';
+// RecordCard — text-rhythm row per Claude Design `screens-patient.jsx#L321-353` (G.12.a)
+//
+// Visual contract:
+//   [Date 2-line]  | [Hairline]  Title (serif 15pt 550)
+//    18 (mono)     |             Author · Hospital (12.5pt secondary)
+//    04 (serif)    |             Type · N đính kèm · N phiên bản (11pt muted)
+//   ─────────────────────────────────────  bottom 0.5px hairline
+//
+// No card chrome, no icon box, no 3D animation, no verified badge. Editorial.
+// Author + Hospital resolved lazily via UserChip's `useUserProfile` hook.
+
+import React from 'react';
+import { Pressable, View } from 'react-native';
+import { XStack, YStack, Text } from 'tamagui';
+
 import { useEhrPalette } from '../constants/uiColors';
-import { formatDate as formatDateShared } from '../utils/dateFormatting';
+import { useUserProfile } from './UserChip';
 
 interface RecordCardProps {
     record: any;
     onPress?: (record: any) => void;
 }
 
-const PRESS_SPRING = { damping: 15, stiffness: 200, mass: 0.6 };
-const MOUNT_SPRING = { damping: 18, stiffness: 120, mass: 0.8 };
+const SERIF = 'Fraunces_400Regular';
+const SERIF_MEDIUM = 'Fraunces_500Medium';
+const SANS = 'DMSans_400Regular';
+const SANS_SEMI = 'DMSans_600SemiBold';
+const MONO = 'monospace';
+
+const TYPE_LABEL: Record<string, string> = {
+    checkup: 'Khám tổng quát',
+    diagnosis: 'Khám chuyên khoa',
+    prescription: 'Đơn thuốc',
+    lab_result: 'Xét nghiệm',
+    imaging: 'Chẩn đoán hình ảnh',
+    vaccination: 'Tiêm chủng',
+    vital_signs: 'Chỉ số sinh tồn',
+};
+
+function splitDate(input?: string): { day: string; month: string } {
+    if (!input) return { day: '—', month: '' };
+    // Already DD/MM/YYYY form (legacy)
+    const dm = input.match(/^(\d{1,2})\/(\d{1,2})\//);
+    if (dm) return { day: dm[1].padStart(2, '0'), month: dm[2].padStart(2, '0') };
+    try {
+        const d = new Date(input);
+        if (Number.isNaN(d.getTime())) return { day: '—', month: '' };
+        return {
+            day: String(d.getDate()).padStart(2, '0'),
+            month: String(d.getMonth() + 1).padStart(2, '0'),
+        };
+    } catch {
+        return { day: '—', month: '' };
+    }
+}
 
 export default function RecordCard({ record, onPress }: RecordCardProps) {
     const palette = useEhrPalette();
-    const s = StyleSheet.create({
-        card: { backgroundColor: palette.EHR_SURFACE_LOWEST, borderRadius: 16, padding: 16, marginBottom: 10, borderWidth: 1, borderColor: `${palette.EHR_OUTLINE_VARIANT}60` },
-        row: { alignItems: 'center', gap: 14 },
-        iconWrap: { width: 48, height: 48, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
-        title: { fontSize: 15, fontWeight: '700' as const, color: palette.EHR_ON_SURFACE, marginBottom: 4 },
-        metaRow: { alignItems: 'center', gap: 8 },
-        chip: { borderRadius: 999, paddingHorizontal: 8, paddingVertical: 2 },
-        chipText: { fontSize: 10, fontWeight: '700' as const, textTransform: 'uppercase' as const },
-        verifiedBadge: { alignItems: 'center', gap: 3, backgroundColor: `${palette.EHR_PRIMARY}10`, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
-        verifiedText: { fontSize: 9, fontWeight: '700' as const, color: palette.EHR_PRIMARY, textTransform: 'uppercase' as const, letterSpacing: 0.3 },
-        date: { fontSize: 11, color: `${palette.EHR_ON_SURFACE_VARIANT}99` },
-    });
-    const mountProgress = useSharedValue(0);
-    const pressScale = useSharedValue(1);
-    const pressRotateY = useSharedValue(0);
-    const elevation = useSharedValue(0);
+    const authorAddress = record?.createdBy || record?.ownerAddress;
+    const { data: authorProfile } = useUserProfile(authorAddress);
 
-    useEffect(() => {
-        mountProgress.value = withSpring(1, MOUNT_SPRING);
-    }, []);
+    const { day, month } = splitDate(record?.date || record?.createdAt);
+    const typeKey = String(record?.recordType || record?.type || '').toLowerCase();
+    const typeLabel = TYPE_LABEL[typeKey] || (typeKey ? typeKey : 'Hồ sơ y tế');
+    const title = record?.title || typeLabel || 'Hồ sơ y tế';
 
-    const handlePressIn = () => {
-        pressScale.value = withSpring(0.97, PRESS_SPRING);
-        pressRotateY.value = withSpring(-1.5, PRESS_SPRING);
-        elevation.value = withTiming(8, { duration: 150 });
-    };
+    const authorName = authorProfile?.fullName
+        ? (authorProfile.isDoctor ? `BS. ${authorProfile.fullName}` : authorProfile.fullName)
+        : null;
+    const orgName = authorProfile?.doctorProfile?.hospitalName || null;
+    const authorLine = [authorName, orgName].filter(Boolean).join(' · ');
 
-    const handlePressOut = () => {
-        pressScale.value = withSpring(1, PRESS_SPRING);
-        pressRotateY.value = withSpring(0, PRESS_SPRING);
-        elevation.value = withTiming(0, { duration: 200 });
-    };
+    const versionCount = Number(record?.versionCount) || 1;
+    const attachmentsCount = Number(record?.attachmentsCount) || 0;
 
-    const mountStyle = useAnimatedStyle(() => ({
-        opacity: interpolate(mountProgress.value, [0, 0.3, 1], [0, 0.5, 1]),
-        transform: [
-            { perspective: 1000 },
-            { translateY: interpolate(mountProgress.value, [0, 1], [14, 0]) },
-            { rotateX: `${interpolate(mountProgress.value, [0, 1], [8, 0])}deg` },
-        ],
-    }));
-
-    const pressStyle = useAnimatedStyle(() => ({
-        transform: [
-            { perspective: 1000 },
-            { scale: pressScale.value },
-            { rotateY: `${pressRotateY.value}deg` },
-        ],
-        shadowRadius: interpolate(elevation.value, [0, 8], [12, 20]),
-        shadowOpacity: interpolate(elevation.value, [0, 8], [0.04, 0.1]),
-        shadowOffset: {
-            width: 0,
-            height: interpolate(elevation.value, [0, 8], [4, 12]),
-        },
-    }));
-
-    const getIcon = () => {
-        const type = typeof record?.type === 'string' ? record.type.toLowerCase() : '';
-        if (type.includes('lab') || type.includes('xet nghiem') || type.includes('xét nghiệm'))
-            return { Icon: Activity, color: palette.EHR_TERTIARY, bg: `${palette.EHR_TERTIARY}15` };
-        if (type.includes('checkup') || type.includes('khám') || type.includes('kham'))
-            return { Icon: Stethoscope, color: palette.EHR_PRIMARY, bg: `${palette.EHR_PRIMARY}15` };
-        if (type.includes('x-ray') || type.includes('x-quang'))
-            return { Icon: FileSearch, color: palette.EHR_SECONDARY, bg: `${palette.EHR_SECONDARY}15` };
-        return { Icon: FileText, color: palette.EHR_PRIMARY, bg: palette.EHR_SURFACE_LOW };
-    };
-
-    const { Icon, color: iconColor, bg: iconBg } = getIcon();
-
-    const statusChip = (() => {
-        if (record?.syncStatus === 'failed')
-            return { label: 'Lỗi', bg: palette.EHR_ERROR_CONTAINER, color: palette.EHR_ERROR };
-        if (record?.syncStatus === 'pending')
-            return { label: 'Đang đồng bộ', bg: palette.EHR_SURFACE_LOW, color: palette.EHR_PRIMARY };
-        return null;
-    })();
-
-    const formatDate = (dateStr?: string) => {
-        if (!dateStr) return '';
-        // If already in dd/mm/yyyy form, pass through unchanged (legacy data).
-        if (/^\d{1,2}\/\d{1,2}\/\d{2,4}$/.test(dateStr)) return dateStr;
-        return formatDateShared(dateStr);
-    };
+    const isPending = record?.syncStatus === 'pending';
+    const isFailed = record?.syncStatus === 'failed';
 
     return (
-        <Animated.View style={mountStyle}>
-            <Pressable onPress={() => onPress?.(record)} onPressIn={handlePressIn} onPressOut={handlePressOut}>
-                <Animated.View style={[pressStyle, { shadowColor: palette.EHR_SHADOW }]}>
-                    <View style={s.card}>
-                        <XStack style={s.row}>
-                            {/* Icon */}
-                            <View style={[s.iconWrap, { backgroundColor: iconBg }]}>
-                                <Icon size={22} color={iconColor} />
-                            </View>
+        <Pressable
+            onPress={() => onPress?.(record)}
+            style={({ pressed }) => ({
+                flexDirection: 'row',
+                alignItems: 'flex-start',
+                gap: 14,
+                paddingVertical: 14,
+                paddingHorizontal: 0,
+                borderBottomWidth: 0.5,
+                borderColor: palette.EHR_OUTLINE_VARIANT,
+                opacity: pressed ? 0.55 : 1,
+            })}
+        >
+            {/* Date stamp 2-line */}
+            <YStack style={{ width: 42, alignItems: 'flex-end', marginTop: 4 }}>
+                <Text
+                    style={{
+                        fontFamily: MONO,
+                        fontSize: 11,
+                        color: palette.EHR_OUTLINE,
+                        letterSpacing: 0.4,
+                    }}
+                >
+                    {day}
+                </Text>
+                <Text
+                    style={{
+                        fontFamily: SERIF,
+                        fontSize: 13,
+                        color: palette.EHR_ON_SURFACE_VARIANT,
+                        marginTop: 1,
+                    }}
+                >
+                    {month}
+                </Text>
+            </YStack>
 
-                            {/* Content */}
-                            <YStack style={{ flex: 1 }}>
-                                <Text style={s.title} numberOfLines={1}>
-                                    {record?.title || record?.type || 'Hồ sơ y tế'}
-                                </Text>
-                                <XStack style={s.metaRow}>
-                                    {statusChip ? (
-                                        <View style={[s.chip, { backgroundColor: statusChip.bg }]}>
-                                            <Text style={[s.chipText, { color: statusChip.color }]}>{statusChip.label}</Text>
-                                        </View>
-                                    ) : (
-                                        <XStack style={s.verifiedBadge}>
-                                            <ShieldCheck size={10} color={palette.EHR_PRIMARY} />
-                                            <Text style={s.verifiedText}>Đã xác minh</Text>
-                                        </XStack>
-                                    )}
-                                    <Text style={s.date}>
-                                        {formatDate(record?.date || record?.createdAt)}
-                                    </Text>
-                                </XStack>
-                            </YStack>
+            {/* Hairline divider */}
+            <View
+                style={{
+                    width: 1,
+                    alignSelf: 'stretch',
+                    backgroundColor: palette.EHR_OUTLINE_VARIANT,
+                    marginTop: 2,
+                }}
+            />
 
-                            {/* Arrow */}
-                            <ChevronRight color={`${palette.EHR_OUTLINE_VARIANT}`} size={18} />
-                        </XStack>
-                    </View>
-                </Animated.View>
-            </Pressable>
-        </Animated.View>
+            {/* Content */}
+            <YStack style={{ flex: 1, minWidth: 0 }}>
+                <Text
+                    style={{
+                        fontFamily: SERIF_MEDIUM,
+                        fontSize: 15,
+                        fontWeight: '500',
+                        color: palette.EHR_ON_SURFACE,
+                        letterSpacing: -0.1,
+                    }}
+                    numberOfLines={1}
+                >
+                    {title}
+                </Text>
+                {authorLine ? (
+                    <Text
+                        style={{
+                            fontFamily: SANS,
+                            fontSize: 12.5,
+                            color: palette.EHR_ON_SURFACE_VARIANT,
+                            marginTop: 3,
+                        }}
+                        numberOfLines={1}
+                    >
+                        {authorLine}
+                    </Text>
+                ) : null}
+                <XStack style={{ gap: 10, marginTop: 6, flexWrap: 'wrap' }}>
+                    <Text style={{ fontFamily: SANS, fontSize: 11, color: palette.EHR_OUTLINE }}>
+                        {typeLabel}
+                    </Text>
+                    {attachmentsCount > 0 ? (
+                        <Text style={{ fontFamily: SANS, fontSize: 11, color: palette.EHR_OUTLINE }}>
+                            · {attachmentsCount} đính kèm
+                        </Text>
+                    ) : null}
+                    {versionCount > 1 ? (
+                        <Text style={{ fontFamily: SANS, fontSize: 11, color: palette.EHR_OUTLINE }}>
+                            · {versionCount} phiên bản
+                        </Text>
+                    ) : null}
+                    {isPending ? (
+                        <Text
+                            style={{
+                                fontFamily: SANS_SEMI,
+                                fontSize: 11,
+                                color: palette.EHR_WARNING,
+                                fontWeight: '700',
+                            }}
+                        >
+                            · Đang đồng bộ
+                        </Text>
+                    ) : null}
+                    {isFailed ? (
+                        <Text
+                            style={{
+                                fontFamily: SANS_SEMI,
+                                fontSize: 11,
+                                color: palette.EHR_DANGER,
+                                fontWeight: '700',
+                            }}
+                        >
+                            · Lỗi đồng bộ
+                        </Text>
+                    ) : null}
+                </XStack>
+            </YStack>
+        </Pressable>
     );
 }
-
