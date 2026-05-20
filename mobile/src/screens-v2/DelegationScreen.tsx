@@ -597,6 +597,193 @@ function GrantAuthorityModal({
     );
 }
 
+// G.9 — Gia hạn stepper bottom sheet. 4 quick-pick options.
+function ExtendSheet({
+    target,
+    onClose,
+    onConfirm,
+    submitting,
+}: {
+    target: DelegationRow | null;
+    onClose: () => void;
+    onConfirm: (additionalDays: number) => void;
+    submitting: boolean;
+}) {
+    const [picked, setPicked] = useState<number>(30);
+
+    if (!target) return null;
+
+    const remainingMs = new Date(target.expiresAt).getTime() - Date.now();
+    const remainingDays = Math.max(0, Math.ceil(remainingMs / (24 * 60 * 60 * 1000)));
+    const newTotal = Math.min(1825, remainingDays + picked);
+    const newExpiry = new Date(Date.now() + newTotal * 24 * 60 * 60 * 1000);
+    const formatExpiryDate = (d: Date) => {
+        const dd = String(d.getDate()).padStart(2, '0');
+        const mm = String(d.getMonth() + 1).padStart(2, '0');
+        return `${dd}·${mm}·${d.getFullYear()}`;
+    };
+
+    const OPTIONS = [
+        { days: 30, label: '+30 ngày' },
+        { days: 90, label: '+90 ngày' },
+        { days: 180, label: '+6 tháng' },
+        { days: 365, label: '+12 tháng' },
+    ];
+
+    return (
+        <Modal visible animationType="slide" transparent onRequestClose={onClose}>
+            <Pressable
+                onPress={onClose}
+                style={{ flex: 1, backgroundColor: 'rgba(8,8,12,0.7)', justifyContent: 'flex-end' }}
+            >
+                <Pressable
+                    onPress={(e) => e.stopPropagation()}
+                    style={{
+                        backgroundColor: EHR_SURFACE_HIGH,
+                        borderTopLeftRadius: 20,
+                        borderTopRightRadius: 20,
+                        paddingHorizontal: 22,
+                        paddingTop: 14,
+                        paddingBottom: 28,
+                    }}
+                >
+                    {/* handle */}
+                    <View style={{ alignItems: 'center', marginBottom: 14 }}>
+                        <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: EHR_OUTLINE }} />
+                    </View>
+
+                    <Text
+                        style={{
+                            fontFamily: SERIF,
+                            fontSize: 20,
+                            color: EHR_ON_SURFACE,
+                            letterSpacing: -0.3,
+                            marginBottom: 6,
+                        }}
+                    >
+                        Gia hạn uỷ quyền
+                    </Text>
+                    <Text
+                        style={{
+                            fontFamily: SANS,
+                            fontSize: 12.5,
+                            color: EHR_ON_SURFACE_VARIANT,
+                            lineHeight: 18,
+                            marginBottom: 14,
+                        }}
+                    >
+                        Chọn khoảng thời gian thêm vào hạn hiện tại. Còn lại {remainingDays} ngày.
+                    </Text>
+
+                    {/* Doctor identity */}
+                    <View
+                        style={{
+                            paddingVertical: 10,
+                            paddingHorizontal: 12,
+                            borderRadius: 10,
+                            borderWidth: 0.5,
+                            borderColor: EHR_OUTLINE_VARIANT,
+                            backgroundColor: EHR_SURFACE,
+                            marginBottom: 16,
+                        }}
+                    >
+                        <UserChip address={target.delegateeAddress} expanded showAddress={false} interactive={false} />
+                    </View>
+
+                    {/* Stepper options */}
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
+                        {OPTIONS.map((opt) => {
+                            const active = picked === opt.days;
+                            return (
+                                <Pressable
+                                    key={opt.days}
+                                    onPress={() => setPicked(opt.days)}
+                                    style={({ pressed }) => ({
+                                        flexBasis: '47%',
+                                        flexGrow: 1,
+                                        paddingVertical: 12,
+                                        borderRadius: 10,
+                                        borderWidth: active ? 1.5 : 0.5,
+                                        borderColor: active ? EHR_PRIMARY : EHR_OUTLINE_VARIANT,
+                                        backgroundColor: active ? `${EHR_PRIMARY}1A` : EHR_SURFACE,
+                                        alignItems: 'center',
+                                        opacity: pressed ? 0.7 : 1,
+                                    })}
+                                >
+                                    <Text
+                                        style={{
+                                            fontFamily: SANS_SEMI,
+                                            fontSize: 14,
+                                            color: active ? EHR_PRIMARY : EHR_ON_SURFACE,
+                                            fontWeight: '700',
+                                        }}
+                                    >
+                                        {opt.label}
+                                    </Text>
+                                </Pressable>
+                            );
+                        })}
+                    </View>
+
+                    {/* Preview line */}
+                    <View
+                        style={{
+                            paddingVertical: 10,
+                            paddingHorizontal: 12,
+                            borderRadius: 10,
+                            borderWidth: 0.5,
+                            borderStyle: 'dashed',
+                            borderColor: EHR_OUTLINE_VARIANT,
+                            backgroundColor: EHR_SURFACE,
+                            marginBottom: 18,
+                        }}
+                    >
+                        <Text style={{ fontFamily: SANS, fontSize: 11.5, color: EHR_OUTLINE }}>
+                            Hạn mới sẽ là{' '}
+                            <Text style={{ fontFamily: 'monospace', color: EHR_ON_SURFACE, fontWeight: '700' }}>
+                                {formatExpiryDate(newExpiry)}
+                            </Text>{' '}
+                            ({newTotal} ngày từ hôm nay)
+                            {newTotal === 1825 ? ' · giới hạn tối đa hợp đồng' : ''}
+                        </Text>
+                    </View>
+
+                    <XStack style={{ gap: 10 }}>
+                        <View style={{ flex: 1 }}>
+                            <ViButton variant="ghost" full onPress={onClose}>
+                                Huỷ
+                            </ViButton>
+                        </View>
+                        <View style={{ flex: 2 }}>
+                            <ViButton
+                                variant="cinnabar"
+                                full
+                                loading={submitting}
+                                onPress={() => onConfirm(picked)}
+                            >
+                                {submitting ? 'Đang ký…' : 'Ký & Gia hạn'}
+                            </ViButton>
+                        </View>
+                    </XStack>
+                    <Text
+                        style={{
+                            marginTop: 10,
+                            textAlign: 'center',
+                            fontFamily: SANS,
+                            fontSize: 10.5,
+                            color: EHR_OUTLINE,
+                            lineHeight: 15,
+                            fontStyle: 'italic',
+                        }}
+                    >
+                        Biometric prompt sẽ hiện · gas sponsor (1/100 lượt ký/tháng).
+                    </Text>
+                </Pressable>
+            </Pressable>
+        </Modal>
+    );
+}
+
 function FieldLabel({ children }: { children: React.ReactNode }) {
     return (
         <Text
@@ -621,6 +808,7 @@ export default function DelegationScreen() {
     const revokeMutation = useRevokeAuthority();
     const [grantOpen, setGrantOpen] = useState(false);
     const [revokingAddr, setRevokingAddr] = useState<string | null>(null);
+    const [extendTarget, setExtendTarget] = useState<DelegationRow | null>(null);
 
     const handleGrant = async (data: {
         delegateeAddress: string;
@@ -641,13 +829,28 @@ export default function DelegationScreen() {
     };
 
     const handleExtend = (item: DelegationRow) => {
-        // G.8 placeholder — full "Gia hạn" flow is G.9 work. Surface intent now so
-        // the card button has something to do.
-        void item;
-        Alert.alert(
-            'Gia hạn uỷ quyền',
-            'Tính năng gia hạn đang được hoàn thiện (Phase G.9). Hiện tại bạn có thể thu hồi và uỷ quyền lại với thời hạn mới.',
-        );
+        // G.9 — opens stepper bottom sheet. Confirming re-issues delegation
+        // with extended duration via the same grant flow.
+        setExtendTarget(item);
+    };
+
+    const handleExtendConfirm = async (additionalDays: number) => {
+        if (!extendTarget) return;
+        const remainingMs = new Date(extendTarget.expiresAt).getTime() - Date.now();
+        const remainingDays = Math.max(0, Math.ceil(remainingMs / (24 * 60 * 60 * 1000)));
+        const newDays = Math.min(1825, remainingDays + additionalDays); // clamp to contract MAX
+        try {
+            await grantMutation.mutateAsync({
+                delegateeAddress: extendTarget.delegateeAddress,
+                durationDays: newDays,
+                allowSubDelegate: extendTarget.allowSubDelegate,
+                scopeNote: extendTarget.scopeNote,
+            });
+            setExtendTarget(null);
+            Alert.alert('Đã gia hạn', `Thời hạn mới: ${newDays} ngày kể từ hôm nay.`);
+        } catch (err: any) {
+            Alert.alert('Gia hạn thất bại', err?.message || 'Không thể gia hạn.');
+        }
     };
 
     const handleRevoke = (item: DelegationRow) => {
@@ -879,6 +1082,13 @@ export default function DelegationScreen() {
                 visible={grantOpen}
                 onClose={() => setGrantOpen(false)}
                 onSubmit={handleGrant}
+                submitting={grantMutation.isPending}
+            />
+
+            <ExtendSheet
+                target={extendTarget}
+                onClose={() => setExtendTarget(null)}
+                onConfirm={handleExtendConfirm}
                 submitting={grantMutation.isPending}
             />
         </SafeAreaView>
