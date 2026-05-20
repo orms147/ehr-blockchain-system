@@ -9,20 +9,7 @@ import Animated, {
     withTiming,
     interpolate,
 } from 'react-native-reanimated';
-import {
-    EHR_ERROR,
-    EHR_ERROR_CONTAINER,
-    EHR_ON_SURFACE,
-    EHR_ON_SURFACE_VARIANT,
-    EHR_OUTLINE,
-    EHR_OUTLINE_VARIANT,
-    EHR_PRIMARY,
-    EHR_SECONDARY,
-    EHR_SHADOW,
-    EHR_SURFACE_LOW,
-    EHR_SURFACE_LOWEST,
-    EHR_TERTIARY,
-} from '../constants/uiColors';
+import { useEhrPalette } from '../constants/uiColors';
 import { formatDate as formatDateShared } from '../utils/dateFormatting';
 
 interface RecordCardProps {
@@ -34,6 +21,19 @@ const PRESS_SPRING = { damping: 15, stiffness: 200, mass: 0.6 };
 const MOUNT_SPRING = { damping: 18, stiffness: 120, mass: 0.8 };
 
 export default function RecordCard({ record, onPress }: RecordCardProps) {
+    const palette = useEhrPalette();
+    const s = StyleSheet.create({
+        card: { backgroundColor: palette.EHR_SURFACE_LOWEST, borderRadius: 16, padding: 16, marginBottom: 10, borderWidth: 1, borderColor: `${palette.EHR_OUTLINE_VARIANT}60` },
+        row: { alignItems: 'center', gap: 14 },
+        iconWrap: { width: 48, height: 48, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+        title: { fontSize: 15, fontWeight: '700' as const, color: palette.EHR_ON_SURFACE, marginBottom: 4 },
+        metaRow: { alignItems: 'center', gap: 8 },
+        chip: { borderRadius: 999, paddingHorizontal: 8, paddingVertical: 2 },
+        chipText: { fontSize: 10, fontWeight: '700' as const, textTransform: 'uppercase' as const },
+        verifiedBadge: { alignItems: 'center', gap: 3, backgroundColor: `${palette.EHR_PRIMARY}10`, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
+        verifiedText: { fontSize: 9, fontWeight: '700' as const, color: palette.EHR_PRIMARY, textTransform: 'uppercase' as const, letterSpacing: 0.3 },
+        date: { fontSize: 11, color: `${palette.EHR_ON_SURFACE_VARIANT}99` },
+    });
     const mountProgress = useSharedValue(0);
     const pressScale = useSharedValue(1);
     const pressRotateY = useSharedValue(0);
@@ -81,21 +81,21 @@ export default function RecordCard({ record, onPress }: RecordCardProps) {
     const getIcon = () => {
         const type = typeof record?.type === 'string' ? record.type.toLowerCase() : '';
         if (type.includes('lab') || type.includes('xet nghiem') || type.includes('xét nghiệm'))
-            return { Icon: Activity, color: EHR_TERTIARY, bg: `${EHR_TERTIARY}15` };
+            return { Icon: Activity, color: palette.EHR_TERTIARY, bg: `${palette.EHR_TERTIARY}15` };
         if (type.includes('checkup') || type.includes('khám') || type.includes('kham'))
-            return { Icon: Stethoscope, color: EHR_PRIMARY, bg: `${EHR_PRIMARY}15` };
+            return { Icon: Stethoscope, color: palette.EHR_PRIMARY, bg: `${palette.EHR_PRIMARY}15` };
         if (type.includes('x-ray') || type.includes('x-quang'))
-            return { Icon: FileSearch, color: EHR_SECONDARY, bg: `${EHR_SECONDARY}15` };
-        return { Icon: FileText, color: EHR_PRIMARY, bg: EHR_SURFACE_LOW };
+            return { Icon: FileSearch, color: palette.EHR_SECONDARY, bg: `${palette.EHR_SECONDARY}15` };
+        return { Icon: FileText, color: palette.EHR_PRIMARY, bg: palette.EHR_SURFACE_LOW };
     };
 
     const { Icon, color: iconColor, bg: iconBg } = getIcon();
 
     const statusChip = (() => {
         if (record?.syncStatus === 'failed')
-            return { label: 'Lỗi', bg: EHR_ERROR_CONTAINER, color: EHR_ERROR };
+            return { label: 'Lỗi', bg: palette.EHR_ERROR_CONTAINER, color: palette.EHR_ERROR };
         if (record?.syncStatus === 'pending')
-            return { label: 'Đang đồng bộ', bg: EHR_SURFACE_LOW, color: EHR_PRIMARY };
+            return { label: 'Đang đồng bộ', bg: palette.EHR_SURFACE_LOW, color: palette.EHR_PRIMARY };
         return null;
     })();
 
@@ -109,7 +109,7 @@ export default function RecordCard({ record, onPress }: RecordCardProps) {
     return (
         <Animated.View style={mountStyle}>
             <Pressable onPress={() => onPress?.(record)} onPressIn={handlePressIn} onPressOut={handlePressOut}>
-                <Animated.View style={[pressStyle, { shadowColor: EHR_SHADOW }]}>
+                <Animated.View style={[pressStyle, { shadowColor: palette.EHR_SHADOW }]}>
                     <View style={s.card}>
                         <XStack style={s.row}>
                             {/* Icon */}
@@ -129,7 +129,7 @@ export default function RecordCard({ record, onPress }: RecordCardProps) {
                                         </View>
                                     ) : (
                                         <XStack style={s.verifiedBadge}>
-                                            <ShieldCheck size={10} color={EHR_PRIMARY} />
+                                            <ShieldCheck size={10} color={palette.EHR_PRIMARY} />
                                             <Text style={s.verifiedText}>Đã xác minh</Text>
                                         </XStack>
                                     )}
@@ -140,7 +140,7 @@ export default function RecordCard({ record, onPress }: RecordCardProps) {
                             </YStack>
 
                             {/* Arrow */}
-                            <ChevronRight color={`${EHR_OUTLINE_VARIANT}`} size={18} />
+                            <ChevronRight color={`${palette.EHR_OUTLINE_VARIANT}`} size={18} />
                         </XStack>
                     </View>
                 </Animated.View>
@@ -149,63 +149,3 @@ export default function RecordCard({ record, onPress }: RecordCardProps) {
     );
 }
 
-const s = StyleSheet.create({
-    card: {
-        backgroundColor: EHR_SURFACE_LOWEST,
-        borderRadius: 16,
-        padding: 16,
-        marginBottom: 10,
-        borderWidth: 1,
-        borderColor: `${EHR_OUTLINE_VARIANT}60`,
-    },
-    row: {
-        alignItems: 'center',
-        gap: 14,
-    },
-    iconWrap: {
-        width: 48,
-        height: 48,
-        borderRadius: 14,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    title: {
-        fontSize: 15,
-        fontWeight: '700',
-        color: EHR_ON_SURFACE,
-        marginBottom: 4,
-    },
-    metaRow: {
-        alignItems: 'center',
-        gap: 8,
-    },
-    chip: {
-        borderRadius: 999,
-        paddingHorizontal: 8,
-        paddingVertical: 2,
-    },
-    chipText: {
-        fontSize: 10,
-        fontWeight: '700',
-        textTransform: 'uppercase',
-    },
-    verifiedBadge: {
-        alignItems: 'center',
-        gap: 3,
-        backgroundColor: `${EHR_PRIMARY}10`,
-        paddingHorizontal: 6,
-        paddingVertical: 2,
-        borderRadius: 4,
-    },
-    verifiedText: {
-        fontSize: 9,
-        fontWeight: '700',
-        color: EHR_PRIMARY,
-        textTransform: 'uppercase',
-        letterSpacing: 0.3,
-    },
-    date: {
-        fontSize: 11,
-        color: `${EHR_ON_SURFACE_VARIANT}99`,
-    },
-});

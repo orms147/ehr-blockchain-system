@@ -14,14 +14,7 @@ import useAuthStore from '../../store/authStore';
 import keyShareService from '../../services/keyShare.service';
 import ViCard from '../../components-v2/ViCard';
 import { formatDate, formatExpiry } from '../../utils/dateFormatting';
-import {
-    EHR_SURFACE,
-    EHR_ON_SURFACE,
-    EHR_ON_SURFACE_VARIANT,
-    EHR_OUTLINE,
-    EHR_OUTLINE_SOFT,
-    EHR_DANGER,
-} from '../../constants/uiColors';
+import { useEhrPalette } from '../../constants/uiColors';
 
 const SERIF = 'Fraunces_400Regular';
 const SANS = 'DMSans_400Regular';
@@ -41,18 +34,19 @@ type ExpiredItem = {
 const truncate = (addr?: string) => (addr ? `${addr.slice(0, 6)}…${addr.slice(-4)}` : '???');
 
 function ExpiredRow({ item }: { item: ExpiredItem }) {
+    const palette = useEhrPalette();
     const ownerAddr = item.record?.ownerAddress || item.senderAddress;
     return (
         <ViCard padding={14} style={{ marginBottom: 10, opacity: 0.75 }}>
             <XStack style={{ alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 6 }}>
                 <YStack style={{ flex: 1, paddingRight: 10 }}>
                     <XStack style={{ alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                        <User size={13} color={EHR_OUTLINE} />
+                        <User size={13} color={palette.EHR_OUTLINE} />
                         <Text
                             style={{
                                 fontFamily: 'monospace',
                                 fontSize: 12,
-                                color: EHR_OUTLINE,
+                                color: palette.EHR_OUTLINE,
                             }}
                         >
                             BN: {truncate(ownerAddr)}
@@ -60,9 +54,9 @@ function ExpiredRow({ item }: { item: ExpiredItem }) {
                     </XStack>
                     {item.cidHash ? (
                         <XStack style={{ alignItems: 'center', gap: 6 }}>
-                            <FileText size={11} color={EHR_OUTLINE} />
+                            <FileText size={11} color={palette.EHR_OUTLINE} />
                             <Text
-                                style={{ fontFamily: 'monospace', fontSize: 11, color: EHR_OUTLINE }}
+                                style={{ fontFamily: 'monospace', fontSize: 11, color: palette.EHR_OUTLINE }}
                                 numberOfLines={1}
                             >
                                 {item.cidHash.slice(0, 22)}…
@@ -78,15 +72,15 @@ function ExpiredRow({ item }: { item: ExpiredItem }) {
                         paddingHorizontal: 8,
                         paddingVertical: 3,
                         borderRadius: 999,
-                        backgroundColor: `${EHR_OUTLINE}1A`,
+                        backgroundColor: `${palette.EHR_OUTLINE}1A`,
                     }}
                 >
-                    <ShieldOff size={11} color={EHR_OUTLINE} />
+                    <ShieldOff size={11} color={palette.EHR_OUTLINE} />
                     <Text
                         style={{
                             fontFamily: SANS_SEMI,
                             fontSize: 10.5,
-                            color: EHR_OUTLINE,
+                            color: palette.EHR_OUTLINE,
                             fontWeight: '700',
                             letterSpacing: 0.3,
                         }}
@@ -96,12 +90,12 @@ function ExpiredRow({ item }: { item: ExpiredItem }) {
                 </View>
             </XStack>
             <XStack style={{ alignItems: 'center', gap: 4, marginTop: 6 }}>
-                <Clock size={11} color={EHR_OUTLINE} />
-                <Text style={{ fontFamily: SANS, fontSize: 11.5, color: EHR_OUTLINE }}>
+                <Clock size={11} color={palette.EHR_OUTLINE} />
+                <Text style={{ fontFamily: SANS, fontSize: 11.5, color: palette.EHR_OUTLINE }}>
                     Chia sẻ: {formatDate(item.createdAt)}
                 </Text>
                 {item.expiresAt ? (
-                    <Text style={{ fontFamily: SANS, fontSize: 11.5, color: EHR_DANGER, marginLeft: 10 }}>
+                    <Text style={{ fontFamily: SANS, fontSize: 11.5, color: palette.EHR_DANGER, marginLeft: 10 }}>
                         Hết: {formatExpiry(item.expiresAt)}
                     </Text>
                 ) : null}
@@ -111,6 +105,7 @@ function ExpiredRow({ item }: { item: ExpiredItem }) {
 }
 
 export default function DoctorExpiredRecordsScreen() {
+    const palette = useEhrPalette();
     const { token } = useAuthStore();
     const [expiredRecords, setExpiredRecords] = useState<ExpiredItem[]>([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -145,13 +140,13 @@ export default function DoctorExpiredRecordsScreen() {
     if (isLoading) return <LoadingSpinner message="Đang tải hồ sơ hết hạn..." />;
 
     return (
-        <SafeAreaView style={{ flex: 1, backgroundColor: EHR_SURFACE }} edges={['right', 'left']}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: palette.EHR_SURFACE }} edges={['right', 'left']}>
             <View style={{ paddingHorizontal: 20, paddingTop: 14, paddingBottom: 12 }}>
                 <Text
                     style={{
                         fontFamily: SERIF,
                         fontSize: 26,
-                        color: EHR_ON_SURFACE,
+                        color: palette.EHR_ON_SURFACE,
                         letterSpacing: -0.4,
                         lineHeight: 30,
                     }}
@@ -163,7 +158,7 @@ export default function DoctorExpiredRecordsScreen() {
                         marginTop: 4,
                         fontFamily: SANS,
                         fontSize: 13,
-                        color: EHR_ON_SURFACE_VARIANT,
+                        color: palette.EHR_ON_SURFACE_VARIANT,
                     }}
                 >
                     Quyền truy cập đã hết hạn hoặc bị thu hồi.
@@ -172,13 +167,13 @@ export default function DoctorExpiredRecordsScreen() {
 
             {expiredRecords.length === 0 ? (
                 <View style={{ paddingHorizontal: 22, paddingTop: 30, alignItems: 'center' }}>
-                    <Clock size={28} color={EHR_OUTLINE} />
+                    <Clock size={28} color={palette.EHR_OUTLINE} />
                     <Text
                         style={{
                             marginTop: 12,
                             fontFamily: SERIF,
                             fontSize: 18,
-                            color: EHR_ON_SURFACE,
+                            color: palette.EHR_ON_SURFACE,
                             textAlign: 'center',
                         }}
                     >
@@ -189,7 +184,7 @@ export default function DoctorExpiredRecordsScreen() {
                             marginTop: 8,
                             fontFamily: SANS,
                             fontSize: 13,
-                            color: EHR_OUTLINE,
+                            color: palette.EHR_OUTLINE,
                             textAlign: 'center',
                             maxWidth: 280,
                             lineHeight: 19,
@@ -208,11 +203,11 @@ export default function DoctorExpiredRecordsScreen() {
                         <RefreshControl
                             refreshing={isRefreshing}
                             onRefresh={handleRefresh}
-                            tintColor={EHR_ON_SURFACE_VARIANT}
+                            tintColor={palette.EHR_ON_SURFACE_VARIANT}
                         />
                     }
                     ListHeaderComponent={
-                        <Text style={{ fontFamily: SANS, fontSize: 12.5, color: EHR_OUTLINE, marginBottom: 12 }}>
+                        <Text style={{ fontFamily: SANS, fontSize: 12.5, color: palette.EHR_OUTLINE, marginBottom: 12 }}>
                             {expiredRecords.length} hồ sơ đã hết hạn / bị thu hồi
                         </Text>
                     }
@@ -222,5 +217,4 @@ export default function DoctorExpiredRecordsScreen() {
     );
 }
 
-void EHR_OUTLINE_SOFT;
 void SANS_MEDIUM;

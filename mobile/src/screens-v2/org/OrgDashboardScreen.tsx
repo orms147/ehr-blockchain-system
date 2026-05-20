@@ -12,18 +12,7 @@ import LoadingSpinner from '../../components/LoadingSpinner';
 import orgService from '../../services/org.service';
 import useAuthStore from '../../store/authStore';
 import ViCard from '../../components-v2/ViCard';
-import {
-    EHR_SURFACE,
-    EHR_SURFACE_LOWEST,
-    EHR_ON_SURFACE,
-    EHR_ON_SURFACE_VARIANT,
-    EHR_OUTLINE,
-    EHR_OUTLINE_SOFT,
-    EHR_OUTLINE_VARIANT,
-    EHR_PRIMARY,
-    EHR_TERTIARY,
-    EHR_WARNING,
-} from '../../constants/uiColors';
+import { useEhrPalette } from '../../constants/uiColors';
 
 const SERIF = 'Fraunces_400Regular';
 const SANS = 'DMSans_400Regular';
@@ -44,6 +33,7 @@ type Member = {
 type Application = { id: string; status?: string; orgName?: string; createdAt?: string; contactEmail?: string };
 
 export default function OrgDashboardScreen() {
+    const palette = useEhrPalette();
     const { token } = useAuthStore();
     const [org, setOrg] = useState<Org | null>(null);
     const [members, setMembers] = useState<Member[]>([]);
@@ -86,14 +76,14 @@ export default function OrgDashboardScreen() {
 
     if (!org && application && application.status === 'PENDING') {
         return (
-            <SafeAreaView style={{ flex: 1, backgroundColor: EHR_SURFACE }} edges={['top']}>
+            <SafeAreaView style={{ flex: 1, backgroundColor: palette.EHR_SURFACE }} edges={['top']}>
                 <View style={{ flex: 1, padding: 20 }}>
                     <XStack style={{ alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
                         <Text
                             style={{
                                 fontFamily: SERIF,
                                 fontSize: 24,
-                                color: EHR_ON_SURFACE,
+                                color: palette.EHR_ON_SURFACE,
                                 letterSpacing: -0.3,
                             }}
                         >
@@ -103,28 +93,28 @@ export default function OrgDashboardScreen() {
                     </XStack>
                     <ViCard padding={18}>
                         <XStack style={{ alignItems: 'center', gap: 10, marginBottom: 10 }}>
-                            <Clock size={20} color={EHR_WARNING} />
+                            <Clock size={20} color={palette.EHR_WARNING} />
                             <Text
                                 style={{
                                     fontFamily: SERIF,
                                     fontSize: 17,
-                                    color: EHR_ON_SURFACE,
+                                    color: palette.EHR_ON_SURFACE,
                                     letterSpacing: -0.2,
                                 }}
                             >
                                 Đơn đang chờ duyệt
                             </Text>
                         </XStack>
-                        <Text style={{ fontFamily: SANS, fontSize: 14, color: EHR_ON_SURFACE_VARIANT, marginBottom: 8, lineHeight: 20 }}>
+                        <Text style={{ fontFamily: SANS, fontSize: 14, color: palette.EHR_ON_SURFACE_VARIANT, marginBottom: 8, lineHeight: 20 }}>
                             Đơn đăng ký "{application.orgName || 'Tổ chức'}" đang được Bộ Y tế xem xét.
                         </Text>
-                        <Text style={{ fontFamily: SANS, fontSize: 12, color: EHR_OUTLINE }}>
+                        <Text style={{ fontFamily: SANS, fontSize: 12, color: palette.EHR_OUTLINE }}>
                             Ngày nộp:{' '}
                             {application.createdAt
                                 ? new Date(application.createdAt).toLocaleDateString('vi-VN')
                                 : ''}
                         </Text>
-                        <Text style={{ fontFamily: SANS, fontSize: 12, color: EHR_OUTLINE }}>
+                        <Text style={{ fontFamily: SANS, fontSize: 12, color: palette.EHR_OUTLINE }}>
                             Email: {application.contactEmail || '—'}
                         </Text>
                     </ViCard>
@@ -135,22 +125,22 @@ export default function OrgDashboardScreen() {
 
     if (!org) {
         return (
-            <SafeAreaView style={{ flex: 1, backgroundColor: EHR_SURFACE }} edges={['top']}>
+            <SafeAreaView style={{ flex: 1, backgroundColor: palette.EHR_SURFACE }} edges={['top']}>
                 <View style={{ flex: 1, padding: 20 }}>
                     <XStack style={{ alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-                        <Text style={{ fontFamily: SERIF, fontSize: 24, color: EHR_ON_SURFACE, letterSpacing: -0.3 }}>
+                        <Text style={{ fontFamily: SERIF, fontSize: 24, color: palette.EHR_ON_SURFACE, letterSpacing: -0.3 }}>
                             Tổ chức
                         </Text>
                         <RoleSwitcher />
                     </XStack>
                     <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-                        <Building2 size={28} color={EHR_OUTLINE} />
+                        <Building2 size={28} color={palette.EHR_OUTLINE} />
                         <Text
                             style={{
                                 marginTop: 12,
                                 fontFamily: SERIF,
                                 fontSize: 18,
-                                color: EHR_ON_SURFACE,
+                                color: palette.EHR_ON_SURFACE,
                                 textAlign: 'center',
                             }}
                         >
@@ -161,7 +151,7 @@ export default function OrgDashboardScreen() {
                                 marginTop: 8,
                                 fontFamily: SANS,
                                 fontSize: 13,
-                                color: EHR_OUTLINE,
+                                color: palette.EHR_OUTLINE,
                                 textAlign: 'center',
                                 maxWidth: 280,
                                 lineHeight: 19,
@@ -178,14 +168,14 @@ export default function OrgDashboardScreen() {
     const verifiedCount = members.filter((m) => m.verified || m.isVerified).length;
 
     return (
-        <SafeAreaView style={{ flex: 1, backgroundColor: EHR_SURFACE }} edges={['top']}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: palette.EHR_SURFACE }} edges={['top']}>
             <FlatList
                 contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 80 }}
                 refreshControl={
                     <RefreshControl
                         refreshing={isRefreshing}
                         onRefresh={handleRefresh}
-                        tintColor={EHR_ON_SURFACE_VARIANT}
+                        tintColor={palette.EHR_ON_SURFACE_VARIANT}
                     />
                 }
                 data={members}
@@ -200,25 +190,25 @@ export default function OrgDashboardScreen() {
                                         width: 36,
                                         height: 36,
                                         borderRadius: 18,
-                                        backgroundColor: `${EHR_TERTIARY}1A`,
+                                        backgroundColor: `${palette.EHR_TERTIARY}1A`,
                                         alignItems: 'center',
                                         justifyContent: 'center',
                                     }}
                                 >
-                                    <Users size={16} color={EHR_TERTIARY} />
+                                    <Users size={16} color={palette.EHR_TERTIARY} />
                                 </View>
                                 <YStack style={{ flex: 1 }}>
                                     <Text
                                         style={{
                                             fontFamily: SANS_MEDIUM,
                                             fontSize: 14,
-                                            color: EHR_ON_SURFACE,
+                                            color: palette.EHR_ON_SURFACE,
                                             fontWeight: '700',
                                         }}
                                     >
                                         {item.fullName || 'Bác sĩ'}
                                     </Text>
-                                    <Text style={{ fontFamily: 'monospace', fontSize: 11, color: EHR_OUTLINE, marginTop: 2 }}>
+                                    <Text style={{ fontFamily: 'monospace', fontSize: 11, color: palette.EHR_OUTLINE, marginTop: 2 }}>
                                         {truncate(item.address || item.walletAddress)}
                                     </Text>
                                 </YStack>
@@ -227,14 +217,14 @@ export default function OrgDashboardScreen() {
                                         paddingHorizontal: 8,
                                         paddingVertical: 3,
                                         borderRadius: 999,
-                                        backgroundColor: isVerified ? `${EHR_TERTIARY}1A` : `${EHR_WARNING}1A`,
+                                        backgroundColor: isVerified ? `${palette.EHR_TERTIARY}1A` : `${palette.EHR_WARNING}1A`,
                                     }}
                                 >
                                     <Text
                                         style={{
                                             fontFamily: SANS_SEMI,
                                             fontSize: 10.5,
-                                            color: isVerified ? EHR_TERTIARY : EHR_WARNING,
+                                            color: isVerified ? palette.EHR_TERTIARY : palette.EHR_WARNING,
                                             fontWeight: '700',
                                             letterSpacing: 0.3,
                                         }}
@@ -254,7 +244,7 @@ export default function OrgDashboardScreen() {
                                     style={{
                                         fontFamily: SANS_SEMI,
                                         fontSize: 11,
-                                        color: EHR_PRIMARY,
+                                        color: palette.EHR_PRIMARY,
                                         letterSpacing: 1.2,
                                         textTransform: 'uppercase',
                                         fontWeight: '600',
@@ -267,7 +257,7 @@ export default function OrgDashboardScreen() {
                                     style={{
                                         fontFamily: SERIF,
                                         fontSize: 26,
-                                        color: EHR_ON_SURFACE,
+                                        color: palette.EHR_ON_SURFACE,
                                         letterSpacing: -0.4,
                                         lineHeight: 30,
                                     }}
@@ -280,22 +270,22 @@ export default function OrgDashboardScreen() {
 
                         <ViCard padding={14} style={{ marginBottom: 14 }}>
                             <XStack style={{ alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                                <Building2 size={20} color={EHR_PRIMARY} />
+                                <Building2 size={20} color={palette.EHR_PRIMARY} />
                                 <Text
                                     style={{
                                         fontFamily: SANS_SEMI,
                                         fontSize: 14.5,
-                                        color: EHR_ON_SURFACE,
+                                        color: palette.EHR_ON_SURFACE,
                                         fontWeight: '700',
                                     }}
                                 >
                                     {org.name || 'Tổ chức'}
                                 </Text>
                             </XStack>
-                            <Text style={{ fontFamily: SANS, fontSize: 12, color: EHR_OUTLINE }}>
+                            <Text style={{ fontFamily: SANS, fontSize: 12, color: palette.EHR_OUTLINE }}>
                                 Loại: {org.orgType === 'hospital' ? 'Bệnh viện' : 'Phòng khám'}
                             </Text>
-                            <Text style={{ fontFamily: 'monospace', fontSize: 11, color: EHR_OUTLINE, marginTop: 3 }}>
+                            <Text style={{ fontFamily: 'monospace', fontSize: 11, color: palette.EHR_OUTLINE, marginTop: 3 }}>
                                 Ví: {truncate(org.address)}
                             </Text>
                         </ViCard>
@@ -306,13 +296,13 @@ export default function OrgDashboardScreen() {
                                 marginBottom: 16,
                                 borderTopWidth: 0.5,
                                 borderBottomWidth: 0.5,
-                                borderColor: EHR_OUTLINE_VARIANT,
+                                borderColor: palette.EHR_OUTLINE_VARIANT,
                             }}
                         >
                             <XStack>
-                                <StatTile icon={<Users size={16} color={EHR_PRIMARY} />} value={members.length} label="Thành viên" tint={EHR_PRIMARY} />
-                                <View style={{ width: 0.5, alignSelf: 'stretch', backgroundColor: EHR_OUTLINE_SOFT }} />
-                                <StatTile icon={<Shield size={16} color={EHR_TERTIARY} />} value={verifiedCount} label="Đã xác thực" tint={EHR_TERTIARY} />
+                                <StatTile icon={<Users size={16} color={palette.EHR_PRIMARY} />} value={members.length} label="Thành viên" tint={palette.EHR_PRIMARY} />
+                                <View style={{ width: 0.5, alignSelf: 'stretch', backgroundColor: palette.EHR_OUTLINE_SOFT }} />
+                                <StatTile icon={<Shield size={16} color={palette.EHR_TERTIARY} />} value={verifiedCount} label="Đã xác thực" tint={palette.EHR_TERTIARY} />
                             </XStack>
                         </View>
 
@@ -320,7 +310,7 @@ export default function OrgDashboardScreen() {
                             style={{
                                 fontFamily: SERIF,
                                 fontSize: 17,
-                                color: EHR_ON_SURFACE,
+                                color: palette.EHR_ON_SURFACE,
                                 letterSpacing: -0.2,
                                 marginBottom: 10,
                             }}
@@ -331,13 +321,13 @@ export default function OrgDashboardScreen() {
                 }
                 ListEmptyComponent={
                     <View style={{ paddingTop: 24, alignItems: 'center' }}>
-                        <Users size={26} color={EHR_OUTLINE} />
+                        <Users size={26} color={palette.EHR_OUTLINE} />
                         <Text
                             style={{
                                 marginTop: 10,
                                 fontFamily: SANS,
                                 fontSize: 13,
-                                color: EHR_OUTLINE,
+                                color: palette.EHR_OUTLINE,
                             }}
                         >
                             Chưa có thành viên nào
@@ -358,6 +348,7 @@ function StatTile({
     label: string;
     tint: string;
 }) {
+    const palette = useEhrPalette();
     // G.5 — inline cell, 14×14 padding meets 60pt min touch target. No card wrap.
     void tint;
     return (
@@ -368,7 +359,7 @@ function StatTile({
                     marginTop: 6,
                     fontFamily: SERIF,
                     fontSize: 24,
-                    color: EHR_ON_SURFACE,
+                    color: palette.EHR_ON_SURFACE,
                     letterSpacing: -0.3,
                 }}
             >
@@ -379,7 +370,7 @@ function StatTile({
                     marginTop: 2,
                     fontFamily: SANS_SEMI,
                     fontSize: 10.5,
-                    color: EHR_OUTLINE,
+                    color: palette.EHR_OUTLINE,
                     letterSpacing: 0.4,
                     textTransform: 'uppercase',
                     fontWeight: '600',
@@ -391,4 +382,3 @@ function StatTile({
     );
 }
 
-void EHR_SURFACE_LOWEST;

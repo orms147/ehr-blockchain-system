@@ -26,19 +26,7 @@ import { formatExpiry, formatDate, getExpiryUrgency } from '../utils/dateFormatt
 import ViCard from '../components-v2/ViCard';
 import ViButton from '../components-v2/ViButton';
 import { ViSectionLabel, ViStatusChip, ViSourceChip } from '../components-v2/ViChips';
-import {
-    EHR_SURFACE,
-    EHR_SURFACE_LOWEST,
-    EHR_ON_SURFACE,
-    EHR_ON_SURFACE_VARIANT,
-    EHR_OUTLINE,
-    EHR_OUTLINE_SOFT,
-    EHR_OUTLINE_VARIANT,
-    EHR_PRIMARY,
-    EHR_TERTIARY,
-    EHR_WARNING,
-    EHR_DANGER,
-} from '../constants/uiColors';
+import { useEhrPalette } from '../constants/uiColors';
 
 const SERIF = 'Fraunces_400Regular';
 const SANS = 'DMSans_400Regular';
@@ -131,13 +119,14 @@ function groupConsents(items: ConsentItem[]): GroupedConsent[] {
 
 // ─────────── KV row (design pattern) ───────────
 function KV({ label, value }: { label: string; value: React.ReactNode }) {
+    const palette = useEhrPalette();
     return (
         <XStack style={{ alignItems: 'baseline', justifyContent: 'space-between', gap: 12 }}>
             <Text
                 style={{
                     fontFamily: SANS_SEMI,
                     fontSize: 11.5,
-                    color: EHR_OUTLINE,
+                    color: palette.EHR_OUTLINE,
                     letterSpacing: 0.3,
                     textTransform: 'uppercase',
                     fontWeight: '600',
@@ -151,7 +140,7 @@ function KV({ label, value }: { label: string; value: React.ReactNode }) {
                     style={{
                         fontFamily: SANS,
                         fontSize: 13,
-                        color: EHR_ON_SURFACE,
+                        color: palette.EHR_ON_SURFACE,
                         textAlign: 'right',
                         flex: 1,
                     }}
@@ -176,6 +165,7 @@ const GroupCard = React.memo(function GroupCard({
     revokingKeys: Set<string>;
     onRevoke: (g: GroupedConsent) => void;
 }) {
+    const palette = useEhrPalette();
     const isActive = group.status === 'active';
     const isRevoking = revokingKeys.has(group.groupKey);
     const urgency = getExpiryUrgency(group.latestExpiresAt);
@@ -194,7 +184,7 @@ const GroupCard = React.memo(function GroupCard({
                 style={{
                     fontFamily: SANS,
                     fontSize: 12.5,
-                    color: EHR_OUTLINE,
+                    color: palette.EHR_OUTLINE,
                 }}
                 numberOfLines={1}
             >
@@ -210,7 +200,7 @@ const GroupCard = React.memo(function GroupCard({
                     paddingVertical: 10,
                     borderTopWidth: 0.5,
                     borderBottomWidth: 0.5,
-                    borderColor: EHR_OUTLINE_SOFT,
+                    borderColor: palette.EHR_OUTLINE_SOFT,
                     borderStyle: 'dashed',
                     gap: 6,
                 }}
@@ -259,6 +249,7 @@ function AllGranteeCard({
     isRevoking: boolean;
     onRevoke: (g: GranteeRow) => void;
 }) {
+    const palette = useEhrPalette();
     return (
         <ViCard padding={14} style={{ marginBottom: 10 }}>
             <XStack style={{ alignItems: 'center', gap: 8, marginBottom: 8 }}>
@@ -276,7 +267,7 @@ function AllGranteeCard({
                         style={{
                             fontFamily: SANS,
                             fontSize: 12,
-                            color: EHR_OUTLINE,
+                            color: palette.EHR_OUTLINE,
                         }}
                     >
                         Cấp bởi:
@@ -297,7 +288,7 @@ function AllGranteeCard({
                         marginTop: 6,
                         fontFamily: SANS,
                         fontSize: 12,
-                        color: EHR_OUTLINE,
+                        color: palette.EHR_OUTLINE,
                     }}
                 >
                     Hết hạn:{' '}
@@ -327,6 +318,7 @@ function AllGranteeCard({
 
 // ─────────── Delegation log row (audit-style) ───────────
 function DelegationLogItem({ item }: { item: DelegationAccessLogRow }) {
+    const palette = useEhrPalette();
     return (
         <ViCard padding={14} style={{ marginBottom: 10 }}>
             <XStack style={{ alignItems: 'center', gap: 6, marginBottom: 8 }}>
@@ -335,14 +327,14 @@ function DelegationLogItem({ item }: { item: DelegationAccessLogRow }) {
                         width: 8,
                         height: 8,
                         borderRadius: 4,
-                        backgroundColor: EHR_PRIMARY,
+                        backgroundColor: palette.EHR_PRIMARY,
                     }}
                 />
                 <Text
                     style={{
                         fontFamily: SANS_SEMI,
                         fontSize: 11,
-                        color: EHR_PRIMARY,
+                        color: palette.EHR_PRIMARY,
                         letterSpacing: 1.2,
                         textTransform: 'uppercase',
                         fontWeight: '700',
@@ -353,10 +345,10 @@ function DelegationLogItem({ item }: { item: DelegationAccessLogRow }) {
             </XStack>
             <XStack style={{ alignItems: 'center', marginTop: 4 }}>
                 <YStack style={{ flex: 1 }}>
-                    <Text style={{ fontFamily: SANS, fontSize: 11, color: EHR_OUTLINE }}>
+                    <Text style={{ fontFamily: SANS, fontSize: 11, color: palette.EHR_OUTLINE }}>
                         Người uỷ quyền
                     </Text>
-                    <Text style={{ fontFamily: 'monospace', fontSize: 12.5, color: EHR_ON_SURFACE }}>
+                    <Text style={{ fontFamily: 'monospace', fontSize: 12.5, color: palette.EHR_ON_SURFACE }}>
                         {truncate(item.byDelegatee)}
                     </Text>
                 </YStack>
@@ -364,17 +356,17 @@ function DelegationLogItem({ item }: { item: DelegationAccessLogRow }) {
                     style={{
                         fontFamily: SANS_MEDIUM,
                         fontSize: 14,
-                        color: EHR_OUTLINE,
+                        color: palette.EHR_OUTLINE,
                         marginHorizontal: 8,
                     }}
                 >
                     →
                 </Text>
                 <YStack style={{ flex: 1 }}>
-                    <Text style={{ fontFamily: SANS, fontSize: 11, color: EHR_OUTLINE }}>
+                    <Text style={{ fontFamily: SANS, fontSize: 11, color: palette.EHR_OUTLINE }}>
                         Người nhận
                     </Text>
-                    <Text style={{ fontFamily: 'monospace', fontSize: 12.5, color: EHR_ON_SURFACE }}>
+                    <Text style={{ fontFamily: 'monospace', fontSize: 12.5, color: palette.EHR_ON_SURFACE }}>
                         {truncate(item.newGrantee)}
                     </Text>
                 </YStack>
@@ -384,18 +376,18 @@ function DelegationLogItem({ item }: { item: DelegationAccessLogRow }) {
                     marginTop: 12,
                     paddingTop: 10,
                     borderTopWidth: 0.5,
-                    borderColor: EHR_OUTLINE_SOFT,
+                    borderColor: palette.EHR_OUTLINE_SOFT,
                     borderStyle: 'dashed',
                 }}
             >
                 <Text
-                    style={{ fontFamily: SANS, fontSize: 12, color: EHR_OUTLINE }}
+                    style={{ fontFamily: SANS, fontSize: 12, color: palette.EHR_OUTLINE }}
                     numberOfLines={1}
                 >
                     Hồ sơ: {item.rootCidHash.slice(0, 24)}…
                 </Text>
                 <Text
-                    style={{ marginTop: 3, fontFamily: SANS, fontSize: 12, color: EHR_OUTLINE }}
+                    style={{ marginTop: 3, fontFamily: SANS, fontSize: 12, color: palette.EHR_OUTLINE }}
                 >
                     {formatDate(item.createdAt)}
                 </Text>
@@ -408,6 +400,7 @@ function DelegationLogItem({ item }: { item: DelegationAccessLogRow }) {
 type TabId = 'direct' | 'all' | 'delegated';
 
 function TabSwitcher({ active, onChange }: { active: TabId; onChange: (t: TabId) => void }) {
+    const palette = useEhrPalette();
     const tabs: { id: TabId; label: string }[] = [
         { id: 'direct', label: 'Trực tiếp' },
         { id: 'all', label: 'Mọi người' },
@@ -424,16 +417,16 @@ function TabSwitcher({ active, onChange }: { active: TabId; onChange: (t: TabId)
                                 paddingVertical: 8,
                                 borderRadius: 999,
                                 alignItems: 'center',
-                                backgroundColor: isActive ? EHR_ON_SURFACE : 'transparent',
+                                backgroundColor: isActive ? palette.EHR_ON_SURFACE : 'transparent',
                                 borderWidth: 0.5,
-                                borderColor: isActive ? EHR_ON_SURFACE : EHR_OUTLINE_SOFT,
+                                borderColor: isActive ? palette.EHR_ON_SURFACE : palette.EHR_OUTLINE_SOFT,
                             }}
                         >
                             <Text
                                 style={{
                                     fontFamily: SANS_MEDIUM,
                                     fontSize: 12.5,
-                                    color: isActive ? EHR_SURFACE : EHR_ON_SURFACE_VARIANT,
+                                    color: isActive ? palette.EHR_SURFACE : palette.EHR_ON_SURFACE_VARIANT,
                                     fontWeight: '600',
                                 }}
                             >
@@ -449,13 +442,14 @@ function TabSwitcher({ active, onChange }: { active: TabId; onChange: (t: TabId)
 
 // ─────────── Empty state (inline) ───────────
 function Empty({ title, description }: { title: string; description: string }) {
+    const palette = useEhrPalette();
     return (
         <View style={{ paddingHorizontal: 20, paddingTop: 40, alignItems: 'center' }}>
             <Text
                 style={{
                     fontFamily: SERIF,
                     fontSize: 20,
-                    color: EHR_ON_SURFACE,
+                    color: palette.EHR_ON_SURFACE,
                     textAlign: 'center',
                     letterSpacing: -0.2,
                 }}
@@ -467,7 +461,7 @@ function Empty({ title, description }: { title: string; description: string }) {
                     marginTop: 10,
                     fontFamily: SANS,
                     fontSize: 13.5,
-                    color: EHR_ON_SURFACE_VARIANT,
+                    color: palette.EHR_ON_SURFACE_VARIANT,
                     textAlign: 'center',
                     lineHeight: 20,
                     maxWidth: 280,
@@ -482,6 +476,7 @@ function Empty({ title, description }: { title: string; description: string }) {
 // ============ MAIN SCREEN ============
 
 export default function AccessLogScreen() {
+    const palette = useEhrPalette();
     const { token } = useAuthStore();
     const [tab, setTab] = useState<TabId>('direct');
     const [consents, setConsents] = useState<ConsentItem[]>([]);
@@ -627,14 +622,14 @@ export default function AccessLogScreen() {
     const delegationLogs = delegationLogsQuery.data || [];
 
     return (
-        <SafeAreaView style={{ flex: 1, backgroundColor: EHR_SURFACE }} edges={['right', 'left']}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: palette.EHR_SURFACE }} edges={['right', 'left']}>
             {/* Hero header */}
             <View style={{ paddingHorizontal: 20, paddingTop: 14, paddingBottom: 14 }}>
                 <Text
                     style={{
                         fontFamily: SERIF,
                         fontSize: 26,
-                        color: EHR_ON_SURFACE,
+                        color: palette.EHR_ON_SURFACE,
                         letterSpacing: -0.3,
                         lineHeight: 30,
                     }}
@@ -646,7 +641,7 @@ export default function AccessLogScreen() {
                         marginTop: 4,
                         fontFamily: SANS,
                         fontSize: 13,
-                        color: EHR_ON_SURFACE_VARIANT,
+                        color: palette.EHR_ON_SURFACE_VARIANT,
                         lineHeight: 18,
                     }}
                 >
@@ -674,7 +669,7 @@ export default function AccessLogScreen() {
                             <RefreshControl
                                 refreshing={isRefreshing}
                                 onRefresh={handleRefresh}
-                                tintColor={EHR_ON_SURFACE_VARIANT}
+                                tintColor={palette.EHR_ON_SURFACE_VARIANT}
                             />
                         }
                         ListHeaderComponent={
@@ -685,14 +680,14 @@ export default function AccessLogScreen() {
                                     marginBottom: 12,
                                 }}
                             >
-                                <Text style={{ fontFamily: SANS, fontSize: 12.5, color: EHR_OUTLINE }}>
+                                <Text style={{ fontFamily: SANS, fontSize: 12.5, color: palette.EHR_OUTLINE }}>
                                     {groupedConsents.length} quyền
                                 </Text>
                                 <Text
                                     style={{
                                         fontFamily: SANS_SEMI,
                                         fontSize: 12.5,
-                                        color: EHR_TERTIARY,
+                                        color: palette.EHR_TERTIARY,
                                         fontWeight: '600',
                                     }}
                                 >
@@ -717,7 +712,7 @@ export default function AccessLogScreen() {
                             <RefreshControl
                                 refreshing={isRefreshing}
                                 onRefresh={handleRefresh}
-                                tintColor={EHR_ON_SURFACE_VARIANT}
+                                tintColor={palette.EHR_ON_SURFACE_VARIANT}
                             />
                         }
                         renderItem={({ item }) => {
@@ -731,7 +726,7 @@ export default function AccessLogScreen() {
                             );
                         }}
                         ListHeaderComponent={
-                            <Text style={{ fontFamily: SANS, fontSize: 12.5, color: EHR_OUTLINE, marginBottom: 12 }}>
+                            <Text style={{ fontFamily: SANS, fontSize: 12.5, color: palette.EHR_OUTLINE, marginBottom: 12 }}>
                                 {allGrantees.length} người đang có quyền
                             </Text>
                         }
@@ -753,7 +748,7 @@ export default function AccessLogScreen() {
                             <RefreshControl
                                 refreshing={isRefreshing || delegationLogsQuery.isFetching}
                                 onRefresh={handleRefresh}
-                                tintColor={EHR_ON_SURFACE_VARIANT}
+                                tintColor={palette.EHR_ON_SURFACE_VARIANT}
                             />
                         }
                         ListHeaderComponent={
@@ -764,10 +759,10 @@ export default function AccessLogScreen() {
                                     marginBottom: 12,
                                 }}
                             >
-                                <Text style={{ fontFamily: SANS, fontSize: 12.5, color: EHR_OUTLINE }}>
+                                <Text style={{ fontFamily: SANS, fontSize: 12.5, color: palette.EHR_OUTLINE }}>
                                     {delegationLogs.length} bản ghi
                                 </Text>
-                                <Text style={{ fontFamily: SANS, fontSize: 11, color: EHR_OUTLINE }}>
+                                <Text style={{ fontFamily: SANS, fontSize: 11, color: palette.EHR_OUTLINE }}>
                                     Audit on-chain
                                 </Text>
                             </XStack>
@@ -779,9 +774,4 @@ export default function AccessLogScreen() {
     );
 }
 
-// Keep unused warning tokens reachable so future variants don't re-import
-void EHR_SURFACE_LOWEST;
-void EHR_OUTLINE_VARIANT;
-void EHR_WARNING;
-void EHR_DANGER;
 void ViSectionLabel;

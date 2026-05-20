@@ -51,20 +51,7 @@ import useAuthStore from '../store/authStore';
 import ViCard from '../components-v2/ViCard';
 import ViButton from '../components-v2/ViButton';
 import { ViSectionLabel } from '../components-v2/ViChips';
-import {
-    EHR_SURFACE,
-    EHR_SURFACE_LOWEST,
-    EHR_ON_SURFACE,
-    EHR_ON_SURFACE_VARIANT,
-    EHR_OUTLINE,
-    EHR_OUTLINE_SOFT,
-    EHR_OUTLINE_VARIANT,
-    EHR_PRIMARY,
-    EHR_PRIMARY_FIXED,
-    EHR_TERTIARY,
-    EHR_SECONDARY,
-    EHR_DANGER,
-} from '../constants/uiColors';
+import { useEhrPalette, DARK } from '../constants/uiColors';
 
 const SERIF = 'Fraunces_400Regular';
 const SANS = 'DMSans_400Regular';
@@ -113,11 +100,13 @@ type BuildPayloadInput = {
     attachment?: SelectedImage | null;
 };
 
+// Tints reference DARK at module load (used as visual hints only — actual
+// JSX uses palette refs inside components for theme reactivity).
 const RECORD_TYPES: RecordTypeOption[] = [
-    { key: 'checkup', label: 'Khám tổng quát', icon: Stethoscope, tint: EHR_PRIMARY },
-    { key: 'lab_result', label: 'Xét nghiệm', icon: TestTubeDiagonal, tint: EHR_TERTIARY },
-    { key: 'prescription', label: 'Đơn thuốc', icon: Pill, tint: EHR_SECONDARY },
-    { key: 'vital_signs', label: 'Chỉ số sinh tồn', icon: HeartPulse, tint: EHR_PRIMARY },
+    { key: 'checkup', label: 'Khám tổng quát', icon: Stethoscope, tint: DARK.EHR_PRIMARY },
+    { key: 'lab_result', label: 'Xét nghiệm', icon: TestTubeDiagonal, tint: DARK.EHR_TERTIARY },
+    { key: 'prescription', label: 'Đơn thuốc', icon: Pill, tint: DARK.EHR_SECONDARY },
+    { key: 'vital_signs', label: 'Chỉ số sinh tồn', icon: HeartPulse, tint: DARK.EHR_PRIMARY },
 ];
 
 function toSerializableRecord(record: Record<string, any>) {
@@ -215,6 +204,7 @@ function buildPayload(input: BuildPayloadInput) {
 }
 
 export default function CreateRecordScreen({ navigation, route: navRoute }: any) {
+    const palette = useEhrPalette();
     const { user } = useAuthStore();
     const recordApi: any = recordService;
     const isMountedRef = useRef(true);
@@ -504,14 +494,14 @@ export default function CreateRecordScreen({ navigation, route: navRoute }: any)
         options: { multiline?: boolean; placeholder?: string; keyboardType?: KeyboardTypeOptions } = {},
     ) => (
         <YStack style={{ marginBottom: 12 }}>
-            <Text style={{ fontFamily: SANS_SEMI, fontSize: 12, color: EHR_OUTLINE, marginBottom: 6, letterSpacing: 0.3, textTransform: 'uppercase', fontWeight: '600' }}>
+            <Text style={{ fontFamily: SANS_SEMI, fontSize: 12, color: palette.EHR_OUTLINE, marginBottom: 6, letterSpacing: 0.3, textTransform: 'uppercase', fontWeight: '600' }}>
                 {label}
             </Text>
             <TextInput
                 value={value}
                 onChangeText={onChangeText}
                 placeholder={options.placeholder || ''}
-                placeholderTextColor={EHR_OUTLINE}
+                placeholderTextColor={palette.EHR_OUTLINE}
                 keyboardType={options.keyboardType}
                 multiline={options.multiline}
                 textAlignVertical={options.multiline ? 'top' : 'center'}
@@ -519,11 +509,11 @@ export default function CreateRecordScreen({ navigation, route: navRoute }: any)
                     minHeight: options.multiline ? 90 : 48,
                     borderRadius: 12,
                     borderWidth: 0.5,
-                    borderColor: EHR_OUTLINE_SOFT,
-                    backgroundColor: EHR_SURFACE,
+                    borderColor: palette.EHR_OUTLINE_SOFT,
+                    backgroundColor: palette.EHR_SURFACE,
                     paddingHorizontal: 14,
                     paddingVertical: options.multiline ? 12 : 0,
-                    color: EHR_ON_SURFACE,
+                    color: palette.EHR_ON_SURFACE,
                     fontFamily: SANS,
                     fontSize: 14,
                 }}
@@ -532,7 +522,7 @@ export default function CreateRecordScreen({ navigation, route: navRoute }: any)
     );
 
     return (
-        <SafeAreaView style={{ flex: 1, backgroundColor: EHR_SURFACE }} edges={['left', 'right', 'bottom']}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: palette.EHR_SURFACE }} edges={['left', 'right', 'bottom']}>
             <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 36 }} showsVerticalScrollIndicator={false}>
                 {/* Hero */}
                 <View style={{ marginBottom: 18 }}>
@@ -540,7 +530,7 @@ export default function CreateRecordScreen({ navigation, route: navRoute }: any)
                         style={{
                             fontFamily: SERIF,
                             fontSize: 28,
-                            color: EHR_ON_SURFACE,
+                            color: palette.EHR_ON_SURFACE,
                             letterSpacing: -0.5,
                             lineHeight: 32,
                         }}
@@ -552,7 +542,7 @@ export default function CreateRecordScreen({ navigation, route: navRoute }: any)
                             marginTop: 6,
                             fontFamily: SANS,
                             fontSize: 13,
-                            color: EHR_ON_SURFACE_VARIANT,
+                            color: palette.EHR_ON_SURFACE_VARIANT,
                             lineHeight: 19,
                         }}
                     >
@@ -570,9 +560,9 @@ export default function CreateRecordScreen({ navigation, route: navRoute }: any)
                             paddingVertical: 12,
                             paddingHorizontal: 14,
                             borderRadius: 12,
-                            backgroundColor: `${EHR_SECONDARY}1A`,
+                            backgroundColor: `${palette.EHR_SECONDARY}1A`,
                             borderWidth: 0.5,
-                            borderColor: `${EHR_SECONDARY}50`,
+                            borderColor: `${palette.EHR_SECONDARY}50`,
                             flexDirection: 'row',
                             gap: 10,
                         }}
@@ -581,7 +571,7 @@ export default function CreateRecordScreen({ navigation, route: navRoute }: any)
                             style={{
                                 width: 4,
                                 alignSelf: 'stretch',
-                                backgroundColor: EHR_SECONDARY,
+                                backgroundColor: palette.EHR_SECONDARY,
                                 borderRadius: 2,
                             }}
                         />
@@ -590,12 +580,12 @@ export default function CreateRecordScreen({ navigation, route: navRoute }: any)
                                 flex: 1,
                                 fontFamily: SANS,
                                 fontSize: 12,
-                                color: EHR_ON_SURFACE,
+                                color: palette.EHR_ON_SURFACE,
                                 lineHeight: 18,
                             }}
                         >
                             Đây là{' '}
-                            <Text style={{ fontFamily: SANS_SEMI, color: EHR_SECONDARY, fontWeight: '700' }}>
+                            <Text style={{ fontFamily: SANS_SEMI, color: palette.EHR_SECONDARY, fontWeight: '700' }}>
                                 hồ sơ tự khai
                             </Text>
                             . Khác với hồ sơ do bác sĩ tạo, nội dung này chưa được xác minh bởi tổ chức y tế.
@@ -612,17 +602,17 @@ export default function CreateRecordScreen({ navigation, route: navRoute }: any)
                                 paddingHorizontal: 14,
                                 borderRadius: 12,
                                 borderWidth: simpleMode ? 1.5 : 0.5,
-                                borderColor: simpleMode ? EHR_PRIMARY : EHR_OUTLINE_SOFT,
-                                backgroundColor: simpleMode ? EHR_PRIMARY_FIXED : EHR_SURFACE_LOWEST,
+                                borderColor: simpleMode ? palette.EHR_PRIMARY : palette.EHR_OUTLINE_SOFT,
+                                backgroundColor: simpleMode ? palette.EHR_PRIMARY_FIXED : palette.EHR_SURFACE_LOWEST,
                             }}
                         >
                             <XStack style={{ alignItems: 'center', gap: 10 }}>
-                                <ImagePlus size={18} color={simpleMode ? EHR_PRIMARY : EHR_ON_SURFACE_VARIANT} />
+                                <ImagePlus size={18} color={simpleMode ? palette.EHR_PRIMARY : palette.EHR_ON_SURFACE_VARIANT} />
                                 <YStack style={{ flex: 1 }}>
-                                    <Text style={{ fontFamily: SANS_SEMI, fontSize: 13.5, color: simpleMode ? EHR_PRIMARY : EHR_ON_SURFACE, fontWeight: '700' }}>
+                                    <Text style={{ fontFamily: SANS_SEMI, fontSize: 13.5, color: simpleMode ? palette.EHR_PRIMARY : palette.EHR_ON_SURFACE, fontWeight: '700' }}>
                                         Nhanh
                                     </Text>
-                                    <Text style={{ fontFamily: SANS, fontSize: 11, color: EHR_OUTLINE }}>
+                                    <Text style={{ fontFamily: SANS, fontSize: 11, color: palette.EHR_OUTLINE }}>
                                         Tiêu đề + ảnh
                                     </Text>
                                 </YStack>
@@ -636,17 +626,17 @@ export default function CreateRecordScreen({ navigation, route: navRoute }: any)
                                 paddingHorizontal: 14,
                                 borderRadius: 12,
                                 borderWidth: !simpleMode ? 1.5 : 0.5,
-                                borderColor: !simpleMode ? EHR_PRIMARY : EHR_OUTLINE_SOFT,
-                                backgroundColor: !simpleMode ? EHR_PRIMARY_FIXED : EHR_SURFACE_LOWEST,
+                                borderColor: !simpleMode ? palette.EHR_PRIMARY : palette.EHR_OUTLINE_SOFT,
+                                backgroundColor: !simpleMode ? palette.EHR_PRIMARY_FIXED : palette.EHR_SURFACE_LOWEST,
                             }}
                         >
                             <XStack style={{ alignItems: 'center', gap: 10 }}>
-                                <Stethoscope size={18} color={!simpleMode ? EHR_PRIMARY : EHR_ON_SURFACE_VARIANT} />
+                                <Stethoscope size={18} color={!simpleMode ? palette.EHR_PRIMARY : palette.EHR_ON_SURFACE_VARIANT} />
                                 <YStack style={{ flex: 1 }}>
-                                    <Text style={{ fontFamily: SANS_SEMI, fontSize: 13.5, color: !simpleMode ? EHR_PRIMARY : EHR_ON_SURFACE, fontWeight: '700' }}>
+                                    <Text style={{ fontFamily: SANS_SEMI, fontSize: 13.5, color: !simpleMode ? palette.EHR_PRIMARY : palette.EHR_ON_SURFACE, fontWeight: '700' }}>
                                         Đầy đủ
                                     </Text>
-                                    <Text style={{ fontFamily: SANS, fontSize: 11, color: EHR_OUTLINE }}>
+                                    <Text style={{ fontFamily: SANS, fontSize: 11, color: palette.EHR_OUTLINE }}>
                                         Toàn bộ trường (ICD-10, Rx…)
                                     </Text>
                                 </YStack>
@@ -671,19 +661,19 @@ export default function CreateRecordScreen({ navigation, route: navRoute }: any)
                                                 paddingHorizontal: 14,
                                                 borderRadius: 14,
                                                 borderWidth: active ? 1.5 : 0.5,
-                                                borderColor: active ? type.tint : EHR_OUTLINE_SOFT,
-                                                backgroundColor: active ? `${type.tint}1A` : EHR_SURFACE_LOWEST,
+                                                borderColor: active ? type.tint : palette.EHR_OUTLINE_SOFT,
+                                                backgroundColor: active ? `${type.tint}1A` : palette.EHR_SURFACE_LOWEST,
                                                 flexDirection: 'row',
                                                 alignItems: 'center',
                                                 gap: 8,
                                             }}
                                         >
-                                            <Icon size={14} color={active ? type.tint : EHR_OUTLINE} />
+                                            <Icon size={14} color={active ? type.tint : palette.EHR_OUTLINE} />
                                             <Text
                                                 style={{
                                                     fontFamily: SANS_MEDIUM,
                                                     fontSize: 12.5,
-                                                    color: active ? type.tint : EHR_ON_SURFACE_VARIANT,
+                                                    color: active ? type.tint : palette.EHR_ON_SURFACE_VARIANT,
                                                     fontWeight: '600',
                                                 }}
                                             >
@@ -703,7 +693,7 @@ export default function CreateRecordScreen({ navigation, route: navRoute }: any)
                         style={{
                             fontFamily: SERIF,
                             fontSize: 17,
-                            color: EHR_ON_SURFACE,
+                            color: palette.EHR_ON_SURFACE,
                             letterSpacing: -0.2,
                             marginBottom: 12,
                         }}
@@ -728,7 +718,7 @@ export default function CreateRecordScreen({ navigation, route: navRoute }: any)
                                 style={{
                                     fontFamily: SANS_SEMI,
                                     fontSize: 12,
-                                    color: EHR_OUTLINE,
+                                    color: palette.EHR_OUTLINE,
                                     marginBottom: 6,
                                     letterSpacing: 0.3,
                                     textTransform: 'uppercase',
@@ -748,7 +738,7 @@ export default function CreateRecordScreen({ navigation, route: navRoute }: any)
                                                 paddingVertical: 8,
                                                 paddingHorizontal: 10,
                                                 borderRadius: 10,
-                                                backgroundColor: EHR_PRIMARY_FIXED,
+                                                backgroundColor: palette.EHR_PRIMARY_FIXED,
                                             }}
                                         >
                                             <View
@@ -757,7 +747,7 @@ export default function CreateRecordScreen({ navigation, route: navRoute }: any)
                                                     paddingHorizontal: 6,
                                                     paddingVertical: 2,
                                                     borderRadius: 6,
-                                                    backgroundColor: EHR_PRIMARY,
+                                                    backgroundColor: palette.EHR_PRIMARY,
                                                     alignItems: 'center',
                                                 }}
                                             >
@@ -765,11 +755,11 @@ export default function CreateRecordScreen({ navigation, route: navRoute }: any)
                                                     {item.code}
                                                 </Text>
                                             </View>
-                                            <Text style={{ flex: 1, fontFamily: SANS, fontSize: 12.5, color: EHR_ON_SURFACE }}>
+                                            <Text style={{ flex: 1, fontFamily: SANS, fontSize: 12.5, color: palette.EHR_ON_SURFACE }}>
                                                 {item.name}
                                             </Text>
                                             <Pressable onPress={() => setIcd10Codes((prev) => prev.filter((c) => c.code !== item.code))}>
-                                                <X size={16} color={EHR_DANGER} />
+                                                <X size={16} color={palette.EHR_DANGER} />
                                             </Pressable>
                                         </XStack>
                                     ))}
@@ -782,15 +772,15 @@ export default function CreateRecordScreen({ navigation, route: navRoute }: any)
                                         borderRadius: 12,
                                         borderWidth: 0.75,
                                         borderStyle: 'dashed',
-                                        borderColor: EHR_PRIMARY,
+                                        borderColor: palette.EHR_PRIMARY,
                                         flexDirection: 'row',
                                         alignItems: 'center',
                                         justifyContent: 'center',
                                         gap: 8,
                                     }}
                                 >
-                                    <Plus size={14} color={EHR_PRIMARY} />
-                                    <Text style={{ fontFamily: SANS_MEDIUM, fontSize: 12.5, color: EHR_PRIMARY, fontWeight: '600' }}>
+                                    <Plus size={14} color={palette.EHR_PRIMARY} />
+                                    <Text style={{ fontFamily: SANS_MEDIUM, fontSize: 12.5, color: palette.EHR_PRIMARY, fontWeight: '600' }}>
                                         {icd10Codes.length > 0 ? 'Thêm mã ICD-10 khác' : 'Chọn mã ICD-10'}
                                     </Text>
                                 </View>
@@ -808,7 +798,7 @@ export default function CreateRecordScreen({ navigation, route: navRoute }: any)
                         style={{
                             fontFamily: SERIF,
                             fontSize: 17,
-                            color: EHR_ON_SURFACE,
+                            color: palette.EHR_ON_SURFACE,
                             letterSpacing: -0.2,
                             marginBottom: 12,
                         }}
@@ -817,14 +807,14 @@ export default function CreateRecordScreen({ navigation, route: navRoute }: any)
                     </Text>
                     {selectedImage ? (
                         <View style={{ marginBottom: 10 }}>
-                            <View style={{ borderRadius: 14, overflow: 'hidden', borderWidth: 0.5, borderColor: EHR_OUTLINE_SOFT }}>
+                            <View style={{ borderRadius: 14, overflow: 'hidden', borderWidth: 0.5, borderColor: palette.EHR_OUTLINE_SOFT }}>
                                 <Image
                                     source={{ uri: selectedImage.uri }}
-                                    style={{ width: '100%', height: 200, backgroundColor: EHR_SURFACE }}
+                                    style={{ width: '100%', height: 200, backgroundColor: palette.EHR_SURFACE }}
                                     resizeMode="cover"
                                 />
                             </View>
-                            <Text style={{ marginTop: 6, fontFamily: SANS, fontSize: 11, color: EHR_OUTLINE }}>
+                            <Text style={{ marginTop: 6, fontFamily: SANS, fontSize: 11, color: palette.EHR_OUTLINE }}>
                                 {selectedImage.fileName}
                             </Text>
                         </View>
@@ -837,7 +827,7 @@ export default function CreateRecordScreen({ navigation, route: navRoute }: any)
                                 size="sm"
                                 onPress={pickImage}
                                 loading={isPickingImage}
-                                leftIcon={<ImagePlus size={14} color={EHR_ON_SURFACE} />}
+                                leftIcon={<ImagePlus size={14} color={palette.EHR_ON_SURFACE} />}
                             >
                                 {selectedImage ? 'Chọn ảnh khác' : (isPickingImage ? 'Đang mở…' : 'Chọn ảnh')}
                             </ViButton>
@@ -847,13 +837,13 @@ export default function CreateRecordScreen({ navigation, route: navRoute }: any)
                                 variant="danger"
                                 size="sm"
                                 onPress={() => setSelectedImage(null)}
-                                leftIcon={<Trash2 size={14} color={EHR_DANGER} />}
+                                leftIcon={<Trash2 size={14} color={palette.EHR_DANGER} />}
                             >
                                 Xoá
                             </ViButton>
                         ) : null}
                     </XStack>
-                    <Text style={{ marginTop: 8, fontFamily: SANS, fontSize: 11, color: EHR_OUTLINE, lineHeight: 16 }}>
+                    <Text style={{ marginTop: 8, fontFamily: SANS, fontSize: 11, color: palette.EHR_OUTLINE, lineHeight: 16 }}>
                         Ảnh sẽ được mã hoá cùng nội dung trước khi upload lên IPFS.
                     </Text>
                 </ViCard>
@@ -865,14 +855,14 @@ export default function CreateRecordScreen({ navigation, route: navRoute }: any)
                             style={{
                                 fontFamily: SERIF,
                                 fontSize: 17,
-                                color: EHR_ON_SURFACE,
+                                color: palette.EHR_ON_SURFACE,
                                 letterSpacing: -0.2,
                                 marginBottom: 4,
                             }}
                         >
                             Dấu hiệu sinh tồn
                         </Text>
-                        <Text style={{ fontFamily: SANS, fontSize: 11, color: EHR_OUTLINE, marginBottom: 12 }}>
+                        <Text style={{ fontFamily: SANS, fontSize: 11, color: palette.EHR_OUTLINE, marginBottom: 12 }}>
                             Theo chuẩn bệnh án điện tử (TT 46/2018/TT-BYT)
                         </Text>
                         <XStack style={{ gap: 10 }}>
@@ -892,8 +882,8 @@ export default function CreateRecordScreen({ navigation, route: navRoute }: any)
                             <View style={{ flex: 1 }}>{renderInput('Chiều cao (cm)', height, setHeight, { placeholder: '165', keyboardType: 'numeric' })}</View>
                         </XStack>
                         <XStack style={{ alignItems: 'center', gap: 6, marginTop: -4 }}>
-                            <Activity size={13} color={EHR_OUTLINE} />
-                            <Text style={{ fontFamily: SANS, fontSize: 11, color: EHR_OUTLINE }}>
+                            <Activity size={13} color={palette.EHR_OUTLINE} />
+                            <Text style={{ fontFamily: SANS, fontSize: 11, color: palette.EHR_OUTLINE }}>
                                 BMI được tính tự động từ cân nặng và chiều cao.
                             </Text>
                         </XStack>
@@ -907,14 +897,14 @@ export default function CreateRecordScreen({ navigation, route: navRoute }: any)
                             style={{
                                 fontFamily: SERIF,
                                 fontSize: 17,
-                                color: EHR_ON_SURFACE,
+                                color: palette.EHR_ON_SURFACE,
                                 letterSpacing: -0.2,
                                 marginBottom: 4,
                             }}
                         >
                             Đơn thuốc
                         </Text>
-                        <Text style={{ fontFamily: SANS, fontSize: 11, color: EHR_OUTLINE, marginBottom: 12 }}>
+                        <Text style={{ fontFamily: SANS, fontSize: 11, color: palette.EHR_OUTLINE, marginBottom: 12 }}>
                             Theo chuẩn đơn thuốc điện tử (TT 04/2022/TT-BYT)
                         </Text>
                         {renderInput('Tên thuốc / hoạt chất', medication, setMedication, { placeholder: 'Paracetamol 500mg' })}
@@ -929,8 +919,8 @@ export default function CreateRecordScreen({ navigation, route: navRoute }: any)
                         {renderInput('Số lượng kê', quantity, setQuantity, { placeholder: '10 viên' })}
                         {renderInput('Lời dặn bác sĩ', instruction, setInstruction, { placeholder: 'Uống sau ăn, tránh rượu bia…', multiline: true })}
                         <XStack style={{ alignItems: 'flex-start', gap: 6, marginTop: -4 }}>
-                            <Pill size={13} color={EHR_OUTLINE} style={{ marginTop: 2 }} />
-                            <Text style={{ flex: 1, fontFamily: SANS, fontSize: 11, color: EHR_OUTLINE, lineHeight: 16 }}>
+                            <Pill size={13} color={palette.EHR_OUTLINE} style={{ marginTop: 2 }} />
+                            <Text style={{ flex: 1, fontFamily: SANS, fontSize: 11, color: palette.EHR_OUTLINE, lineHeight: 16 }}>
                                 Nếu để trống, hồ sơ vẫn được tạo mà không có đơn thuốc.
                             </Text>
                         </XStack>
@@ -942,13 +932,13 @@ export default function CreateRecordScreen({ navigation, route: navRoute }: any)
                         style={{
                             padding: 12,
                             borderRadius: 12,
-                            backgroundColor: `${EHR_DANGER}14`,
+                            backgroundColor: `${palette.EHR_DANGER}14`,
                             borderWidth: 0.5,
-                            borderColor: EHR_DANGER,
+                            borderColor: palette.EHR_DANGER,
                             marginBottom: 14,
                         }}
                     >
-                        <Text style={{ fontFamily: SANS, fontSize: 12.5, color: EHR_DANGER, lineHeight: 18 }}>
+                        <Text style={{ fontFamily: SANS, fontSize: 12.5, color: palette.EHR_DANGER, lineHeight: 18 }}>
                             {error}
                         </Text>
                     </View>
@@ -972,7 +962,7 @@ export default function CreateRecordScreen({ navigation, route: navRoute }: any)
                         textAlign: 'center',
                         fontFamily: SANS,
                         fontSize: 11,
-                        color: EHR_OUTLINE,
+                        color: palette.EHR_OUTLINE,
                         lineHeight: 16,
                     }}
                 >
@@ -992,4 +982,3 @@ export default function CreateRecordScreen({ navigation, route: navRoute }: any)
     );
 }
 
-void EHR_OUTLINE_VARIANT;

@@ -5,16 +5,7 @@ import { Copy, Share2, Wallet, X } from 'lucide-react-native';
 import QRCode from 'react-native-qrcode-svg';
 import * as Clipboard from 'expo-clipboard';
 
-import {
-    EHR_ON_SURFACE,
-    EHR_ON_SURFACE_VARIANT,
-    EHR_OUTLINE_VARIANT,
-    EHR_PRIMARY,
-    EHR_PRIMARY_FIXED,
-    EHR_SURFACE,
-    EHR_SURFACE_LOW,
-    EHR_SURFACE_LOWEST,
-} from '../constants/uiColors';
+import { useEhrPalette } from '../constants/uiColors';
 
 type Props = {
     visible: boolean;
@@ -25,6 +16,7 @@ type Props = {
 };
 
 export default function MyAddressModal({ visible, onClose, address, displayName, role }: Props) {
+    const palette = useEhrPalette();
     const addr = address || '';
     // Deep link giúp scan sang app khác tự điền địa chỉ
     const deepLink = addr ? `erhsystem://u/${addr}` : '';
@@ -52,14 +44,14 @@ export default function MyAddressModal({ visible, onClose, address, displayName,
 
     return (
         <Modal visible={visible} animationType="slide" onRequestClose={onClose} transparent={false}>
-            <View style={{ flex: 1, backgroundColor: EHR_SURFACE, paddingTop: 48 }}>
+            <View style={{ flex: 1, backgroundColor: palette.EHR_SURFACE, paddingTop: 48 }}>
                 <XStack style={{ alignItems: 'center', paddingHorizontal: 20, paddingBottom: 12 }}>
                     <YStack style={{ flex: 1 }}>
                         <Text fontSize="$6" fontWeight="800" color="$color12">Địa chỉ của tôi</Text>
                         <Text fontSize="$2" color="$color10">Đưa mã này cho người cần kết nối với bạn</Text>
                     </YStack>
-                    <Pressable onPress={onClose} style={{ padding: 10, borderRadius: 14, backgroundColor: EHR_SURFACE_LOW }}>
-                        <X size={20} color={EHR_ON_SURFACE} />
+                    <Pressable onPress={onClose} style={{ padding: 10, borderRadius: 14, backgroundColor: palette.EHR_SURFACE_LOW }}>
+                        <X size={20} color={palette.EHR_ON_SURFACE} />
                     </Pressable>
                 </XStack>
 
@@ -70,7 +62,7 @@ export default function MyAddressModal({ visible, onClose, address, displayName,
                             backgroundColor: '#fff',
                             borderRadius: 28,
                             borderWidth: 1,
-                            borderColor: EHR_OUTLINE_VARIANT,
+                            borderColor: palette.EHR_OUTLINE_VARIANT,
                         }}
                     >
                         <QRCode
@@ -87,12 +79,12 @@ export default function MyAddressModal({ visible, onClose, address, displayName,
                             paddingHorizontal: 14,
                             paddingVertical: 8,
                             borderRadius: 999,
-                            backgroundColor: EHR_PRIMARY_FIXED,
+                            backgroundColor: palette.EHR_PRIMARY_FIXED,
                         }}
                     >
                         <XStack style={{ alignItems: 'center', gap: 8 }}>
-                            <Wallet size={14} color={EHR_PRIMARY} />
-                            <Text fontSize="$2" fontWeight="800" style={{ color: EHR_PRIMARY, textTransform: 'uppercase', letterSpacing: 0.6 }}>
+                            <Wallet size={14} color={palette.EHR_PRIMARY} />
+                            <Text fontSize="$2" fontWeight="800" style={{ color: palette.EHR_PRIMARY, textTransform: 'uppercase', letterSpacing: 0.6 }}>
                                 {roleLabel}
                             </Text>
                         </XStack>
@@ -108,18 +100,18 @@ export default function MyAddressModal({ visible, onClose, address, displayName,
                 <View style={{ padding: 20, marginTop: 12 }}>
                     <View
                         style={{
-                            backgroundColor: EHR_SURFACE_LOWEST,
-                            borderColor: EHR_OUTLINE_VARIANT,
+                            backgroundColor: palette.EHR_SURFACE_LOWEST,
+                            borderColor: palette.EHR_OUTLINE_VARIANT,
                             borderWidth: 1,
                             borderRadius: 18,
                             padding: 14,
                             marginBottom: 14,
                         }}
                     >
-                        <Text fontSize="$1" style={{ color: EHR_ON_SURFACE_VARIANT, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 6 }}>
+                        <Text fontSize="$1" style={{ color: palette.EHR_ON_SURFACE_VARIANT, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 6 }}>
                             Địa chỉ đầy đủ
                         </Text>
-                        <Text fontSize="$3" style={{ color: EHR_ON_SURFACE, fontFamily: 'monospace' }}>
+                        <Text fontSize="$3" style={{ color: palette.EHR_ON_SURFACE, fontFamily: 'monospace' }}>
                             {addr || '—'}
                         </Text>
                     </View>
@@ -130,13 +122,13 @@ export default function MyAddressModal({ visible, onClose, address, displayName,
                                 style={{
                                     borderRadius: 16,
                                     borderWidth: 1,
-                                    borderColor: EHR_OUTLINE_VARIANT,
-                                    backgroundColor: EHR_SURFACE_LOW,
+                                    borderColor: palette.EHR_OUTLINE_VARIANT,
+                                    backgroundColor: palette.EHR_SURFACE_LOW,
                                     padding: 14,
                                 }}
                             >
                                 <XStack style={{ alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-                                    <Copy size={16} color={EHR_PRIMARY} />
+                                    <Copy size={16} color={palette.EHR_PRIMARY} />
                                     <Text fontSize="$3" fontWeight="700" color="$color12">Sao chép</Text>
                                 </XStack>
                             </View>
@@ -146,8 +138,8 @@ export default function MyAddressModal({ visible, onClose, address, displayName,
                                 style={{
                                     borderRadius: 16,
                                     borderWidth: 1,
-                                    borderColor: EHR_PRIMARY,
-                                    backgroundColor: EHR_PRIMARY,
+                                    borderColor: palette.EHR_PRIMARY,
+                                    backgroundColor: palette.EHR_PRIMARY,
                                     padding: 14,
                                 }}
                             >

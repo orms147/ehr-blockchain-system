@@ -27,18 +27,7 @@ import { withRpcRetry, formatChainError } from '../../utils/rpcRetry';
 import QrAddressScanner from '../../components/QrAddressScanner';
 import ViCard from '../../components-v2/ViCard';
 import ViButton from '../../components-v2/ViButton';
-import {
-    EHR_SURFACE,
-    EHR_SURFACE_LOWEST,
-    EHR_ON_SURFACE,
-    EHR_ON_SURFACE_VARIANT,
-    EHR_OUTLINE,
-    EHR_OUTLINE_SOFT,
-    EHR_PRIMARY,
-    EHR_PRIMARY_FIXED,
-    EHR_TERTIARY,
-    EHR_DANGER,
-} from '../../constants/uiColors';
+import { useEhrPalette } from '../../constants/uiColors';
 
 const SERIF = 'Fraunces_400Regular';
 const SANS = 'DMSans_400Regular';
@@ -98,6 +87,7 @@ const REQUEST_TYPES = [
 const isValidAddress = (addr: string) => /^0x[a-fA-F0-9]{40}$/.test(addr);
 
 export default function DoctorRequestAccessScreen() {
+    const palette = useEhrPalette();
     const [patientAddress, setPatientAddress] = useState('');
     const [cidHash, setCidHash] = useState('');
     const [selectedType, setSelectedType] = useState(0);
@@ -275,26 +265,26 @@ export default function DoctorRequestAccessScreen() {
 
     if (isSuccess) {
         return (
-            <SafeAreaView style={{ flex: 1, backgroundColor: EHR_SURFACE }} edges={['right', 'left']}>
+            <SafeAreaView style={{ flex: 1, backgroundColor: palette.EHR_SURFACE }} edges={['right', 'left']}>
                 <YStack style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 }}>
                     <View
                         style={{
                             width: 80,
                             height: 80,
                             borderRadius: 40,
-                            backgroundColor: `${EHR_TERTIARY}26`,
+                            backgroundColor: `${palette.EHR_TERTIARY}26`,
                             alignItems: 'center',
                             justifyContent: 'center',
                             marginBottom: 20,
                         }}
                     >
-                        <CheckCircle size={40} color={EHR_TERTIARY} />
+                        <CheckCircle size={40} color={palette.EHR_TERTIARY} />
                     </View>
                     <Text
                         style={{
                             fontFamily: SERIF,
                             fontSize: 24,
-                            color: EHR_ON_SURFACE,
+                            color: palette.EHR_ON_SURFACE,
                             letterSpacing: -0.3,
                             marginBottom: 8,
                             textAlign: 'center',
@@ -306,7 +296,7 @@ export default function DoctorRequestAccessScreen() {
                         style={{
                             fontFamily: SANS,
                             fontSize: 14,
-                            color: EHR_ON_SURFACE_VARIANT,
+                            color: palette.EHR_ON_SURFACE_VARIANT,
                             textAlign: 'center',
                             lineHeight: 21,
                             maxWidth: 320,
@@ -325,7 +315,7 @@ export default function DoctorRequestAccessScreen() {
     }
 
     return (
-        <SafeAreaView style={{ flex: 1, backgroundColor: EHR_SURFACE }} edges={['right', 'left']}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: palette.EHR_SURFACE }} edges={['right', 'left']}>
             <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
                 <ScrollView
                     contentContainerStyle={{ padding: 20, paddingBottom: 60 }}
@@ -337,7 +327,7 @@ export default function DoctorRequestAccessScreen() {
                         style={{
                             fontFamily: SERIF,
                             fontSize: 26,
-                            color: EHR_ON_SURFACE,
+                            color: palette.EHR_ON_SURFACE,
                             letterSpacing: -0.4,
                             lineHeight: 30,
                             marginBottom: 4,
@@ -349,7 +339,7 @@ export default function DoctorRequestAccessScreen() {
                         style={{
                             fontFamily: SANS,
                             fontSize: 13,
-                            color: EHR_ON_SURFACE_VARIANT,
+                            color: palette.EHR_ON_SURFACE_VARIANT,
                             lineHeight: 19,
                             marginBottom: 18,
                         }}
@@ -363,21 +353,21 @@ export default function DoctorRequestAccessScreen() {
                             paddingVertical: 12,
                             paddingHorizontal: 14,
                             borderRadius: 12,
-                            backgroundColor: EHR_SURFACE_LOWEST,
+                            backgroundColor: palette.EHR_SURFACE_LOWEST,
                             borderWidth: 0.5,
-                            borderColor: EHR_OUTLINE_SOFT,
+                            borderColor: palette.EHR_OUTLINE_SOFT,
                             marginBottom: 18,
                             flexDirection: 'row',
                             gap: 10,
                         }}
                     >
-                        <AlertCircle size={16} color={EHR_OUTLINE} style={{ marginTop: 2 }} />
+                        <AlertCircle size={16} color={palette.EHR_OUTLINE} style={{ marginTop: 2 }} />
                         <Text
                             style={{
                                 flex: 1,
                                 fontFamily: SANS,
                                 fontSize: 12.5,
-                                color: EHR_ON_SURFACE_VARIANT,
+                                color: palette.EHR_ON_SURFACE_VARIANT,
                                 lineHeight: 18,
                             }}
                         >
@@ -394,38 +384,38 @@ export default function DoctorRequestAccessScreen() {
                             borderWidth: 0.75,
                             borderColor:
                                 patientAddress.length > 0 && !isValidAddress(patientAddress)
-                                    ? EHR_DANGER
-                                    : EHR_OUTLINE_SOFT,
+                                    ? palette.EHR_DANGER
+                                    : palette.EHR_OUTLINE_SOFT,
                             borderRadius: 12,
-                            backgroundColor: EHR_SURFACE_LOWEST,
+                            backgroundColor: palette.EHR_SURFACE_LOWEST,
                             flexDirection: 'row',
                             alignItems: 'center',
                             paddingHorizontal: 12,
                             marginBottom: 6,
                         }}
                     >
-                        <User size={15} color={EHR_OUTLINE} />
+                        <User size={15} color={palette.EHR_OUTLINE} />
                         <TextInput
                             value={patientAddress}
                             onChangeText={setPatientAddress}
                             placeholder="0x..."
-                            placeholderTextColor={EHR_OUTLINE}
+                            placeholderTextColor={palette.EHR_OUTLINE}
                             autoCapitalize="none"
                             autoCorrect={false}
                             style={{
                                 flex: 1,
                                 paddingVertical: 12,
                                 paddingHorizontal: 10,
-                                color: EHR_ON_SURFACE,
+                                color: palette.EHR_ON_SURFACE,
                                 fontFamily: 'monospace',
                                 fontSize: 13,
                             }}
                         />
                         <Pressable onPress={() => setScannerOpen(true)} hitSlop={8}>
-                            <QrCode size={18} color={EHR_PRIMARY} />
+                            <QrCode size={18} color={palette.EHR_PRIMARY} />
                         </Pressable>
                     </View>
-                    <Text style={{ fontFamily: SANS, fontSize: 11, color: EHR_OUTLINE, marginBottom: 14 }}>
+                    <Text style={{ fontFamily: SANS, fontSize: 11, color: palette.EHR_OUTLINE, marginBottom: 14 }}>
                         Bấm biểu tượng QR để quét từ điện thoại bệnh nhân.
                     </Text>
 
@@ -436,9 +426,9 @@ export default function DoctorRequestAccessScreen() {
                     <View
                         style={{
                             borderWidth: 0.75,
-                            borderColor: EHR_OUTLINE_SOFT,
+                            borderColor: palette.EHR_OUTLINE_SOFT,
                             borderRadius: 12,
-                            backgroundColor: EHR_SURFACE_LOWEST,
+                            backgroundColor: palette.EHR_SURFACE_LOWEST,
                             flexDirection: 'row',
                             alignItems: 'center',
                             paddingHorizontal: 12,
@@ -446,7 +436,7 @@ export default function DoctorRequestAccessScreen() {
                             opacity: selectedType === 1 ? 0.5 : 1,
                         }}
                     >
-                        <FileText size={15} color={EHR_OUTLINE} />
+                        <FileText size={15} color={palette.EHR_OUTLINE} />
                         <TextInput
                             value={selectedType === 1 ? '' : cidHash}
                             onChangeText={setCidHash}
@@ -456,14 +446,14 @@ export default function DoctorRequestAccessScreen() {
                                     ? 'Không cần cho uỷ quyền toàn bộ'
                                     : 'Nhập hoặc quét CID'
                             }
-                            placeholderTextColor={EHR_OUTLINE}
+                            placeholderTextColor={palette.EHR_OUTLINE}
                             autoCapitalize="none"
                             autoCorrect={false}
                             style={{
                                 flex: 1,
                                 paddingVertical: 12,
                                 paddingHorizontal: 10,
-                                color: EHR_ON_SURFACE,
+                                color: palette.EHR_ON_SURFACE,
                                 fontFamily: 'monospace',
                                 fontSize: 12,
                             }}
@@ -473,10 +463,10 @@ export default function DoctorRequestAccessScreen() {
                             hitSlop={8}
                             disabled={selectedType === 1}
                         >
-                            <QrCode size={18} color={EHR_PRIMARY} />
+                            <QrCode size={18} color={palette.EHR_PRIMARY} />
                         </Pressable>
                     </View>
-                    <Text style={{ fontFamily: SANS, fontSize: 11, color: EHR_OUTLINE, marginBottom: 18 }}>
+                    <Text style={{ fontFamily: SANS, fontSize: 11, color: palette.EHR_OUTLINE, marginBottom: 18 }}>
                         {selectedType === 1
                             ? 'Uỷ quyền toàn bộ áp dụng mọi hồ sơ — không chọn CID cụ thể.'
                             : 'Bấm QR để quét mã CID trên màn hình bệnh nhân.'}
@@ -496,8 +486,8 @@ export default function DoctorRequestAccessScreen() {
                                         paddingHorizontal: 14,
                                         borderRadius: 12,
                                         borderWidth: isActive ? 1.5 : 0.5,
-                                        borderColor: isActive ? EHR_PRIMARY : EHR_OUTLINE_SOFT,
-                                        backgroundColor: isActive ? EHR_PRIMARY_FIXED : EHR_SURFACE_LOWEST,
+                                        borderColor: isActive ? palette.EHR_PRIMARY : palette.EHR_OUTLINE_SOFT,
+                                        backgroundColor: isActive ? palette.EHR_PRIMARY_FIXED : palette.EHR_SURFACE_LOWEST,
                                         opacity: pressed ? 0.7 : 1,
                                     })}
                                 >
@@ -505,7 +495,7 @@ export default function DoctorRequestAccessScreen() {
                                         style={{
                                             fontFamily: SANS_SEMI,
                                             fontSize: 14,
-                                            color: isActive ? EHR_PRIMARY : EHR_ON_SURFACE,
+                                            color: isActive ? palette.EHR_PRIMARY : palette.EHR_ON_SURFACE,
                                             fontWeight: '700',
                                         }}
                                     >
@@ -516,7 +506,7 @@ export default function DoctorRequestAccessScreen() {
                                             marginTop: 3,
                                             fontFamily: SANS,
                                             fontSize: 11.5,
-                                            color: isActive ? EHR_PRIMARY : EHR_OUTLINE,
+                                            color: isActive ? palette.EHR_PRIMARY : palette.EHR_OUTLINE,
                                             lineHeight: 16,
                                         }}
                                     >
@@ -552,8 +542,8 @@ export default function DoctorRequestAccessScreen() {
                                         paddingVertical: 6,
                                         borderRadius: 999,
                                         borderWidth: 0.5,
-                                        borderColor: active ? EHR_PRIMARY : EHR_OUTLINE_SOFT,
-                                        backgroundColor: active ? EHR_PRIMARY_FIXED : EHR_SURFACE_LOWEST,
+                                        borderColor: active ? palette.EHR_PRIMARY : palette.EHR_OUTLINE_SOFT,
+                                        backgroundColor: active ? palette.EHR_PRIMARY_FIXED : palette.EHR_SURFACE_LOWEST,
                                         opacity: pressed ? 0.7 : 1,
                                     })}
                                 >
@@ -561,7 +551,7 @@ export default function DoctorRequestAccessScreen() {
                                         style={{
                                             fontFamily: SANS_MEDIUM,
                                             fontSize: 12,
-                                            color: active ? EHR_PRIMARY : EHR_OUTLINE,
+                                            color: active ? palette.EHR_PRIMARY : palette.EHR_OUTLINE,
                                             fontWeight: active ? '700' : '500',
                                         }}
                                     >
@@ -577,8 +567,8 @@ export default function DoctorRequestAccessScreen() {
                                 paddingVertical: 6,
                                 borderRadius: 999,
                                 borderWidth: 0.5,
-                                borderColor: customDurationOpen ? EHR_PRIMARY : EHR_OUTLINE_SOFT,
-                                backgroundColor: customDurationOpen ? EHR_PRIMARY_FIXED : EHR_SURFACE_LOWEST,
+                                borderColor: customDurationOpen ? palette.EHR_PRIMARY : palette.EHR_OUTLINE_SOFT,
+                                backgroundColor: customDurationOpen ? palette.EHR_PRIMARY_FIXED : palette.EHR_SURFACE_LOWEST,
                                 opacity: pressed ? 0.7 : 1,
                             })}
                         >
@@ -586,7 +576,7 @@ export default function DoctorRequestAccessScreen() {
                                 style={{
                                     fontFamily: SANS_MEDIUM,
                                     fontSize: 12,
-                                    color: customDurationOpen ? EHR_PRIMARY : EHR_OUTLINE,
+                                    color: customDurationOpen ? palette.EHR_PRIMARY : palette.EHR_OUTLINE,
                                     fontWeight: customDurationOpen ? '700' : '500',
                                 }}
                             >
@@ -610,8 +600,8 @@ export default function DoctorRequestAccessScreen() {
                                                 paddingVertical: 4,
                                                 borderRadius: 999,
                                                 borderWidth: 0.5,
-                                                borderColor: active ? EHR_PRIMARY : EHR_OUTLINE_SOFT,
-                                                backgroundColor: active ? EHR_PRIMARY_FIXED : EHR_SURFACE_LOWEST,
+                                                borderColor: active ? palette.EHR_PRIMARY : palette.EHR_OUTLINE_SOFT,
+                                                backgroundColor: active ? palette.EHR_PRIMARY_FIXED : palette.EHR_SURFACE_LOWEST,
                                                 opacity: pressed ? 0.7 : 1,
                                             })}
                                         >
@@ -619,7 +609,7 @@ export default function DoctorRequestAccessScreen() {
                                                 style={{
                                                     fontFamily: SANS_MEDIUM,
                                                     fontSize: 11.5,
-                                                    color: active ? EHR_PRIMARY : EHR_OUTLINE,
+                                                    color: active ? palette.EHR_PRIMARY : palette.EHR_OUTLINE,
                                                     fontWeight: active ? '700' : '500',
                                                 }}
                                             >
@@ -645,27 +635,27 @@ export default function DoctorRequestAccessScreen() {
                                 }}
                                 keyboardType="number-pad"
                                 placeholder={`Nhập số ${customDurationUnit === 'minutes' ? 'phút' : customDurationUnit === 'hours' ? 'giờ' : 'ngày'}`}
-                                placeholderTextColor={EHR_OUTLINE}
+                                placeholderTextColor={palette.EHR_OUTLINE}
                                 style={{
                                     borderWidth: 0.5,
-                                    borderColor: EHR_OUTLINE_SOFT,
+                                    borderColor: palette.EHR_OUTLINE_SOFT,
                                     borderRadius: 10,
                                     paddingVertical: 10,
                                     paddingHorizontal: 12,
                                     fontFamily: SANS,
                                     fontSize: 13,
-                                    color: EHR_ON_SURFACE,
-                                    backgroundColor: EHR_SURFACE_LOWEST,
+                                    color: palette.EHR_ON_SURFACE,
+                                    backgroundColor: palette.EHR_SURFACE_LOWEST,
                                 }}
                             />
-                            <Text style={{ fontFamily: SANS, fontSize: 10.5, color: EHR_OUTLINE }}>
+                            <Text style={{ fontFamily: SANS, fontSize: 10.5, color: palette.EHR_OUTLINE }}>
                                 Contract làm tròn lên 1 giờ tối thiểu. Lựa chọn dưới 1 giờ chỉ phục vụ test UI.
                             </Text>
                         </YStack>
                     ) : null}
 
                     {durationHours === 0 ? (
-                        <Text style={{ fontFamily: SANS, fontSize: 11, color: EHR_OUTLINE, marginBottom: 14, lineHeight: 16 }}>
+                        <Text style={{ fontFamily: SANS, fontSize: 11, color: palette.EHR_OUTLINE, marginBottom: 14, lineHeight: 16 }}>
                             "Mặc định" = {selectedType === 1 ? '365 ngày' : '30 ngày'}. Bệnh nhân có thể thu hồi bất kỳ lúc nào.
                         </Text>
                     ) : <View style={{ height: 6 }} />}
@@ -676,18 +666,18 @@ export default function DoctorRequestAccessScreen() {
                         value={reason}
                         onChangeText={setReason}
                         placeholder="VD: Khám định kỳ tháng 5..."
-                        placeholderTextColor={EHR_OUTLINE}
+                        placeholderTextColor={palette.EHR_OUTLINE}
                         multiline
                         textAlignVertical="top"
                         style={{
                             minHeight: 90,
                             borderWidth: 0.75,
-                            borderColor: EHR_OUTLINE_SOFT,
+                            borderColor: palette.EHR_OUTLINE_SOFT,
                             borderRadius: 12,
                             paddingVertical: 12,
                             paddingHorizontal: 14,
-                            backgroundColor: EHR_SURFACE_LOWEST,
-                            color: EHR_ON_SURFACE,
+                            backgroundColor: palette.EHR_SURFACE_LOWEST,
+                            color: palette.EHR_ON_SURFACE,
                             fontFamily: SANS,
                             fontSize: 14,
                             marginBottom: 22,
@@ -731,12 +721,13 @@ export default function DoctorRequestAccessScreen() {
 }
 
 function FieldLabel({ children, error }: { children: React.ReactNode; error?: boolean }) {
+    const palette = useEhrPalette();
     return (
         <Text
             style={{
                 fontFamily: SANS_SEMI,
                 fontSize: 11.5,
-                color: error ? EHR_DANGER : EHR_OUTLINE,
+                color: error ? palette.EHR_DANGER : palette.EHR_OUTLINE,
                 marginBottom: 8,
                 letterSpacing: 0.4,
                 textTransform: 'uppercase',

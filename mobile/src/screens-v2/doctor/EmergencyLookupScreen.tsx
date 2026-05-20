@@ -19,18 +19,7 @@ import { Search, Phone, Heart, AlertTriangle, Droplet, ShieldAlert, Info } from 
 import trustedContactService from '../../services/trustedContact.service';
 import ViCard from '../../components-v2/ViCard';
 import ViButton from '../../components-v2/ViButton';
-import {
-    EHR_SURFACE,
-    EHR_SURFACE_LOWEST,
-    EHR_ON_SURFACE,
-    EHR_ON_SURFACE_VARIANT,
-    EHR_OUTLINE,
-    EHR_OUTLINE_SOFT,
-    EHR_PRIMARY,
-    EHR_PRIMARY_FIXED,
-    EHR_TERTIARY,
-    EHR_DANGER,
-} from '../../constants/uiColors';
+import { useEhrPalette } from '../../constants/uiColors';
 
 const SERIF = 'Fraunces_400Regular';
 const SANS = 'DMSans_400Regular';
@@ -56,6 +45,7 @@ type Contact = {
 const truncate = (addr?: string) => (addr ? `${addr.slice(0, 6)}…${addr.slice(-4)}` : '');
 
 export default function EmergencyLookupScreen() {
+    const palette = useEhrPalette();
     const [cccdInput, setCccdInput] = useState('');
     const [loading, setLoading] = useState(false);
     const [patient, setPatient] = useState<PatientInfo | null>(null);
@@ -106,7 +96,7 @@ export default function EmergencyLookupScreen() {
     };
 
     return (
-        <SafeAreaView style={{ flex: 1, backgroundColor: EHR_SURFACE }}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: palette.EHR_SURFACE }}>
             <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
                 {/* Hero */}
                 <View style={{ marginBottom: 16 }}>
@@ -114,7 +104,7 @@ export default function EmergencyLookupScreen() {
                         style={{
                             fontFamily: SERIF,
                             fontSize: 26,
-                            color: EHR_ON_SURFACE,
+                            color: palette.EHR_ON_SURFACE,
                             letterSpacing: -0.4,
                             lineHeight: 30,
                         }}
@@ -126,7 +116,7 @@ export default function EmergencyLookupScreen() {
                             marginTop: 4,
                             fontFamily: SANS,
                             fontSize: 13,
-                            color: EHR_ON_SURFACE_VARIANT,
+                            color: palette.EHR_ON_SURFACE_VARIANT,
                             lineHeight: 19,
                         }}
                     >
@@ -140,21 +130,21 @@ export default function EmergencyLookupScreen() {
                         paddingVertical: 12,
                         paddingHorizontal: 14,
                         borderRadius: 12,
-                        backgroundColor: `${EHR_PRIMARY}14`,
+                        backgroundColor: `${palette.EHR_PRIMARY}14`,
                         borderWidth: 0.5,
-                        borderColor: `${EHR_PRIMARY}50`,
+                        borderColor: `${palette.EHR_PRIMARY}50`,
                         marginBottom: 16,
                         flexDirection: 'row',
                         gap: 10,
                     }}
                 >
-                    <ShieldAlert size={16} color={EHR_PRIMARY} style={{ marginTop: 2 }} />
+                    <ShieldAlert size={16} color={palette.EHR_PRIMARY} style={{ marginTop: 2 }} />
                     <Text
                         style={{
                             flex: 1,
                             fontFamily: SANS,
                             fontSize: 12,
-                            color: EHR_ON_SURFACE,
+                            color: palette.EHR_ON_SURFACE,
                             lineHeight: 18,
                         }}
                     >
@@ -169,18 +159,18 @@ export default function EmergencyLookupScreen() {
                         value={cccdInput}
                         onChangeText={setCccdInput}
                         placeholder="012345678901"
-                        placeholderTextColor={EHR_OUTLINE}
+                        placeholderTextColor={palette.EHR_OUTLINE}
                         keyboardType="number-pad"
                         maxLength={12}
                         style={{
                             flex: 1,
                             borderWidth: 0.75,
-                            borderColor: EHR_OUTLINE_SOFT,
+                            borderColor: palette.EHR_OUTLINE_SOFT,
                             borderRadius: 12,
                             paddingVertical: 12,
                             paddingHorizontal: 14,
-                            color: EHR_ON_SURFACE,
-                            backgroundColor: EHR_SURFACE_LOWEST,
+                            color: palette.EHR_ON_SURFACE,
+                            backgroundColor: palette.EHR_SURFACE_LOWEST,
                             fontFamily: 'monospace',
                             fontSize: 14,
                         }}
@@ -189,7 +179,7 @@ export default function EmergencyLookupScreen() {
                         variant="primary"
                         onPress={handleLookup}
                         loading={loading}
-                        leftIcon={<Search size={15} color={EHR_SURFACE} />}
+                        leftIcon={<Search size={15} color={palette.EHR_SURFACE} />}
                     >
                         Tra
                     </ViButton>
@@ -200,13 +190,13 @@ export default function EmergencyLookupScreen() {
                         style={{
                             padding: 12,
                             borderRadius: 12,
-                            backgroundColor: `${EHR_DANGER}14`,
+                            backgroundColor: `${palette.EHR_DANGER}14`,
                             borderWidth: 0.5,
-                            borderColor: EHR_DANGER,
+                            borderColor: palette.EHR_DANGER,
                             marginBottom: 14,
                         }}
                     >
-                        <Text style={{ fontFamily: SANS, fontSize: 12.5, color: EHR_DANGER, lineHeight: 18 }}>
+                        <Text style={{ fontFamily: SANS, fontSize: 12.5, color: palette.EHR_DANGER, lineHeight: 18 }}>
                             {error}
                         </Text>
                     </View>
@@ -220,7 +210,7 @@ export default function EmergencyLookupScreen() {
                                 style={{
                                     fontFamily: SERIF,
                                     fontSize: 20,
-                                    color: EHR_ON_SURFACE,
+                                    color: palette.EHR_ON_SURFACE,
                                     letterSpacing: -0.3,
                                 }}
                             >
@@ -231,7 +221,7 @@ export default function EmergencyLookupScreen() {
                                     marginTop: 4,
                                     fontFamily: 'monospace',
                                     fontSize: 11,
-                                    color: EHR_OUTLINE,
+                                    color: palette.EHR_OUTLINE,
                                 }}
                                 numberOfLines={1}
                             >
@@ -245,18 +235,18 @@ export default function EmergencyLookupScreen() {
                                             flexDirection: 'row',
                                             alignItems: 'center',
                                             gap: 5,
-                                            backgroundColor: `${EHR_DANGER}1A`,
+                                            backgroundColor: `${palette.EHR_DANGER}1A`,
                                             paddingHorizontal: 10,
                                             paddingVertical: 5,
                                             borderRadius: 999,
                                         }}
                                     >
-                                        <Droplet size={12} color={EHR_DANGER} />
+                                        <Droplet size={12} color={palette.EHR_DANGER} />
                                         <Text
                                             style={{
                                                 fontFamily: 'monospace',
                                                 fontSize: 12,
-                                                color: EHR_DANGER,
+                                                color: palette.EHR_DANGER,
                                                 fontWeight: '700',
                                             }}
                                         >
@@ -267,7 +257,7 @@ export default function EmergencyLookupScreen() {
                                 {patient.gender ? (
                                     <View
                                         style={{
-                                            backgroundColor: `${EHR_TERTIARY}1A`,
+                                            backgroundColor: `${palette.EHR_TERTIARY}1A`,
                                             paddingHorizontal: 10,
                                             paddingVertical: 5,
                                             borderRadius: 999,
@@ -277,7 +267,7 @@ export default function EmergencyLookupScreen() {
                                             style={{
                                                 fontFamily: SANS_SEMI,
                                                 fontSize: 12,
-                                                color: EHR_TERTIARY,
+                                                color: palette.EHR_TERTIARY,
                                                 fontWeight: '700',
                                             }}
                                         >
@@ -293,20 +283,20 @@ export default function EmergencyLookupScreen() {
                                         marginTop: 14,
                                         padding: 14,
                                         borderRadius: 12,
-                                        backgroundColor: `${EHR_DANGER}1A`,
+                                        backgroundColor: `${palette.EHR_DANGER}1A`,
                                         borderWidth: 0.5,
-                                        borderColor: `${EHR_DANGER}66`,
+                                        borderColor: `${palette.EHR_DANGER}66`,
                                         flexDirection: 'row',
                                         gap: 10,
                                     }}
                                 >
-                                    <AlertTriangle size={18} color={EHR_DANGER} style={{ marginTop: 2 }} />
+                                    <AlertTriangle size={18} color={palette.EHR_DANGER} style={{ marginTop: 2 }} />
                                     <YStack style={{ flex: 1 }}>
                                         <Text
                                             style={{
                                                 fontFamily: SANS_SEMI,
                                                 fontSize: 11,
-                                                color: EHR_DANGER,
+                                                color: palette.EHR_DANGER,
                                                 fontWeight: '700',
                                                 letterSpacing: 1.2,
                                                 textTransform: 'uppercase',
@@ -319,7 +309,7 @@ export default function EmergencyLookupScreen() {
                                                 marginTop: 4,
                                                 fontFamily: SANS_SEMI,
                                                 fontSize: 17,
-                                                color: EHR_DANGER,
+                                                color: palette.EHR_DANGER,
                                                 lineHeight: 24,
                                                 fontWeight: '600',
                                             }}
@@ -335,7 +325,7 @@ export default function EmergencyLookupScreen() {
                             style={{
                                 fontFamily: SERIF,
                                 fontSize: 18,
-                                color: EHR_ON_SURFACE,
+                                color: palette.EHR_ON_SURFACE,
                                 letterSpacing: -0.2,
                                 marginBottom: 8,
                             }}
@@ -347,19 +337,19 @@ export default function EmergencyLookupScreen() {
                                 paddingVertical: 10,
                                 paddingHorizontal: 14,
                                 borderRadius: 12,
-                                backgroundColor: EHR_PRIMARY_FIXED,
+                                backgroundColor: palette.EHR_PRIMARY_FIXED,
                                 marginBottom: 12,
                                 flexDirection: 'row',
                                 gap: 8,
                             }}
                         >
-                            <Info size={14} color={EHR_PRIMARY} style={{ marginTop: 2 }} />
+                            <Info size={14} color={palette.EHR_PRIMARY} style={{ marginTop: 2 }} />
                             <Text
                                 style={{
                                     flex: 1,
                                     fontFamily: SANS,
                                     fontSize: 12,
-                                    color: EHR_PRIMARY,
+                                    color: palette.EHR_PRIMARY,
                                     lineHeight: 17,
                                 }}
                             >
@@ -372,7 +362,7 @@ export default function EmergencyLookupScreen() {
                                 style={{
                                     fontFamily: SANS,
                                     fontSize: 13,
-                                    color: EHR_OUTLINE,
+                                    color: palette.EHR_OUTLINE,
                                     padding: 14,
                                     textAlign: 'center',
                                 }}
@@ -388,19 +378,19 @@ export default function EmergencyLookupScreen() {
                                                 width: 32,
                                                 height: 32,
                                                 borderRadius: 16,
-                                                backgroundColor: EHR_PRIMARY_FIXED,
+                                                backgroundColor: palette.EHR_PRIMARY_FIXED,
                                                 alignItems: 'center',
                                                 justifyContent: 'center',
                                             }}
                                         >
-                                            <Heart size={14} color={EHR_PRIMARY} />
+                                            <Heart size={14} color={palette.EHR_PRIMARY} />
                                         </View>
                                         <YStack style={{ flex: 1, minWidth: 0 }}>
                                             <Text
                                                 style={{
                                                     fontFamily: SANS_MEDIUM,
                                                     fontSize: 14,
-                                                    color: EHR_ON_SURFACE,
+                                                    color: palette.EHR_ON_SURFACE,
                                                     fontWeight: '700',
                                                 }}
                                                 numberOfLines={1}
@@ -412,7 +402,7 @@ export default function EmergencyLookupScreen() {
                                                     style={{
                                                         fontFamily: SANS,
                                                         fontSize: 11.5,
-                                                        color: EHR_OUTLINE,
+                                                        color: palette.EHR_OUTLINE,
                                                     }}
                                                 >
                                                     {c.label}
@@ -435,7 +425,7 @@ export default function EmergencyLookupScreen() {
                                             style={{
                                                 fontFamily: SANS,
                                                 fontSize: 11.5,
-                                                color: EHR_OUTLINE,
+                                                color: palette.EHR_OUTLINE,
                                                 fontStyle: 'italic',
                                             }}
                                         >
@@ -453,12 +443,13 @@ export default function EmergencyLookupScreen() {
 }
 
 function FieldLabel({ children }: { children: React.ReactNode }) {
+    const palette = useEhrPalette();
     return (
         <Text
             style={{
                 fontFamily: SANS_SEMI,
                 fontSize: 11.5,
-                color: EHR_OUTLINE,
+                color: palette.EHR_OUTLINE,
                 marginBottom: 8,
                 letterSpacing: 0.4,
                 textTransform: 'uppercase',

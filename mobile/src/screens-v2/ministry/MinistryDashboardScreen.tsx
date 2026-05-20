@@ -22,18 +22,7 @@ import useAuthStore from '../../store/authStore';
 import ViCard from '../../components-v2/ViCard';
 import ViButton from '../../components-v2/ViButton';
 import { ViStatusChip } from '../../components-v2/ViChips';
-import {
-    EHR_SURFACE,
-    EHR_SURFACE_LOWEST,
-    EHR_ON_SURFACE,
-    EHR_ON_SURFACE_VARIANT,
-    EHR_OUTLINE,
-    EHR_OUTLINE_SOFT,
-    EHR_OUTLINE_VARIANT,
-    EHR_PRIMARY,
-    EHR_TERTIARY,
-    EHR_WARNING,
-} from '../../constants/uiColors';
+import { useEhrPalette } from '../../constants/uiColors';
 
 const SERIF = 'Fraunces_400Regular';
 const SANS = 'DMSans_400Regular';
@@ -63,6 +52,7 @@ type PendingApp = {
 const truncate = (addr?: string) => (addr ? `${addr.slice(0, 6)}…${addr.slice(-4)}` : '???');
 
 export default function MinistryDashboardScreen() {
+    const palette = useEhrPalette();
     const { token } = useAuthStore();
     const [organizations, setOrganizations] = useState<OrgItem[]>([]);
     const [pendingApps, setPendingApps] = useState<PendingApp[]>([]);
@@ -132,7 +122,7 @@ export default function MinistryDashboardScreen() {
     const verifiedCount = organizations.filter((o) => o.verified || o.isVerified).length;
 
     return (
-        <SafeAreaView style={{ flex: 1, backgroundColor: EHR_SURFACE }} edges={['top']}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: palette.EHR_SURFACE }} edges={['top']}>
             <ScrollView
                 contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 80, paddingTop: 14 }}
                 refreshControl={
@@ -142,7 +132,7 @@ export default function MinistryDashboardScreen() {
                             setIsRefreshing(true);
                             fetchData();
                         }}
-                        tintColor={EHR_ON_SURFACE_VARIANT}
+                        tintColor={palette.EHR_ON_SURFACE_VARIANT}
                     />
                 }
                 showsVerticalScrollIndicator={false}
@@ -153,7 +143,7 @@ export default function MinistryDashboardScreen() {
                             style={{
                                 fontFamily: SANS_SEMI,
                                 fontSize: 11,
-                                color: EHR_PRIMARY,
+                                color: palette.EHR_PRIMARY,
                                 letterSpacing: 1.2,
                                 textTransform: 'uppercase',
                                 fontWeight: '600',
@@ -166,7 +156,7 @@ export default function MinistryDashboardScreen() {
                             style={{
                                 fontFamily: SERIF,
                                 fontSize: 26,
-                                color: EHR_ON_SURFACE,
+                                color: palette.EHR_ON_SURFACE,
                                 letterSpacing: -0.4,
                                 lineHeight: 30,
                             }}
@@ -183,29 +173,29 @@ export default function MinistryDashboardScreen() {
                         marginBottom: 16,
                         borderTopWidth: 0.5,
                         borderBottomWidth: 0.5,
-                        borderColor: EHR_OUTLINE_VARIANT,
+                        borderColor: palette.EHR_OUTLINE_VARIANT,
                     }}
                 >
                     <XStack>
                         <StatTile
-                            icon={<Landmark size={16} color={EHR_PRIMARY} />}
+                            icon={<Landmark size={16} color={palette.EHR_PRIMARY} />}
                             value={organizations.length}
                             label="Tổ chức"
-                            tint={EHR_PRIMARY}
+                            tint={palette.EHR_PRIMARY}
                         />
-                        <View style={{ width: 0.5, alignSelf: 'stretch', backgroundColor: EHR_OUTLINE_SOFT }} />
+                        <View style={{ width: 0.5, alignSelf: 'stretch', backgroundColor: palette.EHR_OUTLINE_SOFT }} />
                         <StatTile
-                            icon={<ShieldCheck size={16} color={EHR_TERTIARY} />}
+                            icon={<ShieldCheck size={16} color={palette.EHR_TERTIARY} />}
                             value={verifiedCount}
                             label="Đã duyệt"
-                            tint={EHR_TERTIARY}
+                            tint={palette.EHR_TERTIARY}
                         />
-                        <View style={{ width: 0.5, alignSelf: 'stretch', backgroundColor: EHR_OUTLINE_SOFT }} />
+                        <View style={{ width: 0.5, alignSelf: 'stretch', backgroundColor: palette.EHR_OUTLINE_SOFT }} />
                         <StatTile
-                            icon={<Hourglass size={16} color={EHR_WARNING} />}
+                            icon={<Hourglass size={16} color={palette.EHR_WARNING} />}
                             value={pendingApps.length}
                             label="Chờ duyệt"
-                            tint={EHR_WARNING}
+                            tint={palette.EHR_WARNING}
                         />
                     </XStack>
                 </View>
@@ -236,8 +226,8 @@ export default function MinistryDashboardScreen() {
                 {activeTab === 'orgs' ? (
                     organizations.length === 0 ? (
                         <View style={{ paddingTop: 20, alignItems: 'center' }}>
-                            <Building2 size={26} color={EHR_OUTLINE} />
-                            <Text style={{ marginTop: 10, fontFamily: SANS, fontSize: 13, color: EHR_OUTLINE }}>
+                            <Building2 size={26} color={palette.EHR_OUTLINE} />
+                            <Text style={{ marginTop: 10, fontFamily: SANS, fontSize: 13, color: palette.EHR_OUTLINE }}>
                                 Chưa có tổ chức nào đăng ký.
                             </Text>
                         </View>
@@ -250,31 +240,31 @@ export default function MinistryDashboardScreen() {
                                             width: 36,
                                             height: 36,
                                             borderRadius: 18,
-                                            backgroundColor: `${EHR_PRIMARY}1A`,
+                                            backgroundColor: `${palette.EHR_PRIMARY}1A`,
                                             alignItems: 'center',
                                             justifyContent: 'center',
                                         }}
                                     >
-                                        <Building2 size={16} color={EHR_PRIMARY} />
+                                        <Building2 size={16} color={palette.EHR_PRIMARY} />
                                     </View>
                                     <YStack style={{ flex: 1 }}>
                                         <Text
                                             style={{
                                                 fontFamily: SANS_SEMI,
                                                 fontSize: 14,
-                                                color: EHR_ON_SURFACE,
+                                                color: palette.EHR_ON_SURFACE,
                                                 fontWeight: '700',
                                             }}
                                         >
                                             {org.name || org.orgName || 'Tổ chức'}
                                         </Text>
-                                        <Text style={{ fontFamily: 'monospace', fontSize: 11, color: EHR_OUTLINE, marginTop: 2 }}>
+                                        <Text style={{ fontFamily: 'monospace', fontSize: 11, color: palette.EHR_OUTLINE, marginTop: 2 }}>
                                             {truncate(org.address)}
                                         </Text>
                                     </YStack>
                                     <ViStatusChip status="verified" />
                                 </XStack>
-                                <Text style={{ fontFamily: SANS, fontSize: 11.5, color: EHR_OUTLINE }}>
+                                <Text style={{ fontFamily: SANS, fontSize: 11.5, color: palette.EHR_OUTLINE }}>
                                     {org.orgType === 'hospital' ? 'Bệnh viện' : 'Phòng khám'} · {org.doctorCount || 0} bác sĩ
                                 </Text>
                             </ViCard>
@@ -285,8 +275,8 @@ export default function MinistryDashboardScreen() {
                 {activeTab === 'pending' ? (
                     pendingApps.length === 0 ? (
                         <View style={{ paddingTop: 20, alignItems: 'center' }}>
-                            <Clock size={26} color={EHR_OUTLINE} />
-                            <Text style={{ marginTop: 10, fontFamily: SANS, fontSize: 13, color: EHR_OUTLINE }}>
+                            <Clock size={26} color={palette.EHR_OUTLINE} />
+                            <Text style={{ marginTop: 10, fontFamily: SANS, fontSize: 13, color: palette.EHR_OUTLINE }}>
                                 Không có đơn chờ.
                             </Text>
                         </View>
@@ -297,19 +287,19 @@ export default function MinistryDashboardScreen() {
                                     style={{
                                         fontFamily: SANS_SEMI,
                                         fontSize: 14.5,
-                                        color: EHR_ON_SURFACE,
+                                        color: palette.EHR_ON_SURFACE,
                                         fontWeight: '700',
                                     }}
                                 >
                                     {app.orgName || 'Tổ chức'}
                                 </Text>
-                                <Text style={{ marginTop: 4, fontFamily: SANS, fontSize: 12, color: EHR_OUTLINE }}>
+                                <Text style={{ marginTop: 4, fontFamily: SANS, fontSize: 12, color: palette.EHR_OUTLINE }}>
                                     {app.orgType === 'hospital' ? 'Bệnh viện' : 'Phòng khám'} ·{' '}
                                     <Text style={{ fontFamily: 'monospace' }}>
                                         {truncate(app.applicantAddress || app.address)}
                                     </Text>
                                 </Text>
-                                <Text style={{ marginTop: 3, fontFamily: SANS, fontSize: 11, color: EHR_OUTLINE }}>
+                                <Text style={{ marginTop: 3, fontFamily: SANS, fontSize: 11, color: palette.EHR_OUTLINE }}>
                                     Ngày nộp:{' '}
                                     {app.createdAt ? new Date(app.createdAt).toLocaleDateString('vi-VN') : ''}
                                 </Text>
@@ -320,7 +310,7 @@ export default function MinistryDashboardScreen() {
                                             full
                                             size="sm"
                                             onPress={() => handleReject(app)}
-                                            leftIcon={<X size={14} color={EHR_OUTLINE} />}
+                                            leftIcon={<X size={14} color={palette.EHR_OUTLINE} />}
                                         >
                                             Từ chối
                                         </ViButton>
@@ -348,7 +338,7 @@ export default function MinistryDashboardScreen() {
                             style={{
                                 fontFamily: SERIF,
                                 fontSize: 17,
-                                color: EHR_ON_SURFACE,
+                                color: palette.EHR_ON_SURFACE,
                                 letterSpacing: -0.2,
                                 marginBottom: 12,
                             }}
@@ -364,17 +354,17 @@ export default function MinistryDashboardScreen() {
                                     paddingVertical: 10,
                                     paddingHorizontal: 12,
                                     borderRadius: 10,
-                                    backgroundColor: EHR_SURFACE_LOWEST,
+                                    backgroundColor: palette.EHR_SURFACE_LOWEST,
                                     marginBottom: 8,
                                     borderWidth: 0.5,
-                                    borderColor: EHR_OUTLINE_SOFT,
+                                    borderColor: palette.EHR_OUTLINE_SOFT,
                                 }}
                             >
                                 <Text
                                     style={{
                                         fontFamily: 'monospace',
                                         fontSize: 13,
-                                        color: EHR_ON_SURFACE,
+                                        color: palette.EHR_ON_SURFACE,
                                     }}
                                 >
                                     {name}
@@ -384,14 +374,14 @@ export default function MinistryDashboardScreen() {
                                         paddingHorizontal: 8,
                                         paddingVertical: 3,
                                         borderRadius: 999,
-                                        backgroundColor: `${EHR_TERTIARY}1A`,
+                                        backgroundColor: `${palette.EHR_TERTIARY}1A`,
                                     }}
                                 >
                                     <Text
                                         style={{
                                             fontFamily: SANS_SEMI,
                                             fontSize: 10,
-                                            color: EHR_TERTIARY,
+                                            color: palette.EHR_TERTIARY,
                                             fontWeight: '700',
                                             letterSpacing: 0.3,
                                         }}
@@ -416,6 +406,7 @@ function StatTile({
     label: string;
     tint: string;
 }) {
+    const palette = useEhrPalette();
     // G.5 — inline cell, 14×14 padding meets 60pt min touch target. No card wrap.
     void tint;
     return (
@@ -426,7 +417,7 @@ function StatTile({
                     marginTop: 6,
                     fontFamily: SERIF,
                     fontSize: 22,
-                    color: EHR_ON_SURFACE,
+                    color: palette.EHR_ON_SURFACE,
                     letterSpacing: -0.3,
                 }}
             >
@@ -437,7 +428,7 @@ function StatTile({
                     marginTop: 2,
                     fontFamily: SANS_SEMI,
                     fontSize: 10,
-                    color: EHR_OUTLINE,
+                    color: palette.EHR_OUTLINE,
                     letterSpacing: 0.4,
                     textTransform: 'uppercase',
                     fontWeight: '600',

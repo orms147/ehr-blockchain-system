@@ -14,17 +14,7 @@ import Animated, {
     Easing,
 } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
-import {
-    EHR_ON_PRIMARY,
-    EHR_ON_SURFACE,
-    EHR_ON_SURFACE_VARIANT,
-    EHR_OUTLINE_VARIANT,
-    EHR_PRIMARY,
-    EHR_PRIMARY_CONTAINER,
-    EHR_PRIMARY_FIXED,
-    EHR_SURFACE_LOW,
-    EHR_SURFACE_LOWEST,
-} from '../constants/uiColors';
+import { useEhrPalette } from '../constants/uiColors';
 
 interface EmptyStateProps {
     message?: string;
@@ -49,6 +39,21 @@ export default function EmptyState({
     onAction,
     isLoading = false,
 }: EmptyStateProps) {
+    const palette = useEhrPalette();
+    const s = StyleSheet.create({
+        container: { alignItems: 'center', justifyContent: 'center', paddingVertical: 48, paddingHorizontal: 32 },
+        iconCircle: {
+            width: 88, height: 88, borderRadius: 44,
+            backgroundColor: palette.EHR_PRIMARY_FIXED,
+            borderWidth: 1, borderColor: palette.EHR_OUTLINE_VARIANT,
+            alignItems: 'center', justifyContent: 'center', marginBottom: 24,
+        },
+        heading: { fontSize: 18, fontWeight: '700', color: palette.EHR_ON_SURFACE, textAlign: 'center', marginBottom: 8 },
+        body: { fontSize: 14, color: palette.EHR_ON_SURFACE_VARIANT, textAlign: 'center', lineHeight: 21 },
+        ctaWrap: { marginTop: 20, alignSelf: 'center', borderRadius: 14, overflow: 'hidden' },
+        ctaGradient: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 12, paddingHorizontal: 24, borderRadius: 14 },
+        ctaText: { fontSize: 15, fontWeight: '700', color: palette.EHR_ON_PRIMARY },
+    });
     const heading = title || message || 'Không có dữ liệu';
     const body = description || subMessage;
 
@@ -96,16 +101,16 @@ export default function EmptyState({
     });
 
     const renderIcon = () => {
-        if (!icon) return <FileX size={36} color={EHR_ON_SURFACE_VARIANT} />;
+        if (!icon) return <FileX size={36} color={palette.EHR_ON_SURFACE_VARIANT} />;
         if (React.isValidElement(icon)) return icon;
         const isComponentType =
             typeof icon === 'function'
             || (typeof icon === 'object' && icon !== null && 'render' in icon);
         if (isComponentType) {
             const IconComponent = icon as React.ElementType;
-            return <IconComponent size={36} color={EHR_ON_SURFACE_VARIANT} />;
+            return <IconComponent size={36} color={palette.EHR_ON_SURFACE_VARIANT} />;
         }
-        return <FileX size={36} color={EHR_ON_SURFACE_VARIANT} />;
+        return <FileX size={36} color={palette.EHR_ON_SURFACE_VARIANT} />;
     };
 
     return (
@@ -131,12 +136,12 @@ export default function EmptyState({
                         ]}
                     >
                         <LinearGradient
-                            colors={[EHR_PRIMARY, EHR_PRIMARY_CONTAINER]}
+                            colors={[palette.EHR_PRIMARY, palette.EHR_PRIMARY_CONTAINER]}
                             start={{ x: 0, y: 0 }}
                             end={{ x: 1, y: 0 }}
                             style={s.ctaGradient}
                         >
-                            {isLoading ? <Loader2 size={16} color={EHR_ON_PRIMARY} /> : null}
+                            {isLoading ? <Loader2 size={16} color={palette.EHR_ON_PRIMARY} /> : null}
                             <Text style={s.ctaText}>{actionLabel}</Text>
                         </LinearGradient>
                     </Pressable>
@@ -146,55 +151,3 @@ export default function EmptyState({
     );
 }
 
-const s = StyleSheet.create({
-    container: {
-        alignItems: 'center',
-        justifyContent: 'center',
-        paddingVertical: 48,
-        paddingHorizontal: 32,
-    },
-    iconCircle: {
-        width: 88,
-        height: 88,
-        borderRadius: 44,
-        backgroundColor: EHR_PRIMARY_FIXED,
-        borderWidth: 1,
-        borderColor: EHR_OUTLINE_VARIANT,
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginBottom: 24,
-    },
-    heading: {
-        fontSize: 18,
-        fontWeight: '700',
-        color: EHR_ON_SURFACE,
-        textAlign: 'center',
-        marginBottom: 8,
-    },
-    body: {
-        fontSize: 14,
-        color: EHR_ON_SURFACE_VARIANT,
-        textAlign: 'center',
-        lineHeight: 21,
-    },
-    ctaWrap: {
-        marginTop: 20,
-        alignSelf: 'center',
-        borderRadius: 14,
-        overflow: 'hidden',
-    },
-    ctaGradient: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: 8,
-        paddingVertical: 12,
-        paddingHorizontal: 24,
-        borderRadius: 14,
-    },
-    ctaText: {
-        fontSize: 15,
-        fontWeight: '700',
-        color: EHR_ON_PRIMARY,
-    },
-});

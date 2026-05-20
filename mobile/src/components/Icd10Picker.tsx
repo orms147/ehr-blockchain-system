@@ -4,16 +4,7 @@ import { Text, View, XStack, YStack } from 'tamagui';
 import { Check, Search, X } from 'lucide-react-native';
 
 import { ICD10_COMMON, searchIcd10, type Icd10Code } from '../constants/icd10';
-import {
-    EHR_ON_SURFACE,
-    EHR_ON_SURFACE_VARIANT,
-    EHR_OUTLINE_VARIANT,
-    EHR_PRIMARY,
-    EHR_PRIMARY_FIXED,
-    EHR_SURFACE,
-    EHR_SURFACE_LOW,
-    EHR_SURFACE_LOWEST,
-} from '../constants/uiColors';
+import { useEhrPalette } from '../constants/uiColors';
 
 export type Icd10Selection = Icd10Code;
 
@@ -25,6 +16,7 @@ type Props = {
 };
 
 export default function Icd10Picker({ visible, onClose, onSelect, selectedCodes = [] }: Props) {
+    const palette = useEhrPalette();
     const [query, setQuery] = useState('');
 
     const results = useMemo(() => {
@@ -33,7 +25,7 @@ export default function Icd10Picker({ visible, onClose, onSelect, selectedCodes 
 
     return (
         <Modal visible={visible} animationType="slide" onRequestClose={onClose} transparent={false}>
-            <View style={{ flex: 1, backgroundColor: EHR_SURFACE, paddingTop: 48 }}>
+            <View style={{ flex: 1, backgroundColor: palette.EHR_SURFACE, paddingTop: 48 }}>
                 <XStack style={{ alignItems: 'center', paddingHorizontal: 20, paddingBottom: 12 }}>
                     <YStack style={{ flex: 1 }}>
                         <Text fontSize="$6" fontWeight="800" color="$color12">Chọn mã ICD-10</Text>
@@ -41,9 +33,9 @@ export default function Icd10Picker({ visible, onClose, onSelect, selectedCodes 
                     </YStack>
                     <Pressable
                         onPress={onClose}
-                        style={{ padding: 10, borderRadius: 14, backgroundColor: EHR_SURFACE_LOW }}
+                        style={{ padding: 10, borderRadius: 14, backgroundColor: palette.EHR_SURFACE_LOW }}
                     >
-                        <X size={20} color={EHR_ON_SURFACE} />
+                        <X size={20} color={palette.EHR_ON_SURFACE} />
                     </Pressable>
                 </XStack>
 
@@ -53,23 +45,23 @@ export default function Icd10Picker({ visible, onClose, onSelect, selectedCodes 
                             alignItems: 'center',
                             borderRadius: 16,
                             borderWidth: 1,
-                            borderColor: EHR_OUTLINE_VARIANT,
-                            backgroundColor: EHR_SURFACE_LOWEST,
+                            borderColor: palette.EHR_OUTLINE_VARIANT,
+                            backgroundColor: palette.EHR_SURFACE_LOWEST,
                             paddingHorizontal: 14,
                         }}
                     >
-                        <Search size={18} color={EHR_ON_SURFACE_VARIANT} />
+                        <Search size={18} color={palette.EHR_ON_SURFACE_VARIANT} />
                         <TextInput
                             value={query}
                             onChangeText={setQuery}
                             placeholder="Tìm theo mã (J45) hoặc tên (hen phế quản)..."
-                            placeholderTextColor={EHR_ON_SURFACE_VARIANT}
+                            placeholderTextColor={palette.EHR_ON_SURFACE_VARIANT}
                             style={{
                                 flex: 1,
                                 paddingVertical: 12,
                                 paddingHorizontal: 10,
                                 fontSize: 15,
-                                color: EHR_ON_SURFACE,
+                                color: palette.EHR_ON_SURFACE,
                             }}
                         />
                     </XStack>
@@ -90,8 +82,8 @@ export default function Icd10Picker({ visible, onClose, onSelect, selectedCodes 
                                 style={{
                                     borderRadius: 16,
                                     borderWidth: 1,
-                                    borderColor: selected ? EHR_PRIMARY : EHR_OUTLINE_VARIANT,
-                                    backgroundColor: selected ? EHR_PRIMARY_FIXED : EHR_SURFACE_LOWEST,
+                                    borderColor: selected ? palette.EHR_PRIMARY : palette.EHR_OUTLINE_VARIANT,
+                                    backgroundColor: selected ? palette.EHR_PRIMARY_FIXED : palette.EHR_SURFACE_LOWEST,
                                     padding: 14,
                                     marginBottom: 10,
                                 }}
@@ -103,7 +95,7 @@ export default function Icd10Picker({ visible, onClose, onSelect, selectedCodes 
                                             paddingHorizontal: 10,
                                             paddingVertical: 4,
                                             borderRadius: 8,
-                                            backgroundColor: EHR_PRIMARY,
+                                            backgroundColor: palette.EHR_PRIMARY,
                                             marginRight: 12,
                                             alignItems: 'center',
                                         }}
@@ -120,7 +112,7 @@ export default function Icd10Picker({ visible, onClose, onSelect, selectedCodes 
                                             {item.chapter}
                                         </Text>
                                     </YStack>
-                                    {selected && <Check size={20} color={EHR_PRIMARY} />}
+                                    {selected && <Check size={20} color={palette.EHR_PRIMARY} />}
                                 </XStack>
                             </Pressable>
                         );

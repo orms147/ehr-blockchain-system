@@ -16,14 +16,7 @@
 import React from 'react';
 import { ActivityIndicator, Pressable, View } from 'react-native';
 import { Text } from 'tamagui';
-import {
-    EHR_PRIMARY,
-    EHR_PRIMARY_CONTAINER,
-    EHR_ON_SURFACE,
-    EHR_SURFACE,
-    EHR_OUTLINE_VARIANT,
-    EHR_DANGER,
-} from '../constants/uiColors';
+import { useEhrPalette } from '../constants/uiColors';
 
 export type ViButtonVariant = 'primary' | 'cinnabar' | 'ghost' | 'danger';
 export type ViButtonSize = 'sm' | 'md' | 'lg';
@@ -55,16 +48,17 @@ export default function ViButton({
     loading = false,
     leftIcon,
 }: ViButtonProps) {
+    const palette = useEhrPalette();
     const s = sizeMap[size];
 
     // Color schemes match .design-bundle/project/ui.jsx — primary is the
     // "ink/paper inverse" pattern (high-contrast neutral), cinnabar is the
     // hot accent reserved for legal-action moments.
     const styles = {
-        primary: { bg: EHR_ON_SURFACE, fg: EHR_SURFACE, border: 'transparent' },
-        cinnabar: { bg: EHR_PRIMARY, fg: '#FEFBF5', border: 'transparent' },
-        ghost: { bg: 'transparent', fg: EHR_ON_SURFACE, border: EHR_OUTLINE_VARIANT },
-        danger: { bg: 'transparent', fg: EHR_DANGER, border: EHR_OUTLINE_VARIANT },
+        primary: { bg: palette.EHR_ON_SURFACE, fg: palette.EHR_SURFACE, border: 'transparent' },
+        cinnabar: { bg: palette.EHR_PRIMARY, fg: '#FEFBF5', border: 'transparent' },
+        ghost: { bg: 'transparent', fg: palette.EHR_ON_SURFACE, border: palette.EHR_OUTLINE_VARIANT },
+        danger: { bg: 'transparent', fg: palette.EHR_DANGER, border: palette.EHR_OUTLINE_VARIANT },
     }[variant];
 
     const isDisabled = disabled || loading;

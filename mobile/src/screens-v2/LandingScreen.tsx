@@ -14,18 +14,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Text, YStack } from 'tamagui';
 
 import ViWordmark from '../components-v2/ViWordmark';
-import {
-    EHR_SURFACE,
-    EHR_SURFACE_LOWEST,
-    EHR_ON_SURFACE,
-    EHR_ON_SURFACE_VARIANT,
-    EHR_OUTLINE,
-    EHR_OUTLINE_VARIANT,
-} from '../constants/uiColors';
+import { useEhrPalette } from '../constants/uiColors';
 
 export default function LandingScreen({ navigation }: any) {
+    const palette = useEhrPalette();
     return (
-        <SafeAreaView style={{ flex: 1, backgroundColor: EHR_SURFACE }}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: palette.EHR_SURFACE }}>
             <View
                 style={{
                     flex: 1,
@@ -36,7 +30,7 @@ export default function LandingScreen({ navigation }: any) {
             >
                 {/* Wordmark + serif tagline take vertical center */}
                 <YStack style={{ flex: 1, justifyContent: 'center' }}>
-                    <ViWordmark size={56} color={EHR_ON_SURFACE} />
+                    <ViWordmark size={56} color={palette.EHR_ON_SURFACE} />
 
                     <Text
                         style={{
@@ -44,7 +38,7 @@ export default function LandingScreen({ navigation }: any) {
                             fontFamily: 'Fraunces_500Medium',
                             fontSize: 28,
                             lineHeight: 33,
-                            color: EHR_ON_SURFACE,
+                            color: palette.EHR_ON_SURFACE,
                             letterSpacing: -0.4,
                         }}
                     >
@@ -61,7 +55,7 @@ export default function LandingScreen({ navigation }: any) {
                             fontFamily: 'DMSans_400Regular',
                             fontSize: 14.5,
                             lineHeight: 24,
-                            color: EHR_ON_SURFACE_VARIANT,
+                            color: palette.EHR_ON_SURFACE_VARIANT,
                             maxWidth: 320,
                         }}
                     >
@@ -76,7 +70,7 @@ export default function LandingScreen({ navigation }: any) {
                         style={({ pressed }) => ({
                             paddingVertical: 16,
                             paddingHorizontal: 18,
-                            backgroundColor: EHR_ON_SURFACE,
+                            backgroundColor: palette.EHR_ON_SURFACE,
                             borderRadius: 12,
                             alignItems: 'center',
                             transform: [{ scale: pressed ? 0.985 : 1 }],
@@ -85,7 +79,7 @@ export default function LandingScreen({ navigation }: any) {
                     >
                         <Text
                             style={{
-                                color: EHR_SURFACE,
+                                color: palette.EHR_SURFACE,
                                 fontFamily: 'DMSans_600SemiBold',
                                 fontSize: 16,
                                 letterSpacing: 0.1,
@@ -100,8 +94,8 @@ export default function LandingScreen({ navigation }: any) {
                         style={({ pressed }) => ({
                             paddingVertical: 14,
                             paddingHorizontal: 18,
-                            backgroundColor: EHR_SURFACE_LOWEST,
-                            borderColor: EHR_OUTLINE_VARIANT,
+                            backgroundColor: palette.EHR_SURFACE_LOWEST,
+                            borderColor: palette.EHR_OUTLINE_VARIANT,
                             borderWidth: 0.75,
                             borderRadius: 12,
                             alignItems: 'center',
@@ -110,7 +104,7 @@ export default function LandingScreen({ navigation }: any) {
                     >
                         <Text
                             style={{
-                                color: EHR_ON_SURFACE,
+                                color: palette.EHR_ON_SURFACE,
                                 fontFamily: 'DMSans_500Medium',
                                 fontSize: 14,
                                 letterSpacing: 0.1,
@@ -124,7 +118,7 @@ export default function LandingScreen({ navigation }: any) {
                         style={{
                             fontFamily: 'DMSans_400Regular',
                             fontSize: 11.5,
-                            color: EHR_OUTLINE,
+                            color: palette.EHR_OUTLINE,
                             textAlign: 'center',
                             lineHeight: 18,
                             paddingHorizontal: 12,
@@ -132,11 +126,11 @@ export default function LandingScreen({ navigation }: any) {
                         }}
                     >
                         Bằng cách tiếp tục, bạn đồng ý với{' '}
-                        <Text style={{ color: EHR_ON_SURFACE_VARIANT, textDecorationLine: 'underline' }}>
+                        <Text style={{ color: palette.EHR_ON_SURFACE_VARIANT, textDecorationLine: 'underline' }}>
                             Điều khoản
                         </Text>{' '}
                         và{' '}
-                        <Text style={{ color: EHR_ON_SURFACE_VARIANT, textDecorationLine: 'underline' }}>
+                        <Text style={{ color: palette.EHR_ON_SURFACE_VARIANT, textDecorationLine: 'underline' }}>
                             Chính sách quyền riêng tư
                         </Text>
                         .

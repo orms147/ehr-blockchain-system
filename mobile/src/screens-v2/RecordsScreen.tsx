@@ -24,21 +24,20 @@ import LoadingSpinner from '../components/LoadingSpinner';
 import useRecords from '../hooks/useRecords';
 import ViCard from '../components-v2/ViCard';
 import ViButton from '../components-v2/ViButton';
-import {
-    EHR_SURFACE,
-    EHR_SURFACE_LOWEST,
-    EHR_SURFACE_HIGH,
-    EHR_ON_SURFACE,
-    EHR_ON_SURFACE_VARIANT,
-    EHR_OUTLINE,
-    EHR_OUTLINE_SOFT,
-    EHR_OUTLINE_VARIANT,
-    EHR_PRIMARY,
-    EHR_TERTIARY,
-    EHR_SECONDARY,
-    EHR_DANGER,
-    EHR_WARNING,
-} from '../constants/uiColors';
+import { useEhrPalette, DARK } from '../constants/uiColors';
+
+// Dead branch (G.6 isActivityView=false) — keep map referencing DARK constants
+// to compile. Will be ripped when activity view is fully removed.
+const ACTION_LABELS_FALLBACK: Record<string, { label: string; color: string }> = {
+    CREATE_RECORD: { label: 'Tạo hồ sơ', color: DARK.EHR_TERTIARY },
+    UPDATE_RECORD: { label: 'Cập nhật hồ sơ', color: DARK.EHR_SECONDARY },
+    SHARE_KEY: { label: 'Chia sẻ hồ sơ', color: DARK.EHR_PRIMARY },
+    REVOKE_CONSENT: { label: 'Thu hồi truy cập', color: DARK.EHR_DANGER },
+    DECRYPT: { label: 'Giải mã hồ sơ', color: DARK.EHR_TERTIARY },
+    READ: { label: 'Đọc hồ sơ', color: DARK.EHR_OUTLINE },
+    REQUEST_ACCESS: { label: 'Yêu cầu truy cập', color: DARK.EHR_WARNING },
+    APPROVE_REQUEST: { label: 'Phê duyệt yêu cầu', color: DARK.EHR_TERTIARY },
+};
 
 const SERIF = 'Fraunces_400Regular';
 const SANS = 'DMSans_400Regular';
@@ -79,16 +78,7 @@ const TIME_OPTIONS: { key: TimeFilter; label: string }[] = [
 
 const FILTER_STORAGE_KEY = 'records.filter';
 
-const ACTION_LABELS: Record<string, { label: string; color: string }> = {
-    CREATE_RECORD: { label: 'Tạo hồ sơ', color: EHR_TERTIARY },
-    UPDATE_RECORD: { label: 'Cập nhật hồ sơ', color: EHR_SECONDARY },
-    SHARE_KEY: { label: 'Chia sẻ hồ sơ', color: EHR_PRIMARY },
-    REVOKE_CONSENT: { label: 'Thu hồi truy cập', color: EHR_DANGER },
-    DECRYPT: { label: 'Giải mã hồ sơ', color: EHR_TERTIARY },
-    READ: { label: 'Đọc hồ sơ', color: EHR_OUTLINE },
-    REQUEST_ACCESS: { label: 'Yêu cầu truy cập', color: EHR_WARNING },
-    APPROVE_REQUEST: { label: 'Phê duyệt yêu cầu', color: EHR_TERTIARY },
-};
+const ACTION_LABELS = ACTION_LABELS_FALLBACK;
 
 const formatActivityDate = (s?: string) => {
     if (!s) return '';
@@ -106,6 +96,7 @@ const formatActivityDate = (s?: string) => {
 };
 
 export default function RecordsScreen({ navigation }: any) {
+    const palette = useEhrPalette();
     const { records, isLoading, isRefreshing, error, refresh } = useRecords();
 
     // Primary axis: record.type
@@ -239,7 +230,7 @@ export default function RecordsScreen({ navigation }: any) {
     const dataList = isActivityView ? (activityLogs || []) : filteredRecords;
 
     return (
-        <SafeAreaView style={{ flex: 1, backgroundColor: EHR_SURFACE }} edges={['right', 'left']}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: palette.EHR_SURFACE }} edges={['right', 'left']}>
             <FlashList
                 data={dataList}
                 keyExtractor={(item: any, idx) =>
@@ -248,7 +239,7 @@ export default function RecordsScreen({ navigation }: any) {
                 renderItem={({ item }) => {
                     if (isActivityView) {
                         const meta =
-                            ACTION_LABELS[item.action] || { label: item.action || 'Hoạt động', color: EHR_OUTLINE };
+                            ACTION_LABELS[item.action] || { label: item.action || 'Hoạt động', color: palette.EHR_OUTLINE };
                         return (
                             <ViCard padding={14} style={{ marginBottom: 10 }}>
                                 <View
@@ -284,7 +275,7 @@ export default function RecordsScreen({ navigation }: any) {
                                         style={{
                                             fontFamily: SANS,
                                             fontSize: 11,
-                                            color: EHR_OUTLINE,
+                                            color: palette.EHR_OUTLINE,
                                         }}
                                     >
                                         {formatActivityDate(item.createdAt)}
@@ -295,7 +286,7 @@ export default function RecordsScreen({ navigation }: any) {
                                         style={{
                                             fontFamily: 'monospace',
                                             fontSize: 11,
-                                            color: EHR_OUTLINE,
+                                            color: palette.EHR_OUTLINE,
                                         }}
                                         numberOfLines={1}
                                     >
@@ -308,7 +299,7 @@ export default function RecordsScreen({ navigation }: any) {
                                             marginTop: 2,
                                             fontFamily: SANS,
                                             fontSize: 11,
-                                            color: EHR_DANGER,
+                                            color: palette.EHR_DANGER,
                                         }}
                                     >
                                         Truy cập bị từ chối
@@ -324,7 +315,7 @@ export default function RecordsScreen({ navigation }: any) {
                     <RefreshControl
                         refreshing={isRefreshing}
                         onRefresh={refresh}
-                        tintColor={EHR_ON_SURFACE_VARIANT}
+                        tintColor={palette.EHR_ON_SURFACE_VARIANT}
                     />
                 }
                 ListHeaderComponent={
@@ -336,16 +327,16 @@ export default function RecordsScreen({ navigation }: any) {
                                     paddingVertical: 10,
                                     paddingHorizontal: 14,
                                     borderRadius: 12,
-                                    backgroundColor: `${EHR_DANGER}1A`,
+                                    backgroundColor: `${palette.EHR_DANGER}1A`,
                                     borderWidth: 0.5,
-                                    borderColor: EHR_DANGER,
+                                    borderColor: palette.EHR_DANGER,
                                 }}
                             >
                                 <Text
                                     style={{
                                         fontFamily: SANS,
                                         fontSize: 12.5,
-                                        color: EHR_DANGER,
+                                        color: palette.EHR_DANGER,
                                         textAlign: 'center',
                                     }}
                                 >
@@ -359,7 +350,7 @@ export default function RecordsScreen({ navigation }: any) {
                             style={{
                                 fontFamily: SERIF,
                                 fontSize: 28,
-                                color: EHR_ON_SURFACE,
+                                color: palette.EHR_ON_SURFACE,
                                 letterSpacing: -0.5,
                                 lineHeight: 32,
                             }}
@@ -371,7 +362,7 @@ export default function RecordsScreen({ navigation }: any) {
                                 marginTop: 4,
                                 fontFamily: SANS,
                                 fontSize: 13,
-                                color: EHR_ON_SURFACE_VARIANT,
+                                color: palette.EHR_ON_SURFACE_VARIANT,
                             }}
                         >
                             {records.length} hồ sơ
@@ -397,8 +388,8 @@ export default function RecordsScreen({ navigation }: any) {
                                                 paddingVertical: 7,
                                                 borderRadius: 999,
                                                 borderWidth: 0.5,
-                                                borderColor: active ? EHR_ON_SURFACE : EHR_OUTLINE_SOFT,
-                                                backgroundColor: active ? EHR_ON_SURFACE : 'transparent',
+                                                borderColor: active ? palette.EHR_ON_SURFACE : palette.EHR_OUTLINE_SOFT,
+                                                backgroundColor: active ? palette.EHR_ON_SURFACE : 'transparent',
                                                 opacity: pressed ? 0.7 : 1,
                                             })}
                                         >
@@ -406,7 +397,7 @@ export default function RecordsScreen({ navigation }: any) {
                                                 style={{
                                                     fontFamily: SANS_MEDIUM,
                                                     fontSize: 12,
-                                                    color: active ? EHR_SURFACE : EHR_ON_SURFACE_VARIANT,
+                                                    color: active ? palette.EHR_SURFACE : palette.EHR_ON_SURFACE_VARIANT,
                                                     fontWeight: '600',
                                                 }}
                                             >
@@ -423,8 +414,8 @@ export default function RecordsScreen({ navigation }: any) {
                                     height: 36,
                                     borderRadius: 999,
                                     borderWidth: 0.5,
-                                    borderColor: advancedActiveCount > 0 ? EHR_PRIMARY : EHR_OUTLINE_SOFT,
-                                    backgroundColor: advancedActiveCount > 0 ? `${EHR_PRIMARY}1A` : 'transparent',
+                                    borderColor: advancedActiveCount > 0 ? palette.EHR_PRIMARY : palette.EHR_OUTLINE_SOFT,
+                                    backgroundColor: advancedActiveCount > 0 ? `${palette.EHR_PRIMARY}1A` : 'transparent',
                                     alignItems: 'center',
                                     justifyContent: 'center',
                                     opacity: pressed ? 0.7 : 1,
@@ -434,7 +425,7 @@ export default function RecordsScreen({ navigation }: any) {
                             >
                                 <SlidersHorizontal
                                     size={16}
-                                    color={advancedActiveCount > 0 ? EHR_PRIMARY : EHR_ON_SURFACE_VARIANT}
+                                    color={advancedActiveCount > 0 ? palette.EHR_PRIMARY : palette.EHR_ON_SURFACE_VARIANT}
                                 />
                                 {advancedActiveCount > 0 ? (
                                     <View
@@ -445,7 +436,7 @@ export default function RecordsScreen({ navigation }: any) {
                                             width: 6,
                                             height: 6,
                                             borderRadius: 3,
-                                            backgroundColor: EHR_PRIMARY,
+                                            backgroundColor: palette.EHR_PRIMARY,
                                         }}
                                     />
                                 ) : null}
@@ -461,8 +452,8 @@ export default function RecordsScreen({ navigation }: any) {
                                 paddingHorizontal: 14,
                                 borderRadius: 12,
                                 borderWidth: 0.75,
-                                borderColor: EHR_OUTLINE_SOFT,
-                                backgroundColor: EHR_SURFACE_LOWEST,
+                                borderColor: palette.EHR_OUTLINE_SOFT,
+                                backgroundColor: palette.EHR_SURFACE_LOWEST,
                                 flexDirection: 'row',
                                 alignItems: 'center',
                                 justifyContent: 'space-between',
@@ -474,7 +465,7 @@ export default function RecordsScreen({ navigation }: any) {
                                 style={{
                                     fontFamily: SANS_SEMI,
                                     fontSize: 13.5,
-                                    color: EHR_ON_SURFACE,
+                                    color: palette.EHR_ON_SURFACE,
                                     fontWeight: '600',
                                 }}
                             >
@@ -484,7 +475,7 @@ export default function RecordsScreen({ navigation }: any) {
                                 style={{
                                     fontFamily: SANS,
                                     fontSize: 11.5,
-                                    color: EHR_OUTLINE,
+                                    color: palette.EHR_OUTLINE,
                                 }}
                             >
                                 Mã hoá + IPFS + on-chain
@@ -498,7 +489,7 @@ export default function RecordsScreen({ navigation }: any) {
                             style={{
                                 fontFamily: SERIF,
                                 fontSize: 18,
-                                color: EHR_ON_SURFACE,
+                                color: palette.EHR_ON_SURFACE,
                                 textAlign: 'center',
                             }}
                         >
@@ -509,7 +500,7 @@ export default function RecordsScreen({ navigation }: any) {
                                 marginTop: 8,
                                 fontFamily: SANS,
                                 fontSize: 13,
-                                color: EHR_OUTLINE,
+                                color: palette.EHR_OUTLINE,
                                 textAlign: 'center',
                                 lineHeight: 19,
                                 maxWidth: 280,
@@ -538,7 +529,7 @@ export default function RecordsScreen({ navigation }: any) {
                     <Pressable
                         onPress={(e) => e.stopPropagation()}
                         style={{
-                            backgroundColor: EHR_SURFACE_HIGH,
+                            backgroundColor: palette.EHR_SURFACE_HIGH,
                             borderTopLeftRadius: 20,
                             borderTopRightRadius: 20,
                             paddingBottom: 28,
@@ -547,7 +538,7 @@ export default function RecordsScreen({ navigation }: any) {
                     >
                         {/* drag handle */}
                         <View style={{ alignItems: 'center', paddingTop: 10, paddingBottom: 4 }}>
-                            <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: EHR_OUTLINE }} />
+                            <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: palette.EHR_OUTLINE }} />
                         </View>
 
                         {/* header */}
@@ -556,14 +547,14 @@ export default function RecordsScreen({ navigation }: any) {
                                 style={{
                                     fontFamily: SERIF,
                                     fontSize: 20,
-                                    color: EHR_ON_SURFACE,
+                                    color: palette.EHR_ON_SURFACE,
                                     letterSpacing: -0.3,
                                 }}
                             >
                                 Bộ lọc
                             </Text>
                             <Pressable onPress={resetDraft} hitSlop={8}>
-                                <Text style={{ fontFamily: SANS_SEMI, fontSize: 12, color: EHR_ON_SURFACE_VARIANT, fontWeight: '600' }}>
+                                <Text style={{ fontFamily: SANS_SEMI, fontSize: 12, color: palette.EHR_ON_SURFACE_VARIANT, fontWeight: '600' }}>
                                     Đặt lại
                                 </Text>
                             </Pressable>
@@ -576,7 +567,7 @@ export default function RecordsScreen({ navigation }: any) {
                                     style={{
                                         fontFamily: SANS_SEMI,
                                         fontSize: 10,
-                                        color: EHR_OUTLINE,
+                                        color: palette.EHR_OUTLINE,
                                         letterSpacing: 1.2,
                                         textTransform: 'uppercase',
                                         fontWeight: '700',
@@ -597,8 +588,8 @@ export default function RecordsScreen({ navigation }: any) {
                                                     paddingVertical: 7,
                                                     borderRadius: 999,
                                                     borderWidth: 0.5,
-                                                    borderColor: active ? EHR_ON_SURFACE : EHR_OUTLINE_VARIANT,
-                                                    backgroundColor: active ? EHR_ON_SURFACE : 'transparent',
+                                                    borderColor: active ? palette.EHR_ON_SURFACE : palette.EHR_OUTLINE_VARIANT,
+                                                    backgroundColor: active ? palette.EHR_ON_SURFACE : 'transparent',
                                                     opacity: pressed ? 0.7 : 1,
                                                 })}
                                             >
@@ -606,7 +597,7 @@ export default function RecordsScreen({ navigation }: any) {
                                                     style={{
                                                         fontFamily: SANS_MEDIUM,
                                                         fontSize: 12,
-                                                        color: active ? EHR_SURFACE : EHR_ON_SURFACE_VARIANT,
+                                                        color: active ? palette.EHR_SURFACE : palette.EHR_ON_SURFACE_VARIANT,
                                                         fontWeight: '600',
                                                     }}
                                                 >
@@ -624,7 +615,7 @@ export default function RecordsScreen({ navigation }: any) {
                                     style={{
                                         fontFamily: SANS_SEMI,
                                         fontSize: 10,
-                                        color: EHR_OUTLINE,
+                                        color: palette.EHR_OUTLINE,
                                         letterSpacing: 1.2,
                                         textTransform: 'uppercase',
                                         fontWeight: '700',
@@ -645,8 +636,8 @@ export default function RecordsScreen({ navigation }: any) {
                                                     paddingVertical: 7,
                                                     borderRadius: 999,
                                                     borderWidth: 0.5,
-                                                    borderColor: active ? EHR_ON_SURFACE : EHR_OUTLINE_VARIANT,
-                                                    backgroundColor: active ? EHR_ON_SURFACE : 'transparent',
+                                                    borderColor: active ? palette.EHR_ON_SURFACE : palette.EHR_OUTLINE_VARIANT,
+                                                    backgroundColor: active ? palette.EHR_ON_SURFACE : 'transparent',
                                                     opacity: pressed ? 0.7 : 1,
                                                 })}
                                             >
@@ -654,7 +645,7 @@ export default function RecordsScreen({ navigation }: any) {
                                                     style={{
                                                         fontFamily: SANS_MEDIUM,
                                                         fontSize: 12,
-                                                        color: active ? EHR_SURFACE : EHR_ON_SURFACE_VARIANT,
+                                                        color: active ? palette.EHR_SURFACE : palette.EHR_ON_SURFACE_VARIANT,
                                                         fontWeight: '600',
                                                     }}
                                                 >
@@ -668,7 +659,7 @@ export default function RecordsScreen({ navigation }: any) {
                         </ScrollView>
 
                         {/* Footer */}
-                        <XStack style={{ gap: 10, paddingHorizontal: 22, paddingTop: 12, borderTopWidth: 0.5, borderTopColor: EHR_OUTLINE_VARIANT }}>
+                        <XStack style={{ gap: 10, paddingHorizontal: 22, paddingTop: 12, borderTopWidth: 0.5, borderTopColor: palette.EHR_OUTLINE_VARIANT }}>
                             <View style={{ flex: 1 }}>
                                 <ViButton variant="ghost" full onPress={() => setFilterSheetOpen(false)}>
                                     Đóng

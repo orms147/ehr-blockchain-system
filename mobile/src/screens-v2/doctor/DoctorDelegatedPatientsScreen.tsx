@@ -60,20 +60,7 @@ import {
 import ViCard from '../../components-v2/ViCard';
 import ViButton from '../../components-v2/ViButton';
 import { ViStatusChip } from '../../components-v2/ViChips';
-import {
-    EHR_SURFACE,
-    EHR_SURFACE_LOWEST,
-    EHR_ON_SURFACE,
-    EHR_ON_SURFACE_VARIANT,
-    EHR_OUTLINE,
-    EHR_OUTLINE_SOFT,
-    EHR_OUTLINE_VARIANT,
-    EHR_PRIMARY,
-    EHR_PRIMARY_FIXED,
-    EHR_TERTIARY,
-    EHR_SECONDARY,
-    EHR_WARNING,
-} from '../../constants/uiColors';
+import { useEhrPalette } from '../../constants/uiColors';
 import { formatDate as formatDateShared, formatExpiry } from '../../utils/dateFormatting';
 
 const SERIF = 'Fraunces_400Regular';
@@ -113,6 +100,7 @@ function ShareRecordModal({
     onClose: () => void;
     onDone: () => void;
 }) {
+    const palette = useEhrPalette();
     const [newGrantee, setNewGrantee] = useState('');
     const [days, setDays] = useState('30');
     const [submitting, setSubmitting] = useState(false);
@@ -270,7 +258,7 @@ function ShareRecordModal({
             >
                 <View
                     style={{
-                        backgroundColor: EHR_SURFACE_LOWEST,
+                        backgroundColor: palette.EHR_SURFACE_LOWEST,
                         borderTopLeftRadius: 22,
                         borderTopRightRadius: 22,
                         padding: 22,
@@ -283,7 +271,7 @@ function ShareRecordModal({
                             style={{
                                 fontFamily: SERIF,
                                 fontSize: 20,
-                                color: EHR_ON_SURFACE,
+                                color: palette.EHR_ON_SURFACE,
                                 letterSpacing: -0.3,
                             }}
                         >
@@ -296,7 +284,7 @@ function ShareRecordModal({
                             }}
                             hitSlop={8}
                         >
-                            <X size={18} color={EHR_OUTLINE} />
+                            <X size={18} color={palette.EHR_OUTLINE} />
                         </Pressable>
                     </XStack>
 
@@ -306,18 +294,18 @@ function ShareRecordModal({
                                 style={{
                                     paddingVertical: 12,
                                     paddingHorizontal: 14,
-                                    backgroundColor: EHR_PRIMARY_FIXED,
+                                    backgroundColor: palette.EHR_PRIMARY_FIXED,
                                     borderRadius: 12,
                                     marginBottom: 16,
                                 }}
                             >
                                 <XStack style={{ alignItems: 'center', gap: 8 }}>
-                                    <FileText size={14} color={EHR_PRIMARY} />
+                                    <FileText size={14} color={palette.EHR_PRIMARY} />
                                     <Text
                                         style={{
                                             fontFamily: SANS_SEMI,
                                             fontSize: 13.5,
-                                            color: EHR_PRIMARY,
+                                            color: palette.EHR_PRIMARY,
                                             fontWeight: '700',
                                             flex: 1,
                                         }}
@@ -326,10 +314,10 @@ function ShareRecordModal({
                                         {record.title || 'Hồ sơ y tế'}
                                     </Text>
                                 </XStack>
-                                <Text style={{ marginTop: 4, fontFamily: SANS, fontSize: 11.5, color: EHR_PRIMARY }}>
+                                <Text style={{ marginTop: 4, fontFamily: SANS, fontSize: 11.5, color: palette.EHR_PRIMARY }}>
                                     {record.recordType || 'medical_record'}
                                 </Text>
-                                <Text style={{ marginTop: 2, fontFamily: 'monospace', fontSize: 10.5, color: EHR_PRIMARY }}>
+                                <Text style={{ marginTop: 2, fontFamily: 'monospace', fontSize: 10.5, color: palette.EHR_PRIMARY }}>
                                     cidHash: {record.cidHash.slice(0, 16)}…
                                 </Text>
                             </View>
@@ -337,9 +325,9 @@ function ShareRecordModal({
 
                         <FieldLabel>Địa chỉ ví bác sĩ nhận</FieldLabel>
                         <TextInput
-                            style={inputStyle}
+                            style={makeInputStyle(palette)}
                             placeholder="0x..."
-                            placeholderTextColor={EHR_OUTLINE}
+                            placeholderTextColor={palette.EHR_OUTLINE}
                             value={newGrantee}
                             onChangeText={setNewGrantee}
                             autoCapitalize="none"
@@ -349,14 +337,14 @@ function ShareRecordModal({
                         <View style={{ height: 14 }} />
                         <FieldLabel>Thời hạn (ngày)</FieldLabel>
                         <TextInput
-                            style={inputStyle}
+                            style={makeInputStyle(palette)}
                             placeholder="30"
-                            placeholderTextColor={EHR_OUTLINE}
+                            placeholderTextColor={palette.EHR_OUTLINE}
                             value={days}
                             onChangeText={setDays}
                             keyboardType="number-pad"
                         />
-                        <Text style={{ fontFamily: SANS, fontSize: 11, color: EHR_OUTLINE, marginTop: 4 }}>
+                        <Text style={{ fontFamily: SANS, fontSize: 11, color: palette.EHR_OUTLINE, marginTop: 4 }}>
                             Sẽ bị cắt về thời hạn uỷ quyền gốc nếu lớn hơn.
                         </Text>
 
@@ -364,21 +352,21 @@ function ShareRecordModal({
                             style={{
                                 marginTop: 14,
                                 padding: 12,
-                                backgroundColor: `${EHR_WARNING}1A`,
+                                backgroundColor: `${palette.EHR_WARNING}1A`,
                                 borderRadius: 10,
                                 borderWidth: 0.5,
-                                borderColor: `${EHR_WARNING}50`,
+                                borderColor: `${palette.EHR_WARNING}50`,
                                 flexDirection: 'row',
                                 gap: 6,
                             }}
                         >
-                            <Info size={13} color={EHR_WARNING} style={{ marginTop: 1 }} />
+                            <Info size={13} color={palette.EHR_WARNING} style={{ marginTop: 1 }} />
                             <Text
                                 style={{
                                     flex: 1,
                                     fontFamily: SANS,
                                     fontSize: 11.5,
-                                    color: EHR_ON_SURFACE,
+                                    color: palette.EHR_ON_SURFACE,
                                     lineHeight: 16,
                                 }}
                             >
@@ -411,6 +399,7 @@ function SubDelegateModal({
     parentExpiresAt: string;
     onClose: () => void;
 }) {
+    const palette = useEhrPalette();
     const subDelegateMutation = useSubDelegate();
     const [subDelegatee, setSubDelegatee] = useState('');
     const [days, setDays] = useState('30');
@@ -481,7 +470,7 @@ function SubDelegateModal({
             >
                 <View
                     style={{
-                        backgroundColor: EHR_SURFACE_LOWEST,
+                        backgroundColor: palette.EHR_SURFACE_LOWEST,
                         borderTopLeftRadius: 22,
                         borderTopRightRadius: 22,
                         padding: 22,
@@ -494,7 +483,7 @@ function SubDelegateModal({
                             style={{
                                 fontFamily: SERIF,
                                 fontSize: 20,
-                                color: EHR_ON_SURFACE,
+                                color: palette.EHR_ON_SURFACE,
                                 letterSpacing: -0.3,
                             }}
                         >
@@ -507,16 +496,16 @@ function SubDelegateModal({
                             }}
                             hitSlop={8}
                         >
-                            <X size={18} color={EHR_OUTLINE} />
+                            <X size={18} color={palette.EHR_OUTLINE} />
                         </Pressable>
                     </XStack>
 
                     <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
                         <FieldLabel>Địa chỉ ví bác sĩ nhận</FieldLabel>
                         <TextInput
-                            style={inputStyle}
+                            style={makeInputStyle(palette)}
                             placeholder="0x..."
-                            placeholderTextColor={EHR_OUTLINE}
+                            placeholderTextColor={palette.EHR_OUTLINE}
                             value={subDelegatee}
                             onChangeText={setSubDelegatee}
                             autoCapitalize="none"
@@ -533,15 +522,15 @@ function SubDelegateModal({
                                         paddingVertical: 6,
                                         borderRadius: 999,
                                         borderWidth: 0.5,
-                                        borderColor: useFullRemaining ? EHR_PRIMARY : EHR_OUTLINE_SOFT,
-                                        backgroundColor: useFullRemaining ? EHR_PRIMARY_FIXED : EHR_SURFACE,
+                                        borderColor: useFullRemaining ? palette.EHR_PRIMARY : palette.EHR_OUTLINE_SOFT,
+                                        backgroundColor: useFullRemaining ? palette.EHR_PRIMARY_FIXED : palette.EHR_SURFACE,
                                     }}
                                 >
                                     <Text
                                         style={{
                                             fontFamily: SANS_MEDIUM,
                                             fontSize: 12,
-                                            color: useFullRemaining ? EHR_PRIMARY : EHR_OUTLINE,
+                                            color: useFullRemaining ? palette.EHR_PRIMARY : palette.EHR_OUTLINE,
                                             fontWeight: useFullRemaining ? '700' : '500',
                                         }}
                                     >
@@ -565,15 +554,15 @@ function SubDelegateModal({
                                                 paddingVertical: 6,
                                                 borderRadius: 999,
                                                 borderWidth: 0.5,
-                                                borderColor: active ? EHR_PRIMARY : EHR_OUTLINE_SOFT,
-                                                backgroundColor: active ? EHR_PRIMARY_FIXED : EHR_SURFACE,
+                                                borderColor: active ? palette.EHR_PRIMARY : palette.EHR_OUTLINE_SOFT,
+                                                backgroundColor: active ? palette.EHR_PRIMARY_FIXED : palette.EHR_SURFACE,
                                             }}
                                         >
                                             <Text
                                                 style={{
                                                     fontFamily: SANS_MEDIUM,
                                                     fontSize: 12,
-                                                    color: active ? EHR_PRIMARY : EHR_OUTLINE,
+                                                    color: active ? palette.EHR_PRIMARY : palette.EHR_OUTLINE,
                                                     fontWeight: active ? '700' : '500',
                                                 }}
                                             >
@@ -587,16 +576,16 @@ function SubDelegateModal({
 
                         {!useFullRemaining ? (
                             <TextInput
-                                style={inputStyle}
+                                style={makeInputStyle(palette)}
                                 placeholder="Nhập số ngày"
-                                placeholderTextColor={EHR_OUTLINE}
+                                placeholderTextColor={palette.EHR_OUTLINE}
                                 value={days}
                                 onChangeText={(t) => setDays(t.replace(/[^0-9]/g, ''))}
                                 keyboardType="number-pad"
                             />
                         ) : null}
 
-                        <Text style={{ fontFamily: SANS, fontSize: 11, color: EHR_OUTLINE, marginTop: 6, lineHeight: 16 }}>
+                        <Text style={{ fontFamily: SANS, fontSize: 11, color: palette.EHR_OUTLINE, marginTop: 6, lineHeight: 16 }}>
                             Contract tự động cắt về thời hạn uỷ quyền gốc nếu lớn hơn.
                             {remainingTooShort ? '\n⚠️ Thời hạn còn lại dưới 1 giờ — bác sĩ nhận có thể không kịp sử dụng.' : ''}
                         </Text>
@@ -606,9 +595,9 @@ function SubDelegateModal({
                                 marginTop: 14,
                                 paddingVertical: 12,
                                 paddingHorizontal: 14,
-                                backgroundColor: EHR_SURFACE,
+                                backgroundColor: palette.EHR_SURFACE,
                                 borderWidth: 0.5,
-                                borderColor: EHR_OUTLINE_SOFT,
+                                borderColor: palette.EHR_OUTLINE_SOFT,
                                 borderRadius: 12,
                                 alignItems: 'center',
                             }}
@@ -618,7 +607,7 @@ function SubDelegateModal({
                                     style={{
                                         fontFamily: SANS_SEMI,
                                         fontSize: 13.5,
-                                        color: EHR_ON_SURFACE,
+                                        color: palette.EHR_ON_SURFACE,
                                         fontWeight: '600',
                                     }}
                                 >
@@ -629,7 +618,7 @@ function SubDelegateModal({
                                         marginTop: 2,
                                         fontFamily: SANS,
                                         fontSize: 11.5,
-                                        color: EHR_OUTLINE,
+                                        color: palette.EHR_OUTLINE,
                                         lineHeight: 16,
                                     }}
                                 >
@@ -639,7 +628,7 @@ function SubDelegateModal({
                             <Switch
                                 value={allowFurther}
                                 onValueChange={setAllowFurther}
-                                trackColor={{ false: EHR_OUTLINE_VARIANT, true: EHR_PRIMARY }}
+                                trackColor={{ false: palette.EHR_OUTLINE_VARIANT, true: palette.EHR_PRIMARY }}
                                 thumbColor="#FAF7F1"
                             />
                         </XStack>
@@ -670,6 +659,7 @@ function PatientRecordsDrawer({
     patient: DelegationRow | null;
     onClose: () => void;
 }) {
+    const palette = useEhrPalette();
     const queryClient = useQueryClient();
     const [shareTarget, setShareTarget] = useState<PatientRecord | null>(null);
     const [subOpen, setSubOpen] = useState(false);
@@ -690,13 +680,13 @@ function PatientRecordsDrawer({
         <Pressable onPress={() => setShareTarget(item)}>
             <ViCard padding={14} style={{ marginBottom: 10 }}>
                 <XStack style={{ alignItems: 'center', gap: 10 }}>
-                    <FileText size={18} color={EHR_PRIMARY} />
+                    <FileText size={18} color={palette.EHR_PRIMARY} />
                     <YStack style={{ flex: 1 }}>
                         <Text
                             style={{
                                 fontFamily: SANS_MEDIUM,
                                 fontSize: 14,
-                                color: EHR_ON_SURFACE,
+                                color: palette.EHR_ON_SURFACE,
                                 fontWeight: '600',
                             }}
                             numberOfLines={1}
@@ -708,13 +698,13 @@ function PatientRecordsDrawer({
                                 marginTop: 2,
                                 fontFamily: SANS,
                                 fontSize: 11.5,
-                                color: EHR_OUTLINE,
+                                color: palette.EHR_OUTLINE,
                             }}
                         >
                             {item.recordType || 'medical_record'} · {formatDate(item.createdAt)}
                         </Text>
                     </YStack>
-                    <Send size={14} color={EHR_OUTLINE} />
+                    <Send size={14} color={palette.EHR_OUTLINE} />
                 </XStack>
             </ViCard>
         </Pressable>
@@ -722,14 +712,14 @@ function PatientRecordsDrawer({
 
     return (
         <Modal visible={enabled} animationType="slide" onRequestClose={onClose}>
-            <SafeAreaView style={{ flex: 1, backgroundColor: EHR_SURFACE }} edges={['top']}>
+            <SafeAreaView style={{ flex: 1, backgroundColor: palette.EHR_SURFACE }} edges={['top']}>
                 <XStack
                     style={{
                         padding: 16,
                         alignItems: 'center',
                         justifyContent: 'space-between',
                         borderBottomWidth: 0.5,
-                        borderColor: EHR_OUTLINE_SOFT,
+                        borderColor: palette.EHR_OUTLINE_SOFT,
                     }}
                 >
                     <View style={{ flex: 1 }}>
@@ -741,7 +731,7 @@ function PatientRecordsDrawer({
                                 marginTop: 6,
                                 fontFamily: SANS,
                                 fontSize: 11.5,
-                                color: EHR_OUTLINE,
+                                color: palette.EHR_OUTLINE,
                             }}
                         >
                             Hết hạn: {patient ? formatExpiry(patient.expiresAt) : ''}
@@ -749,7 +739,7 @@ function PatientRecordsDrawer({
                         </Text>
                     </View>
                     <Pressable onPress={onClose} hitSlop={8}>
-                        <X size={20} color={EHR_OUTLINE} />
+                        <X size={20} color={palette.EHR_OUTLINE} />
                     </Pressable>
                 </XStack>
 
@@ -759,7 +749,7 @@ function PatientRecordsDrawer({
                             variant="primary"
                             full
                             onPress={() => setSubOpen(true)}
-                            leftIcon={<Users size={14} color={EHR_SURFACE} />}
+                            leftIcon={<Users size={14} color={palette.EHR_SURFACE} />}
                         >
                             Uỷ quyền tiếp cho bác sĩ khác
                         </ViButton>
@@ -778,18 +768,18 @@ function PatientRecordsDrawer({
                             <RefreshControl
                                 refreshing={isFetching && !isLoading}
                                 onRefresh={() => refetch()}
-                                tintColor={EHR_ON_SURFACE_VARIANT}
+                                tintColor={palette.EHR_ON_SURFACE_VARIANT}
                             />
                         }
                         ListEmptyComponent={
                             <View style={{ paddingTop: 30, alignItems: 'center' }}>
-                                <FileText size={28} color={EHR_OUTLINE} />
+                                <FileText size={28} color={palette.EHR_OUTLINE} />
                                 <Text
                                     style={{
                                         marginTop: 12,
                                         fontFamily: SERIF,
                                         fontSize: 18,
-                                        color: EHR_ON_SURFACE,
+                                        color: palette.EHR_ON_SURFACE,
                                         textAlign: 'center',
                                     }}
                                 >
@@ -800,7 +790,7 @@ function PatientRecordsDrawer({
                                         marginTop: 8,
                                         fontFamily: SANS,
                                         fontSize: 13,
-                                        color: EHR_OUTLINE,
+                                        color: palette.EHR_OUTLINE,
                                         textAlign: 'center',
                                         maxWidth: 280,
                                     }}
@@ -840,6 +830,7 @@ function PatientRecordsDrawer({
 //  Main screen
 // ───────────────────────────────────────────────────────────────────
 export default function DoctorDelegatedPatientsScreen() {
+    const palette = useEhrPalette();
     const { data: delegations = [], isLoading, isFetching, refetch } = useDelegatedToMe();
     const [selected, setSelected] = useState<DelegationRow | null>(null);
 
@@ -859,7 +850,7 @@ export default function DoctorDelegatedPatientsScreen() {
                             paddingHorizontal: 8,
                             paddingVertical: 3,
                             borderRadius: 6,
-                            backgroundColor: item.chainDepth === 1 ? `${EHR_TERTIARY}26` : `${EHR_SECONDARY}26`,
+                            backgroundColor: item.chainDepth === 1 ? `${palette.EHR_TERTIARY}26` : `${palette.EHR_SECONDARY}26`,
                             marginBottom: 8,
                         }}
                     >
@@ -867,7 +858,7 @@ export default function DoctorDelegatedPatientsScreen() {
                             style={{
                                 fontFamily: SANS_SEMI,
                                 fontSize: 10.5,
-                                color: item.chainDepth === 1 ? EHR_TERTIARY : EHR_SECONDARY,
+                                color: item.chainDepth === 1 ? palette.EHR_TERTIARY : palette.EHR_SECONDARY,
                                 fontWeight: '700',
                                 letterSpacing: 0.3,
                                 textTransform: 'uppercase',
@@ -883,18 +874,18 @@ export default function DoctorDelegatedPatientsScreen() {
                             <UserChip address={item.patientAddress} expanded showAddress={false} />
                             {item.parentDelegator ? (
                                 <View style={{ marginTop: 8 }}>
-                                    <Text style={{ fontFamily: SANS, fontSize: 11, color: EHR_OUTLINE, marginBottom: 3 }}>
+                                    <Text style={{ fontFamily: SANS, fontSize: 11, color: palette.EHR_OUTLINE, marginBottom: 3 }}>
                                         Qua bác sĩ:
                                     </Text>
                                     <UserChip address={item.parentDelegator} showAddress={false} size="sm" interactive={false} />
                                 </View>
                             ) : null}
-                            <Text style={{ fontFamily: SANS, fontSize: 11, color: EHR_OUTLINE, marginTop: 3 }}>
+                            <Text style={{ fontFamily: SANS, fontSize: 11, color: palette.EHR_OUTLINE, marginTop: 3 }}>
                                 Hết hạn: {formatExpiry(item.expiresAt)}
                             </Text>
                             {item.scopeNote ? (
                                 <Text
-                                    style={{ fontFamily: SANS, fontSize: 11, color: EHR_OUTLINE, marginTop: 3 }}
+                                    style={{ fontFamily: SANS, fontSize: 11, color: palette.EHR_OUTLINE, marginTop: 3 }}
                                     numberOfLines={2}
                                 >
                                     Phạm vi: {item.scopeNote}
@@ -909,13 +900,13 @@ export default function DoctorDelegatedPatientsScreen() {
                                 style={{
                                     fontFamily: SANS_SEMI,
                                     fontSize: 12,
-                                    color: EHR_PRIMARY,
+                                    color: palette.EHR_PRIMARY,
                                     fontWeight: '600',
                                 }}
                             >
                                 Xem hồ sơ
                             </Text>
-                            <ChevronRight size={14} color={EHR_PRIMARY} />
+                            <ChevronRight size={14} color={palette.EHR_PRIMARY} />
                         </XStack>
                     ) : null}
                 </ViCard>
@@ -928,13 +919,13 @@ export default function DoctorDelegatedPatientsScreen() {
     }
 
     return (
-        <SafeAreaView style={{ flex: 1, backgroundColor: EHR_SURFACE }} edges={['top']}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: palette.EHR_SURFACE }} edges={['top']}>
             <View style={{ paddingHorizontal: 20, paddingTop: 14, paddingBottom: 12 }}>
                 <Text
                     style={{
                         fontFamily: SERIF,
                         fontSize: 26,
-                        color: EHR_ON_SURFACE,
+                        color: palette.EHR_ON_SURFACE,
                         letterSpacing: -0.4,
                         lineHeight: 30,
                     }}
@@ -946,7 +937,7 @@ export default function DoctorDelegatedPatientsScreen() {
                         marginTop: 4,
                         fontFamily: SANS,
                         fontSize: 13,
-                        color: EHR_ON_SURFACE_VARIANT,
+                        color: palette.EHR_ON_SURFACE_VARIANT,
                         lineHeight: 19,
                     }}
                 >
@@ -960,21 +951,21 @@ export default function DoctorDelegatedPatientsScreen() {
                     marginBottom: 12,
                     paddingVertical: 11,
                     paddingHorizontal: 14,
-                    backgroundColor: `${EHR_TERTIARY}1A`,
+                    backgroundColor: `${palette.EHR_TERTIARY}1A`,
                     borderRadius: 12,
                     borderWidth: 0.5,
-                    borderColor: `${EHR_TERTIARY}50`,
+                    borderColor: `${palette.EHR_TERTIARY}50`,
                     flexDirection: 'row',
                     gap: 8,
                 }}
             >
-                <Shield size={14} color={EHR_TERTIARY} style={{ marginTop: 2 }} />
+                <Shield size={14} color={palette.EHR_TERTIARY} style={{ marginTop: 2 }} />
                 <Text
                     style={{
                         flex: 1,
                         fontFamily: SANS,
                         fontSize: 11.5,
-                        color: EHR_ON_SURFACE,
+                        color: palette.EHR_ON_SURFACE,
                         lineHeight: 17,
                     }}
                 >
@@ -990,18 +981,18 @@ export default function DoctorDelegatedPatientsScreen() {
                     <RefreshControl
                         refreshing={isFetching && !isLoading}
                         onRefresh={() => refetch()}
-                        tintColor={EHR_ON_SURFACE_VARIANT}
+                        tintColor={palette.EHR_ON_SURFACE_VARIANT}
                     />
                 }
                 ListEmptyComponent={
                     <View style={{ paddingTop: 30, alignItems: 'center' }}>
-                        <Users size={28} color={EHR_OUTLINE} />
+                        <Users size={28} color={palette.EHR_OUTLINE} />
                         <Text
                             style={{
                                 marginTop: 12,
                                 fontFamily: SERIF,
                                 fontSize: 18,
-                                color: EHR_ON_SURFACE,
+                                color: palette.EHR_ON_SURFACE,
                                 textAlign: 'center',
                             }}
                         >
@@ -1012,7 +1003,7 @@ export default function DoctorDelegatedPatientsScreen() {
                                 marginTop: 8,
                                 fontFamily: SANS,
                                 fontSize: 13,
-                                color: EHR_OUTLINE,
+                                color: palette.EHR_OUTLINE,
                                 textAlign: 'center',
                                 maxWidth: 280,
                                 lineHeight: 19,
@@ -1030,25 +1021,26 @@ export default function DoctorDelegatedPatientsScreen() {
     );
 }
 
-const inputStyle = {
+const makeInputStyle = (palette: ReturnType<typeof useEhrPalette>) => ({
     borderWidth: 0.5,
-    borderColor: EHR_OUTLINE_SOFT,
+    borderColor: palette.EHR_OUTLINE_SOFT,
     borderRadius: 12,
     paddingVertical: 11,
     paddingHorizontal: 14,
-    color: EHR_ON_SURFACE,
-    backgroundColor: EHR_SURFACE,
+    color: palette.EHR_ON_SURFACE,
+    backgroundColor: palette.EHR_SURFACE,
     fontFamily: SANS,
     fontSize: 14,
-};
+});
 
 function FieldLabel({ children }: { children: React.ReactNode }) {
+    const palette = useEhrPalette();
     return (
         <Text
             style={{
                 fontFamily: SANS_SEMI,
                 fontSize: 11.5,
-                color: EHR_OUTLINE,
+                color: palette.EHR_OUTLINE,
                 marginBottom: 6,
                 letterSpacing: 0.4,
                 textTransform: 'uppercase',

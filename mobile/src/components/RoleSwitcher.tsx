@@ -3,14 +3,7 @@ import { Modal, Pressable, View } from 'react-native';
 import { ChevronDown, Check } from 'lucide-react-native';
 import { YStack, XStack, Text, Button } from 'tamagui';
 import useAuthStore, { ROLE_CONFIG } from '../store/authStore';
-import {
-    EHR_ON_SURFACE_VARIANT,
-    EHR_OUTLINE_VARIANT,
-    EHR_PRIMARY,
-    EHR_PRIMARY_FIXED,
-    EHR_PRIMARY_FIXED_DIM,
-    EHR_SURFACE_LOWEST,
-} from '../constants/uiColors';
+import { useEhrPalette } from '../constants/uiColors';
 
 type RoleKey = 'patient' | 'doctor' | 'org' | 'organization' | 'ministry' | 'admin';
 type RoleConfig = { label: string; emoji: string };
@@ -18,6 +11,7 @@ type RoleConfig = { label: string; emoji: string };
 const FALLBACK_ROLE: RoleConfig = { label: 'Bệnh nhân', emoji: 'BN' };
 
 export default function RoleSwitcher() {
+    const palette = useEhrPalette();
     const [isOpen, setIsOpen] = useState(false);
     const { activeRole, availableRoles, switchRole } = useAuthStore();
 
@@ -43,10 +37,10 @@ export default function RoleSwitcher() {
             <Button
                 size="$4"
                 variant="outlined"
-                iconAfter={<ChevronDown size={16} color={EHR_ON_SURFACE_VARIANT} />}
+                iconAfter={<ChevronDown size={16} color={palette.EHR_ON_SURFACE_VARIANT} />}
                 onPress={() => setIsOpen(true)}
-                background={EHR_SURFACE_LOWEST}
-                borderColor={EHR_OUTLINE_VARIANT}
+                background={palette.EHR_SURFACE_LOWEST}
+                borderColor={palette.EHR_OUTLINE_VARIANT}
             >
                 <XStack style={{ alignItems: 'center', flex: 1 }}>
                     <Text fontSize="$5" style={{ marginRight: 8 }}>{currentConfig.emoji}</Text>
@@ -71,10 +65,10 @@ export default function RoleSwitcher() {
                         onPress={(e) => e.stopPropagation()}
                         style={{
                             width: '100%',
-                            backgroundColor: EHR_SURFACE_LOWEST,
+                            backgroundColor: palette.EHR_SURFACE_LOWEST,
                             borderRadius: 20,
                             borderWidth: 1,
-                            borderColor: EHR_OUTLINE_VARIANT,
+                            borderColor: palette.EHR_OUTLINE_VARIANT,
                             padding: 16,
                         }}
                     >
@@ -101,27 +95,27 @@ export default function RoleSwitcher() {
                                             paddingVertical: 12,
                                             paddingHorizontal: 12,
                                             borderWidth: 1,
-                                            borderColor: isActive ? EHR_PRIMARY_FIXED_DIM : EHR_OUTLINE_VARIANT,
-                                            backgroundColor: isActive ? EHR_PRIMARY_FIXED : EHR_SURFACE_LOWEST,
+                                            borderColor: isActive ? palette.EHR_PRIMARY_FIXED_DIM : palette.EHR_OUTLINE_VARIANT,
+                                            backgroundColor: isActive ? palette.EHR_PRIMARY_FIXED : palette.EHR_SURFACE_LOWEST,
                                         }}
                                     >
                                         <Text fontSize="$6" style={{ marginRight: 10 }}>{config.emoji}</Text>
                                         <Text
                                             fontSize="$5"
                                             fontWeight="500"
-                                            color={isActive ? EHR_PRIMARY : '$color12'}
+                                            color={isActive ? palette.EHR_PRIMARY : '$color12'}
                                             style={{ flex: 1 }}
                                         >
                                             {config.label}
                                         </Text>
-                                        {isActive ? <Check size={18} color={EHR_PRIMARY} /> : null}
+                                        {isActive ? <Check size={18} color={palette.EHR_PRIMARY} /> : null}
                                     </Pressable>
                                 );
                             })}
                         </YStack>
 
                         <View style={{ marginTop: 12 }}>
-                            <Button size="$4" variant="outlined" onPress={() => setIsOpen(false)} borderColor={EHR_OUTLINE_VARIANT}>
+                            <Button size="$4" variant="outlined" onPress={() => setIsOpen(false)} borderColor={palette.EHR_OUTLINE_VARIANT}>
                                 <Text color="$color10" fontWeight="500">Đóng</Text>
                             </Button>
                         </View>

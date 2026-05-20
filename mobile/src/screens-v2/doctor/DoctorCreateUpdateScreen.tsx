@@ -54,20 +54,7 @@ import useAuthStore from '../../store/authStore';
 import ViCard from '../../components-v2/ViCard';
 import ViButton from '../../components-v2/ViButton';
 import { ViSectionLabel } from '../../components-v2/ViChips';
-import {
-    EHR_SURFACE,
-    EHR_SURFACE_LOWEST,
-    EHR_ON_SURFACE,
-    EHR_ON_SURFACE_VARIANT,
-    EHR_OUTLINE,
-    EHR_OUTLINE_SOFT,
-    EHR_OUTLINE_VARIANT,
-    EHR_PRIMARY,
-    EHR_PRIMARY_FIXED,
-    EHR_TERTIARY,
-    EHR_SECONDARY,
-    EHR_DANGER,
-} from '../../constants/uiColors';
+import { useEhrPalette, DARK } from '../../constants/uiColors';
 
 const SERIF = 'Fraunces_400Regular';
 const SANS = 'DMSans_400Regular';
@@ -94,11 +81,12 @@ type SelectedImage = {
     fileSize?: number | null;
 };
 
+// Tints reference DARK at module load (visual hints only).
 const RECORD_TYPES: RecordTypeOption[] = [
-    { key: 'checkup', label: 'Khám tổng quát', icon: Stethoscope, tint: EHR_PRIMARY },
-    { key: 'lab_result', label: 'Xét nghiệm', icon: TestTubeDiagonal, tint: EHR_TERTIARY },
-    { key: 'prescription', label: 'Đơn thuốc', icon: Pill, tint: EHR_SECONDARY },
-    { key: 'vital_signs', label: 'Chỉ số sinh tồn', icon: HeartPulse, tint: EHR_PRIMARY },
+    { key: 'checkup', label: 'Khám tổng quát', icon: Stethoscope, tint: DARK.EHR_PRIMARY },
+    { key: 'lab_result', label: 'Xét nghiệm', icon: TestTubeDiagonal, tint: DARK.EHR_TERTIARY },
+    { key: 'prescription', label: 'Đơn thuốc', icon: Pill, tint: DARK.EHR_SECONDARY },
+    { key: 'vital_signs', label: 'Chỉ số sinh tồn', icon: HeartPulse, tint: DARK.EHR_PRIMARY },
 ];
 
 function splitLines(value: string): string[] {
@@ -108,6 +96,7 @@ function splitLines(value: string): string[] {
 const truncate = (addr?: string) => (addr ? `${addr.slice(0, 8)}…${addr.slice(-4)}` : '???');
 
 export default function DoctorCreateUpdateScreen({ navigation, route }: any) {
+    const palette = useEhrPalette();
     const { user } = useAuthStore();
     const queryClient = useQueryClient();
     const isMountedRef = useRef(true);
@@ -417,14 +406,14 @@ export default function DoctorCreateUpdateScreen({ navigation, route }: any) {
         options: { multiline?: boolean; placeholder?: string; keyboardType?: KeyboardTypeOptions } = {},
     ) => (
         <YStack style={{ marginBottom: 12 }}>
-            <Text style={{ fontFamily: SANS_SEMI, fontSize: 12, color: EHR_OUTLINE, marginBottom: 6, letterSpacing: 0.3, textTransform: 'uppercase', fontWeight: '600' }}>
+            <Text style={{ fontFamily: SANS_SEMI, fontSize: 12, color: palette.EHR_OUTLINE, marginBottom: 6, letterSpacing: 0.3, textTransform: 'uppercase', fontWeight: '600' }}>
                 {label}
             </Text>
             <TextInput
                 value={value}
                 onChangeText={onChangeText}
                 placeholder={options.placeholder || ''}
-                placeholderTextColor={EHR_OUTLINE}
+                placeholderTextColor={palette.EHR_OUTLINE}
                 keyboardType={options.keyboardType}
                 multiline={options.multiline}
                 textAlignVertical={options.multiline ? 'top' : 'center'}
@@ -432,11 +421,11 @@ export default function DoctorCreateUpdateScreen({ navigation, route }: any) {
                     minHeight: options.multiline ? 90 : 48,
                     borderRadius: 12,
                     borderWidth: 0.5,
-                    borderColor: EHR_OUTLINE_SOFT,
-                    backgroundColor: EHR_SURFACE,
+                    borderColor: palette.EHR_OUTLINE_SOFT,
+                    backgroundColor: palette.EHR_SURFACE,
                     paddingHorizontal: 14,
                     paddingVertical: options.multiline ? 12 : 0,
-                    color: EHR_ON_SURFACE,
+                    color: palette.EHR_ON_SURFACE,
                     fontFamily: SANS,
                     fontSize: 14,
                 }}
@@ -445,7 +434,7 @@ export default function DoctorCreateUpdateScreen({ navigation, route }: any) {
     );
 
     return (
-        <SafeAreaView style={{ flex: 1, backgroundColor: EHR_SURFACE }} edges={['left', 'right', 'bottom']}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: palette.EHR_SURFACE }} edges={['left', 'right', 'bottom']}>
             <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 36 }} showsVerticalScrollIndicator={false}>
                 {/* Hero */}
                 <View style={{ marginBottom: 14 }}>
@@ -453,7 +442,7 @@ export default function DoctorCreateUpdateScreen({ navigation, route }: any) {
                         style={{
                             fontFamily: SERIF,
                             fontSize: 26,
-                            color: EHR_ON_SURFACE,
+                            color: palette.EHR_ON_SURFACE,
                             letterSpacing: -0.4,
                             lineHeight: 30,
                         }}
@@ -465,7 +454,7 @@ export default function DoctorCreateUpdateScreen({ navigation, route }: any) {
                             marginTop: 6,
                             fontFamily: SANS,
                             fontSize: 13,
-                            color: EHR_ON_SURFACE_VARIANT,
+                            color: palette.EHR_ON_SURFACE_VARIANT,
                             lineHeight: 19,
                         }}
                     >
@@ -484,7 +473,7 @@ export default function DoctorCreateUpdateScreen({ navigation, route }: any) {
                             style={{
                                 fontFamily: SANS_SEMI,
                                 fontSize: 11.5,
-                                color: EHR_OUTLINE,
+                                color: palette.EHR_OUTLINE,
                                 marginBottom: 6,
                                 letterSpacing: 0.4,
                                 textTransform: 'uppercase',
@@ -497,15 +486,15 @@ export default function DoctorCreateUpdateScreen({ navigation, route }: any) {
                             value={patientAddressInput}
                             onChangeText={setPatientAddressInput}
                             placeholder="0x..."
-                            placeholderTextColor={EHR_OUTLINE}
+                            placeholderTextColor={palette.EHR_OUTLINE}
                             autoCapitalize="none"
                             autoCorrect={false}
                             style={{
                                 fontFamily: 'monospace',
                                 fontSize: 13,
-                                color: EHR_ON_SURFACE,
-                                backgroundColor: EHR_SURFACE,
-                                borderColor: EHR_OUTLINE_SOFT,
+                                color: palette.EHR_ON_SURFACE,
+                                backgroundColor: palette.EHR_SURFACE,
+                                borderColor: palette.EHR_OUTLINE_SOFT,
                                 borderWidth: 0.5,
                                 borderRadius: 10,
                                 paddingVertical: 10,
@@ -529,19 +518,19 @@ export default function DoctorCreateUpdateScreen({ navigation, route }: any) {
                                         paddingHorizontal: 14,
                                         borderRadius: 14,
                                         borderWidth: active ? 1.5 : 0.5,
-                                        borderColor: active ? type.tint : EHR_OUTLINE_SOFT,
-                                        backgroundColor: active ? `${type.tint}1A` : EHR_SURFACE_LOWEST,
+                                        borderColor: active ? type.tint : palette.EHR_OUTLINE_SOFT,
+                                        backgroundColor: active ? `${type.tint}1A` : palette.EHR_SURFACE_LOWEST,
                                         flexDirection: 'row',
                                         alignItems: 'center',
                                         gap: 8,
                                     }}
                                 >
-                                    <Icon size={14} color={active ? type.tint : EHR_OUTLINE} />
+                                    <Icon size={14} color={active ? type.tint : palette.EHR_OUTLINE} />
                                     <Text
                                         style={{
                                             fontFamily: SANS_MEDIUM,
                                             fontSize: 12.5,
-                                            color: active ? type.tint : EHR_ON_SURFACE_VARIANT,
+                                            color: active ? type.tint : palette.EHR_ON_SURFACE_VARIANT,
                                             fontWeight: '600',
                                         }}
                                     >
@@ -562,7 +551,7 @@ export default function DoctorCreateUpdateScreen({ navigation, route }: any) {
                     {renderInput('Mô tả ngắn', description, setDescription, { placeholder: 'Tóm tắt kết quả khám…', multiline: true })}
 
                     <YStack style={{ marginBottom: 12 }}>
-                        <Text style={{ fontFamily: SANS_SEMI, fontSize: 12, color: EHR_OUTLINE, marginBottom: 6, letterSpacing: 0.3, textTransform: 'uppercase', fontWeight: '600' }}>
+                        <Text style={{ fontFamily: SANS_SEMI, fontSize: 12, color: palette.EHR_OUTLINE, marginBottom: 6, letterSpacing: 0.3, textTransform: 'uppercase', fontWeight: '600' }}>
                             Chẩn đoán (ICD-10)
                         </Text>
                         {icd10Codes.length > 0 ? (
@@ -576,7 +565,7 @@ export default function DoctorCreateUpdateScreen({ navigation, route }: any) {
                                             paddingVertical: 8,
                                             paddingHorizontal: 10,
                                             borderRadius: 10,
-                                            backgroundColor: EHR_PRIMARY_FIXED,
+                                            backgroundColor: palette.EHR_PRIMARY_FIXED,
                                         }}
                                     >
                                         <View
@@ -585,7 +574,7 @@ export default function DoctorCreateUpdateScreen({ navigation, route }: any) {
                                                 paddingHorizontal: 6,
                                                 paddingVertical: 2,
                                                 borderRadius: 6,
-                                                backgroundColor: EHR_PRIMARY,
+                                                backgroundColor: palette.EHR_PRIMARY,
                                                 alignItems: 'center',
                                             }}
                                         >
@@ -593,11 +582,11 @@ export default function DoctorCreateUpdateScreen({ navigation, route }: any) {
                                                 {item.code}
                                             </Text>
                                         </View>
-                                        <Text style={{ flex: 1, fontFamily: SANS, fontSize: 12.5, color: EHR_ON_SURFACE }}>
+                                        <Text style={{ flex: 1, fontFamily: SANS, fontSize: 12.5, color: palette.EHR_ON_SURFACE }}>
                                             {item.name}
                                         </Text>
                                         <Pressable onPress={() => setIcd10Codes((prev) => prev.filter((c) => c.code !== item.code))}>
-                                            <X size={16} color={EHR_DANGER} />
+                                            <X size={16} color={palette.EHR_DANGER} />
                                         </Pressable>
                                     </XStack>
                                 ))}
@@ -610,15 +599,15 @@ export default function DoctorCreateUpdateScreen({ navigation, route }: any) {
                                     borderRadius: 12,
                                     borderWidth: 0.75,
                                     borderStyle: 'dashed',
-                                    borderColor: EHR_PRIMARY,
+                                    borderColor: palette.EHR_PRIMARY,
                                     flexDirection: 'row',
                                     alignItems: 'center',
                                     justifyContent: 'center',
                                     gap: 8,
                                 }}
                             >
-                                <Plus size={14} color={EHR_PRIMARY} />
-                                <Text style={{ fontFamily: SANS_MEDIUM, fontSize: 12.5, color: EHR_PRIMARY, fontWeight: '600' }}>
+                                <Plus size={14} color={palette.EHR_PRIMARY} />
+                                <Text style={{ fontFamily: SANS_MEDIUM, fontSize: 12.5, color: palette.EHR_PRIMARY, fontWeight: '600' }}>
                                     {icd10Codes.length > 0 ? 'Thêm mã ICD-10 khác' : 'Chọn mã ICD-10'}
                                 </Text>
                             </View>
@@ -636,10 +625,10 @@ export default function DoctorCreateUpdateScreen({ navigation, route }: any) {
                 <ViCard padding={16} style={{ marginBottom: 14 }}>
                     {selectedImage ? (
                         <View style={{ marginBottom: 10 }}>
-                            <View style={{ borderRadius: 14, overflow: 'hidden', borderWidth: 0.5, borderColor: EHR_OUTLINE_SOFT }}>
+                            <View style={{ borderRadius: 14, overflow: 'hidden', borderWidth: 0.5, borderColor: palette.EHR_OUTLINE_SOFT }}>
                                 <Image
                                     source={{ uri: selectedImage.uri }}
-                                    style={{ width: '100%', height: 200, backgroundColor: EHR_SURFACE }}
+                                    style={{ width: '100%', height: 200, backgroundColor: palette.EHR_SURFACE }}
                                     resizeMode="cover"
                                 />
                             </View>
@@ -653,7 +642,7 @@ export default function DoctorCreateUpdateScreen({ navigation, route }: any) {
                                 size="sm"
                                 onPress={pickImage}
                                 loading={isPickingImage}
-                                leftIcon={<ImagePlus size={14} color={EHR_ON_SURFACE} />}
+                                leftIcon={<ImagePlus size={14} color={palette.EHR_ON_SURFACE} />}
                             >
                                 {selectedImage ? 'Chọn ảnh khác' : (isPickingImage ? 'Đang mở…' : 'Chọn ảnh')}
                             </ViButton>
@@ -663,7 +652,7 @@ export default function DoctorCreateUpdateScreen({ navigation, route }: any) {
                                 variant="danger"
                                 size="sm"
                                 onPress={() => setSelectedImage(null)}
-                                leftIcon={<Trash2 size={14} color={EHR_DANGER} />}
+                                leftIcon={<Trash2 size={14} color={palette.EHR_DANGER} />}
                             >
                                 Xoá
                             </ViButton>
@@ -693,8 +682,8 @@ export default function DoctorCreateUpdateScreen({ navigation, route }: any) {
                         <View style={{ flex: 1 }}>{renderInput('Chiều cao (cm)', heightCm, setHeightCm, { placeholder: '165', keyboardType: 'numeric' })}</View>
                     </XStack>
                     <XStack style={{ alignItems: 'center', gap: 6, marginTop: -4 }}>
-                        <Activity size={13} color={EHR_OUTLINE} />
-                        <Text style={{ fontFamily: SANS, fontSize: 11, color: EHR_OUTLINE }}>
+                        <Activity size={13} color={palette.EHR_OUTLINE} />
+                        <Text style={{ fontFamily: SANS, fontSize: 11, color: palette.EHR_OUTLINE }}>
                             BMI được tính tự động.
                         </Text>
                     </XStack>
@@ -723,13 +712,13 @@ export default function DoctorCreateUpdateScreen({ navigation, route }: any) {
                         style={{
                             padding: 12,
                             borderRadius: 12,
-                            backgroundColor: `${EHR_DANGER}14`,
+                            backgroundColor: `${palette.EHR_DANGER}14`,
                             borderWidth: 0.5,
-                            borderColor: EHR_DANGER,
+                            borderColor: palette.EHR_DANGER,
                             marginBottom: 14,
                         }}
                     >
-                        <Text style={{ fontFamily: SANS, fontSize: 12.5, color: EHR_DANGER, lineHeight: 18 }}>
+                        <Text style={{ fontFamily: SANS, fontSize: 12.5, color: palette.EHR_DANGER, lineHeight: 18 }}>
                             {error}
                         </Text>
                     </View>
@@ -753,7 +742,7 @@ export default function DoctorCreateUpdateScreen({ navigation, route }: any) {
                         textAlign: 'center',
                         fontFamily: SANS,
                         fontSize: 11,
-                        color: EHR_OUTLINE,
+                        color: palette.EHR_OUTLINE,
                         lineHeight: 16,
                     }}
                 >
@@ -773,4 +762,3 @@ export default function DoctorCreateUpdateScreen({ navigation, route }: any) {
     );
 }
 
-void EHR_OUTLINE_VARIANT;

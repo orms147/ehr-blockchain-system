@@ -36,18 +36,7 @@ import profileService from '../services/profile.service';
 import useAuthStore from '../store/authStore';
 import ViCard from '../components-v2/ViCard';
 import { ViSectionLabel } from '../components-v2/ViChips';
-import {
-    EHR_SURFACE,
-    EHR_SURFACE_LOWEST,
-    EHR_ON_SURFACE,
-    EHR_ON_SURFACE_VARIANT,
-    EHR_OUTLINE,
-    EHR_OUTLINE_SOFT,
-    EHR_PRIMARY,
-    EHR_PRIMARY_FIXED,
-    EHR_TERTIARY,
-    EHR_SECONDARY,
-} from '../constants/uiColors';
+import { useEhrPalette } from '../constants/uiColors';
 
 const SERIF = 'Fraunces_400Regular';
 const SERIF_MEDIUM = 'Fraunces_500Medium';
@@ -64,6 +53,7 @@ function firstInitial(fullName?: string) {
 }
 
 export default function ProfileScreen() {
+    const palette = useEhrPalette();
     const navigation = useNavigation<any>();
     const { user, logout, token } = useAuthStore();
     const [profile, setProfile] = useState<any>(null);
@@ -107,7 +97,7 @@ export default function ProfileScreen() {
         : userData.DOB || 'Chưa rõ';
 
     return (
-        <SafeAreaView style={{ flex: 1, backgroundColor: EHR_SURFACE }} edges={['right', 'left']}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: palette.EHR_SURFACE }} edges={['right', 'left']}>
             <ScrollView
                 contentContainerStyle={{ paddingBottom: 80, paddingTop: 14 }}
                 showsVerticalScrollIndicator={false}
@@ -124,9 +114,9 @@ export default function ProfileScreen() {
                             width: 80,
                             height: 80,
                             borderRadius: 40,
-                            backgroundColor: EHR_SURFACE_LOWEST,
+                            backgroundColor: palette.EHR_SURFACE_LOWEST,
                             borderWidth: 0.75,
-                            borderColor: EHR_OUTLINE_SOFT,
+                            borderColor: palette.EHR_OUTLINE_SOFT,
                             alignItems: 'center',
                             justifyContent: 'center',
                             marginBottom: 14,
@@ -136,7 +126,7 @@ export default function ProfileScreen() {
                             style={{
                                 fontFamily: SERIF_MEDIUM,
                                 fontSize: 36,
-                                color: EHR_ON_SURFACE_VARIANT,
+                                color: palette.EHR_ON_SURFACE_VARIANT,
                                 lineHeight: 40,
                             }}
                         >
@@ -147,7 +137,7 @@ export default function ProfileScreen() {
                         style={{
                             fontFamily: SERIF,
                             fontSize: 24,
-                            color: EHR_ON_SURFACE,
+                            color: palette.EHR_ON_SURFACE,
                             letterSpacing: -0.3,
                             lineHeight: 28,
                             textAlign: 'center',
@@ -166,8 +156,8 @@ export default function ProfileScreen() {
                             paddingVertical: 5,
                             borderRadius: 999,
                             borderWidth: 0.5,
-                            borderColor: EHR_OUTLINE_SOFT,
-                            backgroundColor: EHR_SURFACE_LOWEST,
+                            borderColor: palette.EHR_OUTLINE_SOFT,
+                            backgroundColor: palette.EHR_SURFACE_LOWEST,
                             opacity: pressed ? 0.7 : 1,
                         })}
                     >
@@ -175,12 +165,12 @@ export default function ProfileScreen() {
                             style={{
                                 fontFamily: 'monospace',
                                 fontSize: 11,
-                                color: EHR_ON_SURFACE_VARIANT,
+                                color: palette.EHR_ON_SURFACE_VARIANT,
                             }}
                         >
                             {truncate(userData.walletAddress || (userData as any).address)}
                         </Text>
-                        <QrCode size={11} color={EHR_PRIMARY} />
+                        <QrCode size={11} color={palette.EHR_PRIMARY} />
                     </Pressable>
                     {/* Canonical identity card — same UserChip used everywhere else
                         (Design G.7: replace hard-coded role line with UserChip(self)) */}
@@ -191,8 +181,8 @@ export default function ProfileScreen() {
                             paddingVertical: 10,
                             borderRadius: 12,
                             borderWidth: 0.5,
-                            borderColor: EHR_OUTLINE_SOFT,
-                            backgroundColor: EHR_SURFACE_LOWEST,
+                            borderColor: palette.EHR_OUTLINE_SOFT,
+                            backgroundColor: palette.EHR_SURFACE_LOWEST,
                             alignSelf: 'stretch',
                         }}
                     >
@@ -209,7 +199,7 @@ export default function ProfileScreen() {
                 {/* Health info */}
                 <ViSectionLabel trailing={
                     <Text
-                        style={{ fontFamily: SANS_SEMI, fontSize: 11, color: EHR_PRIMARY, fontWeight: '600' }}
+                        style={{ fontFamily: SANS_SEMI, fontSize: 11, color: palette.EHR_PRIMARY, fontWeight: '600' }}
                         onPress={() => navigation.navigate('EditProfile')}
                     >
                         Sửa
@@ -221,28 +211,28 @@ export default function ProfileScreen() {
                     <ViCard padding={16}>
                         <XStack style={{ justifyContent: 'space-around', marginBottom: 16 }}>
                             <HealthItem
-                                icon={<Droplets size={16} color={EHR_SECONDARY} />}
+                                icon={<Droplets size={16} color={palette.EHR_SECONDARY} />}
                                 label="Nhóm máu"
                                 value={userData.bloodType || '—'}
-                                tint={EHR_SECONDARY}
+                                tint={palette.EHR_SECONDARY}
                             />
                             <HealthItem
-                                icon={<User size={16} color={EHR_PRIMARY} />}
+                                icon={<User size={16} color={palette.EHR_PRIMARY} />}
                                 label="Giới tính"
                                 value={genderDisplay}
-                                tint={EHR_PRIMARY}
+                                tint={palette.EHR_PRIMARY}
                             />
                             <HealthItem
-                                icon={<Calendar size={16} color={EHR_TERTIARY} />}
+                                icon={<Calendar size={16} color={palette.EHR_TERTIARY} />}
                                 label="Năm sinh"
                                 value={String(birthYear)}
-                                tint={EHR_TERTIARY}
+                                tint={palette.EHR_TERTIARY}
                             />
                         </XStack>
                         <View
                             style={{
                                 height: 0.5,
-                                backgroundColor: EHR_OUTLINE_SOFT,
+                                backgroundColor: palette.EHR_OUTLINE_SOFT,
                                 marginBottom: 12,
                             }}
                         />
@@ -250,7 +240,7 @@ export default function ProfileScreen() {
                             style={{
                                 fontFamily: SANS_SEMI,
                                 fontSize: 10.5,
-                                color: EHR_OUTLINE,
+                                color: palette.EHR_OUTLINE,
                                 letterSpacing: 0.6,
                                 textTransform: 'uppercase',
                                 fontWeight: '600',
@@ -263,7 +253,7 @@ export default function ProfileScreen() {
                             style={{
                                 fontFamily: SANS,
                                 fontSize: 13,
-                                color: EHR_ON_SURFACE,
+                                color: palette.EHR_ON_SURFACE,
                                 lineHeight: 19,
                             }}
                         >
@@ -276,11 +266,11 @@ export default function ProfileScreen() {
                 <ViSectionLabel>Tài khoản & ví</ViSectionLabel>
                 <View style={{ paddingHorizontal: 20, marginBottom: 14 }}>
                     <ViCard padding={0}>
-                        <MenuRow icon={<QrCode size={16} color={EHR_ON_SURFACE_VARIANT} />} label="Địa chỉ của tôi (QR)" onPress={() => setAddressModalOpen(true)} />
-                        <MenuRow icon={<Settings size={16} color={EHR_ON_SURFACE_VARIANT} />} label="Cài đặt & ví" onPress={() => navigation.navigate('Settings')} />
-                        <MenuRow icon={<Edit3 size={16} color={EHR_ON_SURFACE_VARIANT} />} label="Chỉnh sửa hồ sơ" onPress={() => navigation.navigate('EditProfile')} />
-                        <MenuRow icon={<UserCheck size={16} color={EHR_ON_SURFACE_VARIANT} />} label="Uỷ quyền cho bác sĩ" onPress={() => navigation.navigate('Delegation')} />
-                        <MenuRow icon={<Siren size={16} color={EHR_ON_SURFACE_VARIANT} />} label="Hồ sơ khẩn cấp" onPress={() => navigation.navigate('EmergencyProfile')} last />
+                        <MenuRow icon={<QrCode size={16} color={palette.EHR_ON_SURFACE_VARIANT} />} label="Địa chỉ của tôi (QR)" onPress={() => setAddressModalOpen(true)} />
+                        <MenuRow icon={<Settings size={16} color={palette.EHR_ON_SURFACE_VARIANT} />} label="Cài đặt & ví" onPress={() => navigation.navigate('Settings')} />
+                        <MenuRow icon={<Edit3 size={16} color={palette.EHR_ON_SURFACE_VARIANT} />} label="Chỉnh sửa hồ sơ" onPress={() => navigation.navigate('EditProfile')} />
+                        <MenuRow icon={<UserCheck size={16} color={palette.EHR_ON_SURFACE_VARIANT} />} label="Uỷ quyền cho bác sĩ" onPress={() => navigation.navigate('Delegation')} />
+                        <MenuRow icon={<Siren size={16} color={palette.EHR_ON_SURFACE_VARIANT} />} label="Hồ sơ khẩn cấp" onPress={() => navigation.navigate('EmergencyProfile')} last />
                     </ViCard>
                 </View>
 
@@ -288,7 +278,7 @@ export default function ProfileScreen() {
                 <View style={{ paddingHorizontal: 20, marginBottom: 14 }}>
                     <ViCard padding={0}>
                         <MenuRow
-                            icon={<Info size={16} color={EHR_ON_SURFACE_VARIANT} />}
+                            icon={<Info size={16} color={palette.EHR_ON_SURFACE_VARIANT} />}
                             label="Về ViEH"
                             onPress={() =>
                                 Alert.alert(
@@ -305,7 +295,7 @@ export default function ProfileScreen() {
                 <View style={{ paddingHorizontal: 20 }}>
                     <ViCard padding={0}>
                         <MenuRow
-                            icon={<LogOut size={16} color={EHR_PRIMARY} />}
+                            icon={<LogOut size={16} color={palette.EHR_PRIMARY} />}
                             label="Đăng xuất"
                             onPress={handleLogout}
                             danger
@@ -337,6 +327,7 @@ function HealthItem({
     value: string;
     tint: string;
 }) {
+    const palette = useEhrPalette();
     return (
         <YStack style={{ alignItems: 'center', flex: 1 }}>
             <View
@@ -356,7 +347,7 @@ function HealthItem({
                 style={{
                     fontFamily: SANS_SEMI,
                     fontSize: 10,
-                    color: EHR_OUTLINE,
+                    color: palette.EHR_OUTLINE,
                     letterSpacing: 0.6,
                     textTransform: 'uppercase',
                     fontWeight: '600',
@@ -369,7 +360,7 @@ function HealthItem({
                 style={{
                     fontFamily: SERIF,
                     fontSize: 16,
-                    color: EHR_ON_SURFACE,
+                    color: palette.EHR_ON_SURFACE,
                     letterSpacing: -0.2,
                 }}
             >
@@ -392,6 +383,7 @@ function MenuRow({
     danger?: boolean;
     last?: boolean;
 }) {
+    const palette = useEhrPalette();
     return (
         <Pressable
             onPress={onPress}
@@ -403,7 +395,7 @@ function MenuRow({
                 paddingVertical: 14,
                 paddingHorizontal: 16,
                 borderBottomWidth: last ? 0 : 0.5,
-                borderColor: EHR_OUTLINE_SOFT,
+                borderColor: palette.EHR_OUTLINE_SOFT,
                 opacity: pressed ? 0.6 : 1,
             })}
         >
@@ -413,15 +405,14 @@ function MenuRow({
                     flex: 1,
                     fontFamily: SANS_MEDIUM,
                     fontSize: 14,
-                    color: danger ? EHR_PRIMARY : EHR_ON_SURFACE,
+                    color: danger ? palette.EHR_PRIMARY : palette.EHR_ON_SURFACE,
                     fontWeight: '500',
                 }}
             >
                 {label}
             </Text>
-            {!danger ? <ChevronRight size={16} color={EHR_OUTLINE} /> : null}
+            {!danger ? <ChevronRight size={16} color={palette.EHR_OUTLINE} /> : null}
         </Pressable>
     );
 }
 
-void EHR_PRIMARY_FIXED;

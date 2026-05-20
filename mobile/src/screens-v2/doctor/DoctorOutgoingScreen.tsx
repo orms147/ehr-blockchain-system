@@ -17,18 +17,7 @@ import UserChip from '../../components/UserChip';
 import useAuthStore from '../../store/authStore';
 import api from '../../services/api';
 import ViCard from '../../components-v2/ViCard';
-import {
-    EHR_SURFACE,
-    EHR_SURFACE_LOWEST,
-    EHR_ON_SURFACE,
-    EHR_ON_SURFACE_VARIANT,
-    EHR_OUTLINE,
-    EHR_OUTLINE_SOFT,
-    EHR_PRIMARY,
-    EHR_TERTIARY,
-    EHR_WARNING,
-    EHR_DANGER,
-} from '../../constants/uiColors';
+import { useEhrPalette } from '../../constants/uiColors';
 import { formatDate, formatExpiry, getExpiryUrgency } from '../../utils/dateFormatting';
 
 const SERIF = 'Fraunces_400Regular';
@@ -46,33 +35,34 @@ type RequestItem = {
     deadline?: string;
 };
 
-function getStatusConfig(status?: string) {
+function getStatusConfig(status: string | undefined, palette: ReturnType<typeof useEhrPalette>) {
     switch (status?.toLowerCase()) {
         case 'approved':
         case 'completed':
-            return { label: 'Đã duyệt', color: EHR_TERTIARY, Icon: CheckCircle };
+            return { label: 'Đã duyệt', color: palette.EHR_TERTIARY, Icon: CheckCircle };
         case 'rejected':
-            return { label: 'Bị từ chối', color: EHR_DANGER, Icon: XCircle };
+            return { label: 'Bị từ chối', color: palette.EHR_DANGER, Icon: XCircle };
         case 'expired':
-            return { label: 'Hết hạn', color: EHR_OUTLINE, Icon: Clock };
+            return { label: 'Hết hạn', color: palette.EHR_OUTLINE, Icon: Clock };
         case 'claimed':
-            return { label: 'Đã xác nhận', color: EHR_TERTIARY, Icon: CheckCircle };
+            return { label: 'Đã xác nhận', color: palette.EHR_TERTIARY, Icon: CheckCircle };
         default:
-            return { label: 'Đang chờ', color: EHR_WARNING, Icon: Clock };
+            return { label: 'Đang chờ', color: palette.EHR_WARNING, Icon: Clock };
     }
 }
 
 const truncate = (addr?: string) => (addr ? `${addr.slice(0, 6)}…${addr.slice(-4)}` : '???');
 
 function OutgoingRow({ item }: { item: RequestItem }) {
-    const cfg = getStatusConfig(item.status);
+    const palette = useEhrPalette();
+    const cfg = getStatusConfig(item.status, palette);
     return (
         <ViCard padding={14} style={{ marginBottom: 10 }}>
             <XStack style={{ alignItems: 'flex-start', gap: 10, marginBottom: 6 }}>
                 <View style={{ flex: 1 }}>
                     {/* G.2 — patient wallet → UserChip (no expanded, single line for tight row) */}
                     <UserChip address={item.patientAddress} showAddress={false} />
-                    <Text style={{ fontFamily: SANS, fontSize: 11.5, color: EHR_OUTLINE, marginTop: 4 }}>
+                    <Text style={{ fontFamily: SANS, fontSize: 11.5, color: palette.EHR_OUTLINE, marginTop: 4 }}>
                         {formatDate(item.createdAt)}
                     </Text>
                 </View>
@@ -109,12 +99,12 @@ function OutgoingRow({ item }: { item: RequestItem }) {
                         marginTop: 10,
                         paddingTop: 10,
                         borderTopWidth: 0.5,
-                        borderColor: EHR_OUTLINE_SOFT,
+                        borderColor: palette.EHR_OUTLINE_SOFT,
                     }}
                 >
-                    <ShieldCheck size={11} color={EHR_PRIMARY} />
+                    <ShieldCheck size={11} color={palette.EHR_PRIMARY} />
                     <Text
-                        style={{ fontFamily: 'monospace', fontSize: 11, color: EHR_OUTLINE }}
+                        style={{ fontFamily: 'monospace', fontSize: 11, color: palette.EHR_OUTLINE }}
                         numberOfLines={1}
                     >
                         CID: {item.cidHash.slice(0, 22)}…
@@ -124,7 +114,7 @@ function OutgoingRow({ item }: { item: RequestItem }) {
             {item.deadline && item.status === 'pending' ? (() => {
                 const urgency = getExpiryUrgency(item.deadline);
                 const urgent = urgency === 'urgent' || urgency === 'soon';
-                const color = urgency === 'expired' ? EHR_DANGER : urgent ? EHR_WARNING : EHR_OUTLINE;
+                const color = urgency === 'expired' ? palette.EHR_DANGER : urgent ? palette.EHR_WARNING : palette.EHR_OUTLINE;
                 return (
                     <XStack style={{ alignItems: 'center', gap: 4, marginTop: 6 }}>
                         <Clock size={10} color={color} />
@@ -146,6 +136,7 @@ function OutgoingRow({ item }: { item: RequestItem }) {
 }
 
 export default function DoctorOutgoingScreen() {
+    const palette = useEhrPalette();
     const { token } = useAuthStore();
 
     const requestsQuery = useQuery({
@@ -168,14 +159,14 @@ export default function DoctorOutgoingScreen() {
     if (isLoading && !isRefreshing) return <LoadingSpinner message="Đang tải yêu cầu đã gửi..." />;
 
     return (
-        <SafeAreaView style={{ flex: 1, backgroundColor: EHR_SURFACE }} edges={['right', 'left']}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: palette.EHR_SURFACE }} edges={['right', 'left']}>
             {requests.length === 0 ? (
                 <View style={{ paddingHorizontal: 20, paddingTop: 14 }}>
                     <Text
                         style={{
                             fontFamily: SERIF,
                             fontSize: 26,
-                            color: EHR_ON_SURFACE,
+                            color: palette.EHR_ON_SURFACE,
                             letterSpacing: -0.4,
                             lineHeight: 30,
                         }}
@@ -187,19 +178,19 @@ export default function DoctorOutgoingScreen() {
                             marginTop: 4,
                             fontFamily: SANS,
                             fontSize: 13,
-                            color: EHR_ON_SURFACE_VARIANT,
+                            color: palette.EHR_ON_SURFACE_VARIANT,
                         }}
                     >
                         Theo dõi trạng thái các yêu cầu truy cập bạn đã gửi.
                     </Text>
                     <View style={{ paddingTop: 40, alignItems: 'center' }}>
-                        <Send size={28} color={EHR_OUTLINE} />
+                        <Send size={28} color={palette.EHR_OUTLINE} />
                         <Text
                             style={{
                                 marginTop: 12,
                                 fontFamily: SERIF,
                                 fontSize: 18,
-                                color: EHR_ON_SURFACE,
+                                color: palette.EHR_ON_SURFACE,
                                 textAlign: 'center',
                             }}
                         >
@@ -210,7 +201,7 @@ export default function DoctorOutgoingScreen() {
                                 marginTop: 8,
                                 fontFamily: SANS,
                                 fontSize: 13,
-                                color: EHR_OUTLINE,
+                                color: palette.EHR_OUTLINE,
                                 textAlign: 'center',
                                 lineHeight: 19,
                                 maxWidth: 280,
@@ -230,7 +221,7 @@ export default function DoctorOutgoingScreen() {
                         <RefreshControl
                             refreshing={isRefreshing}
                             onRefresh={handleRefresh}
-                            tintColor={EHR_ON_SURFACE_VARIANT}
+                            tintColor={palette.EHR_ON_SURFACE_VARIANT}
                         />
                     }
                     ListHeaderComponent={
@@ -239,7 +230,7 @@ export default function DoctorOutgoingScreen() {
                                 style={{
                                     fontFamily: SERIF,
                                     fontSize: 26,
-                                    color: EHR_ON_SURFACE,
+                                    color: palette.EHR_ON_SURFACE,
                                     letterSpacing: -0.4,
                                     lineHeight: 30,
                                 }}
@@ -251,7 +242,7 @@ export default function DoctorOutgoingScreen() {
                                     marginTop: 4,
                                     fontFamily: SANS,
                                     fontSize: 13,
-                                    color: EHR_ON_SURFACE_VARIANT,
+                                    color: palette.EHR_ON_SURFACE_VARIANT,
                                     marginBottom: 12,
                                 }}
                             >
@@ -265,4 +256,3 @@ export default function DoctorOutgoingScreen() {
     );
 }
 
-void EHR_SURFACE_LOWEST;

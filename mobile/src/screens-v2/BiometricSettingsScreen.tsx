@@ -26,18 +26,7 @@ import { isBiometricSigningEnabled, setBiometricSigningEnabled, requireBiometric
 import ViCard from '../components-v2/ViCard';
 import ViButton from '../components-v2/ViButton';
 import { ViSectionLabel } from '../components-v2/ViChips';
-import {
-    EHR_SURFACE,
-    EHR_SURFACE_LOWEST,
-    EHR_ON_SURFACE,
-    EHR_ON_SURFACE_VARIANT,
-    EHR_OUTLINE,
-    EHR_OUTLINE_SOFT,
-    EHR_OUTLINE_VARIANT,
-    EHR_PRIMARY,
-    EHR_TERTIARY,
-    EHR_SLATE,
-} from '../constants/uiColors';
+import { useEhrPalette } from '../constants/uiColors';
 
 const SERIF = 'Fraunces_400Regular';
 const SANS = 'DMSans_400Regular';
@@ -59,6 +48,7 @@ function describeTypes(types: LocalAuthentication.AuthenticationType[]) {
 }
 
 export default function BiometricSettingsScreen() {
+    const palette = useEhrPalette();
     const navigation = useNavigation<any>();
     const [enabled, setEnabled] = useState(true);
     const [pinFallback, setPinFallback] = useState(true);
@@ -102,11 +92,11 @@ export default function BiometricSettingsScreen() {
     const hwReady = support?.hasHardware && support?.isEnrolled;
     const typesLabel = support ? describeTypes(support.types) : '—';
     const hwIcon = support?.types?.includes(LocalAuthentication.AuthenticationType.FACIAL_RECOGNITION)
-        ? <ScanFace size={20} color={hwReady ? EHR_TERTIARY : EHR_SLATE} />
-        : <Fingerprint size={20} color={hwReady ? EHR_TERTIARY : EHR_SLATE} />;
+        ? <ScanFace size={20} color={hwReady ? palette.EHR_TERTIARY : palette.EHR_SLATE} />
+        : <Fingerprint size={20} color={hwReady ? palette.EHR_TERTIARY : palette.EHR_SLATE} />;
 
     return (
-        <SafeAreaView style={{ flex: 1, backgroundColor: EHR_SURFACE }} edges={['top', 'left', 'right']}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: palette.EHR_SURFACE }} edges={['top', 'left', 'right']}>
             <ScrollView contentContainerStyle={{ paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
                 {/* PageHeader */}
                 <View style={{ paddingHorizontal: 22, paddingTop: 10, paddingBottom: 18 }}>
@@ -122,8 +112,8 @@ export default function BiometricSettingsScreen() {
                             opacity: pressed ? 0.5 : 1,
                         })}
                     >
-                        <ChevronLeft size={18} color={EHR_ON_SURFACE_VARIANT} />
-                        <Text style={{ fontFamily: SANS, fontSize: 13, color: EHR_ON_SURFACE_VARIANT }}>
+                        <ChevronLeft size={18} color={palette.EHR_ON_SURFACE_VARIANT} />
+                        <Text style={{ fontFamily: SANS, fontSize: 13, color: palette.EHR_ON_SURFACE_VARIANT }}>
                             Quay lại
                         </Text>
                     </Pressable>
@@ -132,7 +122,7 @@ export default function BiometricSettingsScreen() {
                             marginTop: 6,
                             fontFamily: SERIF,
                             fontSize: 28,
-                            color: EHR_ON_SURFACE,
+                            color: palette.EHR_ON_SURFACE,
                             letterSpacing: -0.5,
                             lineHeight: 32,
                         }}
@@ -144,7 +134,7 @@ export default function BiometricSettingsScreen() {
                             marginTop: 6,
                             fontFamily: SANS,
                             fontSize: 13,
-                            color: EHR_ON_SURFACE_VARIANT,
+                            color: palette.EHR_ON_SURFACE_VARIANT,
                             lineHeight: 19,
                         }}
                     >
@@ -159,9 +149,9 @@ export default function BiometricSettingsScreen() {
                             paddingVertical: 14,
                             paddingHorizontal: 16,
                             borderRadius: 14,
-                            backgroundColor: hwReady ? `${EHR_TERTIARY}1A` : `${EHR_SLATE}1A`,
+                            backgroundColor: hwReady ? `${palette.EHR_TERTIARY}1A` : `${palette.EHR_SLATE}1A`,
                             borderWidth: 0.5,
-                            borderColor: hwReady ? `${EHR_TERTIARY}40` : EHR_OUTLINE_SOFT,
+                            borderColor: hwReady ? `${palette.EHR_TERTIARY}40` : palette.EHR_OUTLINE_SOFT,
                             flexDirection: 'row',
                             alignItems: 'center',
                             gap: 12,
@@ -172,7 +162,7 @@ export default function BiometricSettingsScreen() {
                                 width: 38,
                                 height: 38,
                                 borderRadius: 19,
-                                backgroundColor: hwReady ? `${EHR_TERTIARY}26` : `${EHR_SLATE}26`,
+                                backgroundColor: hwReady ? `${palette.EHR_TERTIARY}26` : `${palette.EHR_SLATE}26`,
                                 alignItems: 'center',
                                 justifyContent: 'center',
                             }}
@@ -184,7 +174,7 @@ export default function BiometricSettingsScreen() {
                                 style={{
                                     fontFamily: SANS_MEDIUM,
                                     fontSize: 13.5,
-                                    color: EHR_ON_SURFACE,
+                                    color: palette.EHR_ON_SURFACE,
                                     fontWeight: '600',
                                 }}
                             >
@@ -199,7 +189,7 @@ export default function BiometricSettingsScreen() {
                                     marginTop: 3,
                                     fontFamily: SANS,
                                     fontSize: 11.5,
-                                    color: EHR_OUTLINE,
+                                    color: palette.EHR_OUTLINE,
                                     lineHeight: 16,
                                 }}
                             >
@@ -237,18 +227,18 @@ export default function BiometricSettingsScreen() {
                             paddingHorizontal: 14,
                             borderRadius: 10,
                             borderWidth: 0.5,
-                            borderColor: EHR_OUTLINE_SOFT,
+                            borderColor: palette.EHR_OUTLINE_SOFT,
                         }}
                     >
                         <Text
                             style={{
                                 fontFamily: SANS,
                                 fontSize: 11.5,
-                                color: EHR_OUTLINE,
+                                color: palette.EHR_OUTLINE,
                                 lineHeight: 18,
                             }}
                         >
-                            <Text style={{ fontFamily: SANS_SEMI, color: EHR_ON_SURFACE_VARIANT, fontWeight: '600' }}>
+                            <Text style={{ fontFamily: SANS_SEMI, color: palette.EHR_ON_SURFACE_VARIANT, fontWeight: '600' }}>
                                 TT 13/2025/TT-BYT ·{' '}
                             </Text>
                             công nhận chữ ký sinh trắc học là chữ ký pháp lý đối với hồ sơ y tế điện tử.
@@ -267,7 +257,7 @@ export default function BiometricSettingsScreen() {
                             textAlign: 'center',
                             fontFamily: SANS,
                             fontSize: 11,
-                            color: EHR_OUTLINE,
+                            color: palette.EHR_OUTLINE,
                             lineHeight: 16,
                         }}
                     >
@@ -282,7 +272,7 @@ export default function BiometricSettingsScreen() {
                         textAlign: 'center',
                         fontFamily: SANS,
                         fontSize: 11,
-                        color: EHR_OUTLINE,
+                        color: palette.EHR_OUTLINE,
                         letterSpacing: 0.4,
                     }}
                 >
@@ -308,6 +298,7 @@ function ToggleRow({
     disabled?: boolean;
     last?: boolean;
 }) {
+    const palette = useEhrPalette();
     return (
         <View
             style={{
@@ -317,7 +308,7 @@ function ToggleRow({
                 alignItems: 'center',
                 gap: 12,
                 borderBottomWidth: last ? 0 : 0.5,
-                borderColor: EHR_OUTLINE_SOFT,
+                borderColor: palette.EHR_OUTLINE_SOFT,
                 opacity: disabled ? 0.5 : 1,
             }}
         >
@@ -326,7 +317,7 @@ function ToggleRow({
                     style={{
                         fontFamily: SANS_MEDIUM,
                         fontSize: 13.5,
-                        color: EHR_ON_SURFACE,
+                        color: palette.EHR_ON_SURFACE,
                         fontWeight: '500',
                     }}
                 >
@@ -338,7 +329,7 @@ function ToggleRow({
                             marginTop: 3,
                             fontFamily: SANS,
                             fontSize: 11.5,
-                            color: EHR_OUTLINE,
+                            color: palette.EHR_OUTLINE,
                             lineHeight: 16,
                         }}
                     >
@@ -353,9 +344,9 @@ function ToggleRow({
                     width: 40,
                     height: 24,
                     borderRadius: 12,
-                    backgroundColor: value ? EHR_PRIMARY : EHR_SURFACE,
+                    backgroundColor: value ? palette.EHR_PRIMARY : palette.EHR_SURFACE,
                     borderWidth: 0.5,
-                    borderColor: value ? EHR_PRIMARY : EHR_OUTLINE_VARIANT,
+                    borderColor: value ? palette.EHR_PRIMARY : palette.EHR_OUTLINE_VARIANT,
                     justifyContent: 'center',
                 }}
             >
@@ -375,4 +366,3 @@ function ToggleRow({
     );
 }
 
-void EHR_SURFACE_LOWEST;

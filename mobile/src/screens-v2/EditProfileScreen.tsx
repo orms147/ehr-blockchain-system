@@ -19,18 +19,7 @@ import profileService from '../services/profile.service';
 import useAuthStore from '../store/authStore';
 import ViCard from '../components-v2/ViCard';
 import ViButton from '../components-v2/ViButton';
-import {
-    EHR_SURFACE,
-    EHR_SURFACE_LOWEST,
-    EHR_ON_SURFACE,
-    EHR_ON_SURFACE_VARIANT,
-    EHR_OUTLINE,
-    EHR_OUTLINE_SOFT,
-    EHR_OUTLINE_VARIANT,
-    EHR_PRIMARY,
-    EHR_PRIMARY_FIXED,
-    EHR_SECONDARY,
-} from '../constants/uiColors';
+import { useEhrPalette } from '../constants/uiColors';
 
 const SERIF = 'Fraunces_400Regular';
 const SANS = 'DMSans_400Regular';
@@ -45,6 +34,7 @@ const GENDERS = [
 ];
 
 export default function EditProfileScreen({ navigation }: any) {
+    const palette = useEhrPalette();
     const { token } = useAuthStore();
     const [isLoading, setIsLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
@@ -111,7 +101,7 @@ export default function EditProfileScreen({ navigation }: any) {
     if (isLoading) return <LoadingSpinner message="Đang tải thông tin..." />;
 
     return (
-        <SafeAreaView style={{ flex: 1, backgroundColor: EHR_SURFACE }} edges={['left', 'right', 'bottom']}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: palette.EHR_SURFACE }} edges={['left', 'right', 'bottom']}>
             <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 120 }} showsVerticalScrollIndicator={false}>
                 {/* Hero */}
                 <View style={{ marginBottom: 18 }}>
@@ -119,7 +109,7 @@ export default function EditProfileScreen({ navigation }: any) {
                         style={{
                             fontFamily: SERIF,
                             fontSize: 26,
-                            color: EHR_ON_SURFACE,
+                            color: palette.EHR_ON_SURFACE,
                             letterSpacing: -0.4,
                             lineHeight: 30,
                         }}
@@ -131,7 +121,7 @@ export default function EditProfileScreen({ navigation }: any) {
                             marginTop: 4,
                             fontFamily: SANS,
                             fontSize: 13,
-                            color: EHR_ON_SURFACE_VARIANT,
+                            color: palette.EHR_ON_SURFACE_VARIANT,
                         }}
                     >
                         Cập nhật thông tin cá nhân của bạn.
@@ -163,7 +153,7 @@ export default function EditProfileScreen({ navigation }: any) {
                         style={{
                             fontFamily: SERIF,
                             fontSize: 17,
-                            color: EHR_ON_SURFACE,
+                            color: palette.EHR_ON_SURFACE,
                             letterSpacing: -0.2,
                             marginBottom: 12,
                         }}
@@ -180,8 +170,8 @@ export default function EditProfileScreen({ navigation }: any) {
                                             paddingVertical: 11,
                                             borderRadius: 12,
                                             borderWidth: active ? 1.5 : 0.5,
-                                            borderColor: active ? EHR_PRIMARY : EHR_OUTLINE_SOFT,
-                                            backgroundColor: active ? EHR_PRIMARY_FIXED : EHR_SURFACE_LOWEST,
+                                            borderColor: active ? palette.EHR_PRIMARY : palette.EHR_OUTLINE_SOFT,
+                                            backgroundColor: active ? palette.EHR_PRIMARY_FIXED : palette.EHR_SURFACE_LOWEST,
                                             alignItems: 'center',
                                         }}
                                     >
@@ -189,7 +179,7 @@ export default function EditProfileScreen({ navigation }: any) {
                                             style={{
                                                 fontFamily: SANS_SEMI,
                                                 fontSize: 13.5,
-                                                color: active ? EHR_PRIMARY : EHR_ON_SURFACE,
+                                                color: active ? palette.EHR_PRIMARY : palette.EHR_ON_SURFACE,
                                                 fontWeight: '700',
                                             }}
                                         >
@@ -205,12 +195,12 @@ export default function EditProfileScreen({ navigation }: any) {
                 {/* Blood type */}
                 <ViCard padding={16} style={{ marginBottom: 14 }}>
                     <XStack style={{ alignItems: 'center', gap: 8, marginBottom: 12 }}>
-                        <Droplets size={16} color={EHR_SECONDARY} />
+                        <Droplets size={16} color={palette.EHR_SECONDARY} />
                         <Text
                             style={{
                                 fontFamily: SERIF,
                                 fontSize: 17,
-                                color: EHR_ON_SURFACE,
+                                color: palette.EHR_ON_SURFACE,
                                 letterSpacing: -0.2,
                             }}
                         >
@@ -228,8 +218,8 @@ export default function EditProfileScreen({ navigation }: any) {
                                             paddingHorizontal: 14,
                                             borderRadius: 10,
                                             borderWidth: active ? 1.5 : 0.5,
-                                            borderColor: active ? EHR_SECONDARY : EHR_OUTLINE_SOFT,
-                                            backgroundColor: active ? `${EHR_SECONDARY}1A` : 'transparent',
+                                            borderColor: active ? palette.EHR_SECONDARY : palette.EHR_OUTLINE_SOFT,
+                                            backgroundColor: active ? `${palette.EHR_SECONDARY}1A` : 'transparent',
                                             minWidth: 50,
                                             alignItems: 'center',
                                         }}
@@ -239,7 +229,7 @@ export default function EditProfileScreen({ navigation }: any) {
                                                 fontFamily: 'monospace',
                                                 fontSize: 13,
                                                 fontWeight: '700',
-                                                color: active ? EHR_SECONDARY : EHR_ON_SURFACE_VARIANT,
+                                                color: active ? palette.EHR_SECONDARY : palette.EHR_ON_SURFACE_VARIANT,
                                             }}
                                         >
                                             {bt}
@@ -254,12 +244,12 @@ export default function EditProfileScreen({ navigation }: any) {
                 {/* Allergies */}
                 <ViCard padding={16} style={{ marginBottom: 20 }}>
                     <XStack style={{ alignItems: 'center', gap: 8, marginBottom: 10 }}>
-                        <Heart size={16} color={EHR_PRIMARY} />
+                        <Heart size={16} color={palette.EHR_PRIMARY} />
                         <Text
                             style={{
                                 fontFamily: SERIF,
                                 fontSize: 17,
-                                color: EHR_ON_SURFACE,
+                                color: palette.EHR_ON_SURFACE,
                                 letterSpacing: -0.2,
                             }}
                         >
@@ -270,18 +260,18 @@ export default function EditProfileScreen({ navigation }: any) {
                         value={allergies}
                         onChangeText={setAllergies}
                         placeholder="Ví dụ: Dị ứng Penicillin, Hải sản…"
-                        placeholderTextColor={EHR_OUTLINE}
+                        placeholderTextColor={palette.EHR_OUTLINE}
                         multiline
                         textAlignVertical="top"
                         style={{
                             minHeight: 90,
                             borderRadius: 12,
                             borderWidth: 0.5,
-                            borderColor: EHR_OUTLINE_SOFT,
-                            backgroundColor: EHR_SURFACE,
+                            borderColor: palette.EHR_OUTLINE_SOFT,
+                            backgroundColor: palette.EHR_SURFACE,
                             paddingHorizontal: 14,
                             paddingVertical: 12,
-                            color: EHR_ON_SURFACE,
+                            color: palette.EHR_ON_SURFACE,
                             fontFamily: SANS,
                             fontSize: 14,
                         }}
@@ -299,9 +289,9 @@ export default function EditProfileScreen({ navigation }: any) {
                     paddingHorizontal: 20,
                     paddingTop: 12,
                     paddingBottom: 22,
-                    backgroundColor: EHR_SURFACE,
+                    backgroundColor: palette.EHR_SURFACE,
                     borderTopWidth: 0.5,
-                    borderTopColor: EHR_OUTLINE_VARIANT,
+                    borderTopColor: palette.EHR_OUTLINE_VARIANT,
                 }}
             >
                 <ViButton
@@ -310,7 +300,7 @@ export default function EditProfileScreen({ navigation }: any) {
                     size="lg"
                     loading={isSaving}
                     onPress={handleSave}
-                    leftIcon={isSaving ? undefined : <Save size={16} color={EHR_SURFACE} />}
+                    leftIcon={isSaving ? undefined : <Save size={16} color={palette.EHR_SURFACE} />}
                 >
                     {isSaving ? 'Đang lưu…' : 'Lưu thông tin'}
                 </ViButton>
@@ -320,12 +310,13 @@ export default function EditProfileScreen({ navigation }: any) {
 }
 
 function FieldLabel({ children }: { children: React.ReactNode }) {
+    const palette = useEhrPalette();
     return (
         <Text
             style={{
                 fontFamily: SANS_SEMI,
                 fontSize: 11.5,
-                color: EHR_OUTLINE,
+                color: palette.EHR_OUTLINE,
                 marginBottom: 6,
                 letterSpacing: 0.4,
                 textTransform: 'uppercase',
@@ -345,21 +336,22 @@ function Input({
     placeholder?: string;
     keyboardType?: any;
 }) {
+    const palette = useEhrPalette();
     return (
         <TextInput
             value={value}
             onChangeText={onChangeText}
             placeholder={placeholder}
-            placeholderTextColor={EHR_OUTLINE}
+            placeholderTextColor={palette.EHR_OUTLINE}
             keyboardType={keyboardType}
             style={{
                 height: 46,
                 borderRadius: 12,
                 borderWidth: 0.5,
-                borderColor: EHR_OUTLINE_SOFT,
-                backgroundColor: EHR_SURFACE,
+                borderColor: palette.EHR_OUTLINE_SOFT,
+                backgroundColor: palette.EHR_SURFACE,
                 paddingHorizontal: 14,
-                color: EHR_ON_SURFACE,
+                color: palette.EHR_ON_SURFACE,
                 fontFamily: SANS,
                 fontSize: 14,
             }}

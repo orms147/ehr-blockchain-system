@@ -4,14 +4,7 @@ import { Text, View, XStack, YStack } from 'tamagui';
 import { CameraOff, X } from 'lucide-react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 
-import {
-    EHR_ON_SURFACE,
-    EHR_ON_SURFACE_VARIANT,
-    EHR_OUTLINE_VARIANT,
-    EHR_PRIMARY,
-    EHR_SURFACE,
-    EHR_SURFACE_LOW,
-} from '../constants/uiColors';
+import { useEhrPalette } from '../constants/uiColors';
 
 type ScanMode = 'address' | 'cidHash';
 
@@ -39,6 +32,7 @@ function parseFromQr(data: string, mode: ScanMode): string | null {
 }
 
 export default function QrAddressScanner({ visible, onClose, onScanned, mode = 'address', title, subtitle }: Props) {
+    const palette = useEhrPalette();
     const [permission, requestPermission] = useCameraPermissions();
     const [handled, setHandled] = useState(false);
 
@@ -72,8 +66,8 @@ export default function QrAddressScanner({ visible, onClose, onScanned, mode = '
                         onBarcodeScanned={handleBarcode}
                     />
                 ) : (
-                    <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32, backgroundColor: EHR_SURFACE }}>
-                        <CameraOff size={48} color={EHR_ON_SURFACE_VARIANT} />
+                    <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32, backgroundColor: palette.EHR_SURFACE }}>
+                        <CameraOff size={48} color={palette.EHR_ON_SURFACE_VARIANT} />
                         <Text fontSize="$5" fontWeight="800" color="$color12" style={{ marginTop: 16, textAlign: 'center' }}>
                             Cần quyền camera
                         </Text>
@@ -82,7 +76,7 @@ export default function QrAddressScanner({ visible, onClose, onScanned, mode = '
                         </Text>
                         {permission?.canAskAgain ? (
                             <Pressable onPress={requestPermission} style={{ marginTop: 20 }}>
-                                <View style={{ backgroundColor: EHR_PRIMARY, borderRadius: 14, paddingHorizontal: 24, paddingVertical: 12 }}>
+                                <View style={{ backgroundColor: palette.EHR_PRIMARY, borderRadius: 14, paddingHorizontal: 24, paddingVertical: 12 }}>
                                     <Text fontSize="$3" fontWeight="800" style={{ color: '#fff' }}>Cấp quyền</Text>
                                 </View>
                             </Pressable>
@@ -121,7 +115,7 @@ export default function QrAddressScanner({ visible, onClose, onScanned, mode = '
                                 height: 260,
                                 borderRadius: 28,
                                 borderWidth: 3,
-                                borderColor: EHR_PRIMARY,
+                                borderColor: palette.EHR_PRIMARY,
                                 backgroundColor: 'transparent',
                             }}
                         />

@@ -20,11 +20,7 @@ import {
 } from 'lucide-react-native';
 
 import api from '../services/api';
-import {
-    EHR_PRIMARY,
-    EHR_PRIMARY_FIXED,
-    EHR_ON_SURFACE_VARIANT,
-} from '../constants/uiColors';
+import { useEhrPalette } from '../constants/uiColors';
 
 export type RecordMeta = {
     cidHash: string;
@@ -89,6 +85,7 @@ export default function RecordChip({
     showHash = true,
     onPress,
 }: RecordChipProps) {
+    const palette = useEhrPalette();
     const { data: meta } = useRecordMeta(cidHash);
 
     const title = meta?.title || fallbackTitle || `Hồ sơ ${truncate(cidHash)}`;
@@ -105,13 +102,13 @@ export default function RecordChip({
                     width: 36,
                     height: 36,
                     borderRadius: 10,
-                    backgroundColor: EHR_PRIMARY_FIXED,
+                    backgroundColor: palette.EHR_PRIMARY_FIXED,
                     alignItems: 'center',
                     justifyContent: 'center',
                     marginRight: 10,
                 }}
             >
-                <Icon size={18} color={EHR_PRIMARY} />
+                <Icon size={18} color={palette.EHR_PRIMARY} />
             </View>
             <YStack style={{ flex: 1 }}>
                 <Text fontSize="$4" fontWeight="700" color="$color12" numberOfLines={1}>
@@ -122,7 +119,7 @@ export default function RecordChip({
                         <Text fontSize="$2" color="$color10">{typeLabel}</Text>
                     ) : null}
                     {showHash && cidHash ? (
-                        <Text fontSize="$1" style={{ color: EHR_ON_SURFACE_VARIANT, fontFamily: 'monospace' }}>
+                        <Text fontSize="$1" style={{ color: palette.EHR_ON_SURFACE_VARIANT, fontFamily: 'monospace' }}>
                             {truncate(cidHash)}
                         </Text>
                     ) : null}

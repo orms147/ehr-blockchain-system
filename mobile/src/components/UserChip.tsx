@@ -14,15 +14,7 @@ import { User, Stethoscope, ShieldCheck, Copy } from 'lucide-react-native';
 import * as Clipboard from 'expo-clipboard';
 
 import profileService from '../services/profile.service';
-import {
-    EHR_PRIMARY,
-    EHR_PRIMARY_FIXED,
-    EHR_SURFACE_LOW,
-    EHR_SURFACE_LOWEST,
-    EHR_OUTLINE_VARIANT,
-    EHR_ON_SURFACE,
-    EHR_ON_SURFACE_VARIANT,
-} from '../constants/uiColors';
+import { useEhrPalette } from '../constants/uiColors';
 
 export type PublicProfile = {
     walletAddress: string;
@@ -95,6 +87,7 @@ export default function UserChip({
     showRolePrefix = true,
     interactive = true,
 }: UserChipProps) {
+    const palette = useEhrPalette();
     const { data: profile } = useUserProfile(address);
     const [sheetOpen, setSheetOpen] = useState(false);
 
@@ -127,13 +120,13 @@ export default function UserChip({
                         width: size === 'sm' ? 28 : 36,
                         height: size === 'sm' ? 28 : 36,
                         borderRadius: 999,
-                        backgroundColor: EHR_PRIMARY_FIXED,
+                        backgroundColor: palette.EHR_PRIMARY_FIXED,
                         alignItems: 'center',
                         justifyContent: 'center',
                         marginRight: 10,
                     }}
                 >
-                    <RoleIcon size={size === 'sm' ? 14 : 18} color={EHR_PRIMARY} />
+                    <RoleIcon size={size === 'sm' ? 14 : 18} color={palette.EHR_PRIMARY} />
                 </View>
                 <YStack style={{ flex: 1 }}>
                     <XStack style={{ alignItems: 'center', gap: 6 }}>
@@ -152,12 +145,12 @@ export default function UserChip({
                                 alignItems: 'center',
                                 paddingHorizontal: 6,
                                 paddingVertical: 2,
-                                backgroundColor: EHR_PRIMARY_FIXED,
+                                backgroundColor: palette.EHR_PRIMARY_FIXED,
                                 borderRadius: 999,
                                 gap: 2,
                             }}>
-                                <ShieldCheck size={10} color={EHR_PRIMARY} />
-                                <Text fontSize={9} fontWeight="800" style={{ color: EHR_PRIMARY }}>XM</Text>
+                                <ShieldCheck size={10} color={palette.EHR_PRIMARY} />
+                                <Text fontSize={9} fontWeight="800" style={{ color: palette.EHR_PRIMARY }}>XM</Text>
                             </View>
                         ) : null}
                     </XStack>
@@ -183,7 +176,7 @@ export default function UserChip({
                         <View style={{ flex: 1, justifyContent: 'flex-end' }}>
                             <Pressable onPress={(e) => e.stopPropagation()}>
                                 <View style={{
-                                    backgroundColor: EHR_SURFACE_LOWEST,
+                                    backgroundColor: palette.EHR_SURFACE_LOWEST,
                                     borderTopLeftRadius: 20,
                                     borderTopRightRadius: 20,
                                     padding: 20,
@@ -194,12 +187,12 @@ export default function UserChip({
                                             width: 56,
                                             height: 56,
                                             borderRadius: 28,
-                                            backgroundColor: EHR_PRIMARY_FIXED,
+                                            backgroundColor: palette.EHR_PRIMARY_FIXED,
                                             alignItems: 'center',
                                             justifyContent: 'center',
                                             marginRight: 14,
                                         }}>
-                                            <RoleIcon size={28} color={EHR_PRIMARY} />
+                                            <RoleIcon size={28} color={palette.EHR_PRIMARY} />
                                         </View>
                                         <YStack style={{ flex: 1 }}>
                                             <XStack style={{ alignItems: 'center', gap: 6 }}>
@@ -212,12 +205,12 @@ export default function UserChip({
                                                         alignItems: 'center',
                                                         paddingHorizontal: 8,
                                                         paddingVertical: 3,
-                                                        backgroundColor: EHR_PRIMARY_FIXED,
+                                                        backgroundColor: palette.EHR_PRIMARY_FIXED,
                                                         borderRadius: 999,
                                                         gap: 3,
                                                     }}>
-                                                        <ShieldCheck size={12} color={EHR_PRIMARY} />
-                                                        <Text fontSize={10} fontWeight="800" style={{ color: EHR_PRIMARY }}>
+                                                        <ShieldCheck size={12} color={palette.EHR_PRIMARY} />
+                                                        <Text fontSize={10} fontWeight="800" style={{ color: palette.EHR_PRIMARY }}>
                                                             Đã xác minh
                                                         </Text>
                                                     </View>
@@ -233,17 +226,17 @@ export default function UserChip({
                                     </XStack>
 
                                     <View style={{
-                                        backgroundColor: EHR_SURFACE_LOW,
+                                        backgroundColor: palette.EHR_SURFACE_LOW,
                                         borderRadius: 12,
                                         padding: 12,
                                         borderWidth: 1,
-                                        borderColor: EHR_OUTLINE_VARIANT,
+                                        borderColor: palette.EHR_OUTLINE_VARIANT,
                                     }}>
                                         <Text fontSize="$1" color="$color9" style={{ marginBottom: 4 }}>
                                             ĐỊA CHỈ VÍ
                                         </Text>
                                         <XStack style={{ alignItems: 'center', justifyContent: 'space-between' }}>
-                                            <Text fontSize="$3" color={EHR_ON_SURFACE} style={{ flex: 1, fontFamily: 'monospace' }}>
+                                            <Text fontSize="$3" color={palette.EHR_ON_SURFACE} style={{ flex: 1, fontFamily: 'monospace' }}>
                                                 {address}
                                             </Text>
                                             <Pressable
@@ -252,7 +245,7 @@ export default function UserChip({
                                                 }}
                                                 style={{ padding: 6 }}
                                             >
-                                                <Copy size={16} color={EHR_ON_SURFACE_VARIANT} />
+                                                <Copy size={16} color={palette.EHR_ON_SURFACE_VARIANT} />
                                             </Pressable>
                                         </XStack>
                                     </View>

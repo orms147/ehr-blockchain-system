@@ -39,20 +39,7 @@ import {
 import ViCard from '../components-v2/ViCard';
 import ViButton from '../components-v2/ViButton';
 import { ViStatusChip } from '../components-v2/ViChips';
-import {
-    EHR_SURFACE,
-    EHR_SURFACE_LOWEST,
-    EHR_SURFACE_HIGH,
-    EHR_ON_SURFACE,
-    EHR_ON_SURFACE_VARIANT,
-    EHR_OUTLINE,
-    EHR_OUTLINE_SOFT,
-    EHR_OUTLINE_VARIANT,
-    EHR_PRIMARY,
-    EHR_TERTIARY,
-    EHR_WARNING,
-    EHR_DANGER,
-} from '../constants/uiColors';
+import { useEhrPalette } from '../constants/uiColors';
 import { formatExpiry } from '../utils/dateFormatting';
 
 const SERIF = 'Fraunces_400Regular';
@@ -88,6 +75,7 @@ function DelegationCard({
     onExtend: (item: DelegationRow) => void;
     revoking: boolean;
 }) {
+    const palette = useEhrPalette();
     const token = statusToken(item);
     const isActive = token === 'active';
 
@@ -103,16 +91,16 @@ function DelegationCard({
         : isActive
             ? 'Đang hiệu lực'
             : token === 'expired' ? 'Đã hết hạn' : 'Đã thu hồi';
-    const ribbonTint = expiringSoon ? EHR_WARNING : isActive ? EHR_TERTIARY : EHR_OUTLINE;
+    const ribbonTint = expiringSoon ? palette.EHR_WARNING : isActive ? palette.EHR_TERTIARY : palette.EHR_OUTLINE;
 
     return (
         <View
             style={{
                 marginBottom: 16,
-                backgroundColor: EHR_SURFACE_HIGH,
+                backgroundColor: palette.EHR_SURFACE_HIGH,
                 borderRadius: 14,
                 borderWidth: 0.5,
-                borderColor: expiringSoon ? `${EHR_WARNING}60` : EHR_OUTLINE_VARIANT,
+                borderColor: expiringSoon ? `${palette.EHR_WARNING}60` : palette.EHR_OUTLINE_VARIANT,
                 overflow: 'hidden',
             }}
         >
@@ -156,17 +144,17 @@ function DelegationCard({
                         marginTop: 16,
                         paddingVertical: 12,
                         paddingHorizontal: 14,
-                        backgroundColor: EHR_SURFACE,
+                        backgroundColor: palette.EHR_SURFACE,
                         borderRadius: 10,
                         borderWidth: 0.5,
-                        borderColor: EHR_OUTLINE_VARIANT,
+                        borderColor: palette.EHR_OUTLINE_VARIANT,
                     }}
                 >
                     <Text
                         style={{
                             fontFamily: SANS_SEMI,
                             fontSize: 9,
-                            color: EHR_OUTLINE,
+                            color: palette.EHR_OUTLINE,
                             letterSpacing: 1,
                             textTransform: 'uppercase',
                             fontWeight: '700',
@@ -190,7 +178,7 @@ function DelegationCard({
                             marginTop: 12,
                             fontFamily: SANS,
                             fontSize: 11.5,
-                            color: EHR_OUTLINE,
+                            color: palette.EHR_OUTLINE,
                             lineHeight: 16,
                             fontStyle: 'italic',
                         }}
@@ -207,17 +195,17 @@ function DelegationCard({
                         paddingTop: 12,
                         borderTopWidth: 0.5,
                         borderStyle: 'dashed',
-                        borderColor: EHR_OUTLINE_VARIANT,
+                        borderColor: palette.EHR_OUTLINE_VARIANT,
                         flexDirection: 'row',
                         justifyContent: 'space-between',
                     }}
                 >
-                    <Text style={{ fontFamily: SANS, fontSize: 11, color: EHR_OUTLINE }}>
+                    <Text style={{ fontFamily: SANS, fontSize: 11, color: palette.EHR_OUTLINE }}>
                         Đến hạn{' '}
                         <Text
                             style={{
                                 fontFamily: 'monospace',
-                                color: expiringSoon ? EHR_WARNING : EHR_ON_SURFACE,
+                                color: expiringSoon ? palette.EHR_WARNING : palette.EHR_ON_SURFACE,
                             }}
                         >
                             {formatExpiry(item.expiresAt)}
@@ -232,7 +220,7 @@ function DelegationCard({
                     style={{
                         flexDirection: 'row',
                         borderTopWidth: 0.5,
-                        borderTopColor: EHR_OUTLINE_VARIANT,
+                        borderTopColor: palette.EHR_OUTLINE_VARIANT,
                     }}
                 >
                     <Pressable
@@ -246,16 +234,16 @@ function DelegationCard({
                             flexDirection: 'row',
                             gap: 6,
                             borderRightWidth: 0.5,
-                            borderRightColor: EHR_OUTLINE_VARIANT,
+                            borderRightColor: palette.EHR_OUTLINE_VARIANT,
                             opacity: pressed ? 0.5 : revoking ? 0.4 : 1,
                         })}
                     >
-                        <Trash2 size={14} color={EHR_DANGER} />
+                        <Trash2 size={14} color={palette.EHR_DANGER} />
                         <Text
                             style={{
                                 fontFamily: SANS_SEMI,
                                 fontSize: 13,
-                                color: EHR_DANGER,
+                                color: palette.EHR_DANGER,
                                 fontWeight: '700',
                             }}
                         >
@@ -276,7 +264,7 @@ function DelegationCard({
                             style={{
                                 fontFamily: SANS_SEMI,
                                 fontSize: 13,
-                                color: EHR_ON_SURFACE,
+                                color: palette.EHR_ON_SURFACE,
                                 fontWeight: '600',
                             }}
                         >
@@ -291,6 +279,7 @@ function DelegationCard({
 
 // Power row: cinnabar-filled checkbox when on, neutral outline when off.
 function Power({ label, sub, on }: { label: string; sub: string; on: boolean }) {
+    const palette = useEhrPalette();
     return (
         <View style={{ flexDirection: 'row', gap: 10, paddingVertical: 5, alignItems: 'flex-start' }}>
             <View
@@ -299,9 +288,9 @@ function Power({ label, sub, on }: { label: string; sub: string; on: boolean }) 
                     width: 14,
                     height: 14,
                     borderRadius: 3,
-                    backgroundColor: on ? EHR_PRIMARY : 'transparent',
+                    backgroundColor: on ? palette.EHR_PRIMARY : 'transparent',
                     borderWidth: 0.5,
-                    borderColor: on ? EHR_PRIMARY : EHR_OUTLINE,
+                    borderColor: on ? palette.EHR_PRIMARY : palette.EHR_OUTLINE,
                     alignItems: 'center',
                     justifyContent: 'center',
                 }}
@@ -313,7 +302,7 @@ function Power({ label, sub, on }: { label: string; sub: string; on: boolean }) 
                     style={{
                         fontFamily: SANS_SEMI,
                         fontSize: 12,
-                        color: on ? EHR_ON_SURFACE : EHR_OUTLINE,
+                        color: on ? palette.EHR_ON_SURFACE : palette.EHR_OUTLINE,
                         fontWeight: '600',
                     }}
                 >
@@ -324,7 +313,7 @@ function Power({ label, sub, on }: { label: string; sub: string; on: boolean }) 
                         marginTop: 2,
                         fontFamily: SANS,
                         fontSize: 10.5,
-                        color: EHR_OUTLINE,
+                        color: palette.EHR_OUTLINE,
                     }}
                 >
                     {sub}
@@ -350,6 +339,7 @@ function GrantAuthorityModal({
     }) => void;
     submitting: boolean;
 }) {
+    const palette = useEhrPalette();
     const [address, setAddress] = useState('');
     const [days, setDays] = useState('30');
     const [allowSub, setAllowSub] = useState(false);
@@ -391,7 +381,7 @@ function GrantAuthorityModal({
             >
                 <View
                     style={{
-                        backgroundColor: EHR_SURFACE_LOWEST,
+                        backgroundColor: palette.EHR_SURFACE_LOWEST,
                         borderTopLeftRadius: 22,
                         borderTopRightRadius: 22,
                         padding: 22,
@@ -404,7 +394,7 @@ function GrantAuthorityModal({
                             style={{
                                 fontFamily: SERIF,
                                 fontSize: 20,
-                                color: EHR_ON_SURFACE,
+                                color: palette.EHR_ON_SURFACE,
                                 letterSpacing: -0.3,
                             }}
                         >
@@ -417,7 +407,7 @@ function GrantAuthorityModal({
                             }}
                             hitSlop={8}
                         >
-                            <X size={18} color={EHR_OUTLINE} />
+                            <X size={18} color={palette.EHR_OUTLINE} />
                         </Pressable>
                     </XStack>
 
@@ -428,17 +418,17 @@ function GrantAuthorityModal({
                                 style={{
                                     flex: 1,
                                     borderWidth: 0.5,
-                                    borderColor: EHR_OUTLINE_SOFT,
+                                    borderColor: palette.EHR_OUTLINE_SOFT,
                                     borderRadius: 12,
                                     paddingVertical: 11,
                                     paddingHorizontal: 14,
-                                    color: EHR_ON_SURFACE,
-                                    backgroundColor: EHR_SURFACE,
+                                    color: palette.EHR_ON_SURFACE,
+                                    backgroundColor: palette.EHR_SURFACE,
                                     fontFamily: 'monospace',
                                     fontSize: 13,
                                 }}
                                 placeholder="0x..."
-                                placeholderTextColor={EHR_OUTLINE}
+                                placeholderTextColor={palette.EHR_OUTLINE}
                                 value={address}
                                 onChangeText={setAddress}
                                 autoCapitalize="none"
@@ -449,19 +439,19 @@ function GrantAuthorityModal({
                                 style={({ pressed }) => ({
                                     width: 46,
                                     borderWidth: 0.5,
-                                    borderColor: EHR_OUTLINE_SOFT,
+                                    borderColor: palette.EHR_OUTLINE_SOFT,
                                     borderRadius: 12,
                                     alignItems: 'center',
                                     justifyContent: 'center',
-                                    backgroundColor: EHR_SURFACE,
+                                    backgroundColor: palette.EHR_SURFACE,
                                     opacity: pressed ? 0.7 : 1,
                                 })}
                             >
-                                <QrCode size={18} color={EHR_PRIMARY} />
+                                <QrCode size={18} color={palette.EHR_PRIMARY} />
                             </Pressable>
                         </XStack>
                         {address.length > 0 && !addressValid ? (
-                            <Text style={{ fontFamily: SANS, fontSize: 11, color: EHR_PRIMARY, marginBottom: 8 }}>
+                            <Text style={{ fontFamily: SANS, fontSize: 11, color: palette.EHR_PRIMARY, marginBottom: 8 }}>
                                 Cần là địa chỉ 0x + 40 ký tự hex.
                             </Text>
                         ) : null}
@@ -471,22 +461,22 @@ function GrantAuthorityModal({
                         <TextInput
                             style={{
                                 borderWidth: 0.5,
-                                borderColor: EHR_OUTLINE_SOFT,
+                                borderColor: palette.EHR_OUTLINE_SOFT,
                                 borderRadius: 12,
                                 paddingVertical: 11,
                                 paddingHorizontal: 14,
-                                color: EHR_ON_SURFACE,
-                                backgroundColor: EHR_SURFACE,
+                                color: palette.EHR_ON_SURFACE,
+                                backgroundColor: palette.EHR_SURFACE,
                                 fontFamily: SANS,
                                 fontSize: 14,
                             }}
                             placeholder="30"
-                            placeholderTextColor={EHR_OUTLINE}
+                            placeholderTextColor={palette.EHR_OUTLINE}
                             value={days}
                             onChangeText={setDays}
                             keyboardType="number-pad"
                         />
-                        <Text style={{ fontFamily: SANS, fontSize: 11, color: EHR_OUTLINE, marginTop: 4 }}>
+                        <Text style={{ fontFamily: SANS, fontSize: 11, color: palette.EHR_OUTLINE, marginTop: 4 }}>
                             Tối thiểu 1 ngày, tối đa 1825 (5 năm).
                         </Text>
 
@@ -495,9 +485,9 @@ function GrantAuthorityModal({
                                 marginTop: 14,
                                 paddingVertical: 12,
                                 paddingHorizontal: 14,
-                                backgroundColor: EHR_SURFACE,
+                                backgroundColor: palette.EHR_SURFACE,
                                 borderWidth: 0.5,
-                                borderColor: EHR_OUTLINE_SOFT,
+                                borderColor: palette.EHR_OUTLINE_SOFT,
                                 borderRadius: 12,
                                 alignItems: 'center',
                             }}
@@ -507,7 +497,7 @@ function GrantAuthorityModal({
                                     style={{
                                         fontFamily: SANS_SEMI,
                                         fontSize: 13.5,
-                                        color: EHR_ON_SURFACE,
+                                        color: palette.EHR_ON_SURFACE,
                                         fontWeight: '600',
                                     }}
                                 >
@@ -518,7 +508,7 @@ function GrantAuthorityModal({
                                         marginTop: 2,
                                         fontFamily: SANS,
                                         fontSize: 11.5,
-                                        color: EHR_OUTLINE,
+                                        color: palette.EHR_OUTLINE,
                                         lineHeight: 16,
                                     }}
                                 >
@@ -528,7 +518,7 @@ function GrantAuthorityModal({
                             <Switch
                                 value={allowSub}
                                 onValueChange={setAllowSub}
-                                trackColor={{ false: EHR_OUTLINE_VARIANT, true: EHR_PRIMARY }}
+                                trackColor={{ false: palette.EHR_OUTLINE_VARIANT, true: palette.EHR_PRIMARY }}
                                 thumbColor="#FAF7F1"
                             />
                         </XStack>
@@ -539,18 +529,18 @@ function GrantAuthorityModal({
                             style={{
                                 minHeight: 80,
                                 borderWidth: 0.5,
-                                borderColor: EHR_OUTLINE_SOFT,
+                                borderColor: palette.EHR_OUTLINE_SOFT,
                                 borderRadius: 12,
                                 paddingVertical: 11,
                                 paddingHorizontal: 14,
-                                color: EHR_ON_SURFACE,
-                                backgroundColor: EHR_SURFACE,
+                                color: palette.EHR_ON_SURFACE,
+                                backgroundColor: palette.EHR_SURFACE,
                                 fontFamily: SANS,
                                 fontSize: 14,
                                 textAlignVertical: 'top',
                             }}
                             placeholder="VD: điều trị tiểu đường, ICD-10 E11..."
-                            placeholderTextColor={EHR_OUTLINE}
+                            placeholderTextColor={palette.EHR_OUTLINE}
                             value={scope}
                             onChangeText={setScope}
                             multiline
@@ -574,7 +564,7 @@ function GrantAuthorityModal({
                                 textAlign: 'center',
                                 fontFamily: SANS,
                                 fontSize: 11,
-                                color: EHR_OUTLINE,
+                                color: palette.EHR_OUTLINE,
                                 lineHeight: 16,
                             }}
                         >
@@ -609,6 +599,7 @@ function ExtendSheet({
     onConfirm: (additionalDays: number) => void;
     submitting: boolean;
 }) {
+    const palette = useEhrPalette();
     const [picked, setPicked] = useState<number>(30);
 
     if (!target) return null;
@@ -639,7 +630,7 @@ function ExtendSheet({
                 <Pressable
                     onPress={(e) => e.stopPropagation()}
                     style={{
-                        backgroundColor: EHR_SURFACE_HIGH,
+                        backgroundColor: palette.EHR_SURFACE_HIGH,
                         borderTopLeftRadius: 20,
                         borderTopRightRadius: 20,
                         paddingHorizontal: 22,
@@ -649,14 +640,14 @@ function ExtendSheet({
                 >
                     {/* handle */}
                     <View style={{ alignItems: 'center', marginBottom: 14 }}>
-                        <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: EHR_OUTLINE }} />
+                        <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: palette.EHR_OUTLINE }} />
                     </View>
 
                     <Text
                         style={{
                             fontFamily: SERIF,
                             fontSize: 20,
-                            color: EHR_ON_SURFACE,
+                            color: palette.EHR_ON_SURFACE,
                             letterSpacing: -0.3,
                             marginBottom: 6,
                         }}
@@ -667,7 +658,7 @@ function ExtendSheet({
                         style={{
                             fontFamily: SANS,
                             fontSize: 12.5,
-                            color: EHR_ON_SURFACE_VARIANT,
+                            color: palette.EHR_ON_SURFACE_VARIANT,
                             lineHeight: 18,
                             marginBottom: 14,
                         }}
@@ -682,8 +673,8 @@ function ExtendSheet({
                             paddingHorizontal: 12,
                             borderRadius: 10,
                             borderWidth: 0.5,
-                            borderColor: EHR_OUTLINE_VARIANT,
-                            backgroundColor: EHR_SURFACE,
+                            borderColor: palette.EHR_OUTLINE_VARIANT,
+                            backgroundColor: palette.EHR_SURFACE,
                             marginBottom: 16,
                         }}
                     >
@@ -704,8 +695,8 @@ function ExtendSheet({
                                         paddingVertical: 12,
                                         borderRadius: 10,
                                         borderWidth: active ? 1.5 : 0.5,
-                                        borderColor: active ? EHR_PRIMARY : EHR_OUTLINE_VARIANT,
-                                        backgroundColor: active ? `${EHR_PRIMARY}1A` : EHR_SURFACE,
+                                        borderColor: active ? palette.EHR_PRIMARY : palette.EHR_OUTLINE_VARIANT,
+                                        backgroundColor: active ? `${palette.EHR_PRIMARY}1A` : palette.EHR_SURFACE,
                                         alignItems: 'center',
                                         opacity: pressed ? 0.7 : 1,
                                     })}
@@ -714,7 +705,7 @@ function ExtendSheet({
                                         style={{
                                             fontFamily: SANS_SEMI,
                                             fontSize: 14,
-                                            color: active ? EHR_PRIMARY : EHR_ON_SURFACE,
+                                            color: active ? palette.EHR_PRIMARY : palette.EHR_ON_SURFACE,
                                             fontWeight: '700',
                                         }}
                                     >
@@ -733,14 +724,14 @@ function ExtendSheet({
                             borderRadius: 10,
                             borderWidth: 0.5,
                             borderStyle: 'dashed',
-                            borderColor: EHR_OUTLINE_VARIANT,
-                            backgroundColor: EHR_SURFACE,
+                            borderColor: palette.EHR_OUTLINE_VARIANT,
+                            backgroundColor: palette.EHR_SURFACE,
                             marginBottom: 18,
                         }}
                     >
-                        <Text style={{ fontFamily: SANS, fontSize: 11.5, color: EHR_OUTLINE }}>
+                        <Text style={{ fontFamily: SANS, fontSize: 11.5, color: palette.EHR_OUTLINE }}>
                             Hạn mới sẽ là{' '}
-                            <Text style={{ fontFamily: 'monospace', color: EHR_ON_SURFACE, fontWeight: '700' }}>
+                            <Text style={{ fontFamily: 'monospace', color: palette.EHR_ON_SURFACE, fontWeight: '700' }}>
                                 {formatExpiryDate(newExpiry)}
                             </Text>{' '}
                             ({newTotal} ngày từ hôm nay)
@@ -771,7 +762,7 @@ function ExtendSheet({
                             textAlign: 'center',
                             fontFamily: SANS,
                             fontSize: 10.5,
-                            color: EHR_OUTLINE,
+                            color: palette.EHR_OUTLINE,
                             lineHeight: 15,
                             fontStyle: 'italic',
                         }}
@@ -785,12 +776,13 @@ function ExtendSheet({
 }
 
 function FieldLabel({ children }: { children: React.ReactNode }) {
+    const palette = useEhrPalette();
     return (
         <Text
             style={{
                 fontFamily: SANS_SEMI,
                 fontSize: 11.5,
-                color: EHR_OUTLINE,
+                color: palette.EHR_OUTLINE,
                 marginBottom: 6,
                 letterSpacing: 0.4,
                 textTransform: 'uppercase',
@@ -803,6 +795,7 @@ function FieldLabel({ children }: { children: React.ReactNode }) {
 }
 
 export default function DelegationScreen() {
+    const palette = useEhrPalette();
     const { data: delegations = [], isLoading, isFetching, refetch } = useMyDelegates();
     const grantMutation = useGrantAuthority();
     const revokeMutation = useRevokeAuthority();
@@ -883,7 +876,7 @@ export default function DelegationScreen() {
     const activeCount = delegations.filter((d) => statusToken(d) === 'active').length;
 
     return (
-        <SafeAreaView style={{ flex: 1, backgroundColor: EHR_SURFACE }} edges={['top']}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: palette.EHR_SURFACE }} edges={['top']}>
             <FlatList
                 data={delegations}
                 keyExtractor={(item) => item.id}
@@ -892,7 +885,7 @@ export default function DelegationScreen() {
                     <RefreshControl
                         refreshing={isFetching && !isLoading}
                         onRefresh={() => refetch()}
-                        tintColor={EHR_ON_SURFACE_VARIANT}
+                        tintColor={palette.EHR_ON_SURFACE_VARIANT}
                     />
                 }
                 ListHeaderComponent={
@@ -902,7 +895,7 @@ export default function DelegationScreen() {
                             style={{
                                 fontFamily: SANS_SEMI,
                                 fontSize: 10,
-                                color: EHR_PRIMARY,
+                                color: palette.EHR_PRIMARY,
                                 letterSpacing: 1.4,
                                 textTransform: 'uppercase',
                                 fontWeight: '700',
@@ -915,7 +908,7 @@ export default function DelegationScreen() {
                                 marginTop: 8,
                                 fontFamily: SERIF,
                                 fontSize: 24,
-                                color: EHR_ON_SURFACE,
+                                color: palette.EHR_ON_SURFACE,
                                 letterSpacing: -0.4,
                                 lineHeight: 30,
                             }}
@@ -925,7 +918,7 @@ export default function DelegationScreen() {
                                 style={{
                                     fontFamily: 'Fraunces_400Regular_Italic',
                                     fontStyle: 'italic',
-                                    color: EHR_PRIMARY,
+                                    color: palette.EHR_PRIMARY,
                                 }}
                             >
                                 tất cả
@@ -937,7 +930,7 @@ export default function DelegationScreen() {
                                 marginTop: 12,
                                 fontFamily: SANS,
                                 fontSize: 13,
-                                color: EHR_ON_SURFACE_VARIANT,
+                                color: palette.EHR_ON_SURFACE_VARIANT,
                                 lineHeight: 20,
                             }}
                         >
@@ -950,7 +943,7 @@ export default function DelegationScreen() {
                                     marginTop: 22,
                                     fontFamily: SANS_SEMI,
                                     fontSize: 10,
-                                    color: EHR_OUTLINE,
+                                    color: palette.EHR_OUTLINE,
                                     letterSpacing: 1.2,
                                     textTransform: 'uppercase',
                                     fontWeight: '700',
@@ -966,13 +959,13 @@ export default function DelegationScreen() {
                 }
                 ListEmptyComponent={
                     <View style={{ paddingTop: 14, alignItems: 'center' }}>
-                        <Users size={32} color={EHR_OUTLINE} />
+                        <Users size={32} color={palette.EHR_OUTLINE} />
                         <Text
                             style={{
                                 marginTop: 14,
                                 fontFamily: SERIF,
                                 fontSize: 18,
-                                color: EHR_ON_SURFACE,
+                                color: palette.EHR_ON_SURFACE,
                                 textAlign: 'center',
                             }}
                         >
@@ -983,7 +976,7 @@ export default function DelegationScreen() {
                                 marginTop: 8,
                                 fontFamily: SANS,
                                 fontSize: 13,
-                                color: EHR_OUTLINE,
+                                color: palette.EHR_OUTLINE,
                                 textAlign: 'center',
                                 maxWidth: 280,
                                 lineHeight: 19,
@@ -1015,17 +1008,17 @@ export default function DelegationScreen() {
                                 borderRadius: 12,
                                 borderWidth: 1,
                                 borderStyle: 'dashed',
-                                borderColor: EHR_PRIMARY,
+                                borderColor: palette.EHR_PRIMARY,
                                 backgroundColor: 'transparent',
                                 opacity: pressed ? 0.6 : 1,
                             })}
                         >
-                            <UserPlus size={16} color={EHR_PRIMARY} />
+                            <UserPlus size={16} color={palette.EHR_PRIMARY} />
                             <Text
                                 style={{
                                     fontFamily: SANS_SEMI,
                                     fontSize: 13,
-                                    color: EHR_PRIMARY,
+                                    color: palette.EHR_PRIMARY,
                                     fontWeight: '600',
                                 }}
                             >
@@ -1038,7 +1031,7 @@ export default function DelegationScreen() {
                                 textAlign: 'center',
                                 fontFamily: SANS,
                                 fontSize: 10.5,
-                                color: EHR_OUTLINE,
+                                color: palette.EHR_OUTLINE,
                                 lineHeight: 16,
                                 fontStyle: 'italic',
                             }}
@@ -1052,22 +1045,22 @@ export default function DelegationScreen() {
                                 marginTop: 22,
                                 paddingVertical: 11,
                                 paddingHorizontal: 14,
-                                backgroundColor: EHR_SURFACE_LOWEST,
+                                backgroundColor: palette.EHR_SURFACE_LOWEST,
                                 borderRadius: 10,
                                 borderWidth: 0.5,
                                 borderStyle: 'dashed',
-                                borderColor: EHR_OUTLINE_VARIANT,
+                                borderColor: palette.EHR_OUTLINE_VARIANT,
                                 flexDirection: 'row',
                                 gap: 8,
                             }}
                         >
-                            <Info size={13} color={EHR_OUTLINE} style={{ marginTop: 2 }} />
+                            <Info size={13} color={palette.EHR_OUTLINE} style={{ marginTop: 2 }} />
                             <Text
                                 style={{
                                     flex: 1,
                                     fontFamily: SANS,
                                     fontSize: 11,
-                                    color: EHR_OUTLINE,
+                                    color: palette.EHR_OUTLINE,
                                     lineHeight: 16,
                                 }}
                             >
@@ -1095,5 +1088,3 @@ export default function DelegationScreen() {
     );
 }
 
-void EHR_TERTIARY;
-void EHR_OUTLINE_VARIANT;

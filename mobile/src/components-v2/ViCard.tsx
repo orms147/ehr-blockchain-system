@@ -6,10 +6,7 @@
 
 import React from 'react';
 import { Pressable, View, ViewStyle } from 'react-native';
-import {
-    EHR_SURFACE_LOWEST,
-    EHR_OUTLINE_SOFT,
-} from '../constants/uiColors';
+import { useEhrPalette } from '../constants/uiColors';
 
 export interface ViCardProps {
     children: React.ReactNode;
@@ -24,9 +21,10 @@ export default function ViCard({
     padding = 16,
     style,
 }: ViCardProps) {
+    const palette = useEhrPalette();
     const baseStyle: ViewStyle = {
-        backgroundColor: EHR_SURFACE_LOWEST,
-        borderColor: EHR_OUTLINE_SOFT,
+        backgroundColor: palette.EHR_SURFACE_LOWEST,
+        borderColor: palette.EHR_OUTLINE_SOFT,
         borderWidth: 0.75,
         borderRadius: 14,
         padding,

@@ -8,21 +8,7 @@ import Animated, {
     withSpring,
     interpolate,
 } from 'react-native-reanimated';
-import {
-    EHR_ON_PRIMARY,
-    EHR_ON_SURFACE,
-    EHR_ON_SURFACE_VARIANT,
-    EHR_OUTLINE_VARIANT,
-    EHR_PRIMARY,
-    EHR_PRIMARY_CONTAINER,
-    EHR_PRIMARY_FIXED,
-    EHR_SECONDARY,
-    EHR_SECONDARY_CONTAINER,
-    EHR_SHADOW,
-    EHR_SURFACE_LOW,
-    EHR_SURFACE_LOWEST,
-    EHR_TERTIARY,
-} from '../constants/uiColors';
+import { useEhrPalette } from '../constants/uiColors';
 import { formatDate, formatExpiry, getExpiryUrgency } from '../utils/dateFormatting';
 
 interface SharedRecordCardProps {
@@ -35,6 +21,29 @@ const PRESS_SPRING = { damping: 15, stiffness: 200, mass: 0.6 };
 const MOUNT_SPRING = { damping: 18, stiffness: 120, mass: 0.8 };
 
 export default function SharedRecordCard({ record, onView, onCreateUpdate }: SharedRecordCardProps) {
+    const palette = useEhrPalette();
+    const s = StyleSheet.create({
+        cardInactive: { opacity: 0.7, borderLeftWidth: 4, borderLeftColor: palette.EHR_OUTLINE_VARIANT },
+        statusBadgeRevoked: { backgroundColor: '#fde0e0', borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3 },
+        statusBadgeExpired: { backgroundColor: `${palette.EHR_OUTLINE_VARIANT}40`, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3 },
+        statusBadgeText: { fontSize: 9, fontWeight: '700' as const, color: palette.EHR_ON_SURFACE_VARIANT, textTransform: 'uppercase' as const, letterSpacing: 0.3 },
+        card: { backgroundColor: palette.EHR_SURFACE_LOWEST, borderRadius: 16, padding: 16, marginBottom: 12, shadowColor: palette.EHR_SHADOW, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 1, shadowRadius: 16, elevation: 2 },
+        topRow: { alignItems: 'center' as const, gap: 12 },
+        iconWrap: { width: 48, height: 48, borderRadius: 14, alignItems: 'center' as const, justifyContent: 'center' as const },
+        title: { fontSize: 15, fontWeight: '700' as const, color: palette.EHR_ON_SURFACE, lineHeight: 20 },
+        subtitle: { fontSize: 12, color: palette.EHR_ON_SURFACE_VARIANT, marginTop: 2 },
+        rightInfo: { alignItems: 'flex-end' as const, gap: 4 },
+        verifiedBadge: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 3 },
+        verifiedText: { fontSize: 9, fontWeight: '700' as const, color: palette.EHR_PRIMARY, textTransform: 'uppercase' as const, letterSpacing: 0.3 },
+        dateText: { fontSize: 10, color: palette.EHR_ON_SURFACE_VARIANT },
+        metaRow: { marginTop: 10, gap: 8, alignItems: 'center' as const },
+        versionBadge: { backgroundColor: palette.EHR_PRIMARY_FIXED, borderRadius: 6, paddingVertical: 3, paddingHorizontal: 8 },
+        versionText: { fontSize: 11, color: palette.EHR_PRIMARY, fontWeight: '600' as const },
+        expiryBadge: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 4, backgroundColor: palette.EHR_SURFACE_LOW, borderRadius: 6, paddingVertical: 3, paddingHorizontal: 8 },
+        expiryText: { fontSize: 11, color: palette.EHR_ON_SURFACE_VARIANT },
+        readOnlyBadge: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 6, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12, borderWidth: 1, borderColor: palette.EHR_OUTLINE_VARIANT, backgroundColor: palette.EHR_SURFACE_LOW },
+        readOnlyText: { fontSize: 12, fontWeight: '700' as const, color: palette.EHR_ON_SURFACE_VARIANT },
+    });
     const isPending = record?.status === 'pending';
     const statusLower = String(record?.status || '').toLowerCase();
     const isRevoked = statusLower === 'revoked' || statusLower === 'rejected';
@@ -82,9 +91,9 @@ export default function SharedRecordCard({ record, onView, onCreateUpdate }: Sha
     }));
 
     const iconColors = [
-        { bg: `${EHR_PRIMARY}15`, color: EHR_PRIMARY },
-        { bg: `${EHR_SECONDARY}15`, color: EHR_SECONDARY },
-        { bg: `${EHR_TERTIARY}15`, color: EHR_TERTIARY },
+        { bg: `${palette.EHR_PRIMARY}15`, color: palette.EHR_PRIMARY },
+        { bg: `${palette.EHR_SECONDARY}15`, color: palette.EHR_SECONDARY },
+        { bg: `${palette.EHR_TERTIARY}15`, color: palette.EHR_TERTIARY },
     ];
     // Deterministic color based on cidHash
     const colorIdx = record?.cidHash ? record.cidHash.charCodeAt(4) % 3 : 0;
@@ -121,7 +130,7 @@ export default function SharedRecordCard({ record, onView, onCreateUpdate }: Sha
                                     </View>
                                 ) : (
                                     <XStack style={s.verifiedBadge}>
-                                        <ShieldCheck size={10} color={EHR_PRIMARY} />
+                                        <ShieldCheck size={10} color={palette.EHR_PRIMARY} />
                                         <Text style={s.verifiedText}>Đã xác minh</Text>
                                     </XStack>
                                 )}
@@ -143,7 +152,7 @@ export default function SharedRecordCard({ record, onView, onCreateUpdate }: Sha
                                 const isUrgent = urgency === 'urgent' || urgency === 'soon';
                                 return (
                                     <XStack style={[s.expiryBadge, isUrgent && { backgroundColor: '#FEF2F2', borderColor: '#FCA5A5', borderWidth: 1 }]}>
-                                        <Clock size={10} color={isUrgent ? '#DC2626' : EHR_ON_SURFACE_VARIANT} />
+                                        <Clock size={10} color={isUrgent ? '#DC2626' : palette.EHR_ON_SURFACE_VARIANT} />
                                         <Text style={[s.expiryText, isUrgent && { color: '#DC2626', fontWeight: '700' }]}>
                                             Hết hạn: {formatExpiry(record?.expiresAt)}
                                         </Text>
@@ -157,11 +166,11 @@ export default function SharedRecordCard({ record, onView, onCreateUpdate }: Sha
                             {isInactive ? (
                                 <View style={{
                                     flex: 1, borderRadius: 12, paddingVertical: 10,
-                                    backgroundColor: EHR_SURFACE_LOW, alignItems: 'center',
+                                    backgroundColor: palette.EHR_SURFACE_LOW, alignItems: 'center',
                                     flexDirection: 'row', justifyContent: 'center', gap: 6,
                                 }}>
-                                    <XCircle size={14} color={EHR_ON_SURFACE_VARIANT} />
-                                    <Text color={EHR_ON_SURFACE_VARIANT} fontWeight="700" fontSize="$3">
+                                    <XCircle size={14} color={palette.EHR_ON_SURFACE_VARIANT} />
+                                    <Text color={palette.EHR_ON_SURFACE_VARIANT} fontWeight="700" fontSize="$3">
                                         {isRevoked ? 'Đã thu hồi' : 'Hết hạn'}
                                     </Text>
                                 </View>
@@ -169,13 +178,13 @@ export default function SharedRecordCard({ record, onView, onCreateUpdate }: Sha
                                 <Button
                                     flex={1}
                                     size="$3"
-                                    background={EHR_PRIMARY}
-                                    pressStyle={{ background: EHR_PRIMARY_CONTAINER }}
-                                    icon={<Eye size={15} color={EHR_ON_PRIMARY} />}
+                                    background={palette.EHR_PRIMARY}
+                                    pressStyle={{ background: palette.EHR_PRIMARY_CONTAINER }}
+                                    icon={<Eye size={15} color={palette.EHR_ON_PRIMARY} />}
                                     onPress={() => onView?.(record)}
                                     style={{ borderRadius: 12 }}
                                 >
-                                    <Text color={EHR_ON_PRIMARY} fontWeight="700" fontSize="$3">
+                                    <Text color={palette.EHR_ON_PRIMARY} fontWeight="700" fontSize="$3">
                                         {isPending ? 'Nhận và xem' : 'Xem hồ sơ'}
                                     </Text>
                                 </Button>
@@ -185,13 +194,13 @@ export default function SharedRecordCard({ record, onView, onCreateUpdate }: Sha
                                 <Button
                                     size="$3"
                                     variant="outlined"
-                                    borderColor={EHR_OUTLINE_VARIANT}
-                                    pressStyle={{ background: EHR_SURFACE_LOW }}
-                                    icon={<FilePlus2 size={15} color={EHR_TERTIARY} />}
+                                    borderColor={palette.EHR_OUTLINE_VARIANT}
+                                    pressStyle={{ background: palette.EHR_SURFACE_LOW }}
+                                    icon={<FilePlus2 size={15} color={palette.EHR_TERTIARY} />}
                                     onPress={() => onCreateUpdate(record)}
                                     style={{ borderRadius: 12 }}
                                 >
-                                    <Text fontWeight="700" style={{ color: EHR_TERTIARY }} fontSize="$3">
+                                    <Text fontWeight="700" style={{ color: palette.EHR_TERTIARY }} fontSize="$3">
                                         Cập nhật
                                     </Text>
                                 </Button>
@@ -204,127 +213,3 @@ export default function SharedRecordCard({ record, onView, onCreateUpdate }: Sha
     );
 }
 
-const s = StyleSheet.create({
-    cardInactive: {
-        opacity: 0.7,
-        borderLeftWidth: 4,
-        borderLeftColor: EHR_OUTLINE_VARIANT,
-    },
-    statusBadgeRevoked: {
-        backgroundColor: '#fde0e0',
-        borderRadius: 999,
-        paddingHorizontal: 8,
-        paddingVertical: 3,
-    },
-    statusBadgeExpired: {
-        backgroundColor: `${EHR_OUTLINE_VARIANT}40`,
-        borderRadius: 999,
-        paddingHorizontal: 8,
-        paddingVertical: 3,
-    },
-    statusBadgeText: {
-        fontSize: 9,
-        fontWeight: '700',
-        color: EHR_ON_SURFACE_VARIANT,
-        textTransform: 'uppercase',
-        letterSpacing: 0.3,
-    },
-    card: {
-        backgroundColor: EHR_SURFACE_LOWEST,
-        borderRadius: 16,
-        padding: 16,
-        marginBottom: 12,
-        shadowColor: EHR_SHADOW,
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 1,
-        shadowRadius: 16,
-        elevation: 2,
-    },
-    topRow: {
-        alignItems: 'center',
-        gap: 12,
-    },
-    iconWrap: {
-        width: 48,
-        height: 48,
-        borderRadius: 14,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    title: {
-        fontSize: 15,
-        fontWeight: '700',
-        color: EHR_ON_SURFACE,
-        lineHeight: 20,
-    },
-    subtitle: {
-        fontSize: 12,
-        color: EHR_ON_SURFACE_VARIANT,
-        marginTop: 2,
-    },
-    rightInfo: {
-        alignItems: 'flex-end',
-        gap: 4,
-    },
-    verifiedBadge: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 3,
-    },
-    verifiedText: {
-        fontSize: 9,
-        fontWeight: '700',
-        color: EHR_PRIMARY,
-        textTransform: 'uppercase',
-        letterSpacing: 0.3,
-    },
-    dateText: {
-        fontSize: 10,
-        color: EHR_ON_SURFACE_VARIANT,
-    },
-    metaRow: {
-        marginTop: 10,
-        gap: 8,
-        alignItems: 'center',
-    },
-    versionBadge: {
-        backgroundColor: EHR_PRIMARY_FIXED,
-        borderRadius: 6,
-        paddingVertical: 3,
-        paddingHorizontal: 8,
-    },
-    versionText: {
-        fontSize: 11,
-        color: EHR_PRIMARY,
-        fontWeight: '600',
-    },
-    expiryBadge: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 4,
-        backgroundColor: EHR_SURFACE_LOW,
-        borderRadius: 6,
-        paddingVertical: 3,
-        paddingHorizontal: 8,
-    },
-    expiryText: {
-        fontSize: 11,
-        color: EHR_ON_SURFACE_VARIANT,
-    },
-    readOnlyBadge: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 6,
-        paddingHorizontal: 12,
-        paddingVertical: 8,
-        borderRadius: 12,
-        borderWidth: 1,
-        borderColor: EHR_OUTLINE_VARIANT,
-        backgroundColor: EHR_SURFACE_LOW,
-    },
-    readOnlyText: {
-        fontSize: 12,
-        fontWeight: '700',
-        color: EHR_ON_SURFACE_VARIANT,
-    },
-});

@@ -20,20 +20,7 @@ import useAuthStore from '../store/authStore';
 import useRecords from '../hooks/useRecords';
 import useRequests from '../hooks/useRequests';
 import RoleSwitcher from '../components/RoleSwitcher';
-import {
-    EHR_SURFACE,
-    EHR_SURFACE_LOWEST,
-    EHR_ON_SURFACE,
-    EHR_ON_SURFACE_VARIANT,
-    EHR_OUTLINE,
-    EHR_OUTLINE_VARIANT,
-    EHR_OUTLINE_SOFT,
-    EHR_PRIMARY,
-    EHR_PRIMARY_CONTAINER,
-    EHR_TERTIARY,
-    EHR_SECONDARY,
-    EHR_WARNING,
-} from '../constants/uiColors';
+import { useEhrPalette } from '../constants/uiColors';
 
 const SERIF = 'Fraunces_400Regular';
 const SERIF_ITALIC = 'Fraunces_400Regular_Italic';
@@ -59,6 +46,7 @@ function firstName(fullName?: string) {
 }
 
 export default function DashboardScreen({ navigation }: any) {
+    const palette = useEhrPalette();
     const { user } = useAuthStore();
     const queryClient = useQueryClient();
     const { records, isLoading: recordsLoading } = useRecords();
@@ -117,7 +105,7 @@ export default function DashboardScreen({ navigation }: any) {
     const topRequest = (requests || [])[0] as any | undefined;
 
     return (
-        <SafeAreaView style={{ flex: 1, backgroundColor: EHR_SURFACE }} edges={['top']}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: palette.EHR_SURFACE }} edges={['top']}>
             <ScrollView
                 contentContainerStyle={{ paddingBottom: 80 }}
                 showsVerticalScrollIndicator={false}
@@ -125,8 +113,8 @@ export default function DashboardScreen({ navigation }: any) {
                     <RefreshControl
                         refreshing={isRefreshing}
                         onRefresh={handleRefresh}
-                        colors={[EHR_PRIMARY]}
-                        tintColor={EHR_ON_SURFACE_VARIANT}
+                        colors={[palette.EHR_PRIMARY]}
+                        tintColor={palette.EHR_ON_SURFACE_VARIANT}
                     />
                 }
             >
@@ -143,7 +131,7 @@ export default function DashboardScreen({ navigation }: any) {
                             height: 220,
                             borderRadius: 110,
                             borderWidth: 1,
-                            borderColor: EHR_PRIMARY,
+                            borderColor: palette.EHR_PRIMARY,
                             opacity: 0.1,
                         }}
                     />
@@ -153,7 +141,7 @@ export default function DashboardScreen({ navigation }: any) {
                             style={{
                                 fontFamily: SANS_SEMI,
                                 fontSize: 11,
-                                color: EHR_OUTLINE,
+                                color: palette.EHR_OUTLINE,
                                 letterSpacing: 1.6,
                                 textTransform: 'uppercase',
                             }}
@@ -165,7 +153,7 @@ export default function DashboardScreen({ navigation }: any) {
                                 paddingHorizontal: 7,
                                 paddingVertical: 3,
                                 borderWidth: 0.5,
-                                borderColor: EHR_OUTLINE_SOFT,
+                                borderColor: palette.EHR_OUTLINE_SOFT,
                                 borderRadius: 4,
                             }}
                         >
@@ -173,7 +161,7 @@ export default function DashboardScreen({ navigation }: any) {
                                 style={{
                                     fontFamily: 'monospace',
                                     fontSize: 9.5,
-                                    color: EHR_OUTLINE,
+                                    color: palette.EHR_OUTLINE,
                                     letterSpacing: 1.2,
                                 }}
                             >
@@ -189,7 +177,7 @@ export default function DashboardScreen({ navigation }: any) {
                                     fontFamily: SERIF,
                                     fontSize: 44,
                                     fontWeight: '400',
-                                    color: EHR_ON_SURFACE,
+                                    color: palette.EHR_ON_SURFACE,
                                     letterSpacing: -1.2,
                                     lineHeight: 44,
                                 }}
@@ -202,7 +190,7 @@ export default function DashboardScreen({ navigation }: any) {
                                         fontFamily: SERIF_ITALIC,
                                         fontStyle: 'italic',
                                         fontSize: 44,
-                                        color: EHR_PRIMARY,
+                                        color: palette.EHR_PRIMARY,
                                         letterSpacing: -1.2,
                                         lineHeight: 48,
                                     }}
@@ -213,7 +201,7 @@ export default function DashboardScreen({ navigation }: any) {
                                     style={{
                                         fontFamily: SERIF,
                                         fontSize: 28,
-                                        color: EHR_ON_SURFACE,
+                                        color: palette.EHR_ON_SURFACE,
                                         lineHeight: 32,
                                     }}
                                 >
@@ -231,7 +219,7 @@ export default function DashboardScreen({ navigation }: any) {
                                 fontFamily: SANS,
                                 fontSize: 14.5,
                                 lineHeight: 22,
-                                color: EHR_ON_SURFACE_VARIANT,
+                                color: palette.EHR_ON_SURFACE_VARIANT,
                                 maxWidth: 290,
                             }}
                         >
@@ -239,7 +227,7 @@ export default function DashboardScreen({ navigation }: any) {
                             <Text
                                 onPress={handleOpenRequests}
                                 style={{
-                                    color: EHR_PRIMARY,
+                                    color: palette.EHR_PRIMARY,
                                     fontFamily: SANS_SEMI,
                                     fontWeight: '600',
                                 }}
@@ -255,7 +243,7 @@ export default function DashboardScreen({ navigation }: any) {
                                 fontFamily: SANS,
                                 fontSize: 14.5,
                                 lineHeight: 22,
-                                color: EHR_ON_SURFACE_VARIANT,
+                                color: palette.EHR_ON_SURFACE_VARIANT,
                                 maxWidth: 290,
                             }}
                         >
@@ -276,7 +264,7 @@ export default function DashboardScreen({ navigation }: any) {
                             })}
                         >
                             <LinearGradient
-                                colors={[EHR_PRIMARY, EHR_PRIMARY_CONTAINER]}
+                                colors={[palette.EHR_PRIMARY, palette.EHR_PRIMARY_CONTAINER]}
                                 start={{ x: 0, y: 0 }}
                                 end={{ x: 1, y: 1 }}
                                 style={{ padding: 20 }}
@@ -388,27 +376,27 @@ export default function DashboardScreen({ navigation }: any) {
                         style={{
                             borderTopWidth: 0.5,
                             borderBottomWidth: 0.5,
-                            borderColor: EHR_OUTLINE_SOFT,
+                            borderColor: palette.EHR_OUTLINE_SOFT,
                         }}
                     >
                         <HomeStat
                             value={recordsLoading ? '—' : String(totalRecords)}
                             label="Hồ sơ"
                             onPress={handleOpenRecords}
-                            accent={EHR_TERTIARY}
+                            accent={palette.EHR_TERTIARY}
                         />
                         <HomeStat
                             value={recordsLoading ? '—' : String(sharedCount)}
                             label="Đã chia sẻ"
                             onPress={handleOpenPermissions}
-                            accent={pendingCount > 0 ? EHR_WARNING : EHR_PRIMARY}
+                            accent={pendingCount > 0 ? palette.EHR_WARNING : palette.EHR_PRIMARY}
                             divider
                         />
                         <HomeStat
                             value={requestsLoading ? '—' : String(pendingCount)}
                             label="Yêu cầu"
                             onPress={handleOpenRequests}
-                            accent={EHR_SECONDARY}
+                            accent={palette.EHR_SECONDARY}
                             divider
                             mono
                         />
@@ -428,7 +416,7 @@ export default function DashboardScreen({ navigation }: any) {
                             style={{
                                 fontFamily: SERIF,
                                 fontSize: 22,
-                                color: EHR_ON_SURFACE,
+                                color: palette.EHR_ON_SURFACE,
                                 letterSpacing: -0.3,
                             }}
                         >
@@ -440,7 +428,7 @@ export default function DashboardScreen({ navigation }: any) {
                                     style={{
                                         fontFamily: SANS_SEMI,
                                         fontSize: 12,
-                                        color: EHR_ON_SURFACE_VARIANT,
+                                        color: palette.EHR_ON_SURFACE_VARIANT,
                                         fontWeight: '600',
                                     }}
                                 >
@@ -452,7 +440,7 @@ export default function DashboardScreen({ navigation }: any) {
                                     style={{
                                         fontFamily: SANS_SEMI,
                                         fontSize: 12,
-                                        color: EHR_PRIMARY,
+                                        color: palette.EHR_PRIMARY,
                                         fontWeight: '600',
                                     }}
                                 >
@@ -468,17 +456,17 @@ export default function DashboardScreen({ navigation }: any) {
                                 paddingVertical: 36,
                                 alignItems: 'center',
                                 borderWidth: 0.5,
-                                borderColor: EHR_OUTLINE_SOFT,
+                                borderColor: palette.EHR_OUTLINE_SOFT,
                                 borderRadius: 14,
                             }}
                         >
-                            <ActivityIndicator size="small" color={EHR_ON_SURFACE_VARIANT} />
+                            <ActivityIndicator size="small" color={palette.EHR_ON_SURFACE_VARIANT} />
                             <Text
                                 style={{
                                     marginTop: 10,
                                     fontFamily: SANS,
                                     fontSize: 12,
-                                    color: EHR_ON_SURFACE_VARIANT,
+                                    color: palette.EHR_ON_SURFACE_VARIANT,
                                 }}
                             >
                                 Đang tải hồ sơ…
@@ -512,7 +500,7 @@ export default function DashboardScreen({ navigation }: any) {
                             style={{
                                 fontFamily: SANS_SEMI,
                                 fontSize: 10.5,
-                                color: EHR_OUTLINE,
+                                color: palette.EHR_OUTLINE,
                                 letterSpacing: 1.4,
                                 textTransform: 'uppercase',
                                 fontWeight: '700',
@@ -524,17 +512,17 @@ export default function DashboardScreen({ navigation }: any) {
                             style={{
                                 fontFamily: 'monospace',
                                 fontSize: 11,
-                                color: EHR_TERTIARY,
+                                color: palette.EHR_TERTIARY,
                             }}
                         >
                             {signaturesUsed}{' '}
-                            <Text style={{ color: EHR_OUTLINE }}>/ {signaturesLimit}</Text>
+                            <Text style={{ color: palette.EHR_OUTLINE }}>/ {signaturesLimit}</Text>
                         </Text>
                     </XStack>
                     <View
                         style={{
                             height: 2,
-                            backgroundColor: EHR_OUTLINE_SOFT,
+                            backgroundColor: palette.EHR_OUTLINE_SOFT,
                             borderRadius: 1,
                             overflow: 'hidden',
                         }}
@@ -543,7 +531,7 @@ export default function DashboardScreen({ navigation }: any) {
                             style={{
                                 width: `${quotaPct * 100}%`,
                                 height: '100%',
-                                backgroundColor: EHR_TERTIARY,
+                                backgroundColor: palette.EHR_TERTIARY,
                             }}
                         />
                     </View>
@@ -553,7 +541,7 @@ export default function DashboardScreen({ navigation }: any) {
                                 marginTop: 8,
                                 fontFamily: SANS,
                                 fontSize: 11,
-                                color: EHR_OUTLINE,
+                                color: palette.EHR_OUTLINE,
                             }}
                         >
                             {quota.message}
@@ -581,6 +569,7 @@ function HomeStat({
     divider?: boolean;
     mono?: boolean;
 }) {
+    const palette = useEhrPalette();
     return (
         <Pressable
             onPress={onPress}
@@ -590,7 +579,7 @@ function HomeStat({
                 paddingLeft: divider ? 14 : 4,
                 paddingRight: 4,
                 borderLeftWidth: divider ? 0.5 : 0,
-                borderColor: EHR_OUTLINE_SOFT,
+                borderColor: palette.EHR_OUTLINE_SOFT,
                 opacity: pressed ? 0.6 : 1,
             })}
         >
@@ -608,7 +597,7 @@ function HomeStat({
                     style={{
                         fontFamily: mono ? 'monospace' : SERIF_MEDIUM,
                         fontSize: mono ? 24 : 28,
-                        color: EHR_ON_SURFACE,
+                        color: palette.EHR_ON_SURFACE,
                         letterSpacing: -0.5,
                     }}
                 >
@@ -620,7 +609,7 @@ function HomeStat({
                     marginTop: 6,
                     fontFamily: SANS_SEMI,
                     fontSize: 11,
-                    color: EHR_OUTLINE,
+                    color: palette.EHR_OUTLINE,
                     letterSpacing: 1.2,
                     textTransform: 'uppercase',
                     fontWeight: '600',
@@ -634,6 +623,7 @@ function HomeStat({
 
 // ───────── RecordRow (text-rhythm list item) ─────────
 function RecordRow({ record, onPress }: { record: any; onPress: () => void }) {
+    const palette = useEhrPalette();
     const date = parseDateParts(record?.date, record?.createdAt);
 
     return (
@@ -645,7 +635,7 @@ function RecordRow({ record, onPress }: { record: any; onPress: () => void }) {
                 gap: 14,
                 paddingVertical: 12,
                 borderBottomWidth: 0.5,
-                borderColor: EHR_OUTLINE_SOFT,
+                borderColor: palette.EHR_OUTLINE_SOFT,
                 opacity: pressed ? 0.6 : 1,
             })}
         >
@@ -654,7 +644,7 @@ function RecordRow({ record, onPress }: { record: any; onPress: () => void }) {
                     style={{
                         fontFamily: 'monospace',
                         fontSize: 11,
-                        color: EHR_OUTLINE,
+                        color: palette.EHR_OUTLINE,
                         letterSpacing: 0.4,
                     }}
                 >
@@ -664,7 +654,7 @@ function RecordRow({ record, onPress }: { record: any; onPress: () => void }) {
                     style={{
                         fontFamily: SERIF,
                         fontSize: 13,
-                        color: EHR_ON_SURFACE_VARIANT,
+                        color: palette.EHR_ON_SURFACE_VARIANT,
                     }}
                 >
                     {date.month}
@@ -674,7 +664,7 @@ function RecordRow({ record, onPress }: { record: any; onPress: () => void }) {
                 style={{
                     width: 1,
                     alignSelf: 'stretch',
-                    backgroundColor: EHR_OUTLINE_SOFT,
+                    backgroundColor: palette.EHR_OUTLINE_SOFT,
                     marginTop: 2,
                 }}
             />
@@ -683,7 +673,7 @@ function RecordRow({ record, onPress }: { record: any; onPress: () => void }) {
                     style={{
                         fontFamily: SANS_MEDIUM,
                         fontSize: 15,
-                        color: EHR_ON_SURFACE,
+                        color: palette.EHR_ON_SURFACE,
                         letterSpacing: -0.1,
                         fontWeight: '500',
                     }}
@@ -696,7 +686,7 @@ function RecordRow({ record, onPress }: { record: any; onPress: () => void }) {
                         marginTop: 3,
                         fontFamily: SANS,
                         fontSize: 12.5,
-                        color: EHR_ON_SURFACE_VARIANT,
+                        color: palette.EHR_ON_SURFACE_VARIANT,
                     }}
                     numberOfLines={1}
                 >
@@ -709,7 +699,7 @@ function RecordRow({ record, onPress }: { record: any; onPress: () => void }) {
                             marginTop: 6,
                             fontFamily: SANS,
                             fontSize: 11,
-                            color: EHR_WARNING,
+                            color: palette.EHR_WARNING,
                         }}
                     >
                         Đang đồng bộ on-chain…
@@ -736,22 +726,23 @@ function parseDateParts(viDate?: string, isoDate?: string) {
 }
 
 function EmptyRecords({ onCreate }: { onCreate: () => void }) {
+    const palette = useEhrPalette();
     return (
         <View
             style={{
                 paddingVertical: 28,
                 paddingHorizontal: 20,
                 borderWidth: 0.5,
-                borderColor: EHR_OUTLINE_SOFT,
+                borderColor: palette.EHR_OUTLINE_SOFT,
                 borderRadius: 14,
-                backgroundColor: EHR_SURFACE_LOWEST,
+                backgroundColor: palette.EHR_SURFACE_LOWEST,
             }}
         >
             <Text
                 style={{
                     fontFamily: SERIF,
                     fontSize: 18,
-                    color: EHR_ON_SURFACE,
+                    color: palette.EHR_ON_SURFACE,
                     letterSpacing: -0.2,
                     lineHeight: 24,
                 }}
@@ -763,7 +754,7 @@ function EmptyRecords({ onCreate }: { onCreate: () => void }) {
                     marginTop: 8,
                     fontFamily: SANS,
                     fontSize: 13,
-                    color: EHR_ON_SURFACE_VARIANT,
+                    color: palette.EHR_ON_SURFACE_VARIANT,
                     lineHeight: 20,
                 }}
             >
@@ -777,7 +768,7 @@ function EmptyRecords({ onCreate }: { onCreate: () => void }) {
                     paddingHorizontal: 14,
                     paddingVertical: 9,
                     borderWidth: 0.75,
-                    borderColor: EHR_OUTLINE_VARIANT,
+                    borderColor: palette.EHR_OUTLINE_VARIANT,
                     borderRadius: 12,
                     opacity: pressed ? 0.7 : 1,
                 })}
@@ -786,7 +777,7 @@ function EmptyRecords({ onCreate }: { onCreate: () => void }) {
                     style={{
                         fontFamily: SANS_SEMI,
                         fontSize: 13,
-                        color: EHR_ON_SURFACE,
+                        color: palette.EHR_ON_SURFACE,
                         fontWeight: '600',
                     }}
                 >

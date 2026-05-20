@@ -17,16 +17,7 @@ import keyShareService from '../../services/keyShare.service';
 import UserChip from '../../components/UserChip';
 import ViCard from '../../components-v2/ViCard';
 import ViButton from '../../components-v2/ViButton';
-import {
-    EHR_SURFACE,
-    EHR_ON_SURFACE,
-    EHR_ON_SURFACE_VARIANT,
-    EHR_OUTLINE,
-    EHR_OUTLINE_SOFT,
-    EHR_PRIMARY,
-    EHR_PRIMARY_FIXED,
-    EHR_DANGER,
-} from '../../constants/uiColors';
+import { useEhrPalette } from '../../constants/uiColors';
 
 const SERIF = 'Fraunces_400Regular';
 const SANS = 'DMSans_400Regular';
@@ -67,6 +58,7 @@ const isInactive = (s: SentShare) => {
 };
 
 export default function DoctorOutgoingSharesScreen() {
+    const palette = useEhrPalette();
     const queryClient = useQueryClient();
     const [revokingId, setRevokingId] = useState<string | null>(null);
 
@@ -141,12 +133,12 @@ export default function DoctorOutgoingSharesScreen() {
             <ViCard padding={14} style={{ marginBottom: 10, opacity: inactiveRow ? 0.65 : 1 }}>
                 <XStack style={{ alignItems: 'center', justifyContent: 'space-between', marginBottom: 8, gap: 8 }}>
                     <XStack style={{ alignItems: 'center', flex: 1, gap: 8 }}>
-                        <FileText size={14} color={EHR_PRIMARY} />
+                        <FileText size={14} color={palette.EHR_PRIMARY} />
                         <Text
                             style={{
                                 fontFamily: SANS_SEMI,
                                 fontSize: 14,
-                                color: EHR_ON_SURFACE,
+                                color: palette.EHR_ON_SURFACE,
                                 fontWeight: '700',
                                 flex: 1,
                             }}
@@ -164,11 +156,11 @@ export default function DoctorOutgoingSharesScreen() {
                                 paddingHorizontal: 8,
                                 paddingVertical: 3,
                                 borderRadius: 999,
-                                backgroundColor: EHR_PRIMARY_FIXED,
+                                backgroundColor: palette.EHR_PRIMARY_FIXED,
                             }}
                         >
-                            <Share2 size={10} color={EHR_PRIMARY} />
-                            <Text style={{ fontFamily: SANS_SEMI, fontSize: 10, color: EHR_PRIMARY, fontWeight: '700' }}>
+                            <Share2 size={10} color={palette.EHR_PRIMARY} />
+                            <Text style={{ fontFamily: SANS_SEMI, fontSize: 10, color: palette.EHR_PRIMARY, fontWeight: '700' }}>
                                 Chia sẻ lại
                             </Text>
                         </View>
@@ -176,7 +168,7 @@ export default function DoctorOutgoingSharesScreen() {
                 </XStack>
 
                 <YStack style={{ marginVertical: 4 }}>
-                    <Text style={kvLabelStyle}>Người nhận</Text>
+                    <Text style={{ fontFamily: SANS_SEMI, fontSize: 10.5, color: palette.EHR_OUTLINE, letterSpacing: 0.4, textTransform: 'uppercase' as const, fontWeight: '600' as const, marginBottom: 2 }}>Người nhận</Text>
                     <View style={{ marginTop: 4 }}>
                         {/* G.2 — recipient wallet → UserChip resolves name + role + verified */}
                         <UserChip address={recipient} showAddress={false} expanded interactive={false} />
@@ -184,18 +176,18 @@ export default function DoctorOutgoingSharesScreen() {
                 </YStack>
                 <XStack style={{ gap: 14, marginTop: 8 }}>
                     <YStack style={{ flex: 1 }}>
-                        <Text style={kvLabelStyle}>Hết hạn</Text>
+                        <Text style={{ fontFamily: SANS_SEMI, fontSize: 10.5, color: palette.EHR_OUTLINE, letterSpacing: 0.4, textTransform: 'uppercase' as const, fontWeight: '600' as const, marginBottom: 2 }}>Hết hạn</Text>
                         <XStack style={{ alignItems: 'center', gap: 4 }}>
-                            <Clock size={11} color={EHR_OUTLINE} />
-                            <Text style={kvValueStyle}>{formatExpiry(item.expiresAt)}</Text>
+                            <Clock size={11} color={palette.EHR_OUTLINE} />
+                            <Text style={{ fontFamily: SANS_MEDIUM, fontSize: 12.5, color: palette.EHR_ON_SURFACE, fontWeight: '600' as const }}>{formatExpiry(item.expiresAt)}</Text>
                         </XStack>
                     </YStack>
                     <YStack style={{ flex: 1 }}>
-                        <Text style={kvLabelStyle}>Trạng thái</Text>
+                        <Text style={{ fontFamily: SANS_SEMI, fontSize: 10.5, color: palette.EHR_OUTLINE, letterSpacing: 0.4, textTransform: 'uppercase' as const, fontWeight: '600' as const, marginBottom: 2 }}>Trạng thái</Text>
                         <Text
                             style={[
-                                kvValueStyle,
-                                inactiveRow ? { color: EHR_DANGER } : null,
+                                { fontFamily: SANS_MEDIUM, fontSize: 12.5, color: palette.EHR_ON_SURFACE, fontWeight: '600' as const },
+                                inactiveRow ? { color: palette.EHR_DANGER } : null,
                             ]}
                         >
                             {(() => {
@@ -218,7 +210,7 @@ export default function DoctorOutgoingSharesScreen() {
                             size="sm"
                             loading={revokingId === item.id}
                             onPress={() => handleRevoke(item)}
-                            leftIcon={<ShieldOff size={14} color={EHR_DANGER} />}
+                            leftIcon={<ShieldOff size={14} color={palette.EHR_DANGER} />}
                         >
                             {revokingId === item.id ? 'Đang thu hồi…' : 'Thu hồi quyền'}
                         </ViButton>
@@ -231,13 +223,13 @@ export default function DoctorOutgoingSharesScreen() {
     const list = [...active, ...inactive];
 
     return (
-        <SafeAreaView style={{ flex: 1, backgroundColor: EHR_SURFACE }}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: palette.EHR_SURFACE }}>
             <View style={{ paddingHorizontal: 20, paddingTop: 14, paddingBottom: 12 }}>
                 <Text
                     style={{
                         fontFamily: SERIF,
                         fontSize: 26,
-                        color: EHR_ON_SURFACE,
+                        color: palette.EHR_ON_SURFACE,
                         letterSpacing: -0.4,
                         lineHeight: 30,
                     }}
@@ -249,7 +241,7 @@ export default function DoctorOutgoingSharesScreen() {
                         marginTop: 4,
                         fontFamily: SANS,
                         fontSize: 13,
-                        color: EHR_ON_SURFACE_VARIANT,
+                        color: palette.EHR_ON_SURFACE_VARIANT,
                         lineHeight: 19,
                     }}
                 >
@@ -266,18 +258,18 @@ export default function DoctorOutgoingSharesScreen() {
                     <RefreshControl
                         refreshing={isRefetching}
                         onRefresh={refetch}
-                        tintColor={EHR_ON_SURFACE_VARIANT}
+                        tintColor={palette.EHR_ON_SURFACE_VARIANT}
                     />
                 }
                 ListEmptyComponent={
                     <View style={{ paddingTop: 30, alignItems: 'center' }}>
-                        <Share2 size={28} color={EHR_OUTLINE} />
+                        <Share2 size={28} color={palette.EHR_OUTLINE} />
                         <Text
                             style={{
                                 marginTop: 12,
                                 fontFamily: SANS,
                                 fontSize: 13,
-                                color: EHR_OUTLINE,
+                                color: palette.EHR_OUTLINE,
                                 textAlign: 'center',
                                 maxWidth: 280,
                                 lineHeight: 19,
@@ -292,27 +284,26 @@ export default function DoctorOutgoingSharesScreen() {
     );
 }
 
-const kvLabelStyle = {
-    fontFamily: SANS_SEMI,
-    fontSize: 10.5,
-    color: EHR_OUTLINE,
-    letterSpacing: 0.4,
-    textTransform: 'uppercase' as const,
-    fontWeight: '600' as const,
-    marginBottom: 2,
-};
-
-const kvValueStyle = {
-    fontFamily: SANS_MEDIUM,
-    fontSize: 12.5,
-    color: EHR_ON_SURFACE,
-    fontWeight: '600' as const,
-};
-
 function KV({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
+    const palette = useEhrPalette();
+    const kvLabelStyle = {
+        fontFamily: SANS_SEMI,
+        fontSize: 10.5,
+        color: palette.EHR_OUTLINE,
+        letterSpacing: 0.4,
+        textTransform: 'uppercase' as const,
+        fontWeight: '600' as const,
+        marginBottom: 2,
+    };
+    const kvValueStyle = {
+        fontFamily: SANS_MEDIUM,
+        fontSize: 12.5,
+        color: palette.EHR_ON_SURFACE,
+        fontWeight: '600' as const,
+    };
     return (
         <YStack>
-            <Text style={kvLabelStyle}>{label}</Text>
+            <Text style={{ fontFamily: SANS_SEMI, fontSize: 10.5, color: palette.EHR_OUTLINE, letterSpacing: 0.4, textTransform: 'uppercase' as const, fontWeight: '600' as const, marginBottom: 2 }}>{label}</Text>
             <Text style={[kvValueStyle, mono ? { fontFamily: 'monospace', fontSize: 12 } : null]}>
                 {value}
             </Text>
@@ -320,4 +311,3 @@ function KV({ label, value, mono }: { label: string; value: string; mono?: boole
     );
 }
 
-void EHR_OUTLINE_SOFT;

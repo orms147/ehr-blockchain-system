@@ -34,19 +34,7 @@ import useAuthStore, { ROLE_CONFIG } from '../store/authStore';
 import roleRegistrationService from '../services/roleRegistration.service';
 import ViButton from '../components-v2/ViButton';
 import ViWordmark from '../components-v2/ViWordmark';
-import {
-    EHR_SURFACE,
-    EHR_SURFACE_LOWEST,
-    EHR_ON_SURFACE,
-    EHR_ON_SURFACE_VARIANT,
-    EHR_OUTLINE,
-    EHR_OUTLINE_SOFT,
-    EHR_OUTLINE_VARIANT,
-    EHR_PRIMARY,
-    EHR_PRIMARY_FIXED,
-    EHR_TERTIARY,
-    EHR_SECONDARY,
-} from '../constants/uiColors';
+import { useEhrPalette } from '../constants/uiColors';
 
 const SERIF = 'Fraunces_400Regular';
 const SERIF_ITALIC = 'Fraunces_400Regular_Italic';
@@ -64,7 +52,6 @@ const REGISTRATION_OPTIONS = [
         description: 'Lưu giữ hồ sơ khám bệnh, đơn thuốc và kết quả xét nghiệm.',
         badge: 'Quyền truy cập cá nhân',
         Icon: HeartPulse,
-        tint: EHR_PRIMARY,
     },
     {
         role: 'doctor',
@@ -72,7 +59,6 @@ const REGISTRATION_OPTIONS = [
         description: 'Gửi yêu cầu truy cập hồ sơ bệnh nhân + tạo entry.',
         badge: 'Xác minh chứng chỉ',
         Icon: Stethoscope,
-        tint: EHR_TERTIARY,
     },
 ] as const;
 
@@ -114,6 +100,7 @@ function mapRegistrationError(error: any) {
 }
 
 export default function RoleSelectionScreen() {
+    const palette = useEhrPalette();
     const {
         availableRoles,
         needsRoleRegistration,
@@ -217,7 +204,7 @@ export default function RoleSelectionScreen() {
                     paddingHorizontal: 4,
                     borderTopWidth: index === 0 ? 0.5 : 0,
                     borderBottomWidth: 0.5,
-                    borderColor: EHR_OUTLINE_VARIANT,
+                    borderColor: palette.EHR_OUTLINE_VARIANT,
                     opacity: pressed ? 0.6 : busyRole && !isBusy ? 0.5 : 1,
                 })}
             >
@@ -228,7 +215,7 @@ export default function RoleSelectionScreen() {
                                 fontFamily: SERIF_ITALIC,
                                 fontStyle: 'italic',
                                 fontSize: 22,
-                                color: selected ? EHR_PRIMARY : EHR_ON_SURFACE,
+                                color: selected ? palette.EHR_PRIMARY : palette.EHR_ON_SURFACE,
                                 letterSpacing: -0.3,
                                 lineHeight: 26,
                             }}
@@ -240,7 +227,7 @@ export default function RoleSelectionScreen() {
                                 marginTop: 4,
                                 fontFamily: SANS,
                                 fontSize: 12.5,
-                                color: EHR_ON_SURFACE_VARIANT,
+                                color: palette.EHR_ON_SURFACE_VARIANT,
                                 lineHeight: 18,
                             }}
                         >
@@ -253,7 +240,7 @@ export default function RoleSelectionScreen() {
                                 width: 22,
                                 height: 22,
                                 borderRadius: 11,
-                                backgroundColor: EHR_PRIMARY,
+                                backgroundColor: palette.EHR_PRIMARY,
                                 alignItems: 'center',
                                 justifyContent: 'center',
                             }}
@@ -261,7 +248,7 @@ export default function RoleSelectionScreen() {
                             <Check size={13} color="#FAF7F1" strokeWidth={3} />
                         </View>
                     ) : (
-                        <ChevronRight size={18} color={EHR_OUTLINE} />
+                        <ChevronRight size={18} color={palette.EHR_OUTLINE} />
                     )}
                 </XStack>
                 {isBusy ? (
@@ -276,7 +263,7 @@ export default function RoleSelectionScreen() {
                             gap: 8,
                         }}
                     >
-                        <ActivityIndicator size="small" color={EHR_PRIMARY} />
+                        <ActivityIndicator size="small" color={palette.EHR_PRIMARY} />
                         <Text style={{ fontFamily: SANS_MEDIUM, fontSize: 13, color: '#FAF7F1' }}>
                             Đang xử lý…
                         </Text>
@@ -287,7 +274,7 @@ export default function RoleSelectionScreen() {
     };
 
     return (
-        <View style={{ flex: 1, backgroundColor: EHR_SURFACE }}>
+        <View style={{ flex: 1, backgroundColor: palette.EHR_SURFACE }}>
             <SafeAreaView style={{ flex: 1 }}>
                 <ScrollView
                     contentContainerStyle={{ paddingHorizontal: 22, paddingBottom: 30, flexGrow: 1 }}
@@ -323,9 +310,9 @@ export default function RoleSelectionScreen() {
                             })}
                             hitSlop={8}
                         >
-                            <ArrowLeft size={18} color={EHR_ON_SURFACE_VARIANT} />
+                            <ArrowLeft size={18} color={palette.EHR_ON_SURFACE_VARIANT} />
                         </Pressable>
-                        <ViWordmark size={16} color={EHR_ON_SURFACE_VARIANT} />
+                        <ViWordmark size={16} color={palette.EHR_ON_SURFACE_VARIANT} />
                         <View style={{ width: 40 }} />
                     </XStack>
 
@@ -335,7 +322,7 @@ export default function RoleSelectionScreen() {
                             style={{
                                 fontFamily: SERIF,
                                 fontSize: 32,
-                                color: EHR_ON_SURFACE,
+                                color: palette.EHR_ON_SURFACE,
                                 letterSpacing: -0.7,
                                 lineHeight: 36,
                             }}
@@ -345,7 +332,7 @@ export default function RoleSelectionScreen() {
                                 style={{
                                     fontFamily: SERIF_ITALIC,
                                     fontStyle: 'italic',
-                                    color: EHR_PRIMARY,
+                                    color: palette.EHR_PRIMARY,
                                 }}
                             >
                                 ai
@@ -357,7 +344,7 @@ export default function RoleSelectionScreen() {
                                 marginTop: 8,
                                 fontFamily: SANS,
                                 fontSize: 14,
-                                color: EHR_ON_SURFACE_VARIANT,
+                                color: palette.EHR_ON_SURFACE_VARIANT,
                                 lineHeight: 21,
                                 maxWidth: 320,
                             }}
@@ -370,12 +357,12 @@ export default function RoleSelectionScreen() {
                     <YStack>
                         {registrationMode
                             ? REGISTRATION_OPTIONS.map((opt, i) =>
-                                renderRow(opt.role, opt.label, opt.description, opt.badge, opt.Icon, opt.tint, i))
+                                renderRow(opt.role, opt.label, opt.description, opt.badge, opt.Icon, palette.EHR_PRIMARY, i))
                             : roles.map((role: string, i: number) => {
                                 const cfg = ROLE_CONFIG_MAP[role] || FALLBACK_ROLE;
                                 const isDoctor = role === 'doctor';
                                 const Icon = isDoctor ? Stethoscope : HeartPulse;
-                                const tint = isDoctor ? EHR_TERTIARY : EHR_PRIMARY;
+                                const tint = isDoctor ? palette.EHR_TERTIARY : palette.EHR_PRIMARY;
                                 const badge = isDoctor ? 'Xác minh chứng chỉ' : 'Quyền truy cập cá nhân';
                                 return renderRow(
                                     role,
@@ -409,12 +396,12 @@ export default function RoleSelectionScreen() {
                             textAlign: 'center',
                             fontFamily: SANS,
                             fontSize: 11.5,
-                            color: EHR_OUTLINE,
+                            color: palette.EHR_OUTLINE,
                             lineHeight: 17,
                         }}
                     >
                         Bằng cách tiếp tục, bạn đồng ý với{' '}
-                        <Text style={{ color: EHR_ON_SURFACE_VARIANT, textDecorationLine: 'underline' }}>
+                        <Text style={{ color: palette.EHR_ON_SURFACE_VARIANT, textDecorationLine: 'underline' }}>
                             Chính sách Bảo mật
                         </Text>{' '}
                         của ViEH.
@@ -432,7 +419,7 @@ export default function RoleSelectionScreen() {
                 <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' }}>
                     <View
                         style={{
-                            backgroundColor: EHR_SURFACE_LOWEST,
+                            backgroundColor: palette.EHR_SURFACE_LOWEST,
                             borderTopLeftRadius: 24,
                             borderTopRightRadius: 24,
                             padding: 22,
@@ -442,12 +429,12 @@ export default function RoleSelectionScreen() {
                     >
                         <XStack style={{ alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
                             <XStack style={{ alignItems: 'center', gap: 8 }}>
-                                <ShieldCheck size={20} color={EHR_PRIMARY} />
+                                <ShieldCheck size={20} color={palette.EHR_PRIMARY} />
                                 <Text
                                     style={{
                                         fontFamily: SERIF,
                                         fontSize: 20,
-                                        color: EHR_ON_SURFACE,
+                                        color: palette.EHR_ON_SURFACE,
                                         letterSpacing: -0.3,
                                     }}
                                 >
@@ -455,7 +442,7 @@ export default function RoleSelectionScreen() {
                                 </Text>
                             </XStack>
                             <Pressable onPress={() => setConsentVisible(false)} hitSlop={8}>
-                                <X size={18} color={EHR_OUTLINE} />
+                                <X size={18} color={palette.EHR_OUTLINE} />
                             </Pressable>
                         </XStack>
 
@@ -465,7 +452,7 @@ export default function RoleSelectionScreen() {
                                     paddingVertical: 12,
                                     paddingHorizontal: 14,
                                     borderRadius: 12,
-                                    backgroundColor: EHR_PRIMARY_FIXED,
+                                    backgroundColor: palette.EHR_PRIMARY_FIXED,
                                     marginBottom: 18,
                                 }}
                             >
@@ -473,7 +460,7 @@ export default function RoleSelectionScreen() {
                                     style={{
                                         fontFamily: SANS_SEMI,
                                         fontSize: 13.5,
-                                        color: EHR_PRIMARY,
+                                        color: palette.EHR_PRIMARY,
                                         textAlign: 'center',
                                         fontWeight: '700',
                                     }}
@@ -492,20 +479,20 @@ export default function RoleSelectionScreen() {
                                                     width: 32,
                                                     height: 32,
                                                     borderRadius: 10,
-                                                    backgroundColor: EHR_PRIMARY_FIXED,
+                                                    backgroundColor: palette.EHR_PRIMARY_FIXED,
                                                     alignItems: 'center',
                                                     justifyContent: 'center',
                                                     marginTop: 2,
                                                 }}
                                             >
-                                                <Icon size={16} color={EHR_PRIMARY} />
+                                                <Icon size={16} color={palette.EHR_PRIMARY} />
                                             </View>
                                             <Text
                                                 style={{
                                                     flex: 1,
                                                     fontFamily: SANS,
                                                     fontSize: 13,
-                                                    color: EHR_ON_SURFACE,
+                                                    color: palette.EHR_ON_SURFACE,
                                                     lineHeight: 19,
                                                 }}
                                             >
@@ -534,7 +521,7 @@ export default function RoleSelectionScreen() {
                                     textAlign: 'center',
                                     fontFamily: SANS,
                                     fontSize: 11,
-                                    color: EHR_OUTLINE,
+                                    color: palette.EHR_OUTLINE,
                                     lineHeight: 17,
                                 }}
                             >
@@ -548,5 +535,3 @@ export default function RoleSelectionScreen() {
     );
 }
 
-void EHR_SECONDARY;
-void EHR_OUTLINE_VARIANT;

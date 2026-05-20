@@ -2,16 +2,7 @@ import React, { useState } from 'react';
 import { Modal, Pressable, StyleSheet } from 'react-native';
 import { Text, View, XStack, YStack } from 'tamagui';
 import { ShieldCheck, X } from 'lucide-react-native';
-import {
-    EHR_ON_PRIMARY,
-    EHR_ON_SURFACE,
-    EHR_ON_SURFACE_VARIANT,
-    EHR_OUTLINE_VARIANT,
-    EHR_PRIMARY,
-    EHR_PRIMARY_FIXED,
-    EHR_SURFACE_LOW,
-    EHR_SURFACE_LOWEST,
-} from '../constants/uiColors';
+import { useEhrPalette } from '../constants/uiColors';
 
 type Props = {
     visible: boolean;
@@ -28,6 +19,19 @@ const TERMS = [
 ];
 
 export default function LiabilityConfirmModal({ visible, patientLabel, onConfirm, onCancel }: Props) {
+    const palette = useEhrPalette();
+    const s = StyleSheet.create({
+        overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', padding: 24 },
+        card: { backgroundColor: palette.EHR_SURFACE_LOWEST, borderRadius: 20, padding: 20 },
+        patientBadge: { backgroundColor: palette.EHR_PRIMARY_FIXED, borderRadius: 10, paddingVertical: 8, paddingHorizontal: 12 },
+        bullet: { width: 20, height: 20, borderRadius: 10, backgroundColor: palette.EHR_PRIMARY_FIXED, alignItems: 'center', justifyContent: 'center', marginTop: 1 },
+        checkboxRow: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12, backgroundColor: palette.EHR_SURFACE_LOW, borderRadius: 12, borderWidth: 1, borderColor: palette.EHR_OUTLINE_VARIANT },
+        checkbox: { width: 22, height: 22, borderRadius: 6, borderWidth: 2, borderColor: palette.EHR_OUTLINE_VARIANT, alignItems: 'center', justifyContent: 'center' },
+        checkboxChecked: { backgroundColor: palette.EHR_PRIMARY, borderColor: palette.EHR_PRIMARY },
+        btn: { flex: 1, paddingVertical: 14, borderRadius: 12, alignItems: 'center' },
+        btnCancel: { backgroundColor: palette.EHR_SURFACE_LOW },
+        btnConfirm: { backgroundColor: palette.EHR_PRIMARY },
+    });
     const [checked, setChecked] = useState(false);
 
     const handleClose = () => {
@@ -47,19 +51,19 @@ export default function LiabilityConfirmModal({ visible, patientLabel, onConfirm
                     {/* Header */}
                     <XStack style={{ justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
                         <XStack style={{ alignItems: 'center', gap: 8 }}>
-                            <ShieldCheck size={22} color={EHR_PRIMARY} />
+                            <ShieldCheck size={22} color={palette.EHR_PRIMARY} />
                             <Text fontSize={17} fontWeight="800" color="$color12">
                                 Xác nhận trách nhiệm
                             </Text>
                         </XStack>
                         <Pressable onPress={handleClose} style={{ padding: 4 }}>
-                            <X size={18} color={EHR_ON_SURFACE_VARIANT} />
+                            <X size={18} color={palette.EHR_ON_SURFACE_VARIANT} />
                         </Pressable>
                     </XStack>
 
                     {/* Patient info */}
                     <View style={s.patientBadge}>
-                        <Text fontSize={13} color={EHR_ON_SURFACE_VARIANT}>
+                        <Text fontSize={13} color={palette.EHR_ON_SURFACE_VARIANT}>
                             Hồ sơ bệnh nhân: <Text fontWeight="700" color="$color12">{patientLabel}</Text>
                         </Text>
                     </View>
@@ -69,7 +73,7 @@ export default function LiabilityConfirmModal({ visible, patientLabel, onConfirm
                         {TERMS.map((term, idx) => (
                             <XStack key={idx} style={{ gap: 8, alignItems: 'flex-start' }}>
                                 <View style={s.bullet}>
-                                    <Text style={{ fontSize: 10, color: EHR_PRIMARY, fontWeight: '800' }}>{idx + 1}</Text>
+                                    <Text style={{ fontSize: 10, color: palette.EHR_PRIMARY, fontWeight: '800' }}>{idx + 1}</Text>
                                 </View>
                                 <Text fontSize={13} color="$color11" style={{ flex: 1, lineHeight: 19 }}>
                                     {term}
@@ -91,14 +95,14 @@ export default function LiabilityConfirmModal({ visible, patientLabel, onConfirm
                     {/* Actions */}
                     <XStack style={{ gap: 10, marginTop: 16 }}>
                         <Pressable onPress={handleClose} style={[s.btn, s.btnCancel]}>
-                            <Text fontSize={14} fontWeight="700" color={EHR_ON_SURFACE_VARIANT}>Huỷ</Text>
+                            <Text fontSize={14} fontWeight="700" color={palette.EHR_ON_SURFACE_VARIANT}>Huỷ</Text>
                         </Pressable>
                         <Pressable
                             onPress={checked ? handleConfirm : undefined}
                             disabled={!checked}
                             style={[s.btn, s.btnConfirm, !checked && { opacity: 0.4 }]}
                         >
-                            <Text fontSize={14} fontWeight="700" color={EHR_ON_PRIMARY}>
+                            <Text fontSize={14} fontWeight="700" color={palette.EHR_ON_PRIMARY}>
                                 Xác nhận truy cập
                             </Text>
                         </Pressable>
@@ -109,66 +113,3 @@ export default function LiabilityConfirmModal({ visible, patientLabel, onConfirm
     );
 }
 
-const s = StyleSheet.create({
-    overlay: {
-        flex: 1,
-        backgroundColor: 'rgba(0,0,0,0.5)',
-        justifyContent: 'center',
-        padding: 24,
-    },
-    card: {
-        backgroundColor: EHR_SURFACE_LOWEST,
-        borderRadius: 20,
-        padding: 20,
-    },
-    patientBadge: {
-        backgroundColor: EHR_PRIMARY_FIXED,
-        borderRadius: 10,
-        paddingVertical: 8,
-        paddingHorizontal: 12,
-    },
-    bullet: {
-        width: 20,
-        height: 20,
-        borderRadius: 10,
-        backgroundColor: EHR_PRIMARY_FIXED,
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginTop: 1,
-    },
-    checkboxRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 10,
-        padding: 12,
-        backgroundColor: EHR_SURFACE_LOW,
-        borderRadius: 12,
-        borderWidth: 1,
-        borderColor: EHR_OUTLINE_VARIANT,
-    },
-    checkbox: {
-        width: 22,
-        height: 22,
-        borderRadius: 6,
-        borderWidth: 2,
-        borderColor: EHR_OUTLINE_VARIANT,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    checkboxChecked: {
-        backgroundColor: EHR_PRIMARY,
-        borderColor: EHR_PRIMARY,
-    },
-    btn: {
-        flex: 1,
-        paddingVertical: 14,
-        borderRadius: 12,
-        alignItems: 'center',
-    },
-    btnCancel: {
-        backgroundColor: EHR_SURFACE_LOW,
-    },
-    btnConfirm: {
-        backgroundColor: EHR_PRIMARY,
-    },
-});

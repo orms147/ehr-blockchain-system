@@ -31,23 +31,7 @@ import { ChevronLeft, ChevronRight, IdCard, Heart, AlertTriangle, X, Plus } from
 import api from '../services/api';
 import trustedContactService from '../services/trustedContact.service';
 import ViButton from '../components-v2/ViButton';
-import {
-    EHR_SURFACE,
-    EHR_SURFACE_LOWEST,
-    EHR_SURFACE_HIGH,
-    EHR_ON_SURFACE,
-    EHR_ON_SURFACE_VARIANT,
-    EHR_OUTLINE,
-    EHR_OUTLINE_SOFT,
-    EHR_OUTLINE_VARIANT,
-    EHR_PRIMARY,
-    EHR_PRIMARY_CONTAINER,
-    EHR_PRIMARY_FIXED,
-    EHR_TERTIARY,
-    EHR_SECONDARY,
-    EHR_WARNING,
-    EHR_DANGER,
-} from '../constants/uiColors';
+import { useEhrPalette } from '../constants/uiColors';
 
 const SERIF = 'Fraunces_400Regular';
 const SERIF_MEDIUM = 'Fraunces_500Medium';
@@ -115,6 +99,7 @@ const formatGender = (g?: string | null) => {
 };
 
 export default function EmergencyProfileScreen() {
+    const palette = useEhrPalette();
     const navigation = useNavigation<any>();
     const [bloodType, setBloodType] = useState<string>('');
     const [allergies, setAllergies] = useState<string>('');
@@ -175,7 +160,7 @@ export default function EmergencyProfileScreen() {
     };
 
     return (
-        <SafeAreaView style={{ flex: 1, backgroundColor: EHR_SURFACE }} edges={['top', 'left', 'right']}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: palette.EHR_SURFACE }} edges={['top', 'left', 'right']}>
             <ScrollView contentContainerStyle={{ paddingBottom: 120 }} showsVerticalScrollIndicator={false}>
                 {/* Top bar */}
                 <View style={{ paddingHorizontal: 22, paddingTop: 10, paddingBottom: 18 }}>
@@ -191,8 +176,8 @@ export default function EmergencyProfileScreen() {
                             opacity: pressed ? 0.5 : 1,
                         })}
                     >
-                        <ChevronLeft size={18} color={EHR_ON_SURFACE_VARIANT} />
-                        <Text style={{ fontFamily: SANS, fontSize: 13, color: EHR_ON_SURFACE_VARIANT }}>
+                        <ChevronLeft size={18} color={palette.EHR_ON_SURFACE_VARIANT} />
+                        <Text style={{ fontFamily: SANS, fontSize: 13, color: palette.EHR_ON_SURFACE_VARIANT }}>
                             Quay lại
                         </Text>
                     </Pressable>
@@ -201,7 +186,7 @@ export default function EmergencyProfileScreen() {
                             marginTop: 6,
                             fontFamily: SERIF,
                             fontSize: 28,
-                            color: EHR_ON_SURFACE,
+                            color: palette.EHR_ON_SURFACE,
                             letterSpacing: -0.5,
                             lineHeight: 32,
                         }}
@@ -216,7 +201,7 @@ export default function EmergencyProfileScreen() {
                         style={{
                             fontFamily: SANS_SEMI,
                             fontSize: 10,
-                            color: EHR_PRIMARY,
+                            color: palette.EHR_PRIMARY,
                             letterSpacing: 1.4,
                             textTransform: 'uppercase',
                             fontWeight: '700',
@@ -248,7 +233,7 @@ export default function EmergencyProfileScreen() {
                                 paddingVertical: 14,
                                 paddingHorizontal: 16,
                                 borderRadius: 14,
-                                backgroundColor: EHR_PRIMARY,
+                                backgroundColor: palette.EHR_PRIMARY,
                                 opacity: pressed ? 0.85 : 1,
                             })}
                         >
@@ -300,18 +285,18 @@ export default function EmergencyProfileScreen() {
                                 paddingVertical: 10,
                                 paddingHorizontal: 14,
                                 borderRadius: 10,
-                                backgroundColor: `${EHR_TERTIARY}1A`,
+                                backgroundColor: `${palette.EHR_TERTIARY}1A`,
                                 borderWidth: 0.5,
-                                borderColor: `${EHR_TERTIARY}40`,
+                                borderColor: `${palette.EHR_TERTIARY}40`,
                             }}
                         >
-                            <IdCard size={14} color={EHR_TERTIARY} />
+                            <IdCard size={14} color={palette.EHR_TERTIARY} />
                             <Text
                                 style={{
                                     flex: 1,
                                     fontFamily: SANS_MEDIUM,
                                     fontSize: 12,
-                                    color: EHR_TERTIARY,
+                                    color: palette.EHR_TERTIARY,
                                     fontWeight: '600',
                                 }}
                             >
@@ -337,9 +322,9 @@ export default function EmergencyProfileScreen() {
                                             paddingVertical: 9,
                                             paddingHorizontal: 12,
                                             borderRadius: 8,
-                                            backgroundColor: active ? `${EHR_SECONDARY}24` : 'transparent',
+                                            backgroundColor: active ? `${palette.EHR_SECONDARY}24` : 'transparent',
                                             borderWidth: 0.5,
-                                            borderColor: active ? `${EHR_SECONDARY}80` : EHR_OUTLINE_SOFT,
+                                            borderColor: active ? `${palette.EHR_SECONDARY}80` : palette.EHR_OUTLINE_SOFT,
                                             alignItems: 'center',
                                             opacity: pressed ? 0.7 : 1,
                                         })}
@@ -349,7 +334,7 @@ export default function EmergencyProfileScreen() {
                                                 fontFamily: MONO,
                                                 fontSize: 13,
                                                 fontWeight: '700',
-                                                color: active ? EHR_SECONDARY : EHR_ON_SURFACE_VARIANT,
+                                                color: active ? palette.EHR_SECONDARY : palette.EHR_ON_SURFACE_VARIANT,
                                             }}
                                         >
                                             {b}
@@ -375,9 +360,9 @@ export default function EmergencyProfileScreen() {
                                             paddingVertical: 5,
                                             paddingHorizontal: 10,
                                             borderRadius: 6,
-                                            backgroundColor: `${EHR_WARNING}1F`,
+                                            backgroundColor: `${palette.EHR_WARNING}1F`,
                                             borderWidth: 0.5,
-                                            borderColor: `${EHR_WARNING}60`,
+                                            borderColor: `${palette.EHR_WARNING}60`,
                                             opacity: pressed ? 0.7 : 1,
                                         })}
                                     >
@@ -385,13 +370,13 @@ export default function EmergencyProfileScreen() {
                                             style={{
                                                 fontFamily: SANS_SEMI,
                                                 fontSize: 12.5,
-                                                color: EHR_WARNING,
+                                                color: palette.EHR_WARNING,
                                                 fontWeight: '700',
                                             }}
                                         >
                                             !  {a}
                                         </Text>
-                                        <X size={11} color={EHR_WARNING} />
+                                        <X size={11} color={palette.EHR_WARNING} />
                                     </Pressable>
                                 ))}
                             </View>
@@ -402,16 +387,16 @@ export default function EmergencyProfileScreen() {
                                 onChangeText={setAllergyInput}
                                 onSubmitEditing={() => addAllergy(allergyInput)}
                                 placeholder="Thêm dị ứng…"
-                                placeholderTextColor={EHR_OUTLINE}
+                                placeholderTextColor={palette.EHR_OUTLINE}
                                 style={{
                                     flex: 1,
                                     paddingVertical: 9,
                                     paddingHorizontal: 12,
                                     borderRadius: 8,
                                     borderWidth: 0.5,
-                                    borderColor: EHR_OUTLINE_SOFT,
-                                    backgroundColor: EHR_SURFACE_LOWEST,
-                                    color: EHR_ON_SURFACE,
+                                    borderColor: palette.EHR_OUTLINE_SOFT,
+                                    backgroundColor: palette.EHR_SURFACE_LOWEST,
+                                    color: palette.EHR_ON_SURFACE,
                                     fontFamily: SANS,
                                     fontSize: 13,
                                 }}
@@ -425,12 +410,12 @@ export default function EmergencyProfileScreen() {
                                     justifyContent: 'center',
                                     borderRadius: 8,
                                     borderWidth: 0.5,
-                                    borderColor: allergyInput.trim() ? EHR_PRIMARY : EHR_OUTLINE_SOFT,
-                                    backgroundColor: allergyInput.trim() ? `${EHR_PRIMARY}1A` : 'transparent',
+                                    borderColor: allergyInput.trim() ? palette.EHR_PRIMARY : palette.EHR_OUTLINE_SOFT,
+                                    backgroundColor: allergyInput.trim() ? `${palette.EHR_PRIMARY}1A` : 'transparent',
                                     opacity: pressed ? 0.7 : 1,
                                 })}
                             >
-                                <Plus size={16} color={allergyInput.trim() ? EHR_PRIMARY : EHR_OUTLINE} />
+                                <Plus size={16} color={allergyInput.trim() ? palette.EHR_PRIMARY : palette.EHR_OUTLINE} />
                             </Pressable>
                         </View>
                         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 10 }}>
@@ -444,11 +429,11 @@ export default function EmergencyProfileScreen() {
                                         borderRadius: 999,
                                         borderWidth: 0.5,
                                         borderStyle: 'dashed',
-                                        borderColor: EHR_OUTLINE_VARIANT,
+                                        borderColor: palette.EHR_OUTLINE_VARIANT,
                                         opacity: pressed ? 0.6 : 1,
                                     })}
                                 >
-                                    <Text style={{ fontFamily: SANS, fontSize: 10.5, color: EHR_OUTLINE }}>
+                                    <Text style={{ fontFamily: SANS, fontSize: 10.5, color: palette.EHR_OUTLINE }}>
                                         + {a}
                                     </Text>
                                 </Pressable>
@@ -469,20 +454,20 @@ export default function EmergencyProfileScreen() {
                                     paddingHorizontal: 14,
                                     borderRadius: 10,
                                     borderWidth: 0.5,
-                                    borderColor: EHR_OUTLINE_VARIANT,
-                                    backgroundColor: EHR_SURFACE_LOWEST,
+                                    borderColor: palette.EHR_OUTLINE_VARIANT,
+                                    backgroundColor: palette.EHR_SURFACE_LOWEST,
                                     flexDirection: 'row',
                                     alignItems: 'flex-start',
                                     gap: 10,
                                 }}
                             >
-                                <AlertTriangle size={14} color={EHR_OUTLINE} style={{ marginTop: 2 }} />
+                                <AlertTriangle size={14} color={palette.EHR_OUTLINE} style={{ marginTop: 2 }} />
                                 <Text
                                     style={{
                                         flex: 1,
                                         fontFamily: SANS,
                                         fontSize: 12.5,
-                                        color: EHR_ON_SURFACE_VARIANT,
+                                        color: palette.EHR_ON_SURFACE_VARIANT,
                                         lineHeight: 18,
                                     }}
                                 >
@@ -506,19 +491,19 @@ export default function EmergencyProfileScreen() {
                                                 width: 30,
                                                 height: 30,
                                                 borderRadius: 15,
-                                                backgroundColor: EHR_PRIMARY_FIXED,
+                                                backgroundColor: palette.EHR_PRIMARY_FIXED,
                                                 alignItems: 'center',
                                                 justifyContent: 'center',
                                             }}
                                         >
-                                            <Heart size={14} color={EHR_PRIMARY} />
+                                            <Heart size={14} color={palette.EHR_PRIMARY} />
                                         </View>
                                         <View style={{ flex: 1, minWidth: 0 }}>
                                             <Text
                                                 style={{
                                                     fontFamily: SANS_MEDIUM,
                                                     fontSize: 13,
-                                                    color: EHR_ON_SURFACE,
+                                                    color: palette.EHR_ON_SURFACE,
                                                 }}
                                                 numberOfLines={1}
                                             >
@@ -529,7 +514,7 @@ export default function EmergencyProfileScreen() {
                                                     marginTop: 1,
                                                     fontFamily: SANS,
                                                     fontSize: 10.5,
-                                                    color: EHR_OUTLINE,
+                                                    color: palette.EHR_OUTLINE,
                                                 }}
                                                 numberOfLines={1}
                                             >
@@ -556,10 +541,10 @@ export default function EmergencyProfileScreen() {
                         marginHorizontal: 20,
                         paddingVertical: 12,
                         paddingHorizontal: 14,
-                        backgroundColor: EHR_SURFACE_LOWEST,
+                        backgroundColor: palette.EHR_SURFACE_LOWEST,
                         borderWidth: 0.5,
                         borderStyle: 'dashed',
-                        borderColor: EHR_OUTLINE_VARIANT,
+                        borderColor: palette.EHR_OUTLINE_VARIANT,
                         borderRadius: 10,
                     }}
                 >
@@ -567,7 +552,7 @@ export default function EmergencyProfileScreen() {
                         style={{
                             fontFamily: SANS,
                             fontSize: 11,
-                            color: EHR_OUTLINE,
+                            color: palette.EHR_OUTLINE,
                             lineHeight: 17,
                         }}
                     >
@@ -586,9 +571,9 @@ export default function EmergencyProfileScreen() {
                     paddingHorizontal: 20,
                     paddingTop: 12,
                     paddingBottom: 22,
-                    backgroundColor: EHR_SURFACE,
+                    backgroundColor: palette.EHR_SURFACE,
                     borderTopWidth: 0.5,
-                    borderTopColor: EHR_OUTLINE_VARIANT,
+                    borderTopColor: palette.EHR_OUTLINE_VARIANT,
                     flexDirection: 'row',
                     gap: 10,
                 }}
@@ -626,15 +611,16 @@ function ERPreviewCard({
     allergies: string[];
     firstContact: Contact | null;
 }) {
+    const palette = useEhrPalette();
     return (
         <View
             style={{
                 position: 'relative',
                 padding: 18,
-                backgroundColor: EHR_SURFACE_HIGH,
+                backgroundColor: palette.EHR_SURFACE_HIGH,
                 borderRadius: 14,
                 borderWidth: 0.5,
-                borderColor: EHR_OUTLINE_VARIANT,
+                borderColor: palette.EHR_OUTLINE_VARIANT,
             }}
         >
             {/* watermark stamp */}
@@ -646,7 +632,7 @@ function ERPreviewCard({
                     paddingHorizontal: 8,
                     paddingVertical: 3,
                     borderWidth: 0.5,
-                    borderColor: `${EHR_PRIMARY}40`,
+                    borderColor: `${palette.EHR_PRIMARY}40`,
                     borderRadius: 4,
                 }}
             >
@@ -657,7 +643,7 @@ function ERPreviewCard({
                         letterSpacing: 1,
                         textTransform: 'uppercase',
                         fontWeight: '700',
-                        color: EHR_PRIMARY,
+                        color: palette.EHR_PRIMARY,
                     }}
                 >
                     ER · Read-only
@@ -669,7 +655,7 @@ function ERPreviewCard({
                 style={{
                     fontFamily: SERIF_MEDIUM,
                     fontSize: 19,
-                    color: EHR_ON_SURFACE,
+                    color: palette.EHR_ON_SURFACE,
                     letterSpacing: -0.2,
                     lineHeight: 23,
                 }}
@@ -681,7 +667,7 @@ function ERPreviewCard({
                     marginTop: 2,
                     fontFamily: MONO,
                     fontSize: 11.5,
-                    color: EHR_ON_SURFACE_VARIANT,
+                    color: palette.EHR_ON_SURFACE_VARIANT,
                 }}
             >
                 {formatGender(gender)}
@@ -695,7 +681,7 @@ function ERPreviewCard({
                     <Text
                         style={{
                             fontSize: 9,
-                            color: EHR_OUTLINE,
+                            color: palette.EHR_OUTLINE,
                             letterSpacing: 0.8,
                             textTransform: 'uppercase',
                             fontWeight: '700',
@@ -707,7 +693,7 @@ function ERPreviewCard({
                         style={{
                             fontFamily: SERIF_MEDIUM,
                             fontSize: 28,
-                            color: blood ? EHR_SECONDARY : EHR_OUTLINE,
+                            color: blood ? palette.EHR_SECONDARY : palette.EHR_OUTLINE,
                             letterSpacing: -0.6,
                             lineHeight: 32,
                             marginTop: 4,
@@ -720,7 +706,7 @@ function ERPreviewCard({
                     <Text
                         style={{
                             fontSize: 9,
-                            color: EHR_OUTLINE,
+                            color: palette.EHR_OUTLINE,
                             letterSpacing: 0.8,
                             textTransform: 'uppercase',
                             fontWeight: '700',
@@ -734,7 +720,7 @@ function ERPreviewCard({
                                 style={{
                                     fontFamily: SANS,
                                     fontSize: 12,
-                                    color: EHR_OUTLINE,
+                                    color: palette.EHR_OUTLINE,
                                     fontStyle: 'italic',
                                 }}
                             >
@@ -748,16 +734,16 @@ function ERPreviewCard({
                                         paddingHorizontal: 9,
                                         paddingVertical: 4,
                                         borderRadius: 4,
-                                        backgroundColor: `${EHR_WARNING}1F`,
+                                        backgroundColor: `${palette.EHR_WARNING}1F`,
                                         borderWidth: 0.5,
-                                        borderColor: `${EHR_WARNING}60`,
+                                        borderColor: `${palette.EHR_WARNING}60`,
                                     }}
                                 >
                                     <Text
                                         style={{
                                             fontFamily: SANS_SEMI,
                                             fontSize: 12,
-                                            color: EHR_WARNING,
+                                            color: palette.EHR_WARNING,
                                             fontWeight: '700',
                                         }}
                                     >
@@ -778,7 +764,7 @@ function ERPreviewCard({
                         paddingTop: 12,
                         borderTopWidth: 0.5,
                         borderStyle: 'dashed',
-                        borderColor: EHR_OUTLINE_VARIANT,
+                        borderColor: palette.EHR_OUTLINE_VARIANT,
                         flexDirection: 'row',
                         alignItems: 'center',
                         gap: 8,
@@ -787,7 +773,7 @@ function ERPreviewCard({
                     <Text
                         style={{
                             fontSize: 9,
-                            color: EHR_OUTLINE,
+                            color: palette.EHR_OUTLINE,
                             letterSpacing: 0.8,
                             textTransform: 'uppercase',
                             fontWeight: '700',
@@ -800,13 +786,13 @@ function ERPreviewCard({
                             flex: 1,
                             fontFamily: SANS_MEDIUM,
                             fontSize: 11.5,
-                            color: EHR_ON_SURFACE,
+                            color: palette.EHR_ON_SURFACE,
                         }}
                         numberOfLines={1}
                     >
                         {firstContact.fullName || truncate(firstContact.contactAddress)}
                         {firstContact.label ? (
-                            <Text style={{ color: EHR_OUTLINE }}> · {firstContact.label}</Text>
+                            <Text style={{ color: palette.EHR_OUTLINE }}> · {firstContact.label}</Text>
                         ) : null}
                     </Text>
                 </View>
@@ -833,12 +819,13 @@ function SectionRow({
     hint?: string;
     last?: boolean;
 }) {
+    const palette = useEhrPalette();
     return (
         <View
             style={{
                 paddingVertical: 18,
                 borderBottomWidth: last ? 0 : 0.5,
-                borderColor: EHR_OUTLINE_VARIANT,
+                borderColor: palette.EHR_OUTLINE_VARIANT,
             }}
         >
             <XStack style={{ alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 12 }}>
@@ -846,7 +833,7 @@ function SectionRow({
                     <Text
                         style={{
                             fontSize: 10,
-                            color: critical ? EHR_WARNING : EHR_OUTLINE,
+                            color: critical ? palette.EHR_WARNING : palette.EHR_OUTLINE,
                             letterSpacing: 1.2,
                             textTransform: 'uppercase',
                             fontWeight: '700',
@@ -859,7 +846,7 @@ function SectionRow({
                         <Text
                             style={{
                                 fontSize: 9,
-                                color: EHR_WARNING,
+                                color: palette.EHR_WARNING,
                                 letterSpacing: 0.5,
                                 fontWeight: '600',
                             }}
@@ -875,7 +862,7 @@ function SectionRow({
                                 style={{
                                     fontFamily: SANS_MEDIUM,
                                     fontSize: 11.5,
-                                    color: EHR_ON_SURFACE_VARIANT,
+                                    color: palette.EHR_ON_SURFACE_VARIANT,
                                 }}
                             >
                                 {trailing} →
@@ -886,7 +873,7 @@ function SectionRow({
                             style={{
                                 fontFamily: SANS,
                                 fontSize: 11.5,
-                                color: EHR_OUTLINE,
+                                color: palette.EHR_OUTLINE,
                             }}
                         >
                             {trailing}
@@ -901,7 +888,7 @@ function SectionRow({
                         marginTop: 8,
                         fontFamily: SANS,
                         fontSize: 11,
-                        color: EHR_OUTLINE,
+                        color: palette.EHR_OUTLINE,
                         lineHeight: 16,
                         fontStyle: 'italic',
                     }}
@@ -914,13 +901,12 @@ function SectionRow({
 }
 
 function KVRow({ k, v }: { k: string; v: string }) {
+    const palette = useEhrPalette();
     return (
         <XStack style={{ justifyContent: 'space-between', alignItems: 'center', paddingVertical: 6 }}>
-            <Text style={{ fontFamily: SANS, fontSize: 13, color: EHR_ON_SURFACE_VARIANT }}>{k}</Text>
-            <Text style={{ fontFamily: SANS_MEDIUM, fontSize: 13, color: EHR_ON_SURFACE, fontWeight: '500' }}>{v}</Text>
+            <Text style={{ fontFamily: SANS, fontSize: 13, color: palette.EHR_ON_SURFACE_VARIANT }}>{k}</Text>
+            <Text style={{ fontFamily: SANS_MEDIUM, fontSize: 13, color: palette.EHR_ON_SURFACE, fontWeight: '500' }}>{v}</Text>
         </XStack>
     );
 }
 
-void EHR_PRIMARY_CONTAINER;
-void EHR_DANGER;

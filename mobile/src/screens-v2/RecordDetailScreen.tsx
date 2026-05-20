@@ -57,21 +57,7 @@ import { formatExpiry } from '../utils/dateFormatting';
 import ViCard from '../components-v2/ViCard';
 import ViButton from '../components-v2/ViButton';
 import { ViSectionLabel, ViModeChip, ViSourceChip } from '../components-v2/ViChips';
-import {
-    EHR_SURFACE,
-    EHR_SURFACE_LOWEST,
-    EHR_ON_SURFACE,
-    EHR_ON_SURFACE_VARIANT,
-    EHR_OUTLINE,
-    EHR_OUTLINE_SOFT,
-    EHR_OUTLINE_VARIANT,
-    EHR_PRIMARY,
-    EHR_PRIMARY_FIXED,
-    EHR_TERTIARY,
-    EHR_SECONDARY,
-    EHR_WARNING,
-    EHR_DANGER,
-} from '../constants/uiColors';
+import { useEhrPalette } from '../constants/uiColors';
 
 const SERIF = 'Fraunces_400Regular';
 const SERIF_MEDIUM = 'Fraunces_500Medium';
@@ -162,6 +148,7 @@ function classifyDecryptError(error: any): string {
 }
 
 export default function RecordDetailScreen({ route, navigation }: any) {
+    const palette = useEhrPalette();
     const record: RouteRecord = route?.params?.record || {};
     const { user, activeRole } = useAuthStore();
     const me = String(user?.walletAddress || '').toLowerCase();
@@ -656,7 +643,7 @@ export default function RecordDetailScreen({ route, navigation }: any) {
     //  RENDER
     // ───────────────────────────────────────────────────────────────────
     return (
-        <SafeAreaView style={{ flex: 1, backgroundColor: EHR_SURFACE }} edges={['bottom', 'left', 'right']}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: palette.EHR_SURFACE }} edges={['bottom', 'left', 'right']}>
             <ScrollView contentContainerStyle={{ padding: 20, paddingTop: 10, paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
                 {/* ───────── Header card ───────── */}
                 <ViCard padding={18} style={{ marginBottom: 18 }}>
@@ -665,19 +652,19 @@ export default function RecordDetailScreen({ route, navigation }: any) {
                             width: 44,
                             height: 44,
                             borderRadius: 22,
-                            backgroundColor: EHR_PRIMARY_FIXED,
+                            backgroundColor: palette.EHR_PRIMARY_FIXED,
                             alignItems: 'center',
                             justifyContent: 'center',
                             marginBottom: 12,
                         }}
                     >
-                        <FileText size={20} color={EHR_PRIMARY} />
+                        <FileText size={20} color={palette.EHR_PRIMARY} />
                     </View>
                     <Text
                         style={{
                             fontFamily: SERIF,
                             fontSize: 22,
-                            color: EHR_ON_SURFACE,
+                            color: palette.EHR_ON_SURFACE,
                             letterSpacing: -0.3,
                             lineHeight: 28,
                             marginBottom: 10,
@@ -686,14 +673,14 @@ export default function RecordDetailScreen({ route, navigation }: any) {
                         {record.title || record.type || 'Hồ sơ y tế không tên'}
                     </Text>
                     <XStack style={{ alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                        <Clock size={13} color={EHR_OUTLINE} />
-                        <Text style={{ fontFamily: SANS, fontSize: 13, color: EHR_OUTLINE }}>
+                        <Clock size={13} color={palette.EHR_OUTLINE} />
+                        <Text style={{ fontFamily: SANS, fontSize: 13, color: palette.EHR_OUTLINE }}>
                             {record.date || 'Không có ngày'}
                         </Text>
                     </XStack>
                     <XStack style={{ alignItems: 'center', gap: 8 }}>
-                        <User size={13} color={EHR_OUTLINE} />
-                        <Text style={{ fontFamily: SANS, fontSize: 13, color: EHR_OUTLINE }}>
+                        <User size={13} color={palette.EHR_OUTLINE} />
+                        <Text style={{ fontFamily: SANS, fontSize: 13, color: palette.EHR_OUTLINE }}>
                             {record.createdByDisplay || 'Người tạo không rõ'}
                         </Text>
                     </XStack>
@@ -711,20 +698,20 @@ export default function RecordDetailScreen({ route, navigation }: any) {
                     <View
                         style={{
                             borderWidth: 0.75,
-                            borderColor: decryptError ? EHR_DANGER : EHR_OUTLINE_SOFT,
+                            borderColor: decryptError ? palette.EHR_DANGER : palette.EHR_OUTLINE_SOFT,
                             borderRadius: 14,
                             padding: 16,
                             marginBottom: 18,
-                            backgroundColor: EHR_SURFACE_LOWEST,
+                            backgroundColor: palette.EHR_SURFACE_LOWEST,
                         }}
                     >
                         <XStack style={{ alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                            <Lock size={18} color={decryptError ? EHR_DANGER : EHR_PRIMARY} />
+                            <Lock size={18} color={decryptError ? palette.EHR_DANGER : palette.EHR_PRIMARY} />
                             <Text
                                 style={{
                                     fontFamily: SANS_SEMI,
                                     fontSize: 14,
-                                    color: EHR_ON_SURFACE,
+                                    color: palette.EHR_ON_SURFACE,
                                     fontWeight: '700',
                                 }}
                             >
@@ -735,7 +722,7 @@ export default function RecordDetailScreen({ route, navigation }: any) {
                             style={{
                                 fontFamily: SANS,
                                 fontSize: 13,
-                                color: EHR_ON_SURFACE_VARIANT,
+                                color: palette.EHR_ON_SURFACE_VARIANT,
                                 lineHeight: 19,
                                 marginBottom: 12,
                             }}
@@ -748,7 +735,7 @@ export default function RecordDetailScreen({ route, navigation }: any) {
                                     marginBottom: 12,
                                     fontFamily: SANS,
                                     fontSize: 12.5,
-                                    color: EHR_DANGER,
+                                    color: palette.EHR_DANGER,
                                     lineHeight: 18,
                                 }}
                             >
@@ -759,7 +746,7 @@ export default function RecordDetailScreen({ route, navigation }: any) {
                             variant="primary"
                             full
                             loading={isDecrypting}
-                            leftIcon={isDecrypting ? undefined : <Unlock size={16} color={EHR_SURFACE} />}
+                            leftIcon={isDecrypting ? undefined : <Unlock size={16} color={palette.EHR_SURFACE} />}
                             onPress={handleDecrypt}
                         >
                             {isDecrypting ? 'Đang giải mã…' : 'Giải mã nội dung'}
@@ -783,7 +770,7 @@ export default function RecordDetailScreen({ route, navigation }: any) {
                                 style={{
                                     fontFamily: SERIF,
                                     fontSize: 18,
-                                    color: EHR_ON_SURFACE,
+                                    color: palette.EHR_ON_SURFACE,
                                     letterSpacing: -0.2,
                                 }}
                             >
@@ -794,7 +781,7 @@ export default function RecordDetailScreen({ route, navigation }: any) {
                                     paddingHorizontal: 10,
                                     paddingVertical: 3,
                                     borderRadius: 999,
-                                    backgroundColor: EHR_PRIMARY_FIXED,
+                                    backgroundColor: palette.EHR_PRIMARY_FIXED,
                                 }}
                             >
                                 <Text
@@ -802,7 +789,7 @@ export default function RecordDetailScreen({ route, navigation }: any) {
                                         fontFamily: SANS_SEMI,
                                         fontSize: 10.5,
                                         fontWeight: '700',
-                                        color: EHR_PRIMARY,
+                                        color: palette.EHR_PRIMARY,
                                     }}
                                 >
                                     v{chain?.version || 1}
@@ -847,10 +834,10 @@ export default function RecordDetailScreen({ route, navigation }: any) {
                                                     <View
                                                         style={{
                                                             width: 160,
-                                                            backgroundColor: isCurrent ? EHR_PRIMARY_FIXED : EHR_SURFACE_LOWEST,
+                                                            backgroundColor: isCurrent ? palette.EHR_PRIMARY_FIXED : palette.EHR_SURFACE_LOWEST,
                                                             borderRadius: 14,
                                                             borderWidth: isCurrent ? 1.5 : 0.75,
-                                                            borderColor: isCurrent ? EHR_PRIMARY : EHR_OUTLINE_SOFT,
+                                                            borderColor: isCurrent ? palette.EHR_PRIMARY : palette.EHR_OUTLINE_SOFT,
                                                             padding: 12,
                                                             marginRight: 10,
                                                         }}
@@ -861,7 +848,7 @@ export default function RecordDetailScreen({ route, navigation }: any) {
                                                                     paddingHorizontal: 8,
                                                                     paddingVertical: 2,
                                                                     borderRadius: 999,
-                                                                    backgroundColor: isCurrent ? EHR_PRIMARY : EHR_SURFACE,
+                                                                    backgroundColor: isCurrent ? palette.EHR_PRIMARY : palette.EHR_SURFACE,
                                                                 }}
                                                             >
                                                                 <Text
@@ -869,7 +856,7 @@ export default function RecordDetailScreen({ route, navigation }: any) {
                                                                         fontFamily: SANS_SEMI,
                                                                         fontSize: 10,
                                                                         fontWeight: '700',
-                                                                        color: isCurrent ? '#FAF7F1' : EHR_OUTLINE,
+                                                                        color: isCurrent ? '#FAF7F1' : palette.EHR_OUTLINE,
                                                                     }}
                                                                 >
                                                                     v{idx + 1}
@@ -881,7 +868,7 @@ export default function RecordDetailScreen({ route, navigation }: any) {
                                                                         fontFamily: SANS_SEMI,
                                                                         fontSize: 10,
                                                                         fontWeight: '700',
-                                                                        color: EHR_PRIMARY,
+                                                                        color: palette.EHR_PRIMARY,
                                                                         letterSpacing: 0.4,
                                                                     }}
                                                                 >
@@ -893,7 +880,7 @@ export default function RecordDetailScreen({ route, navigation }: any) {
                                                             style={{
                                                                 fontFamily: SANS_MEDIUM,
                                                                 fontSize: 13,
-                                                                color: EHR_ON_SURFACE,
+                                                                color: palette.EHR_ON_SURFACE,
                                                                 fontWeight: '500',
                                                                 marginBottom: 4,
                                                             }}
@@ -906,7 +893,7 @@ export default function RecordDetailScreen({ route, navigation }: any) {
                                                                 style={{
                                                                     fontFamily: SANS,
                                                                     fontSize: 11,
-                                                                    color: EHR_OUTLINE,
+                                                                    color: palette.EHR_OUTLINE,
                                                                 }}
                                                             >
                                                                 {new Date(v.createdAt).toLocaleDateString('vi-VN')}
@@ -917,7 +904,7 @@ export default function RecordDetailScreen({ route, navigation }: any) {
                                                                 marginTop: 2,
                                                                 fontFamily: 'monospace',
                                                                 fontSize: 10,
-                                                                color: EHR_OUTLINE,
+                                                                color: palette.EHR_OUTLINE,
                                                             }}
                                                             numberOfLines={1}
                                                         >
@@ -927,7 +914,7 @@ export default function RecordDetailScreen({ route, navigation }: any) {
                                                 </Pressable>
                                                 {idx < all.length - 1 ? (
                                                     <View style={{ alignSelf: 'center', marginRight: 10 }}>
-                                                        <Text style={{ color: EHR_OUTLINE, fontSize: 16 }}>→</Text>
+                                                        <Text style={{ color: palette.EHR_OUTLINE, fontSize: 16 }}>→</Text>
                                                     </View>
                                                 ) : null}
                                             </React.Fragment>
@@ -961,9 +948,9 @@ export default function RecordDetailScreen({ route, navigation }: any) {
                             paddingVertical: 14,
                             paddingHorizontal: 14,
                             borderRadius: 14,
-                            backgroundColor: EHR_SURFACE_LOWEST,
+                            backgroundColor: palette.EHR_SURFACE_LOWEST,
                             borderWidth: 0.5,
-                            borderColor: EHR_OUTLINE_SOFT,
+                            borderColor: palette.EHR_OUTLINE_SOFT,
                             flexDirection: 'row',
                             alignItems: 'center',
                             gap: 12,
@@ -975,18 +962,18 @@ export default function RecordDetailScreen({ route, navigation }: any) {
                                 width: 36,
                                 height: 36,
                                 borderRadius: 18,
-                                backgroundColor: EHR_PRIMARY_FIXED,
+                                backgroundColor: palette.EHR_PRIMARY_FIXED,
                                 alignItems: 'center',
                                 justifyContent: 'center',
                             }}
                         >
-                            <FilePlus2 size={18} color={EHR_PRIMARY} />
+                            <FilePlus2 size={18} color={palette.EHR_PRIMARY} />
                         </View>
                         <YStack style={{ flex: 1 }}>
-                            <Text style={{ fontFamily: SANS_MEDIUM, fontSize: 14, color: EHR_ON_SURFACE, fontWeight: '500' }}>
+                            <Text style={{ fontFamily: SANS_MEDIUM, fontSize: 14, color: palette.EHR_ON_SURFACE, fontWeight: '500' }}>
                                 Tạo phiên bản mới
                             </Text>
-                            <Text style={{ fontFamily: SANS, fontSize: 11.5, color: EHR_OUTLINE, lineHeight: 16, marginTop: 2 }}>
+                            <Text style={{ fontFamily: SANS, fontSize: 11.5, color: palette.EHR_OUTLINE, lineHeight: 16, marginTop: 2 }}>
                                 {iAmOwner
                                     ? 'Liên kết với hồ sơ gốc; bên đã chia sẻ vẫn truy cập được.'
                                     : 'Key mới sẽ cascade tới mọi người đang có quyền.'}
@@ -1000,7 +987,7 @@ export default function RecordDetailScreen({ route, navigation }: any) {
                     style={{
                         fontFamily: SERIF,
                         fontSize: 18,
-                        color: EHR_ON_SURFACE,
+                        color: palette.EHR_ON_SURFACE,
                         letterSpacing: -0.2,
                         marginBottom: 12,
                     }}
@@ -1023,9 +1010,9 @@ export default function RecordDetailScreen({ route, navigation }: any) {
                             paddingVertical: 14,
                             paddingHorizontal: 14,
                             borderRadius: 14,
-                            backgroundColor: EHR_SURFACE_LOWEST,
+                            backgroundColor: palette.EHR_SURFACE_LOWEST,
                             borderWidth: 0.5,
-                            borderColor: EHR_OUTLINE_SOFT,
+                            borderColor: palette.EHR_OUTLINE_SOFT,
                             flexDirection: 'row',
                             alignItems: 'center',
                             gap: 12,
@@ -1037,18 +1024,18 @@ export default function RecordDetailScreen({ route, navigation }: any) {
                                 width: 36,
                                 height: 36,
                                 borderRadius: 18,
-                                backgroundColor: EHR_PRIMARY_FIXED,
+                                backgroundColor: palette.EHR_PRIMARY_FIXED,
                                 alignItems: 'center',
                                 justifyContent: 'center',
                             }}
                         >
-                            <Share2 size={18} color={EHR_PRIMARY} />
+                            <Share2 size={18} color={palette.EHR_PRIMARY} />
                         </View>
                         <YStack>
-                            <Text style={{ fontFamily: SANS_MEDIUM, fontSize: 14, color: EHR_ON_SURFACE, fontWeight: '500' }}>
+                            <Text style={{ fontFamily: SANS_MEDIUM, fontSize: 14, color: palette.EHR_ON_SURFACE, fontWeight: '500' }}>
                                 Chia sẻ qua địa chỉ ví
                             </Text>
-                            <Text style={{ fontFamily: SANS, fontSize: 11.5, color: EHR_OUTLINE, marginTop: 2 }}>
+                            <Text style={{ fontFamily: SANS, fontSize: 11.5, color: palette.EHR_OUTLINE, marginTop: 2 }}>
                                 Cấp quyền on-chain cho bác sĩ
                             </Text>
                         </YStack>
@@ -1060,9 +1047,9 @@ export default function RecordDetailScreen({ route, navigation }: any) {
                             paddingVertical: 14,
                             paddingHorizontal: 14,
                             borderRadius: 14,
-                            backgroundColor: EHR_SURFACE_LOWEST,
+                            backgroundColor: palette.EHR_SURFACE_LOWEST,
                             borderWidth: 0.5,
-                            borderColor: EHR_OUTLINE_SOFT,
+                            borderColor: palette.EHR_OUTLINE_SOFT,
                             flexDirection: 'row',
                             alignItems: 'center',
                             gap: 12,
@@ -1074,18 +1061,18 @@ export default function RecordDetailScreen({ route, navigation }: any) {
                                 width: 36,
                                 height: 36,
                                 borderRadius: 18,
-                                backgroundColor: `${EHR_SECONDARY}26`,
+                                backgroundColor: `${palette.EHR_SECONDARY}26`,
                                 alignItems: 'center',
                                 justifyContent: 'center',
                             }}
                         >
-                            <QrCode size={18} color={EHR_SECONDARY} />
+                            <QrCode size={18} color={palette.EHR_SECONDARY} />
                         </View>
                         <YStack>
-                            <Text style={{ fontFamily: SANS_MEDIUM, fontSize: 14, color: EHR_ON_SURFACE, fontWeight: '500' }}>
+                            <Text style={{ fontFamily: SANS_MEDIUM, fontSize: 14, color: palette.EHR_ON_SURFACE, fontWeight: '500' }}>
                                 Hiển thị mã CID
                             </Text>
-                            <Text style={{ fontFamily: SANS, fontSize: 11.5, color: EHR_OUTLINE, marginTop: 2 }}>
+                            <Text style={{ fontFamily: SANS, fontSize: 11.5, color: palette.EHR_OUTLINE, marginTop: 2 }}>
                                 Cho bác sĩ nhập CID Hash để tìm hồ sơ
                             </Text>
                         </YStack>
@@ -1169,11 +1156,12 @@ function DecryptedContent({
     ancestorKeyWarning: boolean;
     onOpenImage: () => void;
 }) {
+    const palette = useEhrPalette();
     return (
         <View style={{ marginBottom: 18 }}>
             <XStack style={{ alignItems: 'center', gap: 8, marginBottom: 12 }}>
-                <Unlock size={16} color={EHR_TERTIARY} />
-                <Text style={{ fontFamily: SANS_SEMI, fontSize: 13, color: EHR_TERTIARY, fontWeight: '700', letterSpacing: 0.4, textTransform: 'uppercase' }}>
+                <Unlock size={16} color={palette.EHR_TERTIARY} />
+                <Text style={{ fontFamily: SANS_SEMI, fontSize: 13, color: palette.EHR_TERTIARY, fontWeight: '700', letterSpacing: 0.4, textTransform: 'uppercase' }}>
                     Đã giải mã
                 </Text>
             </XStack>
@@ -1181,8 +1169,8 @@ function DecryptedContent({
             {ancestorKeyWarning ? (
                 <View
                     style={{
-                        backgroundColor: `${EHR_WARNING}1A`,
-                        borderColor: `${EHR_WARNING}50`,
+                        backgroundColor: `${palette.EHR_WARNING}1A`,
+                        borderColor: `${palette.EHR_WARNING}50`,
                         borderWidth: 0.75,
                         borderRadius: 10,
                         padding: 12,
@@ -1191,8 +1179,8 @@ function DecryptedContent({
                         gap: 8,
                     }}
                 >
-                    <Clock size={14} color={EHR_WARNING} style={{ marginTop: 2 }} />
-                    <Text style={{ flex: 1, fontFamily: SANS, fontSize: 12, color: EHR_ON_SURFACE, lineHeight: 18 }}>
+                    <Clock size={14} color={palette.EHR_WARNING} style={{ marginTop: 2 }} />
+                    <Text style={{ flex: 1, fontFamily: SANS, fontSize: 12, color: palette.EHR_ON_SURFACE, lineHeight: 18 }}>
                         Nội dung hiển thị là của phiên bản trước. Khoá giải mã cho phiên bản này chưa được chia sẻ — hãy yêu cầu bệnh nhân chia sẻ lại.
                     </Text>
                 </View>
@@ -1200,32 +1188,32 @@ function DecryptedContent({
 
             {decryptedImage ? (
                 <YStack style={{ marginBottom: 12 }}>
-                    <Text style={{ fontFamily: SANS_SEMI, fontSize: 11, color: EHR_OUTLINE, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8, fontWeight: '700' }}>
+                    <Text style={{ fontFamily: SANS_SEMI, fontSize: 11, color: palette.EHR_OUTLINE, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8, fontWeight: '700' }}>
                         Ảnh đính kèm
                     </Text>
                     <Pressable onPress={onOpenImage}>
-                        <View style={{ borderRadius: 12, overflow: 'hidden', borderWidth: 0.5, borderColor: EHR_OUTLINE_SOFT }}>
+                        <View style={{ borderRadius: 12, overflow: 'hidden', borderWidth: 0.5, borderColor: palette.EHR_OUTLINE_SOFT }}>
                             <Image
                                 source={{ uri: decryptedImage.uri }}
-                                style={{ width: '100%', height: 220, backgroundColor: EHR_SURFACE_LOWEST }}
+                                style={{ width: '100%', height: 220, backgroundColor: palette.EHR_SURFACE_LOWEST }}
                                 resizeMode="cover"
                             />
                         </View>
                     </Pressable>
-                    <Text style={{ marginTop: 6, fontFamily: SANS, fontSize: 11, color: EHR_OUTLINE }}>
+                    <Text style={{ marginTop: 6, fontFamily: SANS, fontSize: 11, color: palette.EHR_OUTLINE }}>
                         {decryptedImage.fileName || 'Ảnh đính kèm'} • Chạm để xem toàn màn hình
                     </Text>
                 </YStack>
             ) : null}
 
             {data?.meta ? (
-                <DecryptedSection title="Thông tin hồ sơ" accent={EHR_PRIMARY}>
+                <DecryptedSection title="Thông tin hồ sơ" accent={palette.EHR_PRIMARY}>
                     <KV label="Tiêu đề" value={data.meta.title || '—'} />
                     <KV label="Loại" value={data.meta.type || '—'} />
                     {data.meta.description ? (
                         <YStack style={{ marginTop: 6 }}>
-                            <Text style={{ fontFamily: SANS, fontSize: 11, color: EHR_OUTLINE, marginBottom: 2 }}>Mô tả</Text>
-                            <Text style={{ fontFamily: SANS, fontSize: 13, color: EHR_ON_SURFACE, lineHeight: 20 }}>
+                            <Text style={{ fontFamily: SANS, fontSize: 11, color: palette.EHR_OUTLINE, marginBottom: 2 }}>Mô tả</Text>
+                            <Text style={{ fontFamily: SANS, fontSize: 13, color: palette.EHR_ON_SURFACE, lineHeight: 20 }}>
                                 {data.meta.description}
                             </Text>
                         </YStack>
@@ -1234,23 +1222,23 @@ function DecryptedContent({
             ) : null}
 
             {data?.summary ? (
-                <DecryptedSection title="Tóm tắt" accent={EHR_SECONDARY}>
-                    <Text style={{ fontFamily: SANS, fontSize: 13, color: EHR_ON_SURFACE, lineHeight: 21 }}>
+                <DecryptedSection title="Tóm tắt" accent={palette.EHR_SECONDARY}>
+                    <Text style={{ fontFamily: SANS, fontSize: 13, color: palette.EHR_ON_SURFACE, lineHeight: 21 }}>
                         {data.summary}
                     </Text>
                 </DecryptedSection>
             ) : null}
 
             {data?.notes ? (
-                <DecryptedSection title="Ghi chú lâm sàng" accent={EHR_OUTLINE}>
-                    <Text style={{ fontFamily: SANS, fontSize: 13, color: EHR_ON_SURFACE, lineHeight: 21 }}>
+                <DecryptedSection title="Ghi chú lâm sàng" accent={palette.EHR_OUTLINE}>
+                    <Text style={{ fontFamily: SANS, fontSize: 13, color: palette.EHR_ON_SURFACE, lineHeight: 21 }}>
                         {data.notes}
                     </Text>
                 </DecryptedSection>
             ) : null}
 
             {data?.observations && Object.keys(data.observations).length > 0 ? (
-                <DecryptedSection title="Chỉ số lâm sàng" accent={EHR_PRIMARY}>
+                <DecryptedSection title="Chỉ số lâm sàng" accent={palette.EHR_PRIMARY}>
                     {Object.entries(data.observations).map(([key, val]: any, idx: number, arr: any[]) => (
                         <XStack
                             key={key}
@@ -1259,10 +1247,10 @@ function DecryptedContent({
                                 alignItems: 'center',
                                 paddingVertical: 8,
                                 borderBottomWidth: idx === arr.length - 1 ? 0 : 0.5,
-                                borderColor: EHR_OUTLINE_SOFT,
+                                borderColor: palette.EHR_OUTLINE_SOFT,
                             }}
                         >
-                            <Text style={{ fontFamily: SANS, fontSize: 13, color: EHR_OUTLINE, textTransform: 'capitalize' }}>
+                            <Text style={{ fontFamily: SANS, fontSize: 13, color: palette.EHR_OUTLINE, textTransform: 'capitalize' }}>
                                 {key}
                             </Text>
                             <View
@@ -1270,10 +1258,10 @@ function DecryptedContent({
                                     paddingHorizontal: 10,
                                     paddingVertical: 3,
                                     borderRadius: 8,
-                                    backgroundColor: EHR_PRIMARY_FIXED,
+                                    backgroundColor: palette.EHR_PRIMARY_FIXED,
                                 }}
                             >
-                                <Text style={{ fontFamily: SANS_SEMI, fontSize: 13, color: EHR_PRIMARY, fontWeight: '700' }}>
+                                <Text style={{ fontFamily: SANS_SEMI, fontSize: 13, color: palette.EHR_PRIMARY, fontWeight: '700' }}>
                                     {String(val)}
                                 </Text>
                             </View>
@@ -1283,11 +1271,11 @@ function DecryptedContent({
             ) : null}
 
             {data?.diagnoses?.length ? (
-                <DecryptedSection title="Chẩn đoán" accent={EHR_DANGER}>
+                <DecryptedSection title="Chẩn đoán" accent={palette.EHR_DANGER}>
                     {data.diagnoses.map((d: string, i: number) => (
                         <XStack key={i} style={{ alignItems: 'flex-start', gap: 8, marginBottom: 4 }}>
-                            <Text style={{ fontFamily: SANS_SEMI, fontSize: 13, color: EHR_DANGER, fontWeight: '700' }}>•</Text>
-                            <Text style={{ flex: 1, fontFamily: SANS, fontSize: 13, color: EHR_ON_SURFACE, lineHeight: 20 }}>
+                            <Text style={{ fontFamily: SANS_SEMI, fontSize: 13, color: palette.EHR_DANGER, fontWeight: '700' }}>•</Text>
+                            <Text style={{ flex: 1, fontFamily: SANS, fontSize: 13, color: palette.EHR_ON_SURFACE, lineHeight: 20 }}>
                                 {d}
                             </Text>
                         </XStack>
@@ -1296,7 +1284,7 @@ function DecryptedContent({
             ) : null}
 
             {data?.prescriptions?.length ? (
-                <DecryptedSection title="Đơn thuốc" accent={EHR_TERTIARY}>
+                <DecryptedSection title="Đơn thuốc" accent={palette.EHR_TERTIARY}>
                     {data.prescriptions.map((p: any, i: number) => (
                         <View
                             key={i}
@@ -1305,27 +1293,27 @@ function DecryptedContent({
                                 paddingHorizontal: 12,
                                 marginBottom: 6,
                                 borderRadius: 10,
-                                backgroundColor: EHR_SURFACE,
+                                backgroundColor: palette.EHR_SURFACE,
                                 borderWidth: 0.5,
-                                borderColor: EHR_OUTLINE_SOFT,
+                                borderColor: palette.EHR_OUTLINE_SOFT,
                             }}
                         >
-                            <Text style={{ fontFamily: SANS_SEMI, fontSize: 13, color: EHR_ON_SURFACE, fontWeight: '700' }}>
+                            <Text style={{ fontFamily: SANS_SEMI, fontSize: 13, color: palette.EHR_ON_SURFACE, fontWeight: '700' }}>
                                 {p.medication || 'Thuốc'}
                             </Text>
                             <XStack style={{ gap: 12, marginTop: 4 }}>
                                 {p.dosage ? (
-                                    <Text style={{ fontFamily: SANS, fontSize: 12, color: EHR_OUTLINE }}>
+                                    <Text style={{ fontFamily: SANS, fontSize: 12, color: palette.EHR_OUTLINE }}>
                                         Liều:{' '}
-                                        <Text style={{ fontFamily: SANS_SEMI, color: EHR_ON_SURFACE, fontWeight: '700' }}>
+                                        <Text style={{ fontFamily: SANS_SEMI, color: palette.EHR_ON_SURFACE, fontWeight: '700' }}>
                                             {p.dosage}
                                         </Text>
                                     </Text>
                                 ) : null}
                                 {p.frequency ? (
-                                    <Text style={{ fontFamily: SANS, fontSize: 12, color: EHR_OUTLINE }}>
+                                    <Text style={{ fontFamily: SANS, fontSize: 12, color: palette.EHR_OUTLINE }}>
                                         Tần suất:{' '}
-                                        <Text style={{ fontFamily: SANS_SEMI, color: EHR_ON_SURFACE, fontWeight: '700' }}>
+                                        <Text style={{ fontFamily: SANS_SEMI, color: palette.EHR_ON_SURFACE, fontWeight: '700' }}>
                                             {p.frequency}
                                         </Text>
                                     </Text>
@@ -1340,10 +1328,11 @@ function DecryptedContent({
 }
 
 function DecryptedSection({ title, accent, children }: { title: string; accent: string; children: React.ReactNode }) {
+    const palette = useEhrPalette();
     return (
         <View
             style={{
-                backgroundColor: EHR_SURFACE_LOWEST,
+                backgroundColor: palette.EHR_SURFACE_LOWEST,
                 borderRadius: 14,
                 padding: 14,
                 marginBottom: 12,
@@ -1352,9 +1341,9 @@ function DecryptedSection({ title, accent, children }: { title: string; accent: 
                 borderTopWidth: 0.5,
                 borderBottomWidth: 0.5,
                 borderRightWidth: 0.5,
-                borderTopColor: EHR_OUTLINE_SOFT,
-                borderBottomColor: EHR_OUTLINE_SOFT,
-                borderRightColor: EHR_OUTLINE_SOFT,
+                borderTopColor: palette.EHR_OUTLINE_SOFT,
+                borderBottomColor: palette.EHR_OUTLINE_SOFT,
+                borderRightColor: palette.EHR_OUTLINE_SOFT,
             }}
         >
             <Text
@@ -1376,14 +1365,15 @@ function DecryptedSection({ title, accent, children }: { title: string; accent: 
 }
 
 function KV({ label, value }: { label: string; value: string }) {
+    const palette = useEhrPalette();
     return (
         <XStack style={{ justifyContent: 'space-between', alignItems: 'baseline', marginVertical: 3 }}>
-            <Text style={{ fontFamily: SANS, fontSize: 12.5, color: EHR_OUTLINE }}>{label}</Text>
+            <Text style={{ fontFamily: SANS, fontSize: 12.5, color: palette.EHR_OUTLINE }}>{label}</Text>
             <Text
                 style={{
                     fontFamily: SANS_SEMI,
                     fontSize: 13,
-                    color: EHR_ON_SURFACE,
+                    color: palette.EHR_ON_SURFACE,
                     flex: 1,
                     textAlign: 'right',
                     fontWeight: '700',
@@ -1415,6 +1405,7 @@ function ShareModal(props: {
     onConfirm: () => void;
     isSharing: boolean;
 }) {
+    const palette = useEhrPalette();
     const {
         visible, onClose, shareAddress, setShareAddress, shareType, setShareType,
         showDelegateOption, shareExpiryHours, setShareExpiryHours, customExpiryOpen,
@@ -1444,7 +1435,7 @@ function ShareModal(props: {
             <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' }}>
                 <View
                     style={{
-                        backgroundColor: EHR_SURFACE_LOWEST,
+                        backgroundColor: palette.EHR_SURFACE_LOWEST,
                         borderTopLeftRadius: 24,
                         borderTopRightRadius: 24,
                         padding: 22,
@@ -1453,39 +1444,39 @@ function ShareModal(props: {
                     }}
                 >
                     <XStack style={{ alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-                        <Text style={{ fontFamily: SERIF, fontSize: 22, color: EHR_ON_SURFACE, letterSpacing: -0.2 }}>
+                        <Text style={{ fontFamily: SERIF, fontSize: 22, color: palette.EHR_ON_SURFACE, letterSpacing: -0.2 }}>
                             Chia sẻ hồ sơ
                         </Text>
                         <Pressable onPress={onClose} hitSlop={10}>
-                            <X size={20} color={EHR_OUTLINE} />
+                            <X size={20} color={palette.EHR_OUTLINE} />
                         </Pressable>
                     </XStack>
                     <ScrollView showsVerticalScrollIndicator={false}>
-                        <Text style={{ fontFamily: SANS, fontSize: 13, color: EHR_ON_SURFACE_VARIANT, marginBottom: 12, lineHeight: 18 }}>
+                        <Text style={{ fontFamily: SANS, fontSize: 13, color: palette.EHR_ON_SURFACE_VARIANT, marginBottom: 12, lineHeight: 18 }}>
                             Nhập địa chỉ ví của bác sĩ. Khoá hồ sơ sẽ được mã hoá đầu-cuối cho ví đó.
                         </Text>
                         <TextInput
                             value={shareAddress}
                             onChangeText={setShareAddress}
                             placeholder="0x..."
-                            placeholderTextColor={EHR_OUTLINE}
+                            placeholderTextColor={palette.EHR_OUTLINE}
                             autoCapitalize="none"
                             autoCorrect={false}
                             style={{
                                 borderWidth: 0.5,
-                                borderColor: EHR_OUTLINE_SOFT,
+                                borderColor: palette.EHR_OUTLINE_SOFT,
                                 borderRadius: 10,
                                 paddingVertical: 12,
                                 paddingHorizontal: 14,
                                 fontFamily: 'monospace',
                                 fontSize: 13,
-                                color: EHR_ON_SURFACE,
-                                backgroundColor: EHR_SURFACE,
+                                color: palette.EHR_ON_SURFACE,
+                                backgroundColor: palette.EHR_SURFACE,
                                 marginBottom: 16,
                             }}
                         />
 
-                        <Text style={{ fontFamily: SANS_SEMI, fontSize: 11, color: EHR_OUTLINE, marginBottom: 8, letterSpacing: 0.4, textTransform: 'uppercase', fontWeight: '600' }}>
+                        <Text style={{ fontFamily: SANS_SEMI, fontSize: 11, color: palette.EHR_OUTLINE, marginBottom: 8, letterSpacing: 0.4, textTransform: 'uppercase', fontWeight: '600' }}>
                             Loại quyền truy cập
                         </Text>
                         <YStack style={{ gap: 8, marginBottom: 16 }}>
@@ -1498,10 +1489,10 @@ function ShareModal(props: {
                                                 flexDirection: 'row',
                                                 alignItems: 'center',
                                                 borderWidth: active ? 1.5 : 0.5,
-                                                borderColor: active ? EHR_PRIMARY : EHR_OUTLINE_SOFT,
+                                                borderColor: active ? palette.EHR_PRIMARY : palette.EHR_OUTLINE_SOFT,
                                                 borderRadius: 12,
                                                 padding: 12,
-                                                backgroundColor: active ? EHR_PRIMARY_FIXED : EHR_SURFACE,
+                                                backgroundColor: active ? palette.EHR_PRIMARY_FIXED : palette.EHR_SURFACE,
                                             }}
                                         >
                                             <View
@@ -1510,8 +1501,8 @@ function ShareModal(props: {
                                                     height: 18,
                                                     borderRadius: 9,
                                                     borderWidth: 2,
-                                                    borderColor: active ? EHR_PRIMARY : EHR_OUTLINE_VARIANT,
-                                                    backgroundColor: active ? EHR_PRIMARY : 'transparent',
+                                                    borderColor: active ? palette.EHR_PRIMARY : palette.EHR_OUTLINE_VARIANT,
+                                                    backgroundColor: active ? palette.EHR_PRIMARY : 'transparent',
                                                     marginRight: 10,
                                                 }}
                                             />
@@ -1521,7 +1512,7 @@ function ShareModal(props: {
                                                         style={{
                                                             fontFamily: SANS_SEMI,
                                                             fontSize: 13.5,
-                                                            color: active ? EHR_PRIMARY : EHR_ON_SURFACE,
+                                                            color: active ? palette.EHR_PRIMARY : palette.EHR_ON_SURFACE,
                                                             fontWeight: '700',
                                                         }}
                                                     >
@@ -1529,7 +1520,7 @@ function ShareModal(props: {
                                                     </Text>
                                                     <ViModeChip mode={opt.value} />
                                                 </XStack>
-                                                <Text style={{ fontFamily: SANS, fontSize: 11.5, color: EHR_OUTLINE, marginTop: 4 }}>
+                                                <Text style={{ fontFamily: SANS, fontSize: 11.5, color: palette.EHR_OUTLINE, marginTop: 4 }}>
                                                     {opt.sub}
                                                 </Text>
                                             </YStack>
@@ -1539,7 +1530,7 @@ function ShareModal(props: {
                             })}
                         </YStack>
 
-                        <Text style={{ fontFamily: SANS_SEMI, fontSize: 11, color: EHR_OUTLINE, marginBottom: 8, letterSpacing: 0.4, textTransform: 'uppercase', fontWeight: '600' }}>
+                        <Text style={{ fontFamily: SANS_SEMI, fontSize: 11, color: palette.EHR_OUTLINE, marginBottom: 8, letterSpacing: 0.4, textTransform: 'uppercase', fontWeight: '600' }}>
                             Thời hạn truy cập
                         </Text>
                         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
@@ -1559,15 +1550,15 @@ function ShareModal(props: {
                                                 paddingVertical: 6,
                                                 borderRadius: 999,
                                                 borderWidth: 0.5,
-                                                borderColor: active ? EHR_PRIMARY : EHR_OUTLINE_SOFT,
-                                                backgroundColor: active ? EHR_PRIMARY_FIXED : EHR_SURFACE,
+                                                borderColor: active ? palette.EHR_PRIMARY : palette.EHR_OUTLINE_SOFT,
+                                                backgroundColor: active ? palette.EHR_PRIMARY_FIXED : palette.EHR_SURFACE,
                                             }}
                                         >
                                             <Text
                                                 style={{
                                                     fontFamily: SANS_MEDIUM,
                                                     fontSize: 12,
-                                                    color: active ? EHR_PRIMARY : EHR_OUTLINE,
+                                                    color: active ? palette.EHR_PRIMARY : palette.EHR_OUTLINE,
                                                     fontWeight: active ? '700' : '500',
                                                 }}
                                             >
@@ -1584,15 +1575,15 @@ function ShareModal(props: {
                                         paddingVertical: 6,
                                         borderRadius: 999,
                                         borderWidth: 0.5,
-                                        borderColor: customExpiryOpen ? EHR_PRIMARY : EHR_OUTLINE_SOFT,
-                                        backgroundColor: customExpiryOpen ? EHR_PRIMARY_FIXED : EHR_SURFACE,
+                                        borderColor: customExpiryOpen ? palette.EHR_PRIMARY : palette.EHR_OUTLINE_SOFT,
+                                        backgroundColor: customExpiryOpen ? palette.EHR_PRIMARY_FIXED : palette.EHR_SURFACE,
                                     }}
                                 >
                                     <Text
                                         style={{
                                             fontFamily: SANS_MEDIUM,
                                             fontSize: 12,
-                                            color: customExpiryOpen ? EHR_PRIMARY : EHR_OUTLINE,
+                                            color: customExpiryOpen ? palette.EHR_PRIMARY : palette.EHR_OUTLINE,
                                             fontWeight: customExpiryOpen ? '700' : '500',
                                         }}
                                     >
@@ -1616,18 +1607,18 @@ function ShareModal(props: {
                                         }
                                     }}
                                     placeholder="VD: 3"
-                                    placeholderTextColor={EHR_OUTLINE}
+                                    placeholderTextColor={palette.EHR_OUTLINE}
                                     keyboardType="number-pad"
                                     style={{
                                         flex: 1,
                                         borderWidth: 0.5,
-                                        borderColor: EHR_OUTLINE_SOFT,
+                                        borderColor: palette.EHR_OUTLINE_SOFT,
                                         borderRadius: 10,
                                         padding: 10,
                                         fontFamily: SANS,
                                         fontSize: 13.5,
-                                        color: EHR_ON_SURFACE,
-                                        backgroundColor: EHR_SURFACE,
+                                        color: palette.EHR_ON_SURFACE,
+                                        backgroundColor: palette.EHR_SURFACE,
                                     }}
                                 />
                                 {(['hour', 'day'] as const).map((unit) => {
@@ -1649,15 +1640,15 @@ function ShareModal(props: {
                                                     paddingVertical: 10,
                                                     borderRadius: 10,
                                                     borderWidth: 0.5,
-                                                    borderColor: active ? EHR_PRIMARY : EHR_OUTLINE_SOFT,
-                                                    backgroundColor: active ? EHR_PRIMARY_FIXED : EHR_SURFACE,
+                                                    borderColor: active ? palette.EHR_PRIMARY : palette.EHR_OUTLINE_SOFT,
+                                                    backgroundColor: active ? palette.EHR_PRIMARY_FIXED : palette.EHR_SURFACE,
                                                 }}
                                             >
                                                 <Text
                                                     style={{
                                                         fontFamily: SANS_MEDIUM,
                                                         fontSize: 12.5,
-                                                        color: active ? EHR_PRIMARY : EHR_OUTLINE,
+                                                        color: active ? palette.EHR_PRIMARY : palette.EHR_OUTLINE,
                                                         fontWeight: active ? '700' : '500',
                                                     }}
                                                 >
@@ -1685,7 +1676,7 @@ function ShareModal(props: {
                                 marginTop: 10,
                                 fontFamily: SANS,
                                 fontSize: 11,
-                                color: EHR_OUTLINE,
+                                color: palette.EHR_OUTLINE,
                                 textAlign: 'center',
                                 lineHeight: 16,
                             }}
@@ -1701,6 +1692,7 @@ function ShareModal(props: {
 
 // ───────── QrModal (CID QR + copy) ─────────
 function QrModal({ visible, onClose, cidHash }: { visible: boolean; onClose: () => void; cidHash?: string }) {
+    const palette = useEhrPalette();
     return (
         <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
             <Pressable
@@ -1708,16 +1700,16 @@ function QrModal({ visible, onClose, cidHash }: { visible: boolean; onClose: () 
                 onPress={onClose}
             >
                 <Pressable onPress={(e) => e.stopPropagation()}>
-                    <View style={{ backgroundColor: EHR_SURFACE_LOWEST, borderRadius: 20, padding: 22 }}>
+                    <View style={{ backgroundColor: palette.EHR_SURFACE_LOWEST, borderRadius: 20, padding: 22 }}>
                         <XStack style={{ alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-                            <Text style={{ fontFamily: SERIF, fontSize: 20, color: EHR_ON_SURFACE, letterSpacing: -0.2 }}>
+                            <Text style={{ fontFamily: SERIF, fontSize: 20, color: palette.EHR_ON_SURFACE, letterSpacing: -0.2 }}>
                                 CID Hash hồ sơ
                             </Text>
                             <Pressable onPress={onClose} hitSlop={10}>
-                                <X size={20} color={EHR_OUTLINE} />
+                                <X size={20} color={palette.EHR_OUTLINE} />
                             </Pressable>
                         </XStack>
-                        <Text style={{ fontFamily: SANS, fontSize: 13, color: EHR_ON_SURFACE_VARIANT, marginBottom: 12, lineHeight: 18 }}>
+                        <Text style={{ fontFamily: SANS, fontSize: 13, color: palette.EHR_ON_SURFACE_VARIANT, marginBottom: 12, lineHeight: 18 }}>
                             Bác sĩ quét QR hoặc nhập CID Hash vào form yêu cầu truy cập.
                         </Text>
                         {cidHash ? (
@@ -1730,7 +1722,7 @@ function QrModal({ visible, onClose, cidHash }: { visible: boolean; onClose: () 
                                     marginBottom: 14,
                                 }}
                             >
-                                <QRCode value={cidHash} size={220} backgroundColor="#FAF7F1" color={EHR_PRIMARY} />
+                                <QRCode value={cidHash} size={220} backgroundColor="#FAF7F1" color={palette.EHR_PRIMARY} />
                             </View>
                         ) : null}
                         <View
@@ -1738,7 +1730,7 @@ function QrModal({ visible, onClose, cidHash }: { visible: boolean; onClose: () 
                                 paddingVertical: 12,
                                 paddingHorizontal: 14,
                                 borderRadius: 12,
-                                backgroundColor: EHR_PRIMARY_FIXED,
+                                backgroundColor: palette.EHR_PRIMARY_FIXED,
                             }}
                         >
                             <XStack style={{ alignItems: 'flex-start', gap: 10 }}>
@@ -1747,7 +1739,7 @@ function QrModal({ visible, onClose, cidHash }: { visible: boolean; onClose: () 
                                         flex: 1,
                                         fontFamily: 'monospace',
                                         fontSize: 12,
-                                        color: EHR_PRIMARY,
+                                        color: palette.EHR_PRIMARY,
                                         lineHeight: 20,
                                     }}
                                     selectable
@@ -1764,10 +1756,10 @@ function QrModal({ visible, onClose, cidHash }: { visible: boolean; onClose: () 
                                         style={{
                                             padding: 6,
                                             borderRadius: 8,
-                                            backgroundColor: EHR_SURFACE_LOWEST,
+                                            backgroundColor: palette.EHR_SURFACE_LOWEST,
                                         }}
                                     >
-                                        <Copy size={14} color={EHR_PRIMARY} />
+                                        <Copy size={14} color={palette.EHR_PRIMARY} />
                                     </Pressable>
                                 ) : null}
                             </XStack>

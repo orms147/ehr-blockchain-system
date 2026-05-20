@@ -5,16 +5,7 @@ import React from 'react';
 import { View } from 'react-native';
 import { Text, XStack } from 'tamagui';
 
-import {
-    EHR_OUTLINE,
-    EHR_OUTLINE_VARIANT,
-    EHR_ON_SURFACE_VARIANT,
-    EHR_SURFACE_CONTAINER,
-    EHR_SLATE,
-    EHR_WARNING,
-    EHR_SUCCESS,
-    EHR_DANGER,
-} from '../constants/uiColors';
+import { useEhrPalette } from '../constants/uiColors';
 
 // ───────── Section header ─────────
 export function ViSectionLabel({
@@ -24,6 +15,7 @@ export function ViSectionLabel({
     children: React.ReactNode;
     trailing?: React.ReactNode;
 }) {
+    const palette = useEhrPalette();
     return (
         <XStack
             style={{
@@ -38,14 +30,14 @@ export function ViSectionLabel({
                     fontSize: 11,
                     fontWeight: '600',
                     letterSpacing: 1.2,
-                    color: EHR_OUTLINE,
+                    color: palette.EHR_OUTLINE,
                     textTransform: 'uppercase',
                 }}
             >
                 {children}
             </Text>
             {trailing ? (
-                <Text style={{ fontSize: 12, color: EHR_OUTLINE }}>{trailing}</Text>
+                <Text style={{ fontSize: 12, color: palette.EHR_OUTLINE }}>{trailing}</Text>
             ) : null}
         </XStack>
     );
@@ -59,11 +51,12 @@ export function ViSectionLabel({
 export type ViMode = 'read-update' | 'read-delegate';
 
 export function ViModeChip({ mode }: { mode: ViMode | string }) {
+    const palette = useEhrPalette();
     const map: Record<string, { label: string; dot: string }> = {
-        'read-update': { label: 'Đọc · Cập nhật', dot: EHR_SLATE },
-        'read-delegate': { label: 'Đọc · Uỷ quyền', dot: EHR_WARNING },
+        'read-update': { label: 'Đọc · Cập nhật', dot: palette.EHR_SLATE },
+        'read-delegate': { label: 'Đọc · Uỷ quyền', dot: palette.EHR_WARNING },
     };
-    const m = map[mode] || { label: mode, dot: EHR_OUTLINE };
+    const m = map[mode] || { label: mode, dot: palette.EHR_OUTLINE };
 
     return (
         <View
@@ -75,8 +68,8 @@ export function ViModeChip({ mode }: { mode: ViMode | string }) {
                 paddingVertical: 4,
                 borderRadius: 999,
                 borderWidth: 0.5,
-                borderColor: EHR_OUTLINE_VARIANT,
-                backgroundColor: EHR_SURFACE_CONTAINER,
+                borderColor: palette.EHR_OUTLINE_VARIANT,
+                backgroundColor: palette.EHR_SURFACE_CONTAINER,
                 alignSelf: 'flex-start',
             }}
         >
@@ -88,7 +81,7 @@ export function ViModeChip({ mode }: { mode: ViMode | string }) {
                     backgroundColor: m.dot,
                 }}
             />
-            <Text style={{ fontSize: 11, fontWeight: '500', color: EHR_ON_SURFACE_VARIANT }}>
+            <Text style={{ fontSize: 11, fontWeight: '500', color: palette.EHR_ON_SURFACE_VARIANT }}>
                 {m.label}
             </Text>
         </View>
@@ -99,14 +92,15 @@ export function ViModeChip({ mode }: { mode: ViMode | string }) {
 export type ViStatus = 'active' | 'expiring' | 'expired' | 'verified' | 'pending' | 'revoked' | 'rejected';
 
 export function ViStatusChip({ status }: { status: ViStatus | string }) {
+    const palette = useEhrPalette();
     const map: Record<string, { label: string; color: string }> = {
-        active: { label: 'Còn hiệu lực', color: EHR_SUCCESS },
-        expiring: { label: 'Sắp hết hạn', color: EHR_WARNING },
-        expired: { label: 'Đã hết hạn', color: EHR_OUTLINE },
-        verified: { label: 'Đã xác minh', color: EHR_SUCCESS },
-        pending: { label: 'Chờ duyệt', color: EHR_WARNING },
-        revoked: { label: 'Đã thu hồi', color: EHR_DANGER },
-        rejected: { label: 'Đã từ chối', color: EHR_OUTLINE },
+        active: { label: 'Còn hiệu lực', color: palette.EHR_SUCCESS },
+        expiring: { label: 'Sắp hết hạn', color: palette.EHR_WARNING },
+        expired: { label: 'Đã hết hạn', color: palette.EHR_OUTLINE },
+        verified: { label: 'Đã xác minh', color: palette.EHR_SUCCESS },
+        pending: { label: 'Chờ duyệt', color: palette.EHR_WARNING },
+        revoked: { label: 'Đã thu hồi', color: palette.EHR_DANGER },
+        rejected: { label: 'Đã từ chối', color: palette.EHR_OUTLINE },
     };
     const m = map[status];
     if (!m) return null;
@@ -128,6 +122,7 @@ export function ViStatusChip({ status }: { status: ViStatus | string }) {
 
 // ───────── Source chip (Trực tiếp / Qua uỷ quyền) ─────────
 export function ViSourceChip({ source }: { source: 'direct' | 'via-delegate' }) {
+    const palette = useEhrPalette();
     if (source === 'direct') {
         return (
             <View
@@ -136,12 +131,12 @@ export function ViSourceChip({ source }: { source: 'direct' | 'via-delegate' }) 
                     paddingVertical: 3,
                     borderRadius: 999,
                     borderWidth: 0.5,
-                    borderColor: EHR_OUTLINE_VARIANT,
-                    backgroundColor: EHR_SURFACE_CONTAINER,
+                    borderColor: palette.EHR_OUTLINE_VARIANT,
+                    backgroundColor: palette.EHR_SURFACE_CONTAINER,
                     alignSelf: 'flex-start',
                 }}
             >
-                <Text style={{ fontSize: 10, fontWeight: '600', color: EHR_SUCCESS }}>
+                <Text style={{ fontSize: 10, fontWeight: '600', color: palette.EHR_SUCCESS }}>
                     ● Trực tiếp
                 </Text>
             </View>
@@ -155,12 +150,12 @@ export function ViSourceChip({ source }: { source: 'direct' | 'via-delegate' }) 
                 paddingVertical: 3,
                 borderRadius: 999,
                 borderWidth: 0.5,
-                borderColor: EHR_WARNING,
-                backgroundColor: EHR_SURFACE_CONTAINER,
+                borderColor: palette.EHR_WARNING,
+                backgroundColor: palette.EHR_SURFACE_CONTAINER,
                 alignSelf: 'flex-start',
             }}
         >
-            <Text style={{ fontSize: 10, fontWeight: '600', color: EHR_WARNING }}>
+            <Text style={{ fontSize: 10, fontWeight: '600', color: palette.EHR_WARNING }}>
                 ↻ Qua uỷ quyền
             </Text>
         </View>

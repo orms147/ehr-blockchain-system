@@ -33,17 +33,7 @@ import QrAddressScanner from '../components/QrAddressScanner';
 import ViButton from '../components-v2/ViButton';
 import ViCard from '../components-v2/ViCard';
 import { ViSectionLabel } from '../components-v2/ViChips';
-import {
-    EHR_SURFACE,
-    EHR_SURFACE_LOWEST,
-    EHR_ON_SURFACE,
-    EHR_ON_SURFACE_VARIANT,
-    EHR_OUTLINE,
-    EHR_OUTLINE_SOFT,
-    EHR_OUTLINE_VARIANT,
-    EHR_PRIMARY,
-    EHR_PRIMARY_FIXED,
-} from '../constants/uiColors';
+import { useEhrPalette } from '../constants/uiColors';
 
 const SERIF = 'Fraunces_400Regular';
 const SANS = 'DMSans_400Regular';
@@ -62,6 +52,7 @@ type Contact = {
 const truncate = (addr?: string) => (addr ? `${addr.slice(0, 6)}…${addr.slice(-4)}` : '');
 
 export default function TrustedContactsScreen() {
+    const palette = useEhrPalette();
     const queryClient = useQueryClient();
     const { data: contacts = [], isLoading, refetch, isRefetching } = useQuery<Contact[]>({
         queryKey: ['trustedContacts', 'me'],
@@ -185,9 +176,9 @@ export default function TrustedContactsScreen() {
             style={{
                 paddingVertical: 14,
                 paddingHorizontal: 14,
-                backgroundColor: EHR_SURFACE_LOWEST,
+                backgroundColor: palette.EHR_SURFACE_LOWEST,
                 borderWidth: 0.5,
-                borderColor: EHR_OUTLINE_SOFT,
+                borderColor: palette.EHR_OUTLINE_SOFT,
                 borderRadius: 14,
                 marginBottom: 10,
             }}
@@ -198,12 +189,12 @@ export default function TrustedContactsScreen() {
                         width: 40,
                         height: 40,
                         borderRadius: 20,
-                        backgroundColor: EHR_PRIMARY_FIXED,
+                        backgroundColor: palette.EHR_PRIMARY_FIXED,
                         alignItems: 'center',
                         justifyContent: 'center',
                     }}
                 >
-                    <Heart size={18} color={EHR_PRIMARY} />
+                    <Heart size={18} color={palette.EHR_PRIMARY} />
                 </View>
                 <YStack style={{ flex: 1, minWidth: 0 }}>
                     <XStack style={{ alignItems: 'baseline', gap: 8 }}>
@@ -211,7 +202,7 @@ export default function TrustedContactsScreen() {
                             style={{
                                 fontFamily: SANS_MEDIUM,
                                 fontSize: 14.5,
-                                color: EHR_ON_SURFACE,
+                                color: palette.EHR_ON_SURFACE,
                             }}
                             numberOfLines={1}
                         >
@@ -223,9 +214,9 @@ export default function TrustedContactsScreen() {
                                     fontSize: 11,
                                     paddingHorizontal: 7,
                                     paddingVertical: 2,
-                                    backgroundColor: EHR_SURFACE,
+                                    backgroundColor: palette.EHR_SURFACE,
                                     borderRadius: 4,
-                                    color: EHR_OUTLINE,
+                                    color: palette.EHR_OUTLINE,
                                     letterSpacing: 0.2,
                                     fontFamily: SANS,
                                 }}
@@ -239,7 +230,7 @@ export default function TrustedContactsScreen() {
                             marginTop: 3,
                             fontFamily: 'monospace',
                             fontSize: 11,
-                            color: EHR_OUTLINE,
+                            color: palette.EHR_OUTLINE,
                         }}
                         numberOfLines={1}
                     >
@@ -254,7 +245,7 @@ export default function TrustedContactsScreen() {
                         paddingVertical: 6,
                         borderRadius: 8,
                         borderWidth: 0.5,
-                        borderColor: EHR_PRIMARY,
+                        borderColor: palette.EHR_PRIMARY,
                         opacity: pressed ? 0.6 : 1,
                     })}
                 >
@@ -262,7 +253,7 @@ export default function TrustedContactsScreen() {
                         style={{
                             fontFamily: SANS_MEDIUM,
                             fontSize: 12,
-                            color: EHR_PRIMARY,
+                            color: palette.EHR_PRIMARY,
                             fontWeight: '600',
                         }}
                     >
@@ -274,14 +265,14 @@ export default function TrustedContactsScreen() {
     );
 
     return (
-        <SafeAreaView style={{ flex: 1, backgroundColor: EHR_SURFACE }}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: palette.EHR_SURFACE }}>
             <ScrollView
                 contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 4, paddingBottom: 40 }}
                 refreshControl={
                     <RefreshControl
                         refreshing={isRefetching}
                         onRefresh={refetch}
-                        tintColor={EHR_ON_SURFACE_VARIANT}
+                        tintColor={palette.EHR_ON_SURFACE_VARIANT}
                     />
                 }
                 showsVerticalScrollIndicator={false}
@@ -293,7 +284,7 @@ export default function TrustedContactsScreen() {
                         paddingHorizontal: 4,
                         borderTopWidth: 0.5,
                         borderBottomWidth: 0.5,
-                        borderColor: EHR_OUTLINE_VARIANT,
+                        borderColor: palette.EHR_OUTLINE_VARIANT,
                         marginTop: 4,
                     }}
                 >
@@ -301,12 +292,12 @@ export default function TrustedContactsScreen() {
                         style={{
                             fontFamily: SANS,
                             fontSize: 13,
-                            color: EHR_ON_SURFACE_VARIANT,
+                            color: palette.EHR_ON_SURFACE_VARIANT,
                             lineHeight: 20,
                         }}
                     >
                         Khi bạn thêm người thân,{' '}
-                        <Text style={{ fontFamily: SANS_SEMI, fontWeight: '600', color: EHR_ON_SURFACE }}>
+                        <Text style={{ fontFamily: SANS_SEMI, fontWeight: '600', color: palette.EHR_ON_SURFACE }}>
                             toàn bộ hồ sơ
                         </Text>{' '}
                         sẽ tự động được chia sẻ cho ví của họ. Họ có thể xem mọi lúc — kể cả khi bạn không thể ký.
@@ -321,7 +312,7 @@ export default function TrustedContactsScreen() {
                 {isLoading ? (
                     <Text
                         style={{
-                            color: EHR_OUTLINE,
+                            color: palette.EHR_OUTLINE,
                             textAlign: 'center',
                             padding: 20,
                             fontFamily: SANS,
@@ -333,7 +324,7 @@ export default function TrustedContactsScreen() {
                 ) : contacts.length === 0 ? (
                     <Text
                         style={{
-                            color: EHR_OUTLINE,
+                            color: palette.EHR_OUTLINE,
                             textAlign: 'center',
                             padding: 32,
                             fontFamily: SANS,
@@ -365,7 +356,7 @@ export default function TrustedContactsScreen() {
                         marginTop: 12,
                         fontFamily: SANS,
                         fontSize: 11.5,
-                        color: EHR_OUTLINE,
+                        color: palette.EHR_OUTLINE,
                         textAlign: 'center',
                         lineHeight: 16,
                     }}
@@ -385,7 +376,7 @@ export default function TrustedContactsScreen() {
                 >
                     <View
                         style={{
-                            backgroundColor: EHR_SURFACE_LOWEST,
+                            backgroundColor: palette.EHR_SURFACE_LOWEST,
                             borderTopLeftRadius: 20,
                             borderTopRightRadius: 20,
                             padding: 22,
@@ -396,7 +387,7 @@ export default function TrustedContactsScreen() {
                             style={{
                                 fontFamily: SERIF,
                                 fontSize: 22,
-                                color: EHR_ON_SURFACE,
+                                color: palette.EHR_ON_SURFACE,
                                 letterSpacing: -0.2,
                             }}
                         >
@@ -407,7 +398,7 @@ export default function TrustedContactsScreen() {
                                 marginTop: 6,
                                 fontFamily: SANS,
                                 fontSize: 13,
-                                color: EHR_ON_SURFACE_VARIANT,
+                                color: palette.EHR_ON_SURFACE_VARIANT,
                                 lineHeight: 19,
                             }}
                         >
@@ -420,18 +411,18 @@ export default function TrustedContactsScreen() {
                                 value={contactInput}
                                 onChangeText={setContactInput}
                                 placeholder="0x..."
-                                placeholderTextColor={EHR_OUTLINE}
+                                placeholderTextColor={palette.EHR_OUTLINE}
                                 autoCapitalize="none"
                                 autoCorrect={false}
                                 style={{
                                     flex: 1,
                                     borderWidth: 0.5,
-                                    borderColor: EHR_OUTLINE_SOFT,
+                                    borderColor: palette.EHR_OUTLINE_SOFT,
                                     borderRadius: 10,
                                     paddingVertical: 12,
                                     paddingHorizontal: 14,
-                                    color: EHR_ON_SURFACE,
-                                    backgroundColor: EHR_SURFACE,
+                                    color: palette.EHR_ON_SURFACE,
+                                    backgroundColor: palette.EHR_SURFACE,
                                     fontFamily: 'monospace',
                                     fontSize: 13,
                                 }}
@@ -443,20 +434,20 @@ export default function TrustedContactsScreen() {
                                     paddingHorizontal: 14,
                                     borderRadius: 10,
                                     borderWidth: 0.5,
-                                    borderColor: EHR_OUTLINE_SOFT,
-                                    backgroundColor: EHR_PRIMARY_FIXED,
+                                    borderColor: palette.EHR_OUTLINE_SOFT,
+                                    backgroundColor: palette.EHR_PRIMARY_FIXED,
                                     flexDirection: 'row',
                                     alignItems: 'center',
                                     gap: 6,
                                     opacity: pressed ? 0.7 : 1,
                                 })}
                             >
-                                <ScanLine size={16} color={EHR_PRIMARY} />
+                                <ScanLine size={16} color={palette.EHR_PRIMARY} />
                                 <Text
                                     style={{
                                         fontFamily: SANS_MEDIUM,
                                         fontSize: 13,
-                                        color: EHR_PRIMARY,
+                                        color: palette.EHR_PRIMARY,
                                     }}
                                 >
                                     QR
@@ -469,16 +460,16 @@ export default function TrustedContactsScreen() {
                             value={labelInput}
                             onChangeText={setLabelInput}
                             placeholder="Vợ"
-                            placeholderTextColor={EHR_OUTLINE}
+                            placeholderTextColor={palette.EHR_OUTLINE}
                             maxLength={120}
                             style={{
                                 borderWidth: 0.5,
-                                borderColor: EHR_OUTLINE_SOFT,
+                                borderColor: palette.EHR_OUTLINE_SOFT,
                                 borderRadius: 10,
                                 paddingVertical: 12,
                                 paddingHorizontal: 14,
-                                color: EHR_ON_SURFACE,
-                                backgroundColor: EHR_SURFACE,
+                                color: palette.EHR_ON_SURFACE,
+                                backgroundColor: palette.EHR_SURFACE,
                                 fontFamily: SANS,
                                 fontSize: 14,
                             }}
@@ -507,7 +498,7 @@ export default function TrustedContactsScreen() {
                                 marginTop: 12,
                                 fontFamily: SANS,
                                 fontSize: 11,
-                                color: EHR_OUTLINE,
+                                color: palette.EHR_OUTLINE,
                                 textAlign: 'center',
                                 lineHeight: 16,
                             }}
@@ -532,7 +523,7 @@ export default function TrustedContactsScreen() {
                 <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
                     <View
                         style={{
-                            backgroundColor: EHR_SURFACE_LOWEST,
+                            backgroundColor: palette.EHR_SURFACE_LOWEST,
                             borderTopLeftRadius: 20,
                             borderTopRightRadius: 20,
                             padding: 22,
@@ -540,12 +531,12 @@ export default function TrustedContactsScreen() {
                         }}
                     >
                         <XStack style={{ alignItems: 'center', gap: 10 }}>
-                            <IdCard size={20} color={EHR_PRIMARY} />
+                            <IdCard size={20} color={palette.EHR_PRIMARY} />
                             <Text
                                 style={{
                                     fontFamily: SERIF,
                                     fontSize: 22,
-                                    color: EHR_ON_SURFACE,
+                                    color: palette.EHR_ON_SURFACE,
                                     letterSpacing: -0.2,
                                 }}
                             >
@@ -557,7 +548,7 @@ export default function TrustedContactsScreen() {
                                 marginTop: 8,
                                 fontFamily: SANS,
                                 fontSize: 13,
-                                color: EHR_ON_SURFACE_VARIANT,
+                                color: palette.EHR_ON_SURFACE_VARIANT,
                                 lineHeight: 20,
                             }}
                         >
@@ -569,18 +560,18 @@ export default function TrustedContactsScreen() {
                             value={cccdInput}
                             onChangeText={setCccdInput}
                             placeholder="012345678901"
-                            placeholderTextColor={EHR_OUTLINE}
+                            placeholderTextColor={palette.EHR_OUTLINE}
                             keyboardType="number-pad"
                             maxLength={12}
                             secureTextEntry
                             style={{
                                 borderWidth: 0.5,
-                                borderColor: EHR_OUTLINE_SOFT,
+                                borderColor: palette.EHR_OUTLINE_SOFT,
                                 borderRadius: 10,
                                 paddingVertical: 12,
                                 paddingHorizontal: 14,
-                                color: EHR_ON_SURFACE,
-                                backgroundColor: EHR_SURFACE,
+                                color: palette.EHR_ON_SURFACE,
+                                backgroundColor: palette.EHR_SURFACE,
                                 fontFamily: 'monospace',
                                 fontSize: 14,
                             }}
@@ -617,12 +608,13 @@ export default function TrustedContactsScreen() {
 }
 
 function FieldLabel({ children }: { children: React.ReactNode }) {
+    const palette = useEhrPalette();
     return (
         <Text
             style={{
                 fontFamily: SANS_SEMI,
                 fontSize: 11,
-                color: EHR_OUTLINE,
+                color: palette.EHR_OUTLINE,
                 letterSpacing: 0.4,
                 fontWeight: '600',
                 textTransform: 'uppercase',
@@ -636,4 +628,3 @@ function FieldLabel({ children }: { children: React.ReactNode }) {
 }
 
 // kept for backwards-compat — referenced by ViSectionLabel
-void EHR_OUTLINE_VARIANT;

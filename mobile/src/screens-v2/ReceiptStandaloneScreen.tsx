@@ -21,16 +21,7 @@ import { ChevronLeft, ExternalLink } from 'lucide-react-native';
 import ViButton from '../components-v2/ViButton';
 import ViWordmark from '../components-v2/ViWordmark';
 import { ViModeChip } from '../components-v2/ViChips';
-import {
-    EHR_SURFACE,
-    EHR_SURFACE_LOWEST,
-    EHR_ON_SURFACE,
-    EHR_ON_SURFACE_VARIANT,
-    EHR_OUTLINE,
-    EHR_OUTLINE_SOFT,
-    EHR_PRIMARY,
-    EHR_PRIMARY_CONTAINER,
-} from '../constants/uiColors';
+import { useEhrPalette } from '../constants/uiColors';
 
 const SERIF = 'Fraunces_400Regular';
 const SERIF_MEDIUM = 'Fraunces_500Medium';
@@ -83,6 +74,7 @@ function formatViDate(value?: string) {
 }
 
 export default function ReceiptStandaloneScreen() {
+    const palette = useEhrPalette();
     const navigation = useNavigation<any>();
     const route = useRoute<RouteProp<Record<string, Params>, string>>();
     const receipt: Receipt = route?.params?.receipt || {};
@@ -102,7 +94,7 @@ export default function ReceiptStandaloneScreen() {
     };
 
     return (
-        <SafeAreaView style={{ flex: 1, backgroundColor: EHR_SURFACE }} edges={['top', 'left', 'right']}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: palette.EHR_SURFACE }} edges={['top', 'left', 'right']}>
             <ScrollView contentContainerStyle={{ paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
                 {/* TopBar */}
                 <View style={{ paddingHorizontal: 22, paddingTop: 10, paddingBottom: 10 }}>
@@ -118,8 +110,8 @@ export default function ReceiptStandaloneScreen() {
                             opacity: pressed ? 0.5 : 1,
                         })}
                     >
-                        <ChevronLeft size={18} color={EHR_ON_SURFACE_VARIANT} />
-                        <Text style={{ fontFamily: SANS, fontSize: 13, color: EHR_ON_SURFACE_VARIANT }}>
+                        <ChevronLeft size={18} color={palette.EHR_ON_SURFACE_VARIANT} />
+                        <Text style={{ fontFamily: SANS, fontSize: 13, color: palette.EHR_ON_SURFACE_VARIANT }}>
                             Quay lại
                         </Text>
                     </Pressable>
@@ -131,17 +123,17 @@ export default function ReceiptStandaloneScreen() {
                         style={{
                             fontFamily: SERIF,
                             fontSize: 19,
-                            color: EHR_ON_SURFACE,
+                            color: palette.EHR_ON_SURFACE,
                             lineHeight: 28,
                             letterSpacing: -0.2,
                         }}
                     >
-                        <Text style={{ color: EHR_PRIMARY, fontFamily: SERIF_MEDIUM }}>“</Text>
+                        <Text style={{ color: palette.EHR_PRIMARY, fontFamily: SERIF_MEDIUM }}>“</Text>
                         Bạn đã đồng ý vào lúc{' '}
                         <Text style={{ fontFamily: 'monospace', fontSize: 16 }}>
                             {formatViDateTime(receipt.signedAt || receipt.grantedAt)}
                         </Text>
-                        <Text style={{ color: EHR_PRIMARY, fontFamily: SERIF_MEDIUM }}>”</Text>
+                        <Text style={{ color: palette.EHR_PRIMARY, fontFamily: SERIF_MEDIUM }}>”</Text>
                     </Text>
                 </View>
 
@@ -150,10 +142,10 @@ export default function ReceiptStandaloneScreen() {
                     <View
                         style={{
                             position: 'relative',
-                            backgroundColor: EHR_SURFACE_LOWEST,
+                            backgroundColor: palette.EHR_SURFACE_LOWEST,
                             borderRadius: 14,
                             borderWidth: 0.5,
-                            borderColor: EHR_OUTLINE_SOFT,
+                            borderColor: palette.EHR_OUTLINE_SOFT,
                             paddingVertical: 24,
                             paddingHorizontal: 22,
                         }}
@@ -168,7 +160,7 @@ export default function ReceiptStandaloneScreen() {
                                 height: 64,
                                 borderRadius: 32,
                                 borderWidth: 1.5,
-                                borderColor: EHR_PRIMARY,
+                                borderColor: palette.EHR_PRIMARY,
                                 alignItems: 'center',
                                 justifyContent: 'center',
                                 opacity: 0.85,
@@ -178,7 +170,7 @@ export default function ReceiptStandaloneScreen() {
                                 style={{
                                     fontFamily: SERIF_MEDIUM,
                                     fontSize: 11,
-                                    color: EHR_PRIMARY,
+                                    color: palette.EHR_PRIMARY,
                                     letterSpacing: 0.4,
                                     textTransform: 'uppercase',
                                 }}
@@ -190,7 +182,7 @@ export default function ReceiptStandaloneScreen() {
                                     marginTop: 2,
                                     fontFamily: 'monospace',
                                     fontSize: 10,
-                                    color: EHR_PRIMARY,
+                                    color: palette.EHR_PRIMARY,
                                 }}
                             >
                                 {formatViDate(receipt.signedAt || receipt.grantedAt)}
@@ -198,13 +190,13 @@ export default function ReceiptStandaloneScreen() {
                         </View>
 
                         <View style={{ paddingRight: 80 }}>
-                            <ViWordmark size={18} color={EHR_ON_SURFACE} />
+                            <ViWordmark size={18} color={palette.EHR_ON_SURFACE} />
                             <Text
                                 style={{
                                     marginTop: 4,
                                     fontFamily: SANS_SEMI,
                                     fontSize: 10.5,
-                                    color: EHR_OUTLINE,
+                                    color: palette.EHR_OUTLINE,
                                     letterSpacing: 0.4,
                                     textTransform: 'uppercase',
                                     fontWeight: '600',
@@ -221,7 +213,7 @@ export default function ReceiptStandaloneScreen() {
                                         style={{
                                             fontFamily: SANS_MEDIUM,
                                             fontSize: 14,
-                                            color: EHR_ON_SURFACE,
+                                            color: palette.EHR_ON_SURFACE,
                                             fontWeight: '500',
                                         }}
                                     >
@@ -233,7 +225,7 @@ export default function ReceiptStandaloneScreen() {
                                                 marginTop: 2,
                                                 fontFamily: SANS,
                                                 fontSize: 12,
-                                                color: EHR_OUTLINE,
+                                                color: palette.EHR_OUTLINE,
                                             }}
                                         >
                                             {receipt.org}
@@ -246,7 +238,7 @@ export default function ReceiptStandaloneScreen() {
                                     style={{
                                         fontFamily: SANS_MEDIUM,
                                         fontSize: 13.5,
-                                        color: EHR_ON_SURFACE,
+                                        color: palette.EHR_ON_SURFACE,
                                     }}
                                 >
                                     {recordLabel}
@@ -261,7 +253,7 @@ export default function ReceiptStandaloneScreen() {
                                     style={{
                                         fontFamily: 'monospace',
                                         fontSize: 12.5,
-                                        color: EHR_ON_SURFACE,
+                                        color: palette.EHR_ON_SURFACE,
                                     }}
                                 >
                                     {formatViDate(receipt.grantedAt)} → {formatViDate(receipt.expiresAt)}
@@ -274,14 +266,14 @@ export default function ReceiptStandaloneScreen() {
                                             style={{
                                                 fontFamily: 'monospace',
                                                 fontSize: 12.5,
-                                                color: EHR_ON_SURFACE_VARIANT,
+                                                color: palette.EHR_ON_SURFACE_VARIANT,
                                                 textDecorationLine: 'underline',
                                                 textDecorationStyle: 'dotted',
                                             }}
                                         >
                                             {txShort}
                                         </Text>
-                                        <ExternalLink size={11} color={EHR_OUTLINE} />
+                                        <ExternalLink size={11} color={palette.EHR_OUTLINE} />
                                     </XStack>
                                 </Pressable>
                             </KVRow>
@@ -296,14 +288,14 @@ export default function ReceiptStandaloneScreen() {
                             paddingHorizontal: 14,
                             borderRadius: 12,
                             borderWidth: 0.5,
-                            borderColor: EHR_OUTLINE_SOFT,
+                            borderColor: palette.EHR_OUTLINE_SOFT,
                         }}
                     >
                         <Text
                             style={{
                                 fontFamily: SANS,
                                 fontSize: 11.5,
-                                color: EHR_OUTLINE,
+                                color: palette.EHR_OUTLINE,
                                 lineHeight: 17,
                             }}
                         >
@@ -341,6 +333,7 @@ export default function ReceiptStandaloneScreen() {
 }
 
 function KVRow({ k, children }: { k: string; children: React.ReactNode }) {
+    const palette = useEhrPalette();
     return (
         <XStack style={{ alignItems: 'baseline', gap: 14 }}>
             <Text
@@ -348,7 +341,7 @@ function KVRow({ k, children }: { k: string; children: React.ReactNode }) {
                     width: 100,
                     fontFamily: SANS_SEMI,
                     fontSize: 10.5,
-                    color: EHR_OUTLINE,
+                    color: palette.EHR_OUTLINE,
                     letterSpacing: 0.4,
                     textTransform: 'uppercase',
                     fontWeight: '600',
@@ -361,4 +354,3 @@ function KVRow({ k, children }: { k: string; children: React.ReactNode }) {
     );
 }
 
-void EHR_PRIMARY_CONTAINER;

@@ -16,16 +16,7 @@ import walletActionService from '../../services/walletAction.service';
 import { ACCESS_CONTROL_ABI } from '../../abi/contractABI';
 import ViCard from '../../components-v2/ViCard';
 import ViButton from '../../components-v2/ViButton';
-import {
-    EHR_SURFACE,
-    EHR_ON_SURFACE,
-    EHR_ON_SURFACE_VARIANT,
-    EHR_OUTLINE,
-    EHR_OUTLINE_SOFT,
-    EHR_PRIMARY,
-    EHR_TERTIARY,
-    EHR_WARNING,
-} from '../../constants/uiColors';
+import { useEhrPalette } from '../../constants/uiColors';
 
 const SERIF = 'Fraunces_400Regular';
 const SANS = 'DMSans_400Regular';
@@ -58,6 +49,7 @@ function PendingRow({
     onApprove: (i: PendingItem) => void;
     onReject: (i: PendingItem) => void;
 }) {
+    const palette = useEhrPalette();
     return (
         <ViCard padding={14} style={{ marginBottom: 10 }}>
             <XStack style={{ alignItems: 'center', gap: 12, marginBottom: 12 }}>
@@ -66,33 +58,33 @@ function PendingRow({
                         width: 44,
                         height: 44,
                         borderRadius: 22,
-                        backgroundColor: `${EHR_WARNING}1A`,
+                        backgroundColor: `${palette.EHR_WARNING}1A`,
                         alignItems: 'center',
                         justifyContent: 'center',
                     }}
                 >
-                    <Clock size={18} color={EHR_WARNING} />
+                    <Clock size={18} color={palette.EHR_WARNING} />
                 </View>
                 <YStack style={{ flex: 1 }}>
                     <Text
                         style={{
                             fontFamily: SANS_SEMI,
                             fontSize: 14,
-                            color: EHR_ON_SURFACE,
+                            color: palette.EHR_ON_SURFACE,
                             fontWeight: '700',
                         }}
                     >
                         {item.fullName || 'Bác sĩ'}
                     </Text>
                     {item.specialty ? (
-                        <Text style={{ fontFamily: SANS, fontSize: 12, color: EHR_OUTLINE, marginTop: 2 }}>
+                        <Text style={{ fontFamily: SANS, fontSize: 12, color: palette.EHR_OUTLINE, marginTop: 2 }}>
                             {item.specialty}
                         </Text>
                     ) : null}
-                    <Text style={{ fontFamily: 'monospace', fontSize: 11, color: EHR_OUTLINE, marginTop: 3 }}>
+                    <Text style={{ fontFamily: 'monospace', fontSize: 11, color: palette.EHR_OUTLINE, marginTop: 3 }}>
                         {truncate(item.doctorAddress || item.address || item.walletAddress)}
                     </Text>
-                    <Text style={{ fontFamily: SANS, fontSize: 11, color: EHR_OUTLINE, marginTop: 3 }}>
+                    <Text style={{ fontFamily: SANS, fontSize: 11, color: palette.EHR_OUTLINE, marginTop: 3 }}>
                         Yêu cầu: {new Date(item.requestedAt || item.createdAt || Date.now()).toLocaleDateString('vi-VN')}
                     </Text>
                 </YStack>
@@ -105,7 +97,7 @@ function PendingRow({
                         size="sm"
                         onPress={() => onReject(item)}
                         disabled={processing}
-                        leftIcon={<X size={14} color={EHR_OUTLINE} />}
+                        leftIcon={<X size={14} color={palette.EHR_OUTLINE} />}
                     >
                         Từ chối
                     </ViButton>
@@ -128,6 +120,7 @@ function PendingRow({
 }
 
 export default function OrgPendingVerificationsScreen() {
+    const palette = useEhrPalette();
     const { token } = useAuthStore();
     const [pending, setPending] = useState<PendingItem[]>([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -234,13 +227,13 @@ export default function OrgPendingVerificationsScreen() {
     if (isLoading && !isRefreshing) return <LoadingSpinner message="Đang tải yêu cầu xác thực..." />;
 
     return (
-        <SafeAreaView style={{ flex: 1, backgroundColor: EHR_SURFACE }} edges={['right', 'left']}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: palette.EHR_SURFACE }} edges={['right', 'left']}>
             <View style={{ paddingHorizontal: 20, paddingTop: 14, paddingBottom: 12 }}>
                 <Text
                     style={{
                         fontFamily: SERIF,
                         fontSize: 26,
-                        color: EHR_ON_SURFACE,
+                        color: palette.EHR_ON_SURFACE,
                         letterSpacing: -0.4,
                         lineHeight: 30,
                     }}
@@ -252,7 +245,7 @@ export default function OrgPendingVerificationsScreen() {
                         marginTop: 4,
                         fontFamily: SANS,
                         fontSize: 13,
-                        color: EHR_ON_SURFACE_VARIANT,
+                        color: palette.EHR_ON_SURFACE_VARIANT,
                     }}
                 >
                     {pending.length} yêu cầu CCHN — duyệt hoặc từ chối.
@@ -261,13 +254,13 @@ export default function OrgPendingVerificationsScreen() {
 
             {pending.length === 0 ? (
                 <View style={{ paddingHorizontal: 22, paddingTop: 30, alignItems: 'center' }}>
-                    <Award size={28} color={EHR_OUTLINE} />
+                    <Award size={28} color={palette.EHR_OUTLINE} />
                     <Text
                         style={{
                             marginTop: 12,
                             fontFamily: SERIF,
                             fontSize: 18,
-                            color: EHR_ON_SURFACE,
+                            color: palette.EHR_ON_SURFACE,
                             textAlign: 'center',
                         }}
                     >
@@ -278,7 +271,7 @@ export default function OrgPendingVerificationsScreen() {
                             marginTop: 8,
                             fontFamily: SANS,
                             fontSize: 13,
-                            color: EHR_OUTLINE,
+                            color: palette.EHR_OUTLINE,
                             textAlign: 'center',
                             maxWidth: 280,
                             lineHeight: 19,
@@ -304,7 +297,7 @@ export default function OrgPendingVerificationsScreen() {
                         <RefreshControl
                             refreshing={isRefreshing}
                             onRefresh={fetchData}
-                            tintColor={EHR_ON_SURFACE_VARIANT}
+                            tintColor={palette.EHR_ON_SURFACE_VARIANT}
                         />
                     }
                 />
@@ -313,5 +306,3 @@ export default function OrgPendingVerificationsScreen() {
     );
 }
 
-void EHR_TERTIARY;
-void EHR_PRIMARY;

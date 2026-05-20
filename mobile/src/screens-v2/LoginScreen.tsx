@@ -43,16 +43,7 @@ import { getOrCreateEncryptionKeypair } from '../services/nacl-crypto';
 import { deriveRolesFromUser } from '../utils/authRoles';
 import { Sentry } from '../lib/sentry';
 import ViWordmark from '../components-v2/ViWordmark';
-import {
-    EHR_SURFACE,
-    EHR_SURFACE_LOWEST,
-    EHR_ON_SURFACE,
-    EHR_ON_SURFACE_VARIANT,
-    EHR_OUTLINE,
-    EHR_OUTLINE_SOFT,
-    EHR_OUTLINE_VARIANT,
-    EHR_PRIMARY,
-} from '../constants/uiColors';
+import { useEhrPalette } from '../constants/uiColors';
 
 const SERIF = 'Fraunces_400Regular';
 const SERIF_ITALIC = 'Fraunces_400Regular_Italic';
@@ -84,6 +75,7 @@ const MORE_SOCIAL: Array<{ key: ProviderKey; icon: string; label: string }> = [
 ];
 
 export default function LoginScreen({ navigation }: any) {
+    const palette = useEhrPalette();
     const [selectedProvider, setSelectedProvider] = useState<ProviderKey>('google');
     const [loading, setLoading] = useState(false);
     const [isBiometricSupported, setIsBiometricSupported] = useState(false);
@@ -306,24 +298,24 @@ export default function LoginScreen({ navigation }: any) {
                     height: 52,
                     borderRadius: 14,
                     borderWidth: 0.75,
-                    borderColor: EHR_OUTLINE_SOFT,
-                    backgroundColor: EHR_SURFACE_LOWEST,
+                    borderColor: palette.EHR_OUTLINE_SOFT,
+                    backgroundColor: palette.EHR_SURFACE_LOWEST,
                     alignItems: 'center',
                     justifyContent: 'center',
                     opacity: pressed ? 0.7 : 1,
                 })}
             >
                 {isLoading ? (
-                    <ActivityIndicator size="small" color={EHR_PRIMARY} />
+                    <ActivityIndicator size="small" color={palette.EHR_PRIMARY} />
                 ) : (
-                    <FontAwesome6 name={item.icon as any} size={20} color={EHR_ON_SURFACE} />
+                    <FontAwesome6 name={item.icon as any} size={20} color={palette.EHR_ON_SURFACE} />
                 )}
             </Pressable>
         );
     };
 
     return (
-        <View style={{ flex: 1, backgroundColor: EHR_SURFACE }}>
+        <View style={{ flex: 1, backgroundColor: palette.EHR_SURFACE }}>
             <SafeAreaView style={{ flex: 1 }}>
                 <ScrollView
                     contentContainerStyle={{ flexGrow: 1, paddingHorizontal: 22, paddingBottom: 30 }}
@@ -353,9 +345,9 @@ export default function LoginScreen({ navigation }: any) {
                             })}
                             hitSlop={8}
                         >
-                            <ArrowLeft size={18} color={EHR_ON_SURFACE_VARIANT} />
+                            <ArrowLeft size={18} color={palette.EHR_ON_SURFACE_VARIANT} />
                         </Pressable>
-                        <ViWordmark size={16} color={EHR_ON_SURFACE_VARIANT} />
+                        <ViWordmark size={16} color={palette.EHR_ON_SURFACE_VARIANT} />
                         <View style={{ width: 40 }} />
                     </View>
 
@@ -365,7 +357,7 @@ export default function LoginScreen({ navigation }: any) {
                             style={{
                                 fontFamily: SERIF,
                                 fontSize: 34,
-                                color: EHR_ON_SURFACE,
+                                color: palette.EHR_ON_SURFACE,
                                 letterSpacing: -0.8,
                                 lineHeight: 38,
                             }}
@@ -378,7 +370,7 @@ export default function LoginScreen({ navigation }: any) {
                                 fontFamily: SERIF_ITALIC,
                                 fontStyle: 'italic',
                                 fontSize: 34,
-                                color: EHR_PRIMARY,
+                                color: palette.EHR_PRIMARY,
                                 letterSpacing: -0.8,
                                 lineHeight: 38,
                             }}
@@ -390,7 +382,7 @@ export default function LoginScreen({ navigation }: any) {
                                 marginTop: 10,
                                 fontFamily: SANS,
                                 fontSize: 14,
-                                color: EHR_ON_SURFACE_VARIANT,
+                                color: palette.EHR_ON_SURFACE_VARIANT,
                                 lineHeight: 21,
                                 maxWidth: 320,
                             }}
@@ -411,8 +403,8 @@ export default function LoginScreen({ navigation }: any) {
                                 height: 52,
                                 borderRadius: 14,
                                 borderWidth: 0.75,
-                                borderColor: EHR_OUTLINE_SOFT,
-                                backgroundColor: EHR_SURFACE_LOWEST,
+                                borderColor: palette.EHR_OUTLINE_SOFT,
+                                backgroundColor: palette.EHR_SURFACE_LOWEST,
                                 alignItems: 'center',
                                 justifyContent: 'center',
                                 opacity: pressed ? 0.7 : 1,
@@ -422,7 +414,7 @@ export default function LoginScreen({ navigation }: any) {
                                 style={{
                                     fontFamily: SANS_SEMI,
                                     fontSize: 18,
-                                    color: EHR_ON_SURFACE_VARIANT,
+                                    color: palette.EHR_ON_SURFACE_VARIANT,
                                     fontWeight: '700',
                                 }}
                             >
@@ -446,26 +438,26 @@ export default function LoginScreen({ navigation }: any) {
                             gap: 10,
                         }}
                     >
-                        <View style={{ flex: 1, height: 0.5, backgroundColor: EHR_OUTLINE_SOFT }} />
+                        <View style={{ flex: 1, height: 0.5, backgroundColor: palette.EHR_OUTLINE_SOFT }} />
                         <Text
                             style={{
                                 fontFamily: SANS_SEMI,
                                 fontSize: 10,
-                                color: EHR_OUTLINE,
+                                color: palette.EHR_OUTLINE,
                                 letterSpacing: 1.2,
                                 fontWeight: '700',
                             }}
                         >
                             HOẶC
                         </Text>
-                        <View style={{ flex: 1, height: 0.5, backgroundColor: EHR_OUTLINE_SOFT }} />
+                        <View style={{ flex: 1, height: 0.5, backgroundColor: palette.EHR_OUTLINE_SOFT }} />
                     </View>
 
                     {/* Email + Phone passwordless */}
                     <FieldLabel>Mã xác thực một lần</FieldLabel>
                     <View style={{ marginTop: 10, gap: 8 }}>
                         <PasswordlessRow
-                            icon={<Mail size={18} color={EHR_PRIMARY} />}
+                            icon={<Mail size={18} color={palette.EHR_PRIMARY} />}
                             title="Dùng Email"
                             subtitle="Nhận mã OTP qua email"
                             badge="Khuyên dùng"
@@ -474,7 +466,7 @@ export default function LoginScreen({ navigation }: any) {
                             onPress={() => handleWeb3Login('email_passwordless')}
                         />
                         <PasswordlessRow
-                            icon={<MessageSquareText size={18} color={EHR_PRIMARY} />}
+                            icon={<MessageSquareText size={18} color={palette.EHR_PRIMARY} />}
                             title="Dùng số điện thoại"
                             subtitle="Nhận mã OTP qua SMS"
                             loading={loading && selectedProvider === 'sms_passwordless'}
@@ -499,12 +491,12 @@ export default function LoginScreen({ navigation }: any) {
                                 opacity: pressed ? 0.5 : 1,
                             })}
                         >
-                            <Fingerprint size={16} color={EHR_PRIMARY} />
+                            <Fingerprint size={16} color={palette.EHR_PRIMARY} />
                             <Text
                                 style={{
                                     fontFamily: SANS_MEDIUM,
                                     fontSize: 13,
-                                    color: EHR_PRIMARY,
+                                    color: palette.EHR_PRIMARY,
                                     fontWeight: '600',
                                 }}
                             >
@@ -523,12 +515,12 @@ export default function LoginScreen({ navigation }: any) {
                             gap: 10,
                         }}
                     >
-                        <View style={{ width: 14, height: 0.5, backgroundColor: EHR_OUTLINE_SOFT }} />
+                        <View style={{ width: 14, height: 0.5, backgroundColor: palette.EHR_OUTLINE_SOFT }} />
                         <Text
                             style={{
                                 fontFamily: SANS_SEMI,
                                 fontSize: 10.5,
-                                color: EHR_OUTLINE,
+                                color: palette.EHR_OUTLINE,
                                 letterSpacing: 1.2,
                                 textTransform: 'uppercase',
                                 fontWeight: '600',
@@ -536,7 +528,7 @@ export default function LoginScreen({ navigation }: any) {
                         >
                             Web3Auth · Bảo mật phân tán
                         </Text>
-                        <View style={{ width: 14, height: 0.5, backgroundColor: EHR_OUTLINE_SOFT }} />
+                        <View style={{ width: 14, height: 0.5, backgroundColor: palette.EHR_OUTLINE_SOFT }} />
                     </View>
                 </ScrollView>
             </SafeAreaView>
@@ -550,14 +542,14 @@ export default function LoginScreen({ navigation }: any) {
             >
                 <KeyboardAvoidingView
                     behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-                    style={styles.hintModalBackdrop}
+                    style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', paddingHorizontal: 24 }}
                 >
-                    <View style={styles.hintModalCard}>
+                    <View style={{ backgroundColor: palette.EHR_SURFACE_LOWEST, borderRadius: 20, padding: 22 }}>
                         <Text
                             style={{
                                 fontFamily: SERIF,
                                 fontSize: 20,
-                                color: EHR_ON_SURFACE,
+                                color: palette.EHR_ON_SURFACE,
                                 letterSpacing: -0.2,
                                 marginBottom: 6,
                             }}
@@ -570,7 +562,7 @@ export default function LoginScreen({ navigation }: any) {
                             style={{
                                 fontFamily: SANS,
                                 fontSize: 13,
-                                color: EHR_ON_SURFACE_VARIANT,
+                                color: palette.EHR_ON_SURFACE_VARIANT,
                                 lineHeight: 19,
                                 marginBottom: 14,
                             }}
@@ -580,14 +572,14 @@ export default function LoginScreen({ navigation }: any) {
                                 : 'Mã xác thực sẽ được gửi đến email này.'}
                         </Text>
                         <TextInput
-                            style={styles.hintModalInput}
+                            style={{ borderWidth: 0.75, borderColor: palette.EHR_OUTLINE_SOFT, borderRadius: 12, paddingVertical: 12, paddingHorizontal: 14, fontFamily: 'monospace', fontSize: 14, color: palette.EHR_ON_SURFACE, backgroundColor: palette.EHR_SURFACE }}
                             value={hintInput}
                             onChangeText={setHintInput}
                             keyboardType={hintModalProvider === 'sms_passwordless' ? 'phone-pad' : 'email-address'}
                             autoCapitalize="none"
                             autoCorrect={false}
                             placeholder={hintModalProvider === 'sms_passwordless' ? '+84901234567' : 'name@example.com'}
-                            placeholderTextColor={EHR_OUTLINE}
+                            placeholderTextColor={palette.EHR_OUTLINE}
                             autoFocus
                         />
                         <View style={{ flexDirection: 'row', gap: 8, marginTop: 16 }}>
@@ -598,12 +590,12 @@ export default function LoginScreen({ navigation }: any) {
                                     paddingVertical: 13,
                                     borderRadius: 12,
                                     borderWidth: 0.75,
-                                    borderColor: EHR_OUTLINE_VARIANT,
+                                    borderColor: palette.EHR_OUTLINE_VARIANT,
                                     alignItems: 'center',
                                     opacity: pressed ? 0.7 : 1,
                                 })}
                             >
-                                <Text style={{ fontFamily: SANS_MEDIUM, fontSize: 14, color: EHR_ON_SURFACE_VARIANT }}>
+                                <Text style={{ fontFamily: SANS_MEDIUM, fontSize: 14, color: palette.EHR_ON_SURFACE_VARIANT }}>
                                     Huỷ
                                 </Text>
                             </Pressable>
@@ -613,12 +605,12 @@ export default function LoginScreen({ navigation }: any) {
                                     flex: 1,
                                     paddingVertical: 13,
                                     borderRadius: 12,
-                                    backgroundColor: EHR_ON_SURFACE,
+                                    backgroundColor: palette.EHR_ON_SURFACE,
                                     alignItems: 'center',
                                     opacity: pressed ? 0.85 : 1,
                                 })}
                             >
-                                <Text style={{ fontFamily: SANS_SEMI, fontSize: 14, color: EHR_SURFACE, fontWeight: '600' }}>
+                                <Text style={{ fontFamily: SANS_SEMI, fontSize: 14, color: palette.EHR_SURFACE, fontWeight: '600' }}>
                                     Tiếp tục
                                 </Text>
                             </Pressable>
@@ -631,12 +623,13 @@ export default function LoginScreen({ navigation }: any) {
 }
 
 function FieldLabel({ children }: { children: React.ReactNode }) {
+    const palette = useEhrPalette();
     return (
         <Text
             style={{
                 fontFamily: SANS_SEMI,
                 fontSize: 11,
-                color: EHR_OUTLINE,
+                color: palette.EHR_OUTLINE,
                 letterSpacing: 1,
                 textTransform: 'uppercase',
                 fontWeight: '600',
@@ -664,6 +657,7 @@ function PasswordlessRow({
     disabled: boolean;
     onPress: () => void;
 }) {
+    const palette = useEhrPalette();
     return (
         <Pressable
             onPress={onPress}
@@ -675,9 +669,9 @@ function PasswordlessRow({
                 paddingVertical: 14,
                 paddingHorizontal: 14,
                 borderRadius: 14,
-                backgroundColor: EHR_SURFACE_LOWEST,
+                backgroundColor: palette.EHR_SURFACE_LOWEST,
                 borderWidth: 0.75,
-                borderColor: EHR_OUTLINE_SOFT,
+                borderColor: palette.EHR_OUTLINE_SOFT,
                 opacity: pressed ? 0.7 : 1,
             })}
         >
@@ -686,7 +680,7 @@ function PasswordlessRow({
                     width: 36,
                     height: 36,
                     borderRadius: 18,
-                    backgroundColor: `${EHR_PRIMARY}1A`,
+                    backgroundColor: `${palette.EHR_PRIMARY}1A`,
                     alignItems: 'center',
                     justifyContent: 'center',
                 }}
@@ -694,56 +688,32 @@ function PasswordlessRow({
                 {icon}
             </View>
             <View style={{ flex: 1 }}>
-                <Text style={{ fontFamily: SANS_MEDIUM, fontSize: 14, color: EHR_ON_SURFACE, fontWeight: '500' }}>
+                <Text style={{ fontFamily: SANS_MEDIUM, fontSize: 14, color: palette.EHR_ON_SURFACE, fontWeight: '500' }}>
                     {title}
                 </Text>
-                <Text style={{ marginTop: 2, fontFamily: SANS, fontSize: 11.5, color: EHR_OUTLINE }}>
+                <Text style={{ marginTop: 2, fontFamily: SANS, fontSize: 11.5, color: palette.EHR_OUTLINE }}>
                     {subtitle}
                 </Text>
             </View>
             {loading ? (
-                <ActivityIndicator size="small" color={EHR_PRIMARY} />
+                <ActivityIndicator size="small" color={palette.EHR_PRIMARY} />
             ) : badge ? (
                 <View
                     style={{
                         paddingHorizontal: 8,
                         paddingVertical: 3,
                         borderRadius: 999,
-                        backgroundColor: `${EHR_PRIMARY}1A`,
+                        backgroundColor: `${palette.EHR_PRIMARY}1A`,
                     }}
                 >
-                    <Text style={{ fontFamily: SANS_SEMI, fontSize: 10, color: EHR_PRIMARY, fontWeight: '700', letterSpacing: 0.4 }}>
+                    <Text style={{ fontFamily: SANS_SEMI, fontSize: 10, color: palette.EHR_PRIMARY, fontWeight: '700', letterSpacing: 0.4 }}>
                         {badge}
                     </Text>
                 </View>
             ) : (
-                <ChevronRight size={16} color={EHR_OUTLINE} />
+                <ChevronRight size={16} color={palette.EHR_OUTLINE} />
             )}
         </Pressable>
     );
 }
 
-const styles = StyleSheet.create({
-    hintModalBackdrop: {
-        flex: 1,
-        backgroundColor: 'rgba(0,0,0,0.6)',
-        justifyContent: 'center',
-        paddingHorizontal: 24,
-    },
-    hintModalCard: {
-        backgroundColor: EHR_SURFACE_LOWEST,
-        borderRadius: 20,
-        padding: 22,
-    },
-    hintModalInput: {
-        borderWidth: 0.75,
-        borderColor: EHR_OUTLINE_SOFT,
-        borderRadius: 12,
-        paddingVertical: 12,
-        paddingHorizontal: 14,
-        fontFamily: 'monospace',
-        fontSize: 14,
-        color: EHR_ON_SURFACE,
-        backgroundColor: EHR_SURFACE,
-    },
-});

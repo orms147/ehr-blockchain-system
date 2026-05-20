@@ -53,20 +53,7 @@ import consentService from '../../services/consent.service';
 import { runKeyShareHealer } from '../../services/keyShareHealer.service';
 import { formatChainError } from '../../utils/rpcRetry';
 import useAuthStore from '../../store/authStore';
-import {
-    EHR_SURFACE,
-    EHR_SURFACE_LOWEST,
-    EHR_ON_SURFACE,
-    EHR_ON_SURFACE_VARIANT,
-    EHR_OUTLINE,
-    EHR_OUTLINE_SOFT,
-    EHR_OUTLINE_VARIANT,
-    EHR_PRIMARY,
-    EHR_PRIMARY_CONTAINER,
-    EHR_TERTIARY,
-    EHR_WARNING,
-    EHR_DANGER,
-} from '../../constants/uiColors';
+import { useEhrPalette } from '../../constants/uiColors';
 
 const SERIF = 'Fraunces_400Regular';
 const SERIF_ITALIC = 'Fraunces_400Regular_Italic';
@@ -155,6 +142,7 @@ function firstName(fullName?: string) {
 }
 
 export default function DoctorDashboardScreen() {
+    const palette = useEhrPalette();
     const navigation = useNavigation<any>();
     const { token, user } = useAuthStore();
     const queryClient = useQueryClient();
@@ -480,14 +468,14 @@ export default function DoctorDashboardScreen() {
     const myAddr = user?.walletAddress || (user as any)?.address || '';
 
     return (
-        <SafeAreaView style={{ flex: 1, backgroundColor: EHR_SURFACE }} edges={['top']}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: palette.EHR_SURFACE }} edges={['top']}>
             <FlashList
                 contentContainerStyle={{ paddingBottom: 80 }}
                 refreshControl={
                     <RefreshControl
                         refreshing={isRefreshing}
                         onRefresh={handleRefresh}
-                        tintColor={EHR_ON_SURFACE_VARIANT}
+                        tintColor={palette.EHR_ON_SURFACE_VARIANT}
                     />
                 }
                 data={sharedRecords}
@@ -521,7 +509,7 @@ export default function DoctorDashboardScreen() {
                                     width: 220,
                                     height: 220,
                                     borderRadius: 110,
-                                    backgroundColor: `${EHR_PRIMARY}1F`,
+                                    backgroundColor: `${palette.EHR_PRIMARY}1F`,
                                 }}
                             />
                             <XStack style={{ alignItems: 'center', justifyContent: 'space-between' }}>
@@ -529,7 +517,7 @@ export default function DoctorDashboardScreen() {
                                     style={{
                                         fontFamily: SANS_SEMI,
                                         fontSize: 11,
-                                        color: EHR_OUTLINE,
+                                        color: palette.EHR_OUTLINE,
                                         letterSpacing: 1.2,
                                         textTransform: 'uppercase',
                                         fontWeight: '700',
@@ -544,7 +532,7 @@ export default function DoctorDashboardScreen() {
                                     marginTop: 8,
                                     fontFamily: SERIF,
                                     fontSize: 32,
-                                    color: EHR_ON_SURFACE,
+                                    color: palette.EHR_ON_SURFACE,
                                     letterSpacing: -0.6,
                                     lineHeight: 36,
                                 }}
@@ -557,7 +545,7 @@ export default function DoctorDashboardScreen() {
                                         fontFamily: SERIF_ITALIC,
                                         fontStyle: 'italic',
                                         fontSize: 32,
-                                        color: EHR_PRIMARY,
+                                        color: palette.EHR_PRIMARY,
                                         letterSpacing: -0.6,
                                         lineHeight: 36,
                                     }}
@@ -568,7 +556,7 @@ export default function DoctorDashboardScreen() {
                                     style={{
                                         fontFamily: SERIF,
                                         fontSize: 24,
-                                        color: EHR_ON_SURFACE,
+                                        color: palette.EHR_ON_SURFACE,
                                     }}
                                 >
                                     .
@@ -586,15 +574,15 @@ export default function DoctorDashboardScreen() {
                                         paddingHorizontal: 10,
                                         paddingVertical: 5,
                                         borderRadius: 999,
-                                        backgroundColor: `${EHR_TERTIARY}26`,
+                                        backgroundColor: `${palette.EHR_TERTIARY}26`,
                                     }}
                                 >
-                                    <ShieldCheck size={12} color={EHR_TERTIARY} />
+                                    <ShieldCheck size={12} color={palette.EHR_TERTIARY} />
                                     <Text
                                         style={{
                                             fontFamily: SANS_SEMI,
                                             fontSize: 11,
-                                            color: EHR_TERTIARY,
+                                            color: palette.EHR_TERTIARY,
                                             letterSpacing: 0.3,
                                             fontWeight: '700',
                                         }}
@@ -613,17 +601,17 @@ export default function DoctorDashboardScreen() {
                                         paddingHorizontal: 10,
                                         paddingVertical: 5,
                                         borderRadius: 999,
-                                        backgroundColor: `${EHR_PRIMARY}1A`,
+                                        backgroundColor: `${palette.EHR_PRIMARY}1A`,
                                         borderWidth: 0.5,
-                                        borderColor: EHR_PRIMARY,
+                                        borderColor: palette.EHR_PRIMARY,
                                     }}
                                 >
-                                    <AlertTriangle size={12} color={EHR_PRIMARY} />
+                                    <AlertTriangle size={12} color={palette.EHR_PRIMARY} />
                                     <Text
                                         style={{
                                             fontFamily: SANS_SEMI,
                                             fontSize: 11,
-                                            color: EHR_PRIMARY,
+                                            color: palette.EHR_PRIMARY,
                                             fontWeight: '700',
                                             letterSpacing: 0.3,
                                         }}
@@ -644,7 +632,7 @@ export default function DoctorDashboardScreen() {
                                     style={{
                                         fontFamily: SANS_SEMI,
                                         fontSize: 10,
-                                        color: EHR_OUTLINE,
+                                        color: palette.EHR_OUTLINE,
                                         letterSpacing: 1.2,
                                         textTransform: 'uppercase',
                                         fontWeight: '700',
@@ -656,7 +644,7 @@ export default function DoctorDashboardScreen() {
                                     style={{
                                         fontFamily: 'monospace',
                                         fontSize: 12,
-                                        color: EHR_ON_SURFACE_VARIANT,
+                                        color: palette.EHR_ON_SURFACE_VARIANT,
                                     }}
                                 >
                                     {truncate(myAddr)}
@@ -671,14 +659,14 @@ export default function DoctorDashboardScreen() {
                                 marginBottom: 22,
                                 borderTopWidth: 0.5,
                                 borderBottomWidth: 0.5,
-                                borderColor: EHR_OUTLINE_VARIANT,
+                                borderColor: palette.EHR_OUTLINE_VARIANT,
                             }}
                         >
                             <XStack>
                                 <DocStat
                                     n={pendingClaims.length}
                                     label="Chờ nhận"
-                                    accent={EHR_PRIMARY}
+                                    accent={palette.EHR_PRIMARY}
                                 />
                                 <Divider />
                                 <DocStat n={uniquePatients} label="Bệnh nhân" />
@@ -686,7 +674,7 @@ export default function DoctorDashboardScreen() {
                                 <DocStat
                                     n={sharedRecords.length}
                                     label="Hồ sơ"
-                                    accent={EHR_TERTIARY}
+                                    accent={palette.EHR_TERTIARY}
                                 />
                             </XStack>
                         </View>
@@ -695,14 +683,14 @@ export default function DoctorDashboardScreen() {
                         <View style={{ paddingHorizontal: 22, marginBottom: 22 }}>
                             <XStack style={{ gap: 10, marginBottom: 10 }}>
                                 <ActionTile
-                                    icon={<FilePlus2 size={20} color={EHR_PRIMARY} />}
+                                    icon={<FilePlus2 size={20} color={palette.EHR_PRIMARY} />}
                                     title="Tạo hồ sơ"
                                     sub="ghi mới cho bệnh nhân"
                                     primary
                                     onPress={() => navigation.navigate('DoctorCreateUpdate', {})}
                                 />
                                 <ActionTile
-                                    icon={<Users size={20} color={EHR_ON_SURFACE} />}
+                                    icon={<Users size={20} color={palette.EHR_ON_SURFACE} />}
                                     title="Bệnh nhân uỷ quyền"
                                     sub="đã trao toàn quyền"
                                     onPress={() => navigation.navigate('DoctorDelegatedPatients')}
@@ -710,13 +698,13 @@ export default function DoctorDashboardScreen() {
                             </XStack>
                             <XStack style={{ gap: 10 }}>
                                 <ActionTile
-                                    icon={<Share2 size={20} color={EHR_ON_SURFACE} />}
+                                    icon={<Share2 size={20} color={palette.EHR_ON_SURFACE} />}
                                     title="Đã chia sẻ lại"
                                     sub="xem + thu hồi"
                                     onPress={() => navigation.navigate('DoctorOutgoingShares')}
                                 />
                                 <ActionTile
-                                    icon={<Siren size={20} color={EHR_PRIMARY} />}
+                                    icon={<Siren size={20} color={palette.EHR_PRIMARY} />}
                                     title="Tra cứu cấp cứu"
                                     sub="theo CCCD bệnh nhân"
                                     warn
@@ -736,9 +724,9 @@ export default function DoctorDashboardScreen() {
                                     paddingVertical: 12,
                                     paddingHorizontal: 14,
                                     borderRadius: 14,
-                                    backgroundColor: EHR_SURFACE_LOWEST,
+                                    backgroundColor: palette.EHR_SURFACE_LOWEST,
                                     borderWidth: 0.5,
-                                    borderColor: EHR_OUTLINE_SOFT,
+                                    borderColor: palette.EHR_OUTLINE_SOFT,
                                     opacity: pressed ? 0.7 : 1,
                                 })}
                             >
@@ -747,19 +735,19 @@ export default function DoctorDashboardScreen() {
                                         width: 36,
                                         height: 36,
                                         borderRadius: 18,
-                                        backgroundColor: `${EHR_TERTIARY}26`,
+                                        backgroundColor: `${palette.EHR_TERTIARY}26`,
                                         alignItems: 'center',
                                         justifyContent: 'center',
                                     }}
                                 >
-                                    <Network size={18} color={EHR_TERTIARY} />
+                                    <Network size={18} color={palette.EHR_TERTIARY} />
                                 </View>
                                 <YStack style={{ flex: 1 }}>
                                     <Text
                                         style={{
                                             fontFamily: SANS_MEDIUM,
                                             fontSize: 13.5,
-                                            color: EHR_ON_SURFACE,
+                                            color: palette.EHR_ON_SURFACE,
                                         }}
                                     >
                                         Hồ sơ uỷ quyền lại được
@@ -768,7 +756,7 @@ export default function DoctorDashboardScreen() {
                                         style={{
                                             fontFamily: SANS,
                                             fontSize: 11.5,
-                                            color: EHR_OUTLINE,
+                                            color: palette.EHR_OUTLINE,
                                             marginTop: 2,
                                         }}
                                     >
@@ -789,9 +777,9 @@ export default function DoctorDashboardScreen() {
                                     paddingVertical: 12,
                                     paddingHorizontal: 14,
                                     borderRadius: 14,
-                                    backgroundColor: EHR_SURFACE_LOWEST,
+                                    backgroundColor: palette.EHR_SURFACE_LOWEST,
                                     borderWidth: 0.5,
-                                    borderColor: EHR_OUTLINE_SOFT,
+                                    borderColor: palette.EHR_OUTLINE_SOFT,
                                     opacity: pressed ? 0.7 : 1,
                                 })}
                             >
@@ -800,19 +788,19 @@ export default function DoctorDashboardScreen() {
                                         width: 36,
                                         height: 36,
                                         borderRadius: 18,
-                                        backgroundColor: `${EHR_OUTLINE}40`,
+                                        backgroundColor: `${palette.EHR_OUTLINE}40`,
                                         alignItems: 'center',
                                         justifyContent: 'center',
                                     }}
                                 >
-                                    <Clock size={18} color={EHR_ON_SURFACE_VARIANT} />
+                                    <Clock size={18} color={palette.EHR_ON_SURFACE_VARIANT} />
                                 </View>
                                 <YStack style={{ flex: 1 }}>
                                     <Text
                                         style={{
                                             fontFamily: SANS_MEDIUM,
                                             fontSize: 13.5,
-                                            color: EHR_ON_SURFACE,
+                                            color: palette.EHR_ON_SURFACE,
                                         }}
                                     >
                                         Hồ sơ hết hạn
@@ -821,7 +809,7 @@ export default function DoctorDashboardScreen() {
                                         style={{
                                             fontFamily: SANS,
                                             fontSize: 11.5,
-                                            color: EHR_OUTLINE,
+                                            color: palette.EHR_OUTLINE,
                                             marginTop: 2,
                                         }}
                                     >
@@ -850,9 +838,9 @@ export default function DoctorDashboardScreen() {
                                                         borderRadius: 14,
                                                         paddingVertical: 16,
                                                         paddingHorizontal: 18,
-                                                        backgroundColor: EHR_SURFACE_LOWEST,
+                                                        backgroundColor: palette.EHR_SURFACE_LOWEST,
                                                         borderLeftWidth: 3,
-                                                        borderLeftColor: EHR_OUTLINE,
+                                                        borderLeftColor: palette.EHR_OUTLINE,
                                                         opacity: 0.6,
                                                     }}
                                                 >
@@ -862,7 +850,7 @@ export default function DoctorDashboardScreen() {
                                                         style={{
                                                             fontFamily: SANS_MEDIUM,
                                                             fontSize: 14,
-                                                            color: EHR_ON_SURFACE,
+                                                            color: palette.EHR_ON_SURFACE,
                                                         }}
                                                     />
                                                     <Text
@@ -870,7 +858,7 @@ export default function DoctorDashboardScreen() {
                                                             marginTop: 4,
                                                             fontFamily: SANS,
                                                             fontSize: 11,
-                                                            color: EHR_OUTLINE,
+                                                            color: palette.EHR_OUTLINE,
                                                         }}
                                                     >
                                                         Yêu cầu đã hết hạn ·{' '}
@@ -888,7 +876,7 @@ export default function DoctorDashboardScreen() {
                                                 }}
                                             >
                                                 <LinearGradient
-                                                    colors={[EHR_PRIMARY, EHR_PRIMARY_CONTAINER]}
+                                                    colors={[palette.EHR_PRIMARY, palette.EHR_PRIMARY_CONTAINER]}
                                                     start={{ x: 0, y: 0 }}
                                                     end={{ x: 1, y: 1 }}
                                                     style={{ padding: 18 }}
@@ -962,16 +950,16 @@ export default function DoctorDashboardScreen() {
                                                         })}
                                                     >
                                                         {isClaiming ? (
-                                                            <ActivityIndicator size="small" color={EHR_PRIMARY} />
+                                                            <ActivityIndicator size="small" color={palette.EHR_PRIMARY} />
                                                         ) : (
-                                                            <CheckCircle size={16} color={EHR_PRIMARY} />
+                                                            <CheckCircle size={16} color={palette.EHR_PRIMARY} />
                                                         )}
                                                         <Text
                                                             style={{
                                                                 fontFamily: SANS_SEMI,
                                                                 fontSize: 14,
                                                                 fontWeight: '700',
-                                                                color: EHR_PRIMARY,
+                                                                color: palette.EHR_PRIMARY,
                                                             }}
                                                         >
                                                             {isClaiming ? 'Đang xác nhận (~17s)…' : 'Nhận truy cập'}
@@ -993,13 +981,13 @@ export default function DoctorDashboardScreen() {
                 }
                 ListEmptyComponent={
                     <View style={{ paddingHorizontal: 22, paddingTop: 24, alignItems: 'center' }}>
-                        <FileText size={28} color={EHR_OUTLINE} />
+                        <FileText size={28} color={palette.EHR_OUTLINE} />
                         <Text
                             style={{
                                 marginTop: 12,
                                 fontFamily: SERIF,
                                 fontSize: 18,
-                                color: EHR_ON_SURFACE,
+                                color: palette.EHR_ON_SURFACE,
                                 textAlign: 'center',
                             }}
                         >
@@ -1010,7 +998,7 @@ export default function DoctorDashboardScreen() {
                                 marginTop: 8,
                                 fontFamily: SANS,
                                 fontSize: 13,
-                                color: EHR_OUTLINE,
+                                color: palette.EHR_OUTLINE,
                                 textAlign: 'center',
                                 lineHeight: 19,
                                 maxWidth: 260,
@@ -1040,6 +1028,7 @@ export default function DoctorDashboardScreen() {
 
 // ───────── DocStat (centered stat column inside strip) ─────────
 function DocStat({ n, label, accent }: { n: number | string; label: string; accent?: string }) {
+    const palette = useEhrPalette();
     // G.5 — inline cell: 14×14 padding meets 60pt min touch target.
     return (
         <YStack style={{ flex: 1, alignItems: 'center', paddingVertical: 14, paddingHorizontal: 14 }}>
@@ -1047,7 +1036,7 @@ function DocStat({ n, label, accent }: { n: number | string; label: string; acce
                 style={{
                     fontFamily: SERIF_MEDIUM,
                     fontSize: 28,
-                    color: accent || EHR_ON_SURFACE,
+                    color: accent || palette.EHR_ON_SURFACE,
                     letterSpacing: -0.5,
                     lineHeight: 30,
                 }}
@@ -1059,7 +1048,7 @@ function DocStat({ n, label, accent }: { n: number | string; label: string; acce
                     marginTop: 6,
                     fontFamily: SANS_SEMI,
                     fontSize: 10,
-                    color: EHR_OUTLINE,
+                    color: palette.EHR_OUTLINE,
                     letterSpacing: 1,
                     textTransform: 'uppercase',
                     fontWeight: '700',
@@ -1072,12 +1061,13 @@ function DocStat({ n, label, accent }: { n: number | string; label: string; acce
 }
 
 function Divider() {
+    const palette = useEhrPalette();
     return (
         <View
             style={{
                 width: 0.5,
                 alignSelf: 'stretch',
-                backgroundColor: EHR_OUTLINE_SOFT,
+                backgroundColor: palette.EHR_OUTLINE_SOFT,
                 marginVertical: 4,
             }}
         />
@@ -1100,6 +1090,7 @@ function ActionTile({
     primary?: boolean;
     warn?: boolean;
 }) {
+    const palette = useEhrPalette();
     return (
         <Pressable
             onPress={onPress}
@@ -1109,12 +1100,12 @@ function ActionTile({
                 paddingHorizontal: 14,
                 borderRadius: 14,
                 backgroundColor: primary
-                    ? `${EHR_PRIMARY}14`
+                    ? `${palette.EHR_PRIMARY}14`
                     : warn
-                        ? `${EHR_PRIMARY}0A`
-                        : EHR_SURFACE_LOWEST,
+                        ? `${palette.EHR_PRIMARY}0A`
+                        : palette.EHR_SURFACE_LOWEST,
                 borderWidth: 0.5,
-                borderColor: primary || warn ? `${EHR_PRIMARY}50` : EHR_OUTLINE_SOFT,
+                borderColor: primary || warn ? `${palette.EHR_PRIMARY}50` : palette.EHR_OUTLINE_SOFT,
                 opacity: pressed ? 0.7 : 1,
                 minHeight: 80,
             })}
@@ -1124,7 +1115,7 @@ function ActionTile({
                     width: 32,
                     height: 32,
                     borderRadius: 16,
-                    backgroundColor: primary || warn ? `${EHR_PRIMARY}1A` : EHR_SURFACE,
+                    backgroundColor: primary || warn ? `${palette.EHR_PRIMARY}1A` : palette.EHR_SURFACE,
                     alignItems: 'center',
                     justifyContent: 'center',
                     marginBottom: 8,
@@ -1136,7 +1127,7 @@ function ActionTile({
                 style={{
                     fontFamily: SANS_SEMI,
                     fontSize: 13,
-                    color: primary || warn ? EHR_PRIMARY : EHR_ON_SURFACE,
+                    color: primary || warn ? palette.EHR_PRIMARY : palette.EHR_ON_SURFACE,
                     fontWeight: '600',
                 }}
             >
@@ -1147,7 +1138,7 @@ function ActionTile({
                     marginTop: 2,
                     fontFamily: SANS,
                     fontSize: 11,
-                    color: EHR_OUTLINE,
+                    color: palette.EHR_OUTLINE,
                     lineHeight: 15,
                 }}
                 numberOfLines={2}
@@ -1158,5 +1149,3 @@ function ActionTile({
     );
 }
 
-void EHR_WARNING;
-void EHR_DANGER;

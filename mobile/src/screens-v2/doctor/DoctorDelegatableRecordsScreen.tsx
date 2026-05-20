@@ -34,17 +34,7 @@ import recordService from '../../services/record.service';
 import useAuthStore from '../../store/authStore';
 import ViCard from '../../components-v2/ViCard';
 import ViButton from '../../components-v2/ViButton';
-import {
-    EHR_SURFACE,
-    EHR_SURFACE_LOWEST,
-    EHR_ON_SURFACE,
-    EHR_ON_SURFACE_VARIANT,
-    EHR_OUTLINE,
-    EHR_OUTLINE_SOFT,
-    EHR_PRIMARY,
-    EHR_PRIMARY_FIXED,
-    EHR_TERTIARY,
-} from '../../constants/uiColors';
+import { useEhrPalette } from '../../constants/uiColors';
 
 const SERIF = 'Fraunces_400Regular';
 const SANS = 'DMSans_400Regular';
@@ -61,6 +51,7 @@ type DelegatableShare = {
 };
 
 export default function DoctorDelegatableRecordsScreen() {
+    const palette = useEhrPalette();
     const queryClient = useQueryClient();
     const { address: myAddress } = useAuthStore() as any;
     const [selected, setSelected] = useState<DelegatableShare | null>(null);
@@ -178,28 +169,28 @@ export default function DoctorDelegatableRecordsScreen() {
                         width: 38,
                         height: 38,
                         borderRadius: 19,
-                        backgroundColor: `${EHR_TERTIARY}1A`,
+                        backgroundColor: `${palette.EHR_TERTIARY}1A`,
                         alignItems: 'center',
                         justifyContent: 'center',
                     }}
                 >
-                    <Users size={18} color={EHR_TERTIARY} />
+                    <Users size={18} color={palette.EHR_TERTIARY} />
                 </View>
                 <YStack style={{ flex: 1 }}>
                     <Text
                         style={{
                             fontFamily: SANS_MEDIUM,
                             fontSize: 14,
-                            color: EHR_ON_SURFACE,
+                            color: palette.EHR_ON_SURFACE,
                             fontWeight: '600',
                         }}
                     >
                         {item.record?.title || 'Hồ sơ y tế'}
                     </Text>
-                    <Text style={{ fontFamily: SANS, fontSize: 12, color: EHR_OUTLINE, marginTop: 2 }}>
+                    <Text style={{ fontFamily: SANS, fontSize: 12, color: palette.EHR_OUTLINE, marginTop: 2 }}>
                         {item.record?.recordType || 'medical_record'}
                     </Text>
-                    <Text style={{ fontFamily: 'monospace', fontSize: 11, color: EHR_OUTLINE, marginTop: 2 }}>
+                    <Text style={{ fontFamily: 'monospace', fontSize: 11, color: palette.EHR_OUTLINE, marginTop: 2 }}>
                         BN: {item.record?.ownerAddress?.slice(0, 10)}…
                     </Text>
                 </YStack>
@@ -210,7 +201,7 @@ export default function DoctorDelegatableRecordsScreen() {
                     full
                     size="sm"
                     onPress={() => setSelected(item)}
-                    leftIcon={<Send size={14} color={EHR_SURFACE} />}
+                    leftIcon={<Send size={14} color={palette.EHR_SURFACE} />}
                 >
                     Uỷ quyền cho BS khác
                 </ViButton>
@@ -219,13 +210,13 @@ export default function DoctorDelegatableRecordsScreen() {
     );
 
     return (
-        <SafeAreaView style={{ flex: 1, backgroundColor: EHR_SURFACE }}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: palette.EHR_SURFACE }}>
             <View style={{ paddingHorizontal: 20, paddingTop: 14, paddingBottom: 12 }}>
                 <Text
                     style={{
                         fontFamily: SERIF,
                         fontSize: 26,
-                        color: EHR_ON_SURFACE,
+                        color: palette.EHR_ON_SURFACE,
                         letterSpacing: -0.4,
                         lineHeight: 30,
                     }}
@@ -237,7 +228,7 @@ export default function DoctorDelegatableRecordsScreen() {
                         marginTop: 4,
                         fontFamily: SANS,
                         fontSize: 13,
-                        color: EHR_ON_SURFACE_VARIANT,
+                        color: palette.EHR_ON_SURFACE_VARIANT,
                         lineHeight: 19,
                     }}
                 >
@@ -254,19 +245,19 @@ export default function DoctorDelegatableRecordsScreen() {
                     <RefreshControl
                         refreshing={isRefetching}
                         onRefresh={refetch}
-                        tintColor={EHR_ON_SURFACE_VARIANT}
+                        tintColor={palette.EHR_ON_SURFACE_VARIANT}
                     />
                 }
                 ListEmptyComponent={
                     !isLoading ? (
                         <View style={{ paddingTop: 30, alignItems: 'center' }}>
-                            <Users size={28} color={EHR_OUTLINE} />
+                            <Users size={28} color={palette.EHR_OUTLINE} />
                             <Text
                                 style={{
                                     marginTop: 12,
                                     fontFamily: SERIF,
                                     fontSize: 18,
-                                    color: EHR_ON_SURFACE,
+                                    color: palette.EHR_ON_SURFACE,
                                     textAlign: 'center',
                                 }}
                             >
@@ -277,7 +268,7 @@ export default function DoctorDelegatableRecordsScreen() {
                                     marginTop: 8,
                                     fontFamily: SANS,
                                     fontSize: 13,
-                                    color: EHR_OUTLINE,
+                                    color: palette.EHR_OUTLINE,
                                     textAlign: 'center',
                                     maxWidth: 280,
                                     lineHeight: 19,
@@ -300,7 +291,7 @@ export default function DoctorDelegatableRecordsScreen() {
                 >
                     <View
                         style={{
-                            backgroundColor: EHR_SURFACE_LOWEST,
+                            backgroundColor: palette.EHR_SURFACE_LOWEST,
                             borderTopLeftRadius: 22,
                             borderTopRightRadius: 22,
                             padding: 22,
@@ -312,17 +303,17 @@ export default function DoctorDelegatableRecordsScreen() {
                                 style={{
                                     fontFamily: SERIF,
                                     fontSize: 20,
-                                    color: EHR_ON_SURFACE,
+                                    color: palette.EHR_ON_SURFACE,
                                     letterSpacing: -0.3,
                                 }}
                             >
                                 Uỷ quyền hồ sơ
                             </Text>
                             <Pressable onPress={closeModal} hitSlop={8}>
-                                <X size={18} color={EHR_OUTLINE} />
+                                <X size={18} color={palette.EHR_OUTLINE} />
                             </Pressable>
                         </XStack>
-                        <Text style={{ fontFamily: SANS, fontSize: 13, color: EHR_ON_SURFACE_VARIANT, marginBottom: 16 }}>
+                        <Text style={{ fontFamily: SANS, fontSize: 13, color: palette.EHR_ON_SURFACE_VARIANT, marginBottom: 16 }}>
                             {selected?.record?.title}
                         </Text>
 
@@ -330,18 +321,18 @@ export default function DoctorDelegatableRecordsScreen() {
                         <TextInput
                             style={{
                                 borderWidth: 0.5,
-                                borderColor: EHR_OUTLINE_SOFT,
+                                borderColor: palette.EHR_OUTLINE_SOFT,
                                 borderRadius: 12,
                                 paddingVertical: 11,
                                 paddingHorizontal: 14,
-                                color: EHR_ON_SURFACE,
-                                backgroundColor: EHR_SURFACE,
+                                color: palette.EHR_ON_SURFACE,
+                                backgroundColor: palette.EHR_SURFACE,
                                 fontFamily: 'monospace',
                                 fontSize: 13,
                                 marginBottom: 14,
                             }}
                             placeholder="0x..."
-                            placeholderTextColor={EHR_OUTLINE}
+                            placeholderTextColor={palette.EHR_OUTLINE}
                             value={recipient}
                             onChangeText={setRecipient}
                             autoCapitalize="none"
@@ -352,18 +343,18 @@ export default function DoctorDelegatableRecordsScreen() {
                         <TextInput
                             style={{
                                 borderWidth: 0.5,
-                                borderColor: EHR_OUTLINE_SOFT,
+                                borderColor: palette.EHR_OUTLINE_SOFT,
                                 borderRadius: 12,
                                 paddingVertical: 11,
                                 paddingHorizontal: 14,
-                                color: EHR_ON_SURFACE,
-                                backgroundColor: EHR_SURFACE,
+                                color: palette.EHR_ON_SURFACE,
+                                backgroundColor: palette.EHR_SURFACE,
                                 fontFamily: SANS,
                                 fontSize: 14,
                                 marginBottom: 18,
                             }}
                             placeholder="30"
-                            placeholderTextColor={EHR_OUTLINE}
+                            placeholderTextColor={palette.EHR_OUTLINE}
                             value={expiryDays}
                             onChangeText={setExpiryDays}
                             keyboardType="number-pad"
@@ -380,12 +371,13 @@ export default function DoctorDelegatableRecordsScreen() {
 }
 
 function FieldLabel({ children }: { children: React.ReactNode }) {
+    const palette = useEhrPalette();
     return (
         <Text
             style={{
                 fontFamily: SANS_SEMI,
                 fontSize: 11.5,
-                color: EHR_OUTLINE,
+                color: palette.EHR_OUTLINE,
                 marginBottom: 6,
                 letterSpacing: 0.4,
                 textTransform: 'uppercase',
@@ -397,4 +389,3 @@ function FieldLabel({ children }: { children: React.ReactNode }) {
     );
 }
 
-void EHR_PRIMARY_FIXED;

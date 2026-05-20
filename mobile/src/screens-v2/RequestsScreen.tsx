@@ -38,19 +38,7 @@ import walletActionService from '../services/walletAction.service';
 import ViCard from '../components-v2/ViCard';
 import ViButton from '../components-v2/ViButton';
 import { ViStatusChip, ViModeChip } from '../components-v2/ViChips';
-import {
-    EHR_SURFACE,
-    EHR_SURFACE_LOWEST,
-    EHR_ON_SURFACE,
-    EHR_ON_SURFACE_VARIANT,
-    EHR_OUTLINE,
-    EHR_OUTLINE_SOFT,
-    EHR_PRIMARY,
-    EHR_PRIMARY_FIXED,
-    EHR_TERTIARY,
-    EHR_WARNING,
-    EHR_DANGER,
-} from '../constants/uiColors';
+import { useEhrPalette } from '../constants/uiColors';
 import { formatDateTime, formatExpiry, getExpiryUrgency } from '../utils/dateFormatting';
 
 const SERIF = 'Fraunces_400Regular';
@@ -155,6 +143,7 @@ const RequestRow = React.memo(function RequestRow({
     onArchive: (r: RequestItem) => void;
     isApproving?: boolean;
 }) {
+    const palette = useEhrPalette();
     const normalizedStatus = (item.status || 'pending').toLowerCase();
     const isPending = normalizedStatus === 'pending';
     const isSigned = normalizedStatus === 'signed';
@@ -174,15 +163,15 @@ const RequestRow = React.memo(function RequestRow({
             {item.requestType === 1 ? (
                 <View
                     style={{
-                        backgroundColor: `${EHR_WARNING}1A`,
+                        backgroundColor: `${palette.EHR_WARNING}1A`,
                         borderRadius: 10,
                         padding: 10,
                         marginBottom: 10,
                         borderWidth: 0.5,
-                        borderColor: `${EHR_WARNING}50`,
+                        borderColor: `${palette.EHR_WARNING}50`,
                     }}
                 >
-                    <Text style={{ fontFamily: SANS_SEMI, fontSize: 12, color: EHR_WARNING, fontWeight: '700' }}>
+                    <Text style={{ fontFamily: SANS_SEMI, fontSize: 12, color: palette.EHR_WARNING, fontWeight: '700' }}>
                         Uỷ quyền toàn bộ
                     </Text>
                     <Text
@@ -190,7 +179,7 @@ const RequestRow = React.memo(function RequestRow({
                             marginTop: 2,
                             fontFamily: SANS,
                             fontSize: 12,
-                            color: EHR_ON_SURFACE,
+                            color: palette.EHR_ON_SURFACE,
                             lineHeight: 18,
                         }}
                     >
@@ -200,19 +189,19 @@ const RequestRow = React.memo(function RequestRow({
             ) : (
                 <View
                     style={{
-                        backgroundColor: EHR_PRIMARY_FIXED,
+                        backgroundColor: palette.EHR_PRIMARY_FIXED,
                         borderRadius: 10,
                         padding: 10,
                         marginBottom: 10,
                     }}
                 >
                     <XStack style={{ alignItems: 'center', gap: 6, marginBottom: item.recordDescription ? 6 : 0 }}>
-                        <FilePlus2 size={13} color={EHR_PRIMARY} />
+                        <FilePlus2 size={13} color={palette.EHR_PRIMARY} />
                         <Text
                             style={{
                                 fontFamily: SANS_SEMI,
                                 fontSize: 13,
-                                color: EHR_PRIMARY,
+                                color: palette.EHR_PRIMARY,
                                 fontWeight: '700',
                                 flex: 1,
                             }}
@@ -226,7 +215,7 @@ const RequestRow = React.memo(function RequestRow({
                             style={{
                                 fontFamily: SANS,
                                 fontSize: 12,
-                                color: EHR_ON_SURFACE,
+                                color: palette.EHR_ON_SURFACE,
                                 lineHeight: 18,
                                 marginBottom: 4,
                             }}
@@ -242,14 +231,14 @@ const RequestRow = React.memo(function RequestRow({
                                     paddingHorizontal: 6,
                                     paddingVertical: 2,
                                     borderRadius: 6,
-                                    backgroundColor: EHR_SURFACE_LOWEST,
+                                    backgroundColor: palette.EHR_SURFACE_LOWEST,
                                 }}
                             >
                                 <Text
                                     style={{
                                         fontFamily: SANS_MEDIUM,
                                         fontSize: 10.5,
-                                        color: EHR_PRIMARY,
+                                        color: palette.EHR_PRIMARY,
                                         fontWeight: '600',
                                     }}
                                 >
@@ -258,12 +247,12 @@ const RequestRow = React.memo(function RequestRow({
                             </View>
                         ) : null}
                         {item.recordCreatedAt ? (
-                            <Text style={{ fontFamily: SANS, fontSize: 10.5, color: EHR_OUTLINE }}>
+                            <Text style={{ fontFamily: SANS, fontSize: 10.5, color: palette.EHR_OUTLINE }}>
                                 {formatDate(item.recordCreatedAt)}
                             </Text>
                         ) : null}
                         {item.parentCidHash ? (
-                            <Text style={{ fontFamily: SANS, fontSize: 10.5, color: EHR_OUTLINE }}>
+                            <Text style={{ fontFamily: SANS, fontSize: 10.5, color: palette.EHR_OUTLINE }}>
                                 · Bản cập nhật
                             </Text>
                         ) : null}
@@ -282,18 +271,18 @@ const RequestRow = React.memo(function RequestRow({
             >
                 <ViModeChip mode={item.requestType === 2 ? 'read-delegate' : 'read-update'} />
                 {formatDuration(item) ? (
-                    <Text style={{ fontFamily: SANS_MEDIUM, fontSize: 11.5, color: EHR_OUTLINE }}>
+                    <Text style={{ fontFamily: SANS_MEDIUM, fontSize: 11.5, color: palette.EHR_OUTLINE }}>
                         {formatDuration(item)}
                     </Text>
                 ) : null}
-                <Text style={{ fontFamily: SANS, fontSize: 11, color: EHR_OUTLINE }}>
+                <Text style={{ fontFamily: SANS, fontSize: 11, color: palette.EHR_OUTLINE }}>
                     {formatDate(item.createdAt)}
                 </Text>
                 {item.deadline && isPending ? (() => {
                     const urgency = getExpiryUrgency(item.deadline);
                     const urgent = urgency === 'urgent' || urgency === 'soon';
                     const color =
-                        urgency === 'expired' ? EHR_DANGER : urgent ? EHR_WARNING : EHR_OUTLINE;
+                        urgency === 'expired' ? palette.EHR_DANGER : urgent ? palette.EHR_WARNING : palette.EHR_OUTLINE;
                     return (
                         <XStack style={{ alignItems: 'center', gap: 4 }}>
                             <Clock size={11} color={color} />
@@ -320,14 +309,14 @@ const RequestRow = React.memo(function RequestRow({
                         paddingVertical: 10,
                         paddingHorizontal: 12,
                         borderRadius: 10,
-                        backgroundColor: timeLeft.expired ? `${EHR_DANGER}14` : `${EHR_TERTIARY}14`,
+                        backgroundColor: timeLeft.expired ? `${palette.EHR_DANGER}14` : `${palette.EHR_TERTIARY}14`,
                     }}
                 >
                     <Text
                         style={{
                             fontFamily: SANS_MEDIUM,
                             fontSize: 12.5,
-                            color: timeLeft.expired ? EHR_DANGER : EHR_TERTIARY,
+                            color: timeLeft.expired ? palette.EHR_DANGER : palette.EHR_TERTIARY,
                             textAlign: 'center',
                             fontWeight: '600',
                         }}
@@ -348,7 +337,7 @@ const RequestRow = React.memo(function RequestRow({
                             size="sm"
                             onPress={() => onArchive(item)}
                             disabled={isApproving}
-                            leftIcon={<X size={14} color={EHR_OUTLINE} />}
+                            leftIcon={<X size={14} color={palette.EHR_OUTLINE} />}
                         >
                             Ẩn
                         </ViButton>
@@ -371,6 +360,7 @@ const RequestRow = React.memo(function RequestRow({
 });
 
 export default function RequestsScreen() {
+    const palette = useEhrPalette();
     const { requests, isLoading, isRefreshing, refresh } = useRequests();
     const [activeFilter, setActiveFilter] = useState<FilterKey>('all');
     const [approvingId, setApprovingId] = useState<string | null>(null);
@@ -633,14 +623,14 @@ export default function RequestsScreen() {
     }
 
     return (
-        <SafeAreaView style={{ flex: 1, backgroundColor: EHR_SURFACE }} edges={['right', 'left']}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: palette.EHR_SURFACE }} edges={['right', 'left']}>
             {/* Hero header */}
             <View style={{ paddingHorizontal: 20, paddingTop: 14, paddingBottom: 12 }}>
                 <Text
                     style={{
                         fontFamily: SERIF,
                         fontSize: 26,
-                        color: EHR_ON_SURFACE,
+                        color: palette.EHR_ON_SURFACE,
                         letterSpacing: -0.3,
                         lineHeight: 30,
                     }}
@@ -652,7 +642,7 @@ export default function RequestsScreen() {
                         marginTop: 4,
                         fontFamily: SANS,
                         fontSize: 13,
-                        color: EHR_ON_SURFACE_VARIANT,
+                        color: palette.EHR_ON_SURFACE_VARIANT,
                         lineHeight: 18,
                     }}
                 >
@@ -686,8 +676,8 @@ export default function RequestsScreen() {
                                 paddingVertical: 6,
                                 borderRadius: 999,
                                 borderWidth: 0.5,
-                                borderColor: active ? EHR_ON_SURFACE : EHR_OUTLINE_SOFT,
-                                backgroundColor: active ? EHR_ON_SURFACE : 'transparent',
+                                borderColor: active ? palette.EHR_ON_SURFACE : palette.EHR_OUTLINE_SOFT,
+                                backgroundColor: active ? palette.EHR_ON_SURFACE : 'transparent',
                                 opacity: pressed ? 0.7 : 1,
                             })}
                         >
@@ -695,7 +685,7 @@ export default function RequestsScreen() {
                                 style={{
                                     fontFamily: SANS_MEDIUM,
                                     fontSize: 12,
-                                    color: active ? EHR_SURFACE : EHR_ON_SURFACE_VARIANT,
+                                    color: active ? palette.EHR_SURFACE : palette.EHR_ON_SURFACE_VARIANT,
                                     fontWeight: '600',
                                 }}
                             >
@@ -708,13 +698,13 @@ export default function RequestsScreen() {
 
             {filteredRequests.length === 0 ? (
                 <View style={{ paddingHorizontal: 22, paddingTop: 30, alignItems: 'center' }}>
-                    <Bell size={28} color={EHR_OUTLINE} />
+                    <Bell size={28} color={palette.EHR_OUTLINE} />
                     <Text
                         style={{
                             marginTop: 12,
                             fontFamily: SERIF,
                             fontSize: 18,
-                            color: EHR_ON_SURFACE,
+                            color: palette.EHR_ON_SURFACE,
                             textAlign: 'center',
                         }}
                     >
@@ -725,7 +715,7 @@ export default function RequestsScreen() {
                             marginTop: 8,
                             fontFamily: SANS,
                             fontSize: 13,
-                            color: EHR_OUTLINE,
+                            color: palette.EHR_OUTLINE,
                             textAlign: 'center',
                             lineHeight: 19,
                             maxWidth: 280,
@@ -755,7 +745,7 @@ export default function RequestsScreen() {
                         <RefreshControl
                             refreshing={isRefreshing}
                             onRefresh={refresh}
-                            tintColor={EHR_ON_SURFACE_VARIANT}
+                            tintColor={palette.EHR_ON_SURFACE_VARIANT}
                         />
                     }
                     showsVerticalScrollIndicator={false}

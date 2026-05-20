@@ -12,13 +12,7 @@ import Animated, {
     Easing,
     interpolate,
 } from 'react-native-reanimated';
-import {
-    EHR_ON_SURFACE_VARIANT,
-    EHR_PRIMARY,
-    EHR_PRIMARY_CONTAINER,
-    EHR_PRIMARY_FIXED,
-    EHR_SURFACE,
-} from '../constants/uiColors';
+import { useEhrPalette } from '../constants/uiColors';
 
 interface LoadingSpinnerProps {
     message?: string;
@@ -27,9 +21,10 @@ interface LoadingSpinnerProps {
 }
 
 const DOT_SIZE = { small: 8, medium: 10, large: 12 };
-const DOT_COLORS = [EHR_PRIMARY, EHR_PRIMARY_CONTAINER, EHR_PRIMARY_FIXED];
 
 function AnimatedDot({ index, dotSize }: { index: number; dotSize: number }) {
+    const palette = useEhrPalette();
+    const DOT_COLORS = [palette.EHR_PRIMARY, palette.EHR_PRIMARY_CONTAINER, palette.EHR_PRIMARY_FIXED];
     const progress = useSharedValue(0);
 
     useEffect(() => {
@@ -75,7 +70,14 @@ export default function LoadingSpinner({
     fullScreen = true,
     size = 'large',
 }: LoadingSpinnerProps) {
+    const palette = useEhrPalette();
     const dotSize = DOT_SIZE[size];
+    const s = StyleSheet.create({
+        container: { justifyContent: 'center', alignItems: 'center', padding: 16 },
+        fullScreen: { flex: 1, backgroundColor: palette.EHR_SURFACE },
+        dotsRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 20 },
+        message: { fontSize: 15, fontWeight: '500', color: palette.EHR_ON_SURFACE_VARIANT },
+    });
 
     const textEnter = useSharedValue(0);
     useEffect(() => {
@@ -115,24 +117,3 @@ export default function LoadingSpinner({
     );
 }
 
-const s = StyleSheet.create({
-    container: {
-        justifyContent: 'center',
-        alignItems: 'center',
-        padding: 16,
-    },
-    fullScreen: {
-        flex: 1,
-        backgroundColor: EHR_SURFACE,
-    },
-    dotsRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        marginBottom: 20,
-    },
-    message: {
-        fontSize: 15,
-        fontWeight: '500',
-        color: EHR_ON_SURFACE_VARIANT,
-    },
-});
