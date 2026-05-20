@@ -202,10 +202,27 @@ const GroupCard = React.memo(function GroupCard({
                     borderBottomWidth: 0.5,
                     borderColor: palette.EHR_OUTLINE_SOFT,
                     borderStyle: 'dashed',
-                    gap: 6,
+                    gap: 8,
                 }}
             >
-                <KV label="Hồ sơ" value={<RecordChip cidHash={group.rootCidHash} />} />
+                {/* Hồ sơ — render as full-width section (label above + RecordChip below)
+                    because RecordChip is too wide for the inline KV row pattern */}
+                <View>
+                    <Text
+                        style={{
+                            fontFamily: SANS_SEMI,
+                            fontSize: 11.5,
+                            color: palette.EHR_TEXT_MUTED,
+                            letterSpacing: 0.3,
+                            textTransform: 'uppercase',
+                            fontWeight: '600',
+                            marginBottom: 6,
+                        }}
+                    >
+                        Hồ sơ
+                    </Text>
+                    <RecordChip cidHash={group.rootCidHash} />
+                </View>
                 {group.firstCreatedAt ? <KV label="Chia sẻ" value={formatDate(group.firstCreatedAt)} /> : null}
                 <KV label="Hết hạn" value={formatExpiry(group.latestExpiresAt)} />
             </View>
