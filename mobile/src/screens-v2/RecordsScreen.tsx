@@ -9,26 +9,30 @@
 //   - accessLogService.getAccessLogs → activity feed
 //   - navigation.navigate('RecordDetail', { record }) / 'CreateRecord'
 
-import React, { useMemo, useState } from 'react';
-import { Pressable, RefreshControl, View } from 'react-native';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Modal, Pressable, RefreshControl, ScrollView, View } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { useQuery } from '@tanstack/react-query';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Text, XStack } from 'tamagui';
+import { Text, XStack, YStack } from 'tamagui';
+import { SlidersHorizontal, X } from 'lucide-react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import consentService from '../services/consent.service';
-import accessLogService from '../services/accessLog.service';
 import RecordCard from '../components/RecordCard';
 import LoadingSpinner from '../components/LoadingSpinner';
 import useRecords from '../hooks/useRecords';
 import ViCard from '../components-v2/ViCard';
+import ViButton from '../components-v2/ViButton';
 import {
     EHR_SURFACE,
     EHR_SURFACE_LOWEST,
+    EHR_SURFACE_HIGH,
     EHR_ON_SURFACE,
     EHR_ON_SURFACE_VARIANT,
     EHR_OUTLINE,
     EHR_OUTLINE_SOFT,
+    EHR_OUTLINE_VARIANT,
     EHR_PRIMARY,
     EHR_TERTIARY,
     EHR_SECONDARY,
@@ -41,11 +45,39 @@ const SANS = 'DMSans_400Regular';
 const SANS_MEDIUM = 'DMSans_500Medium';
 const SANS_SEMI = 'DMSans_600SemiBold';
 
-const FILTER_OPTIONS = [
+// G.6 — record.type filter chips (matches backend recordType enum 1:1 per design §filters).
+// "Tất cả" = all types; "activity" view moved to AccessLog (Quyền tab) per canonical structure.
+const TYPE_FILTER_OPTIONS = [
     { key: 'all', label: 'Tất cả' },
-    { key: 'shared', label: 'Đã chia sẻ' },
-    { key: 'activity', label: 'Hoạt động' },
+    { key: 'checkup', label: 'Khám' },
+    { key: 'diagnosis', label: 'Chẩn đoán' },
+    { key: 'prescription', label: 'Đơn thuốc' },
+    { key: 'lab_result', label: 'Xét nghiệm' },
+    { key: 'imaging', label: 'Hình ảnh' },
+    { key: 'vital_signs', label: 'Sinh tồn' },
+    { key: 'other', label: 'Khác' },
 ] as const;
+
+type TypeFilterKey = (typeof TYPE_FILTER_OPTIONS)[number]['key'];
+
+// G.6 — advanced filter axes (bottom sheet)
+type StatusFilter = 'all' | 'mine' | 'shared' | 'expired';
+type TimeFilter = 'all' | '30d' | '90d' | '12mo';
+
+const STATUS_OPTIONS: { key: StatusFilter; label: string }[] = [
+    { key: 'all', label: 'Tất cả' },
+    { key: 'mine', label: 'Chỉ tôi' },
+    { key: 'shared', label: 'Đã chia sẻ' },
+    { key: 'expired', label: 'Đã hết hạn' },
+];
+const TIME_OPTIONS: { key: TimeFilter; label: string }[] = [
+    { key: 'all', label: 'Mọi lúc' },
+    { key: '30d', label: '30 ngày' },
+    { key: '90d', label: '90 ngày' },
+    { key: '12mo', label: '12 tháng' },
+];
+
+const FILTER_STORAGE_KEY = 'records.filter';
 
 const ACTION_LABELS: Record<string, { label: string; color: string }> = {
     CREATE_RECORD: { label: 'Tạo hồ sơ', color: EHR_TERTIARY },
@@ -73,11 +105,55 @@ const formatActivityDate = (s?: string) => {
     }
 };
 
-type FilterKey = (typeof FILTER_OPTIONS)[number]['key'];
-
 export default function RecordsScreen({ navigation }: any) {
     const { records, isLoading, isRefreshing, error, refresh } = useRecords();
-    const [activeFilter, setActiveFilter] = useState<FilterKey>('all');
+
+    // Primary axis: record.type
+    const [typeFilter, setTypeFilter] = useState<TypeFilterKey>('all');
+    // Advanced axes (in bottom sheet)
+    const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+    const [timeFilter, setTimeFilter] = useState<TimeFilter>('all');
+    const [filterSheetOpen, setFilterSheetOpen] = useState(false);
+    const [draftStatus, setDraftStatus] = useState<StatusFilter>('all');
+    const [draftTime, setDraftTime] = useState<TimeFilter>('all');
+
+    // Hydrate advanced filter state from AsyncStorage (per design §filter step 2)
+    useEffect(() => {
+        AsyncStorage.getItem(FILTER_STORAGE_KEY)
+            .then((raw) => {
+                if (!raw) return;
+                try {
+                    const parsed = JSON.parse(raw);
+                    if (parsed?.status) setStatusFilter(parsed.status);
+                    if (parsed?.time) setTimeFilter(parsed.time);
+                } catch {
+                    // ignore
+                }
+            })
+            .catch(() => {});
+    }, []);
+
+    const persistFilters = (status: StatusFilter, time: TimeFilter) => {
+        AsyncStorage.setItem(FILTER_STORAGE_KEY, JSON.stringify({ status, time })).catch(() => {});
+    };
+
+    const openSheet = () => {
+        setDraftStatus(statusFilter);
+        setDraftTime(timeFilter);
+        setFilterSheetOpen(true);
+    };
+    const applyDraft = () => {
+        setStatusFilter(draftStatus);
+        setTimeFilter(draftTime);
+        persistFilters(draftStatus, draftTime);
+        setFilterSheetOpen(false);
+    };
+    const resetDraft = () => {
+        setDraftStatus('all');
+        setDraftTime('all');
+    };
+    const advancedActiveCount =
+        (statusFilter !== 'all' ? 1 : 0) + (timeFilter !== 'all' ? 1 : 0);
 
     const { data: sentShares } = useQuery({
         queryKey: ['keyShares', 'sent'],
@@ -95,25 +171,53 @@ export default function RecordsScreen({ navigation }: any) {
         return s;
     }, [sentShares]);
 
-    const { data: activityLogs } = useQuery({
-        queryKey: ['accessLogs', 'myActivity'],
-        queryFn: () => accessLogService.getAccessLogs(),
-        enabled: activeFilter === 'activity',
-        staleTime: 30_000,
-    });
+    const expiredCidSet = useMemo(() => {
+        const s = new Set<string>();
+        const now = Date.now();
+        (sentShares || []).forEach((ks: any) => {
+            const exp = ks?.expireAt ? new Date(ks.expireAt).getTime() : null;
+            if (exp && exp < now && ks?.cidHash) s.add(String(ks.cidHash).toLowerCase());
+        });
+        return s;
+    }, [sentShares]);
+
+    const timeThresholdMs = useMemo(() => {
+        const now = Date.now();
+        if (timeFilter === '30d') return now - 30 * 24 * 60 * 60 * 1000;
+        if (timeFilter === '90d') return now - 90 * 24 * 60 * 60 * 1000;
+        if (timeFilter === '12mo') return now - 365 * 24 * 60 * 60 * 1000;
+        return null;
+    }, [timeFilter]);
 
     const filteredRecords = records.filter((r: any) => {
-        if (activeFilter === 'all') return true;
-        if (activeFilter === 'shared') {
-            const cid = String(r.cidHash || '').toLowerCase();
-            const parent = String(r.parentCidHash || '').toLowerCase();
-            return (cid && sharedCidSet.has(cid)) || (parent && sharedCidSet.has(parent));
+        if (r.archived) return false;
+
+        // Type axis
+        if (typeFilter !== 'all') {
+            const rType = String(r.recordType || r.type || '').toLowerCase();
+            if (rType !== typeFilter) return false;
         }
-        if (activeFilter === 'activity') return false;
-        return !r.archived;
+
+        // Status axis
+        const cid = String(r.cidHash || '').toLowerCase();
+        const parent = String(r.parentCidHash || '').toLowerCase();
+        const isShared = (cid && sharedCidSet.has(cid)) || (parent && sharedCidSet.has(parent));
+        const isExpired = (cid && expiredCidSet.has(cid)) || (parent && expiredCidSet.has(parent));
+        if (statusFilter === 'mine' && isShared) return false;
+        if (statusFilter === 'shared' && !isShared) return false;
+        if (statusFilter === 'expired' && !isExpired) return false;
+
+        // Time axis (createdAt)
+        if (timeThresholdMs && r.createdAt) {
+            const created = new Date(r.createdAt).getTime();
+            if (created < timeThresholdMs) return false;
+        }
+
+        return true;
     });
 
-    const isActivityView = activeFilter === 'activity';
+    const isActivityView = false; // moved to AccessLog/Quyền tab per canonical structure
+    const activityLogs: any[] = [];
 
     const handleRecordPress = (record: any) => {
         const serializableRecord = {
@@ -274,38 +378,79 @@ export default function RecordsScreen({ navigation }: any) {
                             {sharedCidSet.size > 0 ? ` · ${sharedCidSet.size} đã chia sẻ` : ''}
                         </Text>
 
-                        {/* Filter pills */}
-                        <View style={{ flexDirection: 'row', gap: 6, marginTop: 14, marginBottom: 4 }}>
-                            {FILTER_OPTIONS.map((f) => {
-                                const active = activeFilter === f.key;
-                                return (
-                                    <Pressable
-                                        key={f.key}
-                                        onPress={() => setActiveFilter(f.key)}
-                                        style={({ pressed }) => ({
-                                            paddingHorizontal: 14,
-                                            paddingVertical: 7,
-                                            borderRadius: 999,
-                                            borderWidth: 0.5,
-                                            borderColor: active ? EHR_ON_SURFACE : EHR_OUTLINE_SOFT,
-                                            backgroundColor: active ? EHR_ON_SURFACE : 'transparent',
-                                            opacity: pressed ? 0.7 : 1,
-                                        })}
-                                    >
-                                        <Text
-                                            style={{
-                                                fontFamily: SANS_MEDIUM,
-                                                fontSize: 12.5,
-                                                color: active ? EHR_SURFACE : EHR_ON_SURFACE_VARIANT,
-                                                fontWeight: '600',
-                                            }}
+                        {/* G.6 — type chips (horizontal scroll) + advanced filter icon */}
+                        <XStack style={{ alignItems: 'center', marginTop: 14, marginBottom: 4, gap: 8 }}>
+                            <ScrollView
+                                horizontal
+                                showsHorizontalScrollIndicator={false}
+                                contentContainerStyle={{ gap: 6, paddingRight: 8 }}
+                                style={{ flex: 1 }}
+                            >
+                                {TYPE_FILTER_OPTIONS.map((f) => {
+                                    const active = typeFilter === f.key;
+                                    return (
+                                        <Pressable
+                                            key={f.key}
+                                            onPress={() => setTypeFilter(f.key)}
+                                            style={({ pressed }) => ({
+                                                paddingHorizontal: 13,
+                                                paddingVertical: 7,
+                                                borderRadius: 999,
+                                                borderWidth: 0.5,
+                                                borderColor: active ? EHR_ON_SURFACE : EHR_OUTLINE_SOFT,
+                                                backgroundColor: active ? EHR_ON_SURFACE : 'transparent',
+                                                opacity: pressed ? 0.7 : 1,
+                                            })}
                                         >
-                                            {f.label}
-                                        </Text>
-                                    </Pressable>
-                                );
-                            })}
-                        </View>
+                                            <Text
+                                                style={{
+                                                    fontFamily: SANS_MEDIUM,
+                                                    fontSize: 12,
+                                                    color: active ? EHR_SURFACE : EHR_ON_SURFACE_VARIANT,
+                                                    fontWeight: '600',
+                                                }}
+                                            >
+                                                {f.label}
+                                            </Text>
+                                        </Pressable>
+                                    );
+                                })}
+                            </ScrollView>
+                            <Pressable
+                                onPress={openSheet}
+                                style={({ pressed }) => ({
+                                    width: 36,
+                                    height: 36,
+                                    borderRadius: 999,
+                                    borderWidth: 0.5,
+                                    borderColor: advancedActiveCount > 0 ? EHR_PRIMARY : EHR_OUTLINE_SOFT,
+                                    backgroundColor: advancedActiveCount > 0 ? `${EHR_PRIMARY}1A` : 'transparent',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    opacity: pressed ? 0.7 : 1,
+                                })}
+                                hitSlop={6}
+                                accessibilityLabel="Lọc nâng cao"
+                            >
+                                <SlidersHorizontal
+                                    size={16}
+                                    color={advancedActiveCount > 0 ? EHR_PRIMARY : EHR_ON_SURFACE_VARIANT}
+                                />
+                                {advancedActiveCount > 0 ? (
+                                    <View
+                                        style={{
+                                            position: 'absolute',
+                                            top: 4,
+                                            right: 4,
+                                            width: 6,
+                                            height: 6,
+                                            borderRadius: 3,
+                                            backgroundColor: EHR_PRIMARY,
+                                        }}
+                                    />
+                                ) : null}
+                            </Pressable>
+                        </XStack>
 
                         {/* Tạo hồ sơ tile (small, no big cinnabar gradient — design's "+ Tạo hồ sơ" link pattern) */}
                         <Pressable
@@ -378,6 +523,166 @@ export default function RecordsScreen({ navigation }: any) {
                 }
                 showsVerticalScrollIndicator={false}
             />
+
+            {/* G.6 — Advanced filter bottom sheet */}
+            <Modal
+                visible={filterSheetOpen}
+                transparent
+                animationType="slide"
+                onRequestClose={() => setFilterSheetOpen(false)}
+            >
+                <Pressable
+                    onPress={() => setFilterSheetOpen(false)}
+                    style={{ flex: 1, backgroundColor: 'rgba(8,8,12,0.7)', justifyContent: 'flex-end' }}
+                >
+                    <Pressable
+                        onPress={(e) => e.stopPropagation()}
+                        style={{
+                            backgroundColor: EHR_SURFACE_HIGH,
+                            borderTopLeftRadius: 20,
+                            borderTopRightRadius: 20,
+                            paddingBottom: 28,
+                            maxHeight: '70%',
+                        }}
+                    >
+                        {/* drag handle */}
+                        <View style={{ alignItems: 'center', paddingTop: 10, paddingBottom: 4 }}>
+                            <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: EHR_OUTLINE }} />
+                        </View>
+
+                        {/* header */}
+                        <XStack style={{ alignItems: 'baseline', justifyContent: 'space-between', paddingHorizontal: 22, paddingTop: 8, paddingBottom: 18 }}>
+                            <Text
+                                style={{
+                                    fontFamily: SERIF,
+                                    fontSize: 20,
+                                    color: EHR_ON_SURFACE,
+                                    letterSpacing: -0.3,
+                                }}
+                            >
+                                Bộ lọc
+                            </Text>
+                            <Pressable onPress={resetDraft} hitSlop={8}>
+                                <Text style={{ fontFamily: SANS_SEMI, fontSize: 12, color: EHR_ON_SURFACE_VARIANT, fontWeight: '600' }}>
+                                    Đặt lại
+                                </Text>
+                            </Pressable>
+                        </XStack>
+
+                        <ScrollView showsVerticalScrollIndicator={false}>
+                            {/* Trạng thái */}
+                            <View style={{ paddingHorizontal: 22, paddingBottom: 22 }}>
+                                <Text
+                                    style={{
+                                        fontFamily: SANS_SEMI,
+                                        fontSize: 10,
+                                        color: EHR_OUTLINE,
+                                        letterSpacing: 1.2,
+                                        textTransform: 'uppercase',
+                                        fontWeight: '700',
+                                        marginBottom: 10,
+                                    }}
+                                >
+                                    Trạng thái
+                                </Text>
+                                <XStack style={{ flexWrap: 'wrap', gap: 6 }}>
+                                    {STATUS_OPTIONS.map((opt) => {
+                                        const active = draftStatus === opt.key;
+                                        return (
+                                            <Pressable
+                                                key={opt.key}
+                                                onPress={() => setDraftStatus(opt.key)}
+                                                style={({ pressed }) => ({
+                                                    paddingHorizontal: 13,
+                                                    paddingVertical: 7,
+                                                    borderRadius: 999,
+                                                    borderWidth: 0.5,
+                                                    borderColor: active ? EHR_ON_SURFACE : EHR_OUTLINE_VARIANT,
+                                                    backgroundColor: active ? EHR_ON_SURFACE : 'transparent',
+                                                    opacity: pressed ? 0.7 : 1,
+                                                })}
+                                            >
+                                                <Text
+                                                    style={{
+                                                        fontFamily: SANS_MEDIUM,
+                                                        fontSize: 12,
+                                                        color: active ? EHR_SURFACE : EHR_ON_SURFACE_VARIANT,
+                                                        fontWeight: '600',
+                                                    }}
+                                                >
+                                                    {opt.label}
+                                                </Text>
+                                            </Pressable>
+                                        );
+                                    })}
+                                </XStack>
+                            </View>
+
+                            {/* Thời gian */}
+                            <View style={{ paddingHorizontal: 22, paddingBottom: 22 }}>
+                                <Text
+                                    style={{
+                                        fontFamily: SANS_SEMI,
+                                        fontSize: 10,
+                                        color: EHR_OUTLINE,
+                                        letterSpacing: 1.2,
+                                        textTransform: 'uppercase',
+                                        fontWeight: '700',
+                                        marginBottom: 10,
+                                    }}
+                                >
+                                    Thời gian
+                                </Text>
+                                <XStack style={{ flexWrap: 'wrap', gap: 6 }}>
+                                    {TIME_OPTIONS.map((opt) => {
+                                        const active = draftTime === opt.key;
+                                        return (
+                                            <Pressable
+                                                key={opt.key}
+                                                onPress={() => setDraftTime(opt.key)}
+                                                style={({ pressed }) => ({
+                                                    paddingHorizontal: 13,
+                                                    paddingVertical: 7,
+                                                    borderRadius: 999,
+                                                    borderWidth: 0.5,
+                                                    borderColor: active ? EHR_ON_SURFACE : EHR_OUTLINE_VARIANT,
+                                                    backgroundColor: active ? EHR_ON_SURFACE : 'transparent',
+                                                    opacity: pressed ? 0.7 : 1,
+                                                })}
+                                            >
+                                                <Text
+                                                    style={{
+                                                        fontFamily: SANS_MEDIUM,
+                                                        fontSize: 12,
+                                                        color: active ? EHR_SURFACE : EHR_ON_SURFACE_VARIANT,
+                                                        fontWeight: '600',
+                                                    }}
+                                                >
+                                                    {opt.label}
+                                                </Text>
+                                            </Pressable>
+                                        );
+                                    })}
+                                </XStack>
+                            </View>
+                        </ScrollView>
+
+                        {/* Footer */}
+                        <XStack style={{ gap: 10, paddingHorizontal: 22, paddingTop: 12, borderTopWidth: 0.5, borderTopColor: EHR_OUTLINE_VARIANT }}>
+                            <View style={{ flex: 1 }}>
+                                <ViButton variant="ghost" full onPress={() => setFilterSheetOpen(false)}>
+                                    Đóng
+                                </ViButton>
+                            </View>
+                            <View style={{ flex: 2 }}>
+                                <ViButton variant="primary" full onPress={applyDraft}>
+                                    Áp dụng
+                                </ViButton>
+                            </View>
+                        </XStack>
+                    </Pressable>
+                </Pressable>
+            </Modal>
         </SafeAreaView>
     );
 }
