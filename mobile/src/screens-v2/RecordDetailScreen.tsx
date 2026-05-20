@@ -817,109 +817,113 @@ export default function RecordDetailScreen({ route, navigation }: any) {
                             }
                             return (
                                 <ScrollView
-                                    horizontal
                                     showsHorizontalScrollIndicator={false}
-                                    contentContainerStyle={{ paddingVertical: 2, paddingRight: 8 }}
+                                    contentContainerStyle={{ paddingVertical: 2 }}
                                 >
-                                    {all.map((v, idx) => {
-                                        const isCurrent = v._role === 'current';
-                                        const onPress = isCurrent
-                                            ? undefined
-                                            : () => navigation.replace('RecordDetail', {
-                                                record: { ...v, createdAt: v?.createdAt ? new Date(v.createdAt).toISOString() : null },
-                                            });
-                                        return (
-                                            <React.Fragment key={v.cidHash || idx}>
-                                                <Pressable onPress={onPress} disabled={isCurrent}>
+                                    {/* G.12.h — vertical timeline spine per design `screens-patient.jsx#L468-503` */}
+                                    <View style={{ position: 'relative', paddingLeft: 16 }}>
+                                        {/* Spine */}
+                                        <View
+                                            style={{
+                                                position: 'absolute',
+                                                left: 5,
+                                                top: 6,
+                                                bottom: 6,
+                                                width: 0.5,
+                                                backgroundColor: palette.EHR_OUTLINE,
+                                            }}
+                                        />
+                                        {all.map((v, idx) => {
+                                            const isCurrent = v._role === 'current';
+                                            const onPress = isCurrent
+                                                ? undefined
+                                                : () => navigation.replace('RecordDetail', {
+                                                    record: { ...v, createdAt: v?.createdAt ? new Date(v.createdAt).toISOString() : null },
+                                                });
+                                            return (
+                                                <View key={v.cidHash || idx} style={{ position: 'relative', marginBottom: 16 }}>
+                                                    {/* Dot — solid ink if current, hollow ring else */}
                                                     <View
                                                         style={{
-                                                            width: 160,
-                                                            backgroundColor: isCurrent ? palette.EHR_PRIMARY_FIXED : palette.EHR_SURFACE_LOWEST,
-                                                            borderRadius: 14,
-                                                            borderWidth: isCurrent ? 1.5 : 0.75,
-                                                            borderColor: isCurrent ? palette.EHR_PRIMARY : palette.EHR_OUTLINE_SOFT,
-                                                            padding: 12,
-                                                            marginRight: 10,
+                                                            position: 'absolute',
+                                                            left: -16,
+                                                            top: 6,
+                                                            width: 11,
+                                                            height: 11,
+                                                            borderRadius: 6,
+                                                            backgroundColor: isCurrent ? palette.EHR_ON_SURFACE : palette.EHR_SURFACE,
+                                                            borderWidth: 0.75,
+                                                            borderColor: isCurrent ? palette.EHR_ON_SURFACE : palette.EHR_OUTLINE,
                                                         }}
-                                                    >
-                                                        <XStack style={{ alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-                                                            <View
+                                                    />
+                                                    <Pressable onPress={onPress} disabled={isCurrent}>
+                                                        <XStack style={{ alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
+                                                            <Text
                                                                 style={{
-                                                                    paddingHorizontal: 8,
-                                                                    paddingVertical: 2,
-                                                                    borderRadius: 999,
-                                                                    backgroundColor: isCurrent ? palette.EHR_PRIMARY : palette.EHR_SURFACE,
+                                                                    fontFamily: 'Fraunces_500Medium',
+                                                                    fontStyle: 'italic',
+                                                                    fontSize: 15,
+                                                                    fontWeight: '600',
+                                                                    color: palette.EHR_ON_SURFACE,
                                                                 }}
                                                             >
+                                                                v{idx + 1}
+                                                            </Text>
+                                                            {v.createdAt ? (
                                                                 <Text
                                                                     style={{
-                                                                        fontFamily: SANS_SEMI,
-                                                                        fontSize: 10,
-                                                                        fontWeight: '700',
-                                                                        color: isCurrent ? '#FAF7F1' : palette.EHR_OUTLINE,
+                                                                        fontSize: 12,
+                                                                        color: palette.EHR_TEXT_MUTED,
+                                                                        letterSpacing: 0.2,
+                                                                        fontFamily: 'monospace',
                                                                     }}
                                                                 >
-                                                                    v{idx + 1}
+                                                                    {new Date(v.createdAt).toLocaleDateString('vi-VN')}
                                                                 </Text>
-                                                            </View>
+                                                            ) : null}
                                                             {isCurrent ? (
                                                                 <Text
                                                                     style={{
-                                                                        fontFamily: SANS_SEMI,
                                                                         fontSize: 10,
-                                                                        fontWeight: '700',
                                                                         color: palette.EHR_PRIMARY,
-                                                                        letterSpacing: 0.4,
+                                                                        fontWeight: '700',
+                                                                        letterSpacing: 0.6,
+                                                                        textTransform: 'uppercase',
+                                                                        fontFamily: SANS_SEMI,
                                                                     }}
                                                                 >
-                                                                    HIỆN TẠI
+                                                                    Hiện tại
                                                                 </Text>
                                                             ) : null}
                                                         </XStack>
                                                         <Text
                                                             style={{
-                                                                fontFamily: SANS_MEDIUM,
-                                                                fontSize: 13,
-                                                                color: palette.EHR_ON_SURFACE,
-                                                                fontWeight: '500',
-                                                                marginBottom: 4,
+                                                                marginTop: 4,
+                                                                fontSize: 13.5,
+                                                                color: palette.EHR_ON_SURFACE_VARIANT,
+                                                                lineHeight: 19,
+                                                                fontFamily: SANS,
                                                             }}
                                                             numberOfLines={2}
                                                         >
                                                             {v.title || `Phiên bản ${idx + 1}`}
                                                         </Text>
-                                                        {v.createdAt ? (
-                                                            <Text
-                                                                style={{
-                                                                    fontFamily: SANS,
-                                                                    fontSize: 11,
-                                                                    color: palette.EHR_TEXT_MUTED,
-                                                                }}
-                                                            >
-                                                                {new Date(v.createdAt).toLocaleDateString('vi-VN')}
-                                                            </Text>
-                                                        ) : null}
                                                         <Text
                                                             style={{
-                                                                marginTop: 2,
+                                                                marginTop: 4,
                                                                 fontFamily: 'monospace',
-                                                                fontSize: 10,
+                                                                fontSize: 10.5,
                                                                 color: palette.EHR_TEXT_MUTED,
                                                             }}
                                                             numberOfLines={1}
                                                         >
-                                                            {String(v.cidHash || '').slice(0, 14)}…
+                                                            {String(v.cidHash || '').slice(0, 18)}…
                                                         </Text>
-                                                    </View>
-                                                </Pressable>
-                                                {idx < all.length - 1 ? (
-                                                    <View style={{ alignSelf: 'center', marginRight: 10 }}>
-                                                        <Text style={{ color: palette.EHR_TEXT_MUTED, fontSize: 16 }}>→</Text>
-                                                    </View>
-                                                ) : null}
-                                            </React.Fragment>
-                                        );
-                                    })}
+                                                    </Pressable>
+                                                </View>
+                                            );
+                                        })}
+                                    </View>
                                 </ScrollView>
                             );
                         })()}

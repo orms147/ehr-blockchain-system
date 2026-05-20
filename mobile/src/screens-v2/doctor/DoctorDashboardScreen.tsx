@@ -591,34 +591,53 @@ export default function DoctorDashboardScreen() {
                                     </Text>
                                 </View>
                             ) : isVerifiedDoctor === false ? (
-                                <View
-                                    style={{
+                                // G.12.l — interactive button per design (was text-only pill)
+                                <Pressable
+                                    onPress={() => {
+                                        try {
+                                            navigation.navigate('CredentialSubmit');
+                                        } catch {
+                                            Alert.alert(
+                                                'Xác minh CCHN',
+                                                'Tính năng gửi đơn xác minh CCHN sẽ được hoàn thiện trong phiên bản tới (Phase G.12.o + backend credential endpoint).',
+                                            );
+                                        }
+                                    }}
+                                    style={({ pressed }) => ({
                                         marginTop: 12,
                                         alignSelf: 'flex-start',
                                         flexDirection: 'row',
                                         alignItems: 'center',
-                                        gap: 6,
-                                        paddingHorizontal: 10,
-                                        paddingVertical: 5,
+                                        gap: 8,
+                                        paddingHorizontal: 12,
+                                        paddingVertical: 6,
                                         borderRadius: 999,
-                                        backgroundColor: `${palette.EHR_PRIMARY}1A`,
-                                        borderWidth: 0.5,
-                                        borderColor: palette.EHR_PRIMARY,
-                                    }}
+                                        backgroundColor: palette.EHR_PRIMARY,
+                                        opacity: pressed ? 0.85 : 1,
+                                    })}
                                 >
-                                    <AlertTriangle size={12} color={palette.EHR_PRIMARY} />
+                                    <AlertTriangle size={12} color="#FBF8F1" />
                                     <Text
                                         style={{
                                             fontFamily: SANS_SEMI,
-                                            fontSize: 11,
-                                            color: palette.EHR_PRIMARY,
+                                            fontSize: 11.5,
+                                            color: '#FBF8F1',
                                             fontWeight: '700',
                                             letterSpacing: 0.3,
                                         }}
                                     >
                                         Cần xác minh CCHN
                                     </Text>
-                                </View>
+                                    <Text
+                                        style={{
+                                            fontFamily: SANS_SEMI,
+                                            fontSize: 12,
+                                            color: '#FBF8F1',
+                                        }}
+                                    >
+                                        ›
+                                    </Text>
+                                </Pressable>
                             ) : null}
 
                             <XStack
@@ -663,17 +682,18 @@ export default function DoctorDashboardScreen() {
                             }}
                         >
                             <XStack>
+                                {/* G.12.l — labels match design: Đang chờ / Đang theo dõi / Tháng này */}
                                 <DocStat
                                     n={pendingClaims.length}
-                                    label="Chờ nhận"
+                                    label="Đang chờ"
                                     accent={palette.EHR_PRIMARY}
                                 />
                                 <Divider />
-                                <DocStat n={uniquePatients} label="Bệnh nhân" />
+                                <DocStat n={uniquePatients} label="Đang theo dõi" />
                                 <Divider />
                                 <DocStat
                                     n={sharedRecords.length}
-                                    label="Hồ sơ"
+                                    label="Tháng này"
                                     accent={palette.EHR_TERTIARY}
                                 />
                             </XStack>
