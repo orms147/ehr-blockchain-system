@@ -17,7 +17,7 @@ import { Text, XStack, YStack } from 'tamagui';
 import {
     ArrowLeft,
     Check,
-    Circle,
+    ChevronRight,
     HeartPulse,
     ShieldCheck,
     Stethoscope,
@@ -193,13 +193,16 @@ export default function RoleSelectionScreen() {
         if (selectedRole) handleRegisterRole(selectedRole as 'patient' | 'doctor');
     };
 
-    const renderCard = (
+    // Editorial inline-hairline row (RecordRow-style) per design G.7.
+    // Replaces the previous "marketing-y" iconboxed card. One-time decision
+    // deserves quiet typography, not app-store visual weight.
+    const renderRow = (
         role: string,
         label: string,
         description: string,
-        badge: string,
-        Icon: any,
-        tint: string,
+        _badge: string,
+        _Icon: any,
+        _tint: string,
         index: number,
     ) => {
         const selected = selectedRole === role;
@@ -210,100 +213,62 @@ export default function RoleSelectionScreen() {
                 onPress={() => setSelectedRole(role)}
                 disabled={Boolean(busyRole)}
                 style={({ pressed }) => ({
-                    paddingVertical: 16,
-                    paddingHorizontal: 16,
-                    borderRadius: 14,
-                    borderWidth: selected ? 1.5 : 0.75,
-                    borderColor: selected ? EHR_PRIMARY : EHR_OUTLINE_SOFT,
-                    backgroundColor: selected ? EHR_PRIMARY_FIXED : EHR_SURFACE_LOWEST,
-                    marginBottom: 10,
-                    opacity: pressed ? 0.85 : busyRole && !isBusy ? 0.5 : 1,
+                    paddingVertical: 18,
+                    paddingHorizontal: 4,
+                    borderTopWidth: index === 0 ? 0.5 : 0,
+                    borderBottomWidth: 0.5,
+                    borderColor: EHR_OUTLINE_VARIANT,
+                    opacity: pressed ? 0.6 : busyRole && !isBusy ? 0.5 : 1,
                 })}
             >
-                <XStack style={{ alignItems: 'center', gap: 14 }}>
-                    <View
-                        style={{
-                            width: 48,
-                            height: 48,
-                            borderRadius: 14,
-                            backgroundColor: `${tint}1A`,
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                        }}
-                    >
-                        <Icon size={24} color={tint} />
-                    </View>
+                <XStack style={{ alignItems: 'center', gap: 12 }}>
                     <YStack style={{ flex: 1 }}>
                         <Text
                             style={{
-                                fontFamily: SERIF,
-                                fontSize: 18,
+                                fontFamily: SERIF_ITALIC,
+                                fontStyle: 'italic',
+                                fontSize: 22,
                                 color: selected ? EHR_PRIMARY : EHR_ON_SURFACE,
-                                letterSpacing: -0.2,
+                                letterSpacing: -0.3,
+                                lineHeight: 26,
                             }}
                         >
                             {label}
                         </Text>
                         <Text
                             style={{
-                                marginTop: 2,
+                                marginTop: 4,
                                 fontFamily: SANS,
-                                fontSize: 12,
-                                color: EHR_OUTLINE,
-                                lineHeight: 17,
+                                fontSize: 12.5,
+                                color: EHR_ON_SURFACE_VARIANT,
+                                lineHeight: 18,
                             }}
                         >
                             {description}
                         </Text>
+                    </YStack>
+                    {selected ? (
                         <View
                             style={{
-                                marginTop: 6,
-                                alignSelf: 'flex-start',
-                                paddingHorizontal: 8,
-                                paddingVertical: 3,
-                                borderRadius: 999,
-                                backgroundColor: selected ? EHR_PRIMARY : `${tint}1A`,
+                                width: 22,
+                                height: 22,
+                                borderRadius: 11,
+                                backgroundColor: EHR_PRIMARY,
+                                alignItems: 'center',
+                                justifyContent: 'center',
                             }}
                         >
-                            <Text
-                                style={{
-                                    fontFamily: SANS_SEMI,
-                                    fontSize: 10,
-                                    color: selected ? '#FAF7F1' : tint,
-                                    letterSpacing: 0.4,
-                                    textTransform: 'uppercase',
-                                    fontWeight: '600',
-                                }}
-                            >
-                                {badge}
-                            </Text>
+                            <Check size={13} color="#FAF7F1" strokeWidth={3} />
                         </View>
-                    </YStack>
-                    <View style={{ marginLeft: 4 }}>
-                        {selected ? (
-                            <View
-                                style={{
-                                    width: 22,
-                                    height: 22,
-                                    borderRadius: 11,
-                                    backgroundColor: EHR_PRIMARY,
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                }}
-                            >
-                                <Check size={13} color="#FAF7F1" strokeWidth={3} />
-                            </View>
-                        ) : (
-                            <Circle size={22} color={EHR_OUTLINE} strokeWidth={1.5} />
-                        )}
-                    </View>
+                    ) : (
+                        <ChevronRight size={18} color={EHR_OUTLINE} />
+                    )}
                 </XStack>
                 {isBusy ? (
                     <View
                         style={{
                             position: 'absolute',
                             inset: 0,
-                            borderRadius: 14,
                             backgroundColor: 'rgba(15,20,25,0.6)',
                             alignItems: 'center',
                             justifyContent: 'center',
@@ -405,14 +370,14 @@ export default function RoleSelectionScreen() {
                     <YStack>
                         {registrationMode
                             ? REGISTRATION_OPTIONS.map((opt, i) =>
-                                renderCard(opt.role, opt.label, opt.description, opt.badge, opt.Icon, opt.tint, i))
+                                renderRow(opt.role, opt.label, opt.description, opt.badge, opt.Icon, opt.tint, i))
                             : roles.map((role: string, i: number) => {
                                 const cfg = ROLE_CONFIG_MAP[role] || FALLBACK_ROLE;
                                 const isDoctor = role === 'doctor';
                                 const Icon = isDoctor ? Stethoscope : HeartPulse;
                                 const tint = isDoctor ? EHR_TERTIARY : EHR_PRIMARY;
                                 const badge = isDoctor ? 'Xác minh chứng chỉ' : 'Quyền truy cập cá nhân';
-                                return renderCard(
+                                return renderRow(
                                     role,
                                     cfg.label,
                                     `Đăng nhập với quyền ${String(cfg.label).toLowerCase()}`,

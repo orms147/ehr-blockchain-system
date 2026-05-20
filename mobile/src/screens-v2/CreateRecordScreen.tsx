@@ -620,10 +620,10 @@ export default function CreateRecordScreen({ navigation, route: navRoute }: any)
                                 <ImagePlus size={18} color={simpleMode ? EHR_PRIMARY : EHR_ON_SURFACE_VARIANT} />
                                 <YStack style={{ flex: 1 }}>
                                     <Text style={{ fontFamily: SANS_SEMI, fontSize: 13.5, color: simpleMode ? EHR_PRIMARY : EHR_ON_SURFACE, fontWeight: '700' }}>
-                                        Đơn giản
+                                        Nhanh
                                     </Text>
                                     <Text style={{ fontFamily: SANS, fontSize: 11, color: EHR_OUTLINE }}>
-                                        Ảnh + ghi chú
+                                        Tiêu đề + ảnh
                                     </Text>
                                 </YStack>
                             </XStack>
@@ -644,10 +644,10 @@ export default function CreateRecordScreen({ navigation, route: navRoute }: any)
                                 <Stethoscope size={18} color={!simpleMode ? EHR_PRIMARY : EHR_ON_SURFACE_VARIANT} />
                                 <YStack style={{ flex: 1 }}>
                                     <Text style={{ fontFamily: SANS_SEMI, fontSize: 13.5, color: !simpleMode ? EHR_PRIMARY : EHR_ON_SURFACE, fontWeight: '700' }}>
-                                        Chi tiết
+                                        Đầy đủ
                                     </Text>
                                     <Text style={{ fontFamily: SANS, fontSize: 11, color: EHR_OUTLINE }}>
-                                        ICD-10 + sinh tồn + Rx
+                                        Toàn bộ trường (ICD-10, Rx…)
                                     </Text>
                                 </YStack>
                             </XStack>

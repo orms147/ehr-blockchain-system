@@ -71,6 +71,7 @@ import {
     EHR_PRIMARY,
     EHR_PRIMARY_FIXED,
     EHR_TERTIARY,
+    EHR_SECONDARY,
     EHR_WARNING,
 } from '../../constants/uiColors';
 import { formatDate as formatDateShared, formatExpiry } from '../../utils/dateFormatting';
@@ -851,20 +852,39 @@ export default function DoctorDelegatedPatientsScreen() {
                 style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
             >
                 <ViCard padding={16} style={{ marginBottom: 10, opacity: isExpired ? 0.6 : 1 }}>
+                    {/* G.7 — chain-depth chip on row header, not buried in subtitle */}
+                    <View
+                        style={{
+                            alignSelf: 'flex-start',
+                            paddingHorizontal: 8,
+                            paddingVertical: 3,
+                            borderRadius: 6,
+                            backgroundColor: item.chainDepth === 1 ? `${EHR_TERTIARY}26` : `${EHR_SECONDARY}26`,
+                            marginBottom: 8,
+                        }}
+                    >
+                        <Text
+                            style={{
+                                fontFamily: SANS_SEMI,
+                                fontSize: 10.5,
+                                color: item.chainDepth === 1 ? EHR_TERTIARY : EHR_SECONDARY,
+                                fontWeight: '700',
+                                letterSpacing: 0.3,
+                                textTransform: 'uppercase',
+                            }}
+                        >
+                            {item.chainDepth === 1 ? 'Trực tiếp' : `Cấp ${item.chainDepth}`}
+                            {item.allowSubDelegate ? ' · uỷ quyền tiếp' : ''}
+                        </Text>
+                    </View>
                     <XStack style={{ alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 6, gap: 8 }}>
                         <View style={{ flex: 1 }}>
                             {/* G.2 — patient wallet → UserChip resolves real name + nationalId tag */}
                             <UserChip address={item.patientAddress} expanded showAddress={false} />
-                            <Text style={{ fontFamily: SANS, fontSize: 12, color: EHR_OUTLINE, marginTop: 6 }}>
-                                {item.chainDepth === 1
-                                    ? 'Uỷ quyền trực tiếp từ bệnh nhân'
-                                    : `Chuỗi uỷ quyền cấp ${item.chainDepth}`}
-                                {item.allowSubDelegate ? ' · uỷ quyền tiếp được' : ''}
-                            </Text>
                             {item.parentDelegator ? (
-                                <View style={{ marginTop: 6 }}>
+                                <View style={{ marginTop: 8 }}>
                                     <Text style={{ fontFamily: SANS, fontSize: 11, color: EHR_OUTLINE, marginBottom: 3 }}>
-                                        Uỷ quyền từ bác sĩ:
+                                        Qua bác sĩ:
                                     </Text>
                                     <UserChip address={item.parentDelegator} showAddress={false} size="sm" interactive={false} />
                                 </View>

@@ -290,17 +290,17 @@ export default function EmergencyLookupScreen() {
                             {patient.allergies ? (
                                 <View
                                     style={{
-                                        marginTop: 12,
-                                        padding: 12,
-                                        borderRadius: 10,
-                                        backgroundColor: `${EHR_DANGER}14`,
+                                        marginTop: 14,
+                                        padding: 14,
+                                        borderRadius: 12,
+                                        backgroundColor: `${EHR_DANGER}1A`,
                                         borderWidth: 0.5,
-                                        borderColor: `${EHR_DANGER}50`,
+                                        borderColor: `${EHR_DANGER}66`,
                                         flexDirection: 'row',
-                                        gap: 8,
+                                        gap: 10,
                                     }}
                                 >
-                                    <AlertTriangle size={14} color={EHR_DANGER} style={{ marginTop: 2 }} />
+                                    <AlertTriangle size={18} color={EHR_DANGER} style={{ marginTop: 2 }} />
                                     <YStack style={{ flex: 1 }}>
                                         <Text
                                             style={{
@@ -308,18 +308,20 @@ export default function EmergencyLookupScreen() {
                                                 fontSize: 11,
                                                 color: EHR_DANGER,
                                                 fontWeight: '700',
-                                                letterSpacing: 0.5,
+                                                letterSpacing: 1.2,
+                                                textTransform: 'uppercase',
                                             }}
                                         >
-                                            DỊ ỨNG
+                                            Dị ứng — đọc kỹ trước khi điều trị
                                         </Text>
                                         <Text
                                             style={{
-                                                marginTop: 2,
-                                                fontFamily: SANS,
-                                                fontSize: 13,
-                                                color: EHR_ON_SURFACE,
-                                                lineHeight: 18,
+                                                marginTop: 4,
+                                                fontFamily: SANS_SEMI,
+                                                fontSize: 17,
+                                                color: EHR_DANGER,
+                                                lineHeight: 24,
+                                                fontWeight: '600',
                                             }}
                                         >
                                             {patient.allergies}

@@ -26,6 +26,7 @@ import {
     EHR_ON_SURFACE_VARIANT,
     EHR_OUTLINE,
     EHR_OUTLINE_SOFT,
+    EHR_OUTLINE_VARIANT,
     EHR_PRIMARY,
     EHR_PRIMARY_FIXED,
     EHR_SECONDARY,
@@ -111,7 +112,7 @@ export default function EditProfileScreen({ navigation }: any) {
 
     return (
         <SafeAreaView style={{ flex: 1, backgroundColor: EHR_SURFACE }} edges={['left', 'right', 'bottom']}>
-            <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
+            <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 120 }} showsVerticalScrollIndicator={false}>
                 {/* Hero */}
                 <View style={{ marginBottom: 18 }}>
                     <Text
@@ -286,7 +287,23 @@ export default function EditProfileScreen({ navigation }: any) {
                         }}
                     />
                 </ViCard>
+            </ScrollView>
 
+            {/* Sticky footer Save CTA (G.7: avoid Android soft-keyboard clipping) */}
+            <View
+                style={{
+                    position: 'absolute',
+                    bottom: 0,
+                    left: 0,
+                    right: 0,
+                    paddingHorizontal: 20,
+                    paddingTop: 12,
+                    paddingBottom: 22,
+                    backgroundColor: EHR_SURFACE,
+                    borderTopWidth: 0.5,
+                    borderTopColor: EHR_OUTLINE_VARIANT,
+                }}
+            >
                 <ViButton
                     variant="primary"
                     full
@@ -297,7 +314,7 @@ export default function EditProfileScreen({ navigation }: any) {
                 >
                     {isSaving ? 'Đang lưu…' : 'Lưu thông tin'}
                 </ViButton>
-            </ScrollView>
+            </View>
         </SafeAreaView>
     );
 }

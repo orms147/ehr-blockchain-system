@@ -25,7 +25,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Text, XStack, YStack } from 'tamagui';
-import { Heart, AlertTriangle, ScanLine, IdCard } from 'lucide-react-native';
+import { Heart, ScanLine, IdCard } from 'lucide-react-native';
 
 import api from '../services/api';
 import trustedContactService from '../services/trustedContact.service';
@@ -286,42 +286,29 @@ export default function TrustedContactsScreen() {
                 }
                 showsVerticalScrollIndicator={false}
             >
-                {/* ───────── Hero warning ───────── */}
+                {/* ───────── Editorial note (paper, no cinnabar — design G.7) ───────── */}
                 <View
                     style={{
-                        padding: 16,
-                        borderRadius: 16,
-                        backgroundColor: `${EHR_PRIMARY}14`,
-                        borderWidth: 0.5,
-                        borderColor: `${EHR_PRIMARY}40`,
-                        flexDirection: 'row',
-                        gap: 12,
+                        paddingVertical: 16,
+                        paddingHorizontal: 4,
+                        borderTopWidth: 0.5,
+                        borderBottomWidth: 0.5,
+                        borderColor: EHR_OUTLINE_VARIANT,
                         marginTop: 4,
                     }}
                 >
-                    <View
-                        style={{
-                            width: 32,
-                            height: 32,
-                            borderRadius: 16,
-                            backgroundColor: `${EHR_PRIMARY}26`,
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                        }}
-                    >
-                        <AlertTriangle size={16} color={EHR_PRIMARY} />
-                    </View>
                     <Text
                         style={{
-                            flex: 1,
                             fontFamily: SANS,
                             fontSize: 13,
-                            color: EHR_ON_SURFACE,
+                            color: EHR_ON_SURFACE_VARIANT,
                             lineHeight: 20,
                         }}
                     >
                         Khi bạn thêm người thân,{' '}
-                        <Text style={{ fontFamily: SANS_SEMI, fontWeight: '600' }}>toàn bộ hồ sơ</Text>{' '}
+                        <Text style={{ fontFamily: SANS_SEMI, fontWeight: '600', color: EHR_ON_SURFACE }}>
+                            toàn bộ hồ sơ
+                        </Text>{' '}
                         sẽ tự động được chia sẻ cho ví của họ. Họ có thể xem mọi lúc — kể cả khi bạn không thể ký.
                     </Text>
                 </View>

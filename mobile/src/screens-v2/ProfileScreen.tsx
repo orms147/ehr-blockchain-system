@@ -17,7 +17,6 @@ import { Text, XStack, YStack } from 'tamagui';
 import {
     User,
     LogOut,
-    ShieldCheck,
     Droplets,
     ChevronRight,
     Edit3,
@@ -32,6 +31,7 @@ import {
 import LoadingSpinner from '../components/LoadingSpinner';
 import MyAddressModal from '../components/MyAddressModal';
 import RoleSwitcher from '../components/RoleSwitcher';
+import UserChip from '../components/UserChip';
 import profileService from '../services/profile.service';
 import useAuthStore from '../store/authStore';
 import ViCard from '../components-v2/ViCard';
@@ -182,31 +182,27 @@ export default function ProfileScreen() {
                         </Text>
                         <QrCode size={11} color={EHR_PRIMARY} />
                     </Pressable>
+                    {/* Canonical identity card — same UserChip used everywhere else
+                        (Design G.7: replace hard-coded role line with UserChip(self)) */}
                     <View
                         style={{
-                            marginTop: 8,
-                            flexDirection: 'row',
-                            alignItems: 'center',
-                            gap: 5,
-                            paddingHorizontal: 10,
-                            paddingVertical: 4,
-                            borderRadius: 999,
-                            backgroundColor: `${EHR_TERTIARY}1A`,
+                            marginTop: 14,
+                            paddingHorizontal: 14,
+                            paddingVertical: 10,
+                            borderRadius: 12,
+                            borderWidth: 0.5,
+                            borderColor: EHR_OUTLINE_SOFT,
+                            backgroundColor: EHR_SURFACE_LOWEST,
+                            alignSelf: 'stretch',
                         }}
                     >
-                        <ShieldCheck size={11} color={EHR_TERTIARY} />
-                        <Text
-                            style={{
-                                fontFamily: SANS_SEMI,
-                                fontSize: 10,
-                                color: EHR_TERTIARY,
-                                letterSpacing: 0.6,
-                                textTransform: 'uppercase',
-                                fontWeight: '700',
-                            }}
-                        >
-                            Blockchain Verified
-                        </Text>
+                        <UserChip
+                            address={userData.walletAddress || (userData as any).address}
+                            expanded
+                            showAddress={false}
+                            interactive={false}
+                            fallbackName={userData.fullName}
+                        />
                     </View>
                 </View>
 

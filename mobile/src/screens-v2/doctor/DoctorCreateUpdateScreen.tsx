@@ -554,18 +554,10 @@ export default function DoctorCreateUpdateScreen({ navigation, route }: any) {
                 </View>
 
                 {/* Content card */}
+                <View style={{ marginHorizontal: -20 }}>
+                    <ViSectionLabel>Nội dung</ViSectionLabel>
+                </View>
                 <ViCard padding={16} style={{ marginBottom: 14 }}>
-                    <Text
-                        style={{
-                            fontFamily: SERIF,
-                            fontSize: 17,
-                            color: EHR_ON_SURFACE,
-                            letterSpacing: -0.2,
-                            marginBottom: 12,
-                        }}
-                    >
-                        Nội dung
-                    </Text>
                     {renderInput('Tiêu đề', title, setTitle, { placeholder: 'Khám tim mạch định kỳ' })}
                     {renderInput('Mô tả ngắn', description, setDescription, { placeholder: 'Tóm tắt kết quả khám…', multiline: true })}
 
@@ -638,18 +630,10 @@ export default function DoctorCreateUpdateScreen({ navigation, route }: any) {
                 </ViCard>
 
                 {/* Image attachment */}
+                <View style={{ marginHorizontal: -20 }}>
+                    <ViSectionLabel>Ảnh đính kèm (tuỳ chọn)</ViSectionLabel>
+                </View>
                 <ViCard padding={16} style={{ marginBottom: 14 }}>
-                    <Text
-                        style={{
-                            fontFamily: SERIF,
-                            fontSize: 17,
-                            color: EHR_ON_SURFACE,
-                            letterSpacing: -0.2,
-                            marginBottom: 12,
-                        }}
-                    >
-                        Ảnh đính kèm (tuỳ chọn)
-                    </Text>
                     {selectedImage ? (
                         <View style={{ marginBottom: 10 }}>
                             <View style={{ borderRadius: 14, overflow: 'hidden', borderWidth: 0.5, borderColor: EHR_OUTLINE_SOFT }}>
@@ -688,21 +672,10 @@ export default function DoctorCreateUpdateScreen({ navigation, route }: any) {
                 </ViCard>
 
                 {/* Vital signs */}
+                <View style={{ marginHorizontal: -20 }}>
+                    <ViSectionLabel trailing="TT 46/2018/TT-BYT">Dấu hiệu sinh tồn</ViSectionLabel>
+                </View>
                 <ViCard padding={16} style={{ marginBottom: 14 }}>
-                    <Text
-                        style={{
-                            fontFamily: SERIF,
-                            fontSize: 17,
-                            color: EHR_ON_SURFACE,
-                            letterSpacing: -0.2,
-                            marginBottom: 4,
-                        }}
-                    >
-                        Dấu hiệu sinh tồn
-                    </Text>
-                    <Text style={{ fontFamily: SANS, fontSize: 11, color: EHR_OUTLINE, marginBottom: 12 }}>
-                        Theo chuẩn bệnh án điện tử (TT 46/2018/TT-BYT)
-                    </Text>
                     <XStack style={{ gap: 10 }}>
                         <View style={{ flex: 1 }}>{renderInput('Mạch (bpm)', heartRate, setHeartRate, { placeholder: '72', keyboardType: 'numeric' })}</View>
                         <View style={{ flex: 1 }}>{renderInput('Nhịp thở', respRate, setRespRate, { placeholder: '18', keyboardType: 'numeric' })}</View>
@@ -728,21 +701,10 @@ export default function DoctorCreateUpdateScreen({ navigation, route }: any) {
                 </ViCard>
 
                 {/* Prescription */}
+                <View style={{ marginHorizontal: -20 }}>
+                    <ViSectionLabel trailing="TT 04/2022/TT-BYT">Đơn thuốc</ViSectionLabel>
+                </View>
                 <ViCard padding={16} style={{ marginBottom: 14 }}>
-                    <Text
-                        style={{
-                            fontFamily: SERIF,
-                            fontSize: 17,
-                            color: EHR_ON_SURFACE,
-                            letterSpacing: -0.2,
-                            marginBottom: 4,
-                        }}
-                    >
-                        Đơn thuốc
-                    </Text>
-                    <Text style={{ fontFamily: SANS, fontSize: 11, color: EHR_OUTLINE, marginBottom: 12 }}>
-                        Theo chuẩn đơn thuốc điện tử (TT 04/2022/TT-BYT)
-                    </Text>
                     {renderInput('Tên thuốc / hoạt chất', medication, setMedication, { placeholder: 'Paracetamol 500mg' })}
                     <XStack style={{ gap: 10 }}>
                         <View style={{ flex: 1 }}>{renderInput('Hàm lượng / Liều', dosage, setDosage, { placeholder: '1 viên' })}</View>
