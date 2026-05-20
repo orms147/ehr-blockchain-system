@@ -25,7 +25,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Text, XStack, YStack } from 'tamagui';
-import { Info, QrCode, Trash2, UserPlus, Users, X } from 'lucide-react-native';
+import { Info, QrCode, Trash2, UserPlus, Users, X, Check } from 'lucide-react-native';
 
 import LoadingSpinner from '../components/LoadingSpinner';
 import QrAddressScanner from '../components/QrAddressScanner';
@@ -42,6 +42,7 @@ import { ViStatusChip } from '../components-v2/ViChips';
 import {
     EHR_SURFACE,
     EHR_SURFACE_LOWEST,
+    EHR_SURFACE_HIGH,
     EHR_ON_SURFACE,
     EHR_ON_SURFACE_VARIANT,
     EHR_OUTLINE,
@@ -50,6 +51,7 @@ import {
     EHR_PRIMARY,
     EHR_TERTIARY,
     EHR_WARNING,
+    EHR_DANGER,
 } from '../constants/uiColors';
 import { formatExpiry } from '../utils/dateFormatting';
 
@@ -71,69 +73,264 @@ function statusToken(item: DelegationRow): 'active' | 'expired' | 'revoked' {
     return 'active';
 }
 
+// G.8 — stakes-first DelegationCard per Claude Design viehp-g-pack-screens.html §3.
+// Each active delegation is a full-bleed agreement card: status ribbon, identity,
+// powers spelled out as labelled bullets, dates, and a SPLIT action row where
+// revoke is the same visual weight as extend (not hidden in a menu).
 function DelegationCard({
     item,
     onRevoke,
+    onExtend,
     revoking,
 }: {
     item: DelegationRow;
     onRevoke: (item: DelegationRow) => void;
+    onExtend: (item: DelegationRow) => void;
     revoking: boolean;
 }) {
     const token = statusToken(item);
     const isActive = token === 'active';
 
+    // Days remaining for "Sắp hết" ribbon
+    let daysLeft: number | null = null;
+    if (item.expiresAt) {
+        const ms = new Date(item.expiresAt).getTime() - Date.now();
+        if (ms > 0) daysLeft = Math.ceil(ms / (24 * 60 * 60 * 1000));
+    }
+    const expiringSoon = isActive && daysLeft !== null && daysLeft <= 14;
+    const ribbonLabel = expiringSoon
+        ? `Sắp hết · ${daysLeft}d`
+        : isActive
+            ? 'Đang hiệu lực'
+            : token === 'expired' ? 'Đã hết hạn' : 'Đã thu hồi';
+    const ribbonTint = expiringSoon ? EHR_WARNING : isActive ? EHR_TERTIARY : EHR_OUTLINE;
+
     return (
-        <ViCard padding={16} style={{ marginBottom: 10 }}>
-            <XStack style={{ alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 10, gap: 8 }}>
-                <View style={{ flex: 1 }}>
-                    {/* G.2 — delegatee wallet → UserChip resolves doctor name + specialty + hospital */}
-                    <UserChip address={item.delegateeAddress} expanded showAddress={false} />
-                    <Text style={{ fontFamily: SANS, fontSize: 12, color: EHR_OUTLINE, marginTop: 6 }}>
-                        {item.chainDepth === 1
-                            ? 'Uỷ quyền trực tiếp'
-                            : `Chuỗi uỷ quyền ${item.chainDepth} cấp`}
-                        {item.allowSubDelegate ? ' · cho phép uỷ quyền tiếp' : ''}
-                    </Text>
-                </View>
-                <ViStatusChip status={token} />
-            </XStack>
-
-            {item.parentDelegator ? (
-                <View style={{ marginBottom: 6 }}>
-                    <Text style={{ fontFamily: SANS, fontSize: 11.5, color: EHR_OUTLINE, marginBottom: 4 }}>
-                        Uỷ quyền từ:
-                    </Text>
-                    <UserChip address={item.parentDelegator} showAddress={false} size="sm" interactive={false} />
-                </View>
-            ) : null}
-            <Text style={{ fontFamily: SANS, fontSize: 11.5, color: EHR_OUTLINE, marginBottom: 4 }}>
-                Hết hạn: {formatExpiry(item.expiresAt)}
-            </Text>
-            {item.scopeNote ? (
-                <Text
-                    style={{ fontFamily: SANS, fontSize: 11.5, color: EHR_OUTLINE, lineHeight: 16 }}
-                    numberOfLines={2}
+        <View
+            style={{
+                marginBottom: 16,
+                backgroundColor: EHR_SURFACE_HIGH,
+                borderRadius: 14,
+                borderWidth: 0.5,
+                borderColor: expiringSoon ? `${EHR_WARNING}60` : EHR_OUTLINE_VARIANT,
+                overflow: 'hidden',
+            }}
+        >
+            <View style={{ padding: 18 }}>
+                {/* Status ribbon */}
+                <View
+                    style={{
+                        position: 'absolute',
+                        right: 14,
+                        top: 14,
+                        paddingHorizontal: 8,
+                        paddingVertical: 3,
+                        borderRadius: 4,
+                        backgroundColor: `${ribbonTint}22`,
+                        borderWidth: 0.5,
+                        borderColor: `${ribbonTint}60`,
+                    }}
                 >
-                    Phạm vi: {item.scopeNote}
-                </Text>
-            ) : null}
-
-            {isActive ? (
-                <View style={{ marginTop: 12 }}>
-                    <ViButton
-                        variant="danger"
-                        full
-                        size="sm"
-                        loading={revoking}
-                        onPress={() => onRevoke(item)}
-                        leftIcon={<Trash2 size={13} color={EHR_PRIMARY} />}
+                    <Text
+                        style={{
+                            fontFamily: SANS_SEMI,
+                            fontSize: 9,
+                            fontWeight: '700',
+                            letterSpacing: 0.8,
+                            textTransform: 'uppercase',
+                            color: ribbonTint,
+                        }}
                     >
-                        {revoking ? 'Đang thu hồi…' : 'Thu hồi uỷ quyền'}
-                    </ViButton>
+                        {ribbonLabel}
+                    </Text>
+                </View>
+
+                {/* Identity */}
+                <View style={{ paddingRight: 90 }}>
+                    <UserChip address={item.delegateeAddress} expanded showAddress={false} />
+                </View>
+
+                {/* Powers — labelled bullets */}
+                <View
+                    style={{
+                        marginTop: 16,
+                        paddingVertical: 12,
+                        paddingHorizontal: 14,
+                        backgroundColor: EHR_SURFACE,
+                        borderRadius: 10,
+                        borderWidth: 0.5,
+                        borderColor: EHR_OUTLINE_VARIANT,
+                    }}
+                >
+                    <Text
+                        style={{
+                            fontFamily: SANS_SEMI,
+                            fontSize: 9,
+                            color: EHR_OUTLINE,
+                            letterSpacing: 1,
+                            textTransform: 'uppercase',
+                            fontWeight: '700',
+                            marginBottom: 10,
+                        }}
+                    >
+                        Bác sĩ này có thể
+                    </Text>
+                    <Power label="Xem mọi hồ sơ" sub="Hồ sơ hiện tại + mới về sau" on />
+                    <Power label="Tạo hồ sơ thay bạn" sub="Hồ sơ mới tự cấp cho họ" on />
+                    <Power
+                        label="Uỷ quyền tiếp cho đồng nghiệp"
+                        sub={item.allowSubDelegate ? 'Bạn cho phép' : 'Bạn không cho phép'}
+                        on={item.allowSubDelegate}
+                    />
+                </View>
+
+                {item.scopeNote ? (
+                    <Text
+                        style={{
+                            marginTop: 12,
+                            fontFamily: SANS,
+                            fontSize: 11.5,
+                            color: EHR_OUTLINE,
+                            lineHeight: 16,
+                            fontStyle: 'italic',
+                        }}
+                        numberOfLines={3}
+                    >
+                        Phạm vi: {item.scopeNote}
+                    </Text>
+                ) : null}
+
+                {/* Dates */}
+                <View
+                    style={{
+                        marginTop: 14,
+                        paddingTop: 12,
+                        borderTopWidth: 0.5,
+                        borderStyle: 'dashed',
+                        borderColor: EHR_OUTLINE_VARIANT,
+                        flexDirection: 'row',
+                        justifyContent: 'space-between',
+                    }}
+                >
+                    <Text style={{ fontFamily: SANS, fontSize: 11, color: EHR_OUTLINE }}>
+                        Đến hạn{' '}
+                        <Text
+                            style={{
+                                fontFamily: 'monospace',
+                                color: expiringSoon ? EHR_WARNING : EHR_ON_SURFACE,
+                            }}
+                        >
+                            {formatExpiry(item.expiresAt)}
+                        </Text>
+                    </Text>
+                </View>
+            </View>
+
+            {/* Split action row — revoke same weight as extend */}
+            {isActive ? (
+                <View
+                    style={{
+                        flexDirection: 'row',
+                        borderTopWidth: 0.5,
+                        borderTopColor: EHR_OUTLINE_VARIANT,
+                    }}
+                >
+                    <Pressable
+                        onPress={() => onRevoke(item)}
+                        disabled={revoking}
+                        style={({ pressed }) => ({
+                            flex: 1,
+                            paddingVertical: 14,
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            flexDirection: 'row',
+                            gap: 6,
+                            borderRightWidth: 0.5,
+                            borderRightColor: EHR_OUTLINE_VARIANT,
+                            opacity: pressed ? 0.5 : revoking ? 0.4 : 1,
+                        })}
+                    >
+                        <Trash2 size={14} color={EHR_DANGER} />
+                        <Text
+                            style={{
+                                fontFamily: SANS_SEMI,
+                                fontSize: 13,
+                                color: EHR_DANGER,
+                                fontWeight: '700',
+                            }}
+                        >
+                            {revoking ? 'Đang thu hồi…' : 'Thu hồi'}
+                        </Text>
+                    </Pressable>
+                    <Pressable
+                        onPress={() => onExtend(item)}
+                        style={({ pressed }) => ({
+                            flex: 1,
+                            paddingVertical: 14,
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            opacity: pressed ? 0.5 : 1,
+                        })}
+                    >
+                        <Text
+                            style={{
+                                fontFamily: SANS_SEMI,
+                                fontSize: 13,
+                                color: EHR_ON_SURFACE,
+                                fontWeight: '600',
+                            }}
+                        >
+                            Gia hạn
+                        </Text>
+                    </Pressable>
                 </View>
             ) : null}
-        </ViCard>
+        </View>
+    );
+}
+
+// Power row: cinnabar-filled checkbox when on, neutral outline when off.
+function Power({ label, sub, on }: { label: string; sub: string; on: boolean }) {
+    return (
+        <View style={{ flexDirection: 'row', gap: 10, paddingVertical: 5, alignItems: 'flex-start' }}>
+            <View
+                style={{
+                    marginTop: 2,
+                    width: 14,
+                    height: 14,
+                    borderRadius: 3,
+                    backgroundColor: on ? EHR_PRIMARY : 'transparent',
+                    borderWidth: 0.5,
+                    borderColor: on ? EHR_PRIMARY : EHR_OUTLINE,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                }}
+            >
+                {on ? <Check size={9} color="#FBF8F1" strokeWidth={3} /> : null}
+            </View>
+            <View style={{ flex: 1 }}>
+                <Text
+                    style={{
+                        fontFamily: SANS_SEMI,
+                        fontSize: 12,
+                        color: on ? EHR_ON_SURFACE : EHR_OUTLINE,
+                        fontWeight: '600',
+                    }}
+                >
+                    {label}
+                </Text>
+                <Text
+                    style={{
+                        marginTop: 2,
+                        fontFamily: SANS,
+                        fontSize: 10.5,
+                        color: EHR_OUTLINE,
+                    }}
+                >
+                    {sub}
+                </Text>
+            </View>
+        </View>
     );
 }
 
@@ -443,6 +640,16 @@ export default function DelegationScreen() {
         }
     };
 
+    const handleExtend = (item: DelegationRow) => {
+        // G.8 placeholder — full "Gia hạn" flow is G.9 work. Surface intent now so
+        // the card button has something to do.
+        void item;
+        Alert.alert(
+            'Gia hạn uỷ quyền',
+            'Tính năng gia hạn đang được hoàn thiện (Phase G.9). Hiện tại bạn có thể thu hồi và uỷ quyền lại với thời hạn mới.',
+        );
+    };
+
     const handleRevoke = (item: DelegationRow) => {
         Alert.alert(
             'Thu hồi uỷ quyền',
@@ -470,77 +677,14 @@ export default function DelegationScreen() {
 
     if (isLoading) return <LoadingSpinner message="Đang tải danh sách uỷ quyền..." />;
 
+    const activeCount = delegations.filter((d) => statusToken(d) === 'active').length;
+
     return (
         <SafeAreaView style={{ flex: 1, backgroundColor: EHR_SURFACE }} edges={['top']}>
-            <YStack style={{ paddingHorizontal: 20, paddingTop: 14, paddingBottom: 12 }}>
-                <Text
-                    style={{
-                        fontFamily: SERIF,
-                        fontSize: 26,
-                        color: EHR_ON_SURFACE,
-                        letterSpacing: -0.4,
-                        lineHeight: 30,
-                    }}
-                >
-                    Uỷ quyền toàn bộ
-                </Text>
-                <Text
-                    style={{
-                        marginTop: 4,
-                        fontFamily: SANS,
-                        fontSize: 13,
-                        color: EHR_ON_SURFACE_VARIANT,
-                        lineHeight: 19,
-                    }}
-                >
-                    Cấp cho bác sĩ quyền thay bạn chia sẻ hồ sơ với đồng nghiệp chuyên khoa.
-                </Text>
-            </YStack>
-
-            <View style={{ paddingHorizontal: 20 }}>
-                <View style={{ marginBottom: 12 }}>
-                    <ViButton
-                        variant="cinnabar"
-                        full
-                        onPress={() => setGrantOpen(true)}
-                        leftIcon={<UserPlus size={16} color="#FAF7F1" />}
-                    >
-                        Uỷ quyền cho bác sĩ mới
-                    </ViButton>
-                </View>
-                <View
-                    style={{
-                        marginBottom: 12,
-                        paddingVertical: 11,
-                        paddingHorizontal: 14,
-                        backgroundColor: `${EHR_WARNING}1A`,
-                        borderWidth: 0.5,
-                        borderColor: `${EHR_WARNING}50`,
-                        borderRadius: 12,
-                        flexDirection: 'row',
-                        gap: 8,
-                    }}
-                >
-                    <Info size={14} color={EHR_WARNING} style={{ marginTop: 2 }} />
-                    <Text
-                        style={{
-                            flex: 1,
-                            fontFamily: SANS,
-                            fontSize: 11.5,
-                            color: EHR_ON_SURFACE,
-                            lineHeight: 17,
-                        }}
-                    >
-                        Khi thu hồi, tất cả uỷ quyền con (sub-delegation) + hồ sơ bác sĩ đã chia sẻ
-                        dựa vào uỷ quyền này cũng sẽ bị vô hiệu (epoch cascade on-chain).
-                    </Text>
-                </View>
-            </View>
-
             <FlatList
                 data={delegations}
                 keyExtractor={(item) => item.id}
-                contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 80 }}
+                contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 40 }}
                 refreshControl={
                     <RefreshControl
                         refreshing={isFetching && !isLoading}
@@ -548,12 +692,81 @@ export default function DelegationScreen() {
                         tintColor={EHR_ON_SURFACE_VARIANT}
                     />
                 }
-                ListEmptyComponent={
-                    <View style={{ paddingTop: 30, alignItems: 'center' }}>
-                        <Users size={28} color={EHR_OUTLINE} />
+                ListHeaderComponent={
+                    <View style={{ paddingTop: 14 }}>
+                        {/* G.8 — stakes-first hero */}
+                        <Text
+                            style={{
+                                fontFamily: SANS_SEMI,
+                                fontSize: 10,
+                                color: EHR_PRIMARY,
+                                letterSpacing: 1.4,
+                                textTransform: 'uppercase',
+                                fontWeight: '700',
+                            }}
+                        >
+                            Quyền cao nhất bạn có thể cấp
+                        </Text>
+                        <Text
+                            style={{
+                                marginTop: 8,
+                                fontFamily: SERIF,
+                                fontSize: 24,
+                                color: EHR_ON_SURFACE,
+                                letterSpacing: -0.4,
+                                lineHeight: 30,
+                            }}
+                        >
+                            Người được uỷ quyền sẽ xem được{' '}
+                            <Text
+                                style={{
+                                    fontFamily: 'Fraunces_400Regular_Italic',
+                                    fontStyle: 'italic',
+                                    color: EHR_PRIMARY,
+                                }}
+                            >
+                                tất cả
+                            </Text>{' '}
+                            hồ sơ của bạn.
+                        </Text>
                         <Text
                             style={{
                                 marginTop: 12,
+                                fontFamily: SANS,
+                                fontSize: 13,
+                                color: EHR_ON_SURFACE_VARIANT,
+                                lineHeight: 20,
+                            }}
+                        >
+                            Khác với cấp quyền từng hồ sơ, uỷ quyền cho phép bác sĩ xem hồ sơ hiện tại và tương lai mà không cần hỏi lại — phù hợp với bác sĩ chăm sóc dài hạn.
+                        </Text>
+
+                        {delegations.length > 0 ? (
+                            <Text
+                                style={{
+                                    marginTop: 22,
+                                    fontFamily: SANS_SEMI,
+                                    fontSize: 10,
+                                    color: EHR_OUTLINE,
+                                    letterSpacing: 1.2,
+                                    textTransform: 'uppercase',
+                                    fontWeight: '700',
+                                    marginBottom: 12,
+                                }}
+                            >
+                                Đang có hiệu lực · {activeCount}
+                            </Text>
+                        ) : (
+                            <View style={{ height: 22 }} />
+                        )}
+                    </View>
+                }
+                ListEmptyComponent={
+                    <View style={{ paddingTop: 14, alignItems: 'center' }}>
+                        <Users size={32} color={EHR_OUTLINE} />
+                        <Text
+                            style={{
+                                marginTop: 14,
                                 fontFamily: SERIF,
                                 fontSize: 18,
                                 color: EHR_ON_SURFACE,
@@ -573,7 +786,7 @@ export default function DelegationScreen() {
                                 lineHeight: 19,
                             }}
                         >
-                            Bấm "Uỷ quyền cho bác sĩ mới" ở trên để cấp toàn quyền cho bác sĩ đầu tiên.
+                            Bấm &quot;Uỷ quyền cho một bác sĩ mới&quot; bên dưới để cấp toàn quyền cho bác sĩ đầu tiên.
                         </Text>
                     </View>
                 }
@@ -582,8 +795,84 @@ export default function DelegationScreen() {
                         item={item}
                         revoking={revokingAddr === item.delegateeAddress}
                         onRevoke={handleRevoke}
+                        onExtend={handleExtend}
                     />
                 )}
+                ListFooterComponent={
+                    <View style={{ marginTop: 8 }}>
+                        {/* G.8 — bordered dashed CTA (hesitation, not solid) */}
+                        <Pressable
+                            onPress={() => setGrantOpen(true)}
+                            style={({ pressed }) => ({
+                                flexDirection: 'row',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                gap: 8,
+                                paddingVertical: 14,
+                                borderRadius: 12,
+                                borderWidth: 1,
+                                borderStyle: 'dashed',
+                                borderColor: EHR_PRIMARY,
+                                backgroundColor: 'transparent',
+                                opacity: pressed ? 0.6 : 1,
+                            })}
+                        >
+                            <UserPlus size={16} color={EHR_PRIMARY} />
+                            <Text
+                                style={{
+                                    fontFamily: SANS_SEMI,
+                                    fontSize: 13,
+                                    color: EHR_PRIMARY,
+                                    fontWeight: '600',
+                                }}
+                            >
+                                + Uỷ quyền cho một bác sĩ mới
+                            </Text>
+                        </Pressable>
+                        <Text
+                            style={{
+                                marginTop: 10,
+                                textAlign: 'center',
+                                fontFamily: SANS,
+                                fontSize: 10.5,
+                                color: EHR_OUTLINE,
+                                lineHeight: 16,
+                                fontStyle: 'italic',
+                            }}
+                        >
+                            Bạn sẽ được nhắc xác nhận lại ở bước cuối.
+                        </Text>
+
+                        {/* Cascade-revoke explainer kept (load-bearing on-chain reality) */}
+                        <View
+                            style={{
+                                marginTop: 22,
+                                paddingVertical: 11,
+                                paddingHorizontal: 14,
+                                backgroundColor: EHR_SURFACE_LOWEST,
+                                borderRadius: 10,
+                                borderWidth: 0.5,
+                                borderStyle: 'dashed',
+                                borderColor: EHR_OUTLINE_VARIANT,
+                                flexDirection: 'row',
+                                gap: 8,
+                            }}
+                        >
+                            <Info size={13} color={EHR_OUTLINE} style={{ marginTop: 2 }} />
+                            <Text
+                                style={{
+                                    flex: 1,
+                                    fontFamily: SANS,
+                                    fontSize: 11,
+                                    color: EHR_OUTLINE,
+                                    lineHeight: 16,
+                                }}
+                            >
+                                Khi thu hồi, tất cả uỷ quyền con (sub-delegation) + hồ sơ bác sĩ đã chia sẻ dựa vào uỷ quyền này cũng sẽ bị vô hiệu (epoch cascade on-chain).
+                            </Text>
+                        </View>
+                    </View>
+                }
             />
 
             <GrantAuthorityModal

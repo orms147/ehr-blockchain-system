@@ -1,55 +1,60 @@
-// EmergencyProfileScreen v2 — port of .design-bundle/project/screens-extras2.jsx
-// EmergencyProfileScreen. Consolidates 3 surfaces:
-//   - CCCD identifier status (enrolled / not enrolled) → links to TrustedContacts
-//     for the keccak256 modal flow
-//   - Lifesaving info form (bloodType + allergies; conditions deferred until
-//     User schema gains a column)
-//   - Trusted contacts preview (3 most recent) + link to full list
-//   - "How you'll be found" 3-step explainer
+// EmergencyProfileScreen v2 — Phase G.8 full redesign per Claude Design
+// viehp-g-pack-screens.html §2 ("One document, not seven cards"):
 //
-// Backend wiring:
-//   - GET /api/profile/me — fetch bloodType + allergies + nationalIdHash
-//   - PUT /api/profile/me — save bloodType + allergies (existing endpoint)
+// Layout intent: this is ONE document — what an ER doctor sees when they look
+// you up. The page reads as a single paper sheet with sectioned content, and
+// surfaces a LIVE PREVIEW of the ER-side view at top — the emotional anchor
+// for filling this in carefully.
+//
+// Sections (hairline-separated, NO card chrome):
+//   1. ER preview card ("Bác sĩ cấp cứu thấy") — at top, reactive to edits
+//   2. CCCD enrolment banner — the ONE cinnabar moment, links to TrustedContacts
+//   3. Nhóm máu (critical, larger type)
+//   4. Dị ứng (critical, warn tone)
+//   5. Người thân tin cậy (preview + link to full list)
+//   6. Khác (gender + DOB — read-only KV rows)
+//   7. Footer note in dashed border explaining what CCCD lookup exposes
+//
+// Backend wiring (unchanged):
+//   - GET /api/profile/me — bloodType + allergies + nationalIdHash + fullName + gender + dateOfBirth
+//   - PUT /api/profile/me — save bloodType + allergies
 //   - trustedContactService.listMyContacts (TanStack Query)
 
-import React, { useEffect, useState } from 'react';
-import {
-    Alert,
-    Pressable,
-    ScrollView,
-    TextInput,
-    View,
-} from 'react-native';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Alert, Pressable, ScrollView, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { useQuery } from '@tanstack/react-query';
 import { Text, XStack, YStack } from 'tamagui';
-import { ChevronLeft, ChevronRight, IdCard, Heart, AlertTriangle } from 'lucide-react-native';
+import { ChevronLeft, ChevronRight, IdCard, Heart, AlertTriangle, X, Plus } from 'lucide-react-native';
 
 import api from '../services/api';
 import trustedContactService from '../services/trustedContact.service';
-import ViCard from '../components-v2/ViCard';
 import ViButton from '../components-v2/ViButton';
-import { ViSectionLabel } from '../components-v2/ViChips';
 import {
     EHR_SURFACE,
     EHR_SURFACE_LOWEST,
+    EHR_SURFACE_HIGH,
     EHR_ON_SURFACE,
     EHR_ON_SURFACE_VARIANT,
     EHR_OUTLINE,
     EHR_OUTLINE_SOFT,
     EHR_OUTLINE_VARIANT,
     EHR_PRIMARY,
+    EHR_PRIMARY_CONTAINER,
     EHR_PRIMARY_FIXED,
     EHR_TERTIARY,
     EHR_SECONDARY,
-    EHR_SLATE,
+    EHR_WARNING,
+    EHR_DANGER,
 } from '../constants/uiColors';
 
 const SERIF = 'Fraunces_400Regular';
+const SERIF_MEDIUM = 'Fraunces_500Medium';
 const SANS = 'DMSans_400Regular';
 const SANS_MEDIUM = 'DMSans_500Medium';
 const SANS_SEMI = 'DMSans_600SemiBold';
+const MONO = 'monospace';
 
 const BLOOD_TYPES = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
 const ALLERGY_QUICK = ['Penicillin', 'Aspirin', 'Lactose', 'Đậu phộng', 'Hải sản', 'Trứng'];
@@ -64,16 +69,57 @@ type Profile = {
     bloodType?: string | null;
     allergies?: string | null;
     nationalIdHash?: string | null;
+    fullName?: string | null;
+    gender?: string | null;
+    dateOfBirth?: string | null;
 };
 
 const truncate = (a?: string) => (a ? `${a.slice(0, 6)}…${a.slice(-4)}` : '');
+
+const parseList = (raw: string): string[] =>
+    raw
+        .split(',')
+        .map((x) => x.trim())
+        .filter(Boolean);
+
+const formatVnDate = (iso?: string | null) => {
+    if (!iso) return '—';
+    try {
+        const d = new Date(iso);
+        const dd = String(d.getDate()).padStart(2, '0');
+        const mm = String(d.getMonth() + 1).padStart(2, '0');
+        return `${dd}·${mm}·${d.getFullYear()}`;
+    } catch {
+        return '—';
+    }
+};
+
+const computeAge = (iso?: string | null) => {
+    if (!iso) return null;
+    try {
+        const d = new Date(iso);
+        const diff = Date.now() - d.getTime();
+        const age = Math.floor(diff / (365.25 * 24 * 60 * 60 * 1000));
+        return age >= 0 && age < 150 ? age : null;
+    } catch {
+        return null;
+    }
+};
+
+const formatGender = (g?: string | null) => {
+    if (!g) return '—';
+    const lower = String(g).toLowerCase();
+    if (lower === 'male' || lower === 'm') return 'Nam';
+    if (lower === 'female' || lower === 'f') return 'Nữ';
+    return 'Khác';
+};
 
 export default function EmergencyProfileScreen() {
     const navigation = useNavigation<any>();
     const [bloodType, setBloodType] = useState<string>('');
     const [allergies, setAllergies] = useState<string>('');
+    const [allergyInput, setAllergyInput] = useState('');
     const [saving, setSaving] = useState(false);
-    const [enrolled, setEnrolled] = useState(false);
 
     const profileQuery = useQuery<Profile>({
         queryKey: ['profile', 'me'],
@@ -89,21 +135,28 @@ export default function EmergencyProfileScreen() {
         if (profileQuery.data) {
             setBloodType(profileQuery.data.bloodType || '');
             setAllergies(profileQuery.data.allergies || '');
-            setEnrolled(!!profileQuery.data.nationalIdHash);
         }
     }, [profileQuery.data]);
 
+    const profile = profileQuery.data || {};
+    const enrolled = !!profile.nationalIdHash;
     const allContacts = contactsQuery.data || [];
     const contactsPreview = allContacts.slice(0, 3);
+    const age = computeAge(profile.dateOfBirth);
+    const allergyList = useMemo(() => parseList(allergies), [allergies]);
 
-    const addAllergyTag = (tag: string) => {
-        const list = allergies
-            .split(',')
-            .map((x) => x.trim())
-            .filter(Boolean);
-        if (!list.includes(tag)) {
-            setAllergies([...list, tag].join(', '));
-        }
+    const addAllergy = (tag: string) => {
+        const clean = tag.trim();
+        if (!clean) return;
+        const list = parseList(allergies);
+        if (list.includes(clean)) return;
+        setAllergies([...list, clean].join(', '));
+        setAllergyInput('');
+    };
+
+    const removeAllergy = (tag: string) => {
+        const list = parseList(allergies).filter((x) => x !== tag);
+        setAllergies(list.join(', '));
     };
 
     const handleSave = async () => {
@@ -123,8 +176,8 @@ export default function EmergencyProfileScreen() {
 
     return (
         <SafeAreaView style={{ flex: 1, backgroundColor: EHR_SURFACE }} edges={['top', 'left', 'right']}>
-            <ScrollView contentContainerStyle={{ paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
-                {/* PageHeader */}
+            <ScrollView contentContainerStyle={{ paddingBottom: 120 }} showsVerticalScrollIndicator={false}>
+                {/* Top bar */}
                 <View style={{ paddingHorizontal: 22, paddingTop: 10, paddingBottom: 18 }}>
                     <Pressable
                         onPress={() => navigation.goBack()}
@@ -155,107 +208,124 @@ export default function EmergencyProfileScreen() {
                     >
                         Hồ sơ khẩn cấp
                     </Text>
+                </View>
+
+                {/* ───────── ER PREVIEW — "Bác sĩ cấp cứu thấy" ───────── */}
+                <View style={{ paddingHorizontal: 20, marginBottom: 22 }}>
                     <Text
                         style={{
-                            marginTop: 6,
-                            fontFamily: SANS,
-                            fontSize: 13,
-                            color: EHR_ON_SURFACE_VARIANT,
-                            lineHeight: 19,
+                            fontFamily: SANS_SEMI,
+                            fontSize: 10,
+                            color: EHR_PRIMARY,
+                            letterSpacing: 1.4,
+                            textTransform: 'uppercase',
+                            fontWeight: '700',
+                            marginBottom: 10,
                         }}
                     >
-                        Thông tin cứu sinh bác sĩ cấp cứu thấy khi tra cứu CCCD của bạn.
+                        Bác sĩ cấp cứu thấy
                     </Text>
+                    <ERPreviewCard
+                        fullName={profile.fullName}
+                        gender={profile.gender}
+                        age={age}
+                        dateOfBirth={profile.dateOfBirth}
+                        blood={bloodType}
+                        allergies={allergyList}
+                        firstContact={contactsPreview[0] || null}
+                    />
                 </View>
 
-                {/* ───────── CCCD identifier ───────── */}
-                <ViSectionLabel>Mã định danh CCCD</ViSectionLabel>
-                <View style={{ paddingHorizontal: 20, marginBottom: 22 }}>
-                    <Pressable
-                        onPress={() => navigation.navigate('TrustedContacts')}
-                        style={({ pressed }) => ({
-                            flexDirection: 'row',
-                            alignItems: 'center',
-                            gap: 12,
-                            paddingVertical: 14,
-                            paddingHorizontal: 16,
-                            borderRadius: 14,
-                            backgroundColor: EHR_SURFACE_LOWEST,
-                            borderWidth: 0.5,
-                            borderColor: enrolled ? `${EHR_TERTIARY}40` : EHR_OUTLINE_SOFT,
-                            opacity: pressed ? 0.7 : 1,
-                        })}
-                    >
-                        <View
-                            style={{
-                                width: 36,
-                                height: 36,
-                                borderRadius: 10,
-                                backgroundColor: enrolled ? `${EHR_TERTIARY}26` : `${EHR_SLATE}1A`,
+                {/* ───────── CCCD enrolment — the ONE cinnabar moment ───────── */}
+                {!enrolled ? (
+                    <View style={{ paddingHorizontal: 20, marginBottom: 28 }}>
+                        <Pressable
+                            onPress={() => navigation.navigate('TrustedContacts')}
+                            style={({ pressed }) => ({
+                                flexDirection: 'row',
                                 alignItems: 'center',
-                                justifyContent: 'center',
-                            }}
+                                gap: 12,
+                                paddingVertical: 14,
+                                paddingHorizontal: 16,
+                                borderRadius: 14,
+                                backgroundColor: EHR_PRIMARY,
+                                opacity: pressed ? 0.85 : 1,
+                            })}
                         >
-                            <IdCard size={18} color={enrolled ? EHR_TERTIARY : EHR_SLATE} />
-                        </View>
-                        <View style={{ flex: 1 }}>
-                            <XStack style={{ alignItems: 'center', gap: 8 }}>
-                                <Text
-                                    style={{
-                                        fontFamily: SANS_MEDIUM,
-                                        fontSize: 13.5,
-                                        color: EHR_ON_SURFACE,
-                                        fontWeight: '600',
-                                    }}
-                                >
-                                    CCCD đã đăng ký
-                                </Text>
-                                <View
-                                    style={{
-                                        paddingHorizontal: 7,
-                                        paddingVertical: 2,
-                                        borderRadius: 999,
-                                        backgroundColor: enrolled
-                                            ? `${EHR_TERTIARY}1A`
-                                            : `${EHR_SLATE}1A`,
-                                    }}
-                                >
-                                    <Text
-                                        style={{
-                                            fontFamily: SANS_SEMI,
-                                            fontSize: 9.5,
-                                            color: enrolled ? EHR_TERTIARY : EHR_OUTLINE,
-                                            letterSpacing: 0.5,
-                                            textTransform: 'uppercase',
-                                            fontWeight: '700',
-                                        }}
-                                    >
-                                        {enrolled ? '✓ Đã đăng ký' : 'Chưa'}
-                                    </Text>
-                                </View>
-                            </XStack>
-                            <Text
+                            <View
                                 style={{
-                                    marginTop: 3,
-                                    fontFamily: SANS,
-                                    fontSize: 11.5,
-                                    color: EHR_OUTLINE,
-                                    lineHeight: 16,
+                                    width: 36,
+                                    height: 36,
+                                    borderRadius: 8,
+                                    backgroundColor: 'rgba(250,247,241,0.18)',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
                                 }}
                             >
-                                Bác sĩ nhập số CCCD vật lý → app tự tra ví của bạn.
+                                <IdCard size={18} color="#FBF8F1" />
+                            </View>
+                            <View style={{ flex: 1 }}>
+                                <Text
+                                    style={{
+                                        fontFamily: SANS_SEMI,
+                                        fontSize: 13.5,
+                                        color: '#FBF8F1',
+                                        fontWeight: '700',
+                                    }}
+                                >
+                                    Đăng ký CCCD để được tra cứu
+                                </Text>
+                                <Text
+                                    style={{
+                                        marginTop: 3,
+                                        fontFamily: SANS,
+                                        fontSize: 11,
+                                        color: 'rgba(250,247,241,0.78)',
+                                        lineHeight: 15,
+                                    }}
+                                >
+                                    ER nhập CCCD → app tra ví của bạn. Chưa đăng ký · 2 phút.
+                                </Text>
+                            </View>
+                            <ChevronRight size={16} color="#FBF8F1" />
+                        </Pressable>
+                    </View>
+                ) : (
+                    <View style={{ paddingHorizontal: 20, marginBottom: 22 }}>
+                        <View
+                            style={{
+                                flexDirection: 'row',
+                                alignItems: 'center',
+                                gap: 10,
+                                paddingVertical: 10,
+                                paddingHorizontal: 14,
+                                borderRadius: 10,
+                                backgroundColor: `${EHR_TERTIARY}1A`,
+                                borderWidth: 0.5,
+                                borderColor: `${EHR_TERTIARY}40`,
+                            }}
+                        >
+                            <IdCard size={14} color={EHR_TERTIARY} />
+                            <Text
+                                style={{
+                                    flex: 1,
+                                    fontFamily: SANS_MEDIUM,
+                                    fontSize: 12,
+                                    color: EHR_TERTIARY,
+                                    fontWeight: '600',
+                                }}
+                            >
+                                CCCD đã đăng ký — bạn có thể được tra cứu khi cấp cứu.
                             </Text>
                         </View>
-                        <ChevronRight size={16} color={EHR_OUTLINE} />
-                    </Pressable>
-                </View>
+                    </View>
+                )}
 
-                {/* ───────── Lifesaving info ───────── */}
-                <ViSectionLabel>Thông tin cứu sinh</ViSectionLabel>
-                <View style={{ paddingHorizontal: 20, marginBottom: 12 }}>
-                    <ViCard padding={16}>
-                        <FieldLabel>Nhóm máu</FieldLabel>
-                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
+                {/* ───────── EDITING — sectioned hairlines, no card chrome ───────── */}
+                <View style={{ paddingHorizontal: 20 }}>
+                    {/* Nhóm máu */}
+                    <SectionRow label="Nhóm máu" critical>
+                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
                             {BLOOD_TYPES.map((b) => {
                                 const active = bloodType === b;
                                 return (
@@ -263,9 +333,9 @@ export default function EmergencyProfileScreen() {
                                         key={b}
                                         onPress={() => setBloodType(active ? '' : b)}
                                         style={({ pressed }) => ({
-                                            minWidth: 48,
-                                            paddingVertical: 8,
-                                            paddingHorizontal: 10,
+                                            minWidth: 52,
+                                            paddingVertical: 9,
+                                            paddingHorizontal: 12,
                                             borderRadius: 8,
                                             backgroundColor: active ? `${EHR_SECONDARY}24` : 'transparent',
                                             borderWidth: 0.5,
@@ -276,7 +346,7 @@ export default function EmergencyProfileScreen() {
                                     >
                                         <Text
                                             style={{
-                                                fontFamily: 'monospace',
+                                                fontFamily: MONO,
                                                 fontSize: 13,
                                                 fontWeight: '700',
                                                 color: active ? EHR_SECONDARY : EHR_ON_SURFACE_VARIANT,
@@ -288,332 +358,569 @@ export default function EmergencyProfileScreen() {
                                 );
                             })}
                         </View>
+                    </SectionRow>
 
-                        <View style={{ height: 16 }} />
-                        <FieldLabel>Dị ứng</FieldLabel>
-                        <TextInput
-                            value={allergies}
-                            onChangeText={setAllergies}
-                            placeholder="Penicillin, Aspirin…"
-                            placeholderTextColor={EHR_OUTLINE}
-                            multiline
-                            style={{
-                                marginTop: 8,
-                                paddingVertical: 10,
-                                paddingHorizontal: 12,
-                                borderRadius: 8,
-                                borderWidth: 0.5,
-                                borderColor: EHR_OUTLINE_SOFT,
-                                backgroundColor: EHR_SURFACE,
-                                color: EHR_ON_SURFACE,
-                                fontFamily: SANS,
-                                fontSize: 13,
-                                minHeight: 48,
-                                textAlignVertical: 'top',
-                            }}
-                        />
-                        <View style={{ marginTop: 8, flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
-                            {ALLERGY_QUICK.map((a) => (
+                    {/* Dị ứng */}
+                    <SectionRow label="Dị ứng" critical hint="Liệt kê tất cả · ER tin tưởng tuyệt đối">
+                        {allergyList.length > 0 ? (
+                            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>
+                                {allergyList.map((a) => (
+                                    <Pressable
+                                        key={a}
+                                        onPress={() => removeAllergy(a)}
+                                        style={({ pressed }) => ({
+                                            flexDirection: 'row',
+                                            alignItems: 'center',
+                                            gap: 5,
+                                            paddingVertical: 5,
+                                            paddingHorizontal: 10,
+                                            borderRadius: 6,
+                                            backgroundColor: `${EHR_WARNING}1F`,
+                                            borderWidth: 0.5,
+                                            borderColor: `${EHR_WARNING}60`,
+                                            opacity: pressed ? 0.7 : 1,
+                                        })}
+                                    >
+                                        <Text
+                                            style={{
+                                                fontFamily: SANS_SEMI,
+                                                fontSize: 12.5,
+                                                color: EHR_WARNING,
+                                                fontWeight: '700',
+                                            }}
+                                        >
+                                            !  {a}
+                                        </Text>
+                                        <X size={11} color={EHR_WARNING} />
+                                    </Pressable>
+                                ))}
+                            </View>
+                        ) : null}
+                        <View style={{ flexDirection: 'row', gap: 8 }}>
+                            <TextInput
+                                value={allergyInput}
+                                onChangeText={setAllergyInput}
+                                onSubmitEditing={() => addAllergy(allergyInput)}
+                                placeholder="Thêm dị ứng…"
+                                placeholderTextColor={EHR_OUTLINE}
+                                style={{
+                                    flex: 1,
+                                    paddingVertical: 9,
+                                    paddingHorizontal: 12,
+                                    borderRadius: 8,
+                                    borderWidth: 0.5,
+                                    borderColor: EHR_OUTLINE_SOFT,
+                                    backgroundColor: EHR_SURFACE_LOWEST,
+                                    color: EHR_ON_SURFACE,
+                                    fontFamily: SANS,
+                                    fontSize: 13,
+                                }}
+                                returnKeyType="done"
+                            />
+                            <Pressable
+                                onPress={() => addAllergy(allergyInput)}
+                                disabled={!allergyInput.trim()}
+                                style={({ pressed }) => ({
+                                    paddingHorizontal: 12,
+                                    justifyContent: 'center',
+                                    borderRadius: 8,
+                                    borderWidth: 0.5,
+                                    borderColor: allergyInput.trim() ? EHR_PRIMARY : EHR_OUTLINE_SOFT,
+                                    backgroundColor: allergyInput.trim() ? `${EHR_PRIMARY}1A` : 'transparent',
+                                    opacity: pressed ? 0.7 : 1,
+                                })}
+                            >
+                                <Plus size={16} color={allergyInput.trim() ? EHR_PRIMARY : EHR_OUTLINE} />
+                            </Pressable>
+                        </View>
+                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 10 }}>
+                            {ALLERGY_QUICK.filter((a) => !allergyList.includes(a)).map((a) => (
                                 <Pressable
                                     key={a}
-                                    onPress={() => addAllergyTag(a)}
+                                    onPress={() => addAllergy(a)}
                                     style={({ pressed }) => ({
                                         paddingHorizontal: 9,
                                         paddingVertical: 4,
                                         borderRadius: 999,
                                         borderWidth: 0.5,
-                                        borderColor: EHR_OUTLINE_VARIANT,
                                         borderStyle: 'dashed',
+                                        borderColor: EHR_OUTLINE_VARIANT,
                                         opacity: pressed ? 0.6 : 1,
                                     })}
                                 >
-                                    <Text
-                                        style={{
-                                            fontFamily: SANS,
-                                            fontSize: 10.5,
-                                            color: EHR_OUTLINE,
-                                        }}
-                                    >
+                                    <Text style={{ fontFamily: SANS, fontSize: 10.5, color: EHR_OUTLINE }}>
                                         + {a}
                                     </Text>
                                 </Pressable>
                             ))}
                         </View>
-                    </ViCard>
-                    <View
-                        style={{
-                            marginTop: 10,
-                            paddingVertical: 10,
-                            paddingHorizontal: 14,
-                            borderRadius: 10,
-                            backgroundColor: `${EHR_SLATE}1A`,
-                            borderWidth: 0.5,
-                            borderColor: EHR_OUTLINE_SOFT,
-                        }}
-                    >
-                        <Text
-                            style={{
-                                fontFamily: SANS,
-                                fontSize: 11.5,
-                                color: EHR_OUTLINE,
-                                lineHeight: 18,
-                            }}
-                        >
-                            Chỉ bác sĩ có phiên cấp cứu đang hoạt động + đã được xác minh mới thấy thông tin này.
-                        </Text>
-                    </View>
-                </View>
+                    </SectionRow>
 
-                {/* ───────── Trusted contacts preview ───────── */}
-                <View style={{ paddingHorizontal: 0, marginTop: 14 }}>
-                    <XStack
-                        style={{
-                            paddingHorizontal: 20,
-                            justifyContent: 'space-between',
-                            alignItems: 'baseline',
-                        }}
+                    {/* Người thân tin cậy */}
+                    <SectionRow
+                        label="Người thân tin cậy"
+                        trailing={`${allContacts.length} người`}
+                        onTrailingPress={() => navigation.navigate('TrustedContacts')}
                     >
-                        <Text
-                            style={{
-                                fontFamily: SANS_SEMI,
-                                fontSize: 11,
-                                color: EHR_OUTLINE,
-                                letterSpacing: 1.2,
-                                textTransform: 'uppercase',
-                                fontWeight: '600',
-                            }}
-                        >
-                            Người thân tin cậy
-                        </Text>
-                        <Pressable onPress={() => navigation.navigate('TrustedContacts')}>
-                            <Text
-                                style={{
-                                    fontFamily: SANS_MEDIUM,
-                                    fontSize: 11.5,
-                                    color: EHR_ON_SURFACE_VARIANT,
-                                    fontWeight: '500',
-                                }}
-                            >
-                                Xem tất cả ({allContacts.length}) →
-                            </Text>
-                        </Pressable>
-                    </XStack>
-
-                    {allContacts.length === 0 ? (
-                        <View style={{ paddingHorizontal: 20, marginTop: 10 }}>
+                        {allContacts.length === 0 ? (
                             <View
                                 style={{
-                                    paddingVertical: 14,
-                                    paddingHorizontal: 16,
-                                    borderRadius: 12,
-                                    backgroundColor: `${EHR_PRIMARY}14`,
+                                    paddingVertical: 12,
+                                    paddingHorizontal: 14,
+                                    borderRadius: 10,
                                     borderWidth: 0.5,
-                                    borderColor: `${EHR_PRIMARY}40`,
+                                    borderColor: EHR_OUTLINE_VARIANT,
+                                    backgroundColor: EHR_SURFACE_LOWEST,
                                     flexDirection: 'row',
-                                    gap: 12,
                                     alignItems: 'flex-start',
+                                    gap: 10,
                                 }}
                             >
-                                <AlertTriangle size={16} color={EHR_PRIMARY} style={{ marginTop: 2 }} />
+                                <AlertTriangle size={14} color={EHR_OUTLINE} style={{ marginTop: 2 }} />
                                 <Text
                                     style={{
                                         flex: 1,
                                         fontFamily: SANS,
                                         fontSize: 12.5,
-                                        color: EHR_ON_SURFACE,
+                                        color: EHR_ON_SURFACE_VARIANT,
                                         lineHeight: 18,
                                     }}
                                 >
-                                    <Text style={{ fontFamily: SANS_SEMI, color: EHR_PRIMARY, fontWeight: '700' }}>
-                                        Bạn chưa có người thân nào.{' '}
-                                    </Text>
-                                    Trong tình huống cấp cứu, không ai có thể đại diện cho bạn cấp quyền truy cập.
+                                    Chưa có người thân nào. Trong tình huống cấp cứu, không ai có thể đại diện cấp quyền truy cập.
                                 </Text>
                             </View>
-                        </View>
-                    ) : (
-                        <View style={{ paddingHorizontal: 20, marginTop: 10, gap: 6 }}>
-                            {contactsPreview.map((c) => (
-                                <View
-                                    key={c.contactAddress}
-                                    style={{
-                                        flexDirection: 'row',
-                                        alignItems: 'center',
-                                        gap: 12,
-                                        paddingVertical: 12,
-                                        paddingHorizontal: 14,
-                                        backgroundColor: EHR_SURFACE_LOWEST,
-                                        borderWidth: 0.5,
-                                        borderColor: EHR_OUTLINE_SOFT,
-                                        borderRadius: 10,
-                                    }}
-                                >
+                        ) : (
+                            <View style={{ gap: 6 }}>
+                                {contactsPreview.map((c) => (
                                     <View
+                                        key={c.contactAddress}
                                         style={{
-                                            width: 34,
-                                            height: 34,
-                                            borderRadius: 17,
-                                            backgroundColor: EHR_PRIMARY_FIXED,
+                                            flexDirection: 'row',
                                             alignItems: 'center',
-                                            justifyContent: 'center',
+                                            gap: 10,
+                                            paddingVertical: 8,
                                         }}
                                     >
-                                        <Heart size={16} color={EHR_PRIMARY} />
-                                    </View>
-                                    <View style={{ flex: 1, minWidth: 0 }}>
-                                        <Text
+                                        <View
                                             style={{
-                                                fontFamily: SANS_MEDIUM,
-                                                fontSize: 13.5,
-                                                color: EHR_ON_SURFACE,
-                                                fontWeight: '500',
+                                                width: 30,
+                                                height: 30,
+                                                borderRadius: 15,
+                                                backgroundColor: EHR_PRIMARY_FIXED,
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
                                             }}
-                                            numberOfLines={1}
                                         >
-                                            {c.fullName || truncate(c.contactAddress)}
-                                        </Text>
-                                        <Text
-                                            style={{
-                                                marginTop: 1,
-                                                fontFamily: SANS,
-                                                fontSize: 11,
-                                                color: EHR_OUTLINE,
-                                            }}
-                                            numberOfLines={1}
-                                        >
-                                            {c.label || '—'} · {truncate(c.contactAddress)}
-                                        </Text>
+                                            <Heart size={14} color={EHR_PRIMARY} />
+                                        </View>
+                                        <View style={{ flex: 1, minWidth: 0 }}>
+                                            <Text
+                                                style={{
+                                                    fontFamily: SANS_MEDIUM,
+                                                    fontSize: 13,
+                                                    color: EHR_ON_SURFACE,
+                                                }}
+                                                numberOfLines={1}
+                                            >
+                                                {c.fullName || truncate(c.contactAddress)}
+                                            </Text>
+                                            <Text
+                                                style={{
+                                                    marginTop: 1,
+                                                    fontFamily: SANS,
+                                                    fontSize: 10.5,
+                                                    color: EHR_OUTLINE,
+                                                }}
+                                                numberOfLines={1}
+                                            >
+                                                {c.label || '—'} · {truncate(c.contactAddress)}
+                                            </Text>
+                                        </View>
                                     </View>
-                                </View>
-                            ))}
-                        </View>
-                    )}
+                                ))}
+                            </View>
+                        )}
+                    </SectionRow>
+
+                    {/* Khác */}
+                    <SectionRow label="Khác" last>
+                        <KVRow k="Giới tính" v={formatGender(profile.gender)} />
+                        <KVRow k="Ngày sinh" v={formatVnDate(profile.dateOfBirth)} />
+                    </SectionRow>
                 </View>
 
-                <View style={{ height: 26 }} />
-
-                {/* ───────── How you'll be found ───────── */}
-                <ViSectionLabel>Bạn sẽ được tìm thấy như thế nào</ViSectionLabel>
-                <View style={{ paddingHorizontal: 20, marginTop: 8 }}>
-                    <View
+                {/* Footer note */}
+                <View
+                    style={{
+                        marginTop: 20,
+                        marginHorizontal: 20,
+                        paddingVertical: 12,
+                        paddingHorizontal: 14,
+                        backgroundColor: EHR_SURFACE_LOWEST,
+                        borderWidth: 0.5,
+                        borderStyle: 'dashed',
+                        borderColor: EHR_OUTLINE_VARIANT,
+                        borderRadius: 10,
+                    }}
+                >
+                    <Text
                         style={{
-                            padding: 18,
-                            borderRadius: 14,
-                            backgroundColor: EHR_SURFACE_LOWEST,
-                            borderWidth: 0.5,
-                            borderColor: EHR_OUTLINE_SOFT,
+                            fontFamily: SANS,
+                            fontSize: 11,
+                            color: EHR_OUTLINE,
+                            lineHeight: 17,
                         }}
                     >
-                        {[
-                            {
-                                n: '1',
-                                title: 'Bác sĩ quét CCCD vật lý',
-                                sub: 'Trên thẻ căn cước của bạn — không cần mở app',
-                            },
-                            {
-                                n: '2',
-                                title: 'App tính keccak256 → tra ví',
-                                sub: 'Backend tìm địa chỉ ví của bạn từ hash CCCD',
-                            },
-                            {
-                                n: '3',
-                                title: 'Bác sĩ gọi Người thân → ký uỷ quyền',
-                                sub: 'Người thân đại diện bạn cấp quyền truy cập tạm thời',
-                            },
-                        ].map((s, i, arr) => (
-                            <View
-                                key={s.n}
-                                style={{
-                                    flexDirection: 'row',
-                                    gap: 12,
-                                    paddingTop: i === 0 ? 0 : 12,
-                                    paddingBottom: i === arr.length - 1 ? 0 : 12,
-                                    borderBottomWidth: i < arr.length - 1 ? 0.5 : 0,
-                                    borderColor: EHR_OUTLINE_SOFT,
-                                    borderStyle: 'dashed',
-                                }}
-                            >
-                                <View
-                                    style={{
-                                        width: 24,
-                                        height: 24,
-                                        borderRadius: 12,
-                                        backgroundColor: `${EHR_PRIMARY}1A`,
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                    }}
-                                >
-                                    <Text
-                                        style={{
-                                            fontFamily: SERIF,
-                                            fontSize: 11,
-                                            fontWeight: '700',
-                                            color: EHR_PRIMARY,
-                                        }}
-                                    >
-                                        {s.n}
-                                    </Text>
-                                </View>
-                                <View style={{ flex: 1 }}>
-                                    <Text
-                                        style={{
-                                            fontFamily: SANS_MEDIUM,
-                                            fontSize: 13,
-                                            color: EHR_ON_SURFACE,
-                                            fontWeight: '500',
-                                            lineHeight: 18,
-                                        }}
-                                    >
-                                        {s.title}
-                                    </Text>
-                                    <Text
-                                        style={{
-                                            marginTop: 3,
-                                            fontFamily: SANS,
-                                            fontSize: 11.5,
-                                            color: EHR_OUTLINE,
-                                            lineHeight: 16,
-                                        }}
-                                    >
-                                        {s.sub}
-                                    </Text>
-                                </View>
-                            </View>
-                        ))}
-                    </View>
-                </View>
-
-                {/* ───────── CTAs ───────── */}
-                <View style={{ paddingHorizontal: 20, marginTop: 24, flexDirection: 'row', gap: 10 }}>
-                    <View style={{ flex: 1 }}>
-                        <ViButton variant="ghost" full onPress={() => navigation.goBack()}>
-                            Đóng
-                        </ViButton>
-                    </View>
-                    <View style={{ flex: 1 }}>
-                        <ViButton variant="primary" full loading={saving} onPress={handleSave}>
-                            {saving ? 'Đang lưu…' : 'Lưu thông tin'}
-                        </ViButton>
-                    </View>
+                        Chỉ thông tin trong khung &quot;Bác sĩ cấp cứu thấy&quot; ở trên được hiển thị qua tra cứu CCCD. Ngoài lúc cấp cứu, không ai khác có quyền xem.
+                    </Text>
                 </View>
             </ScrollView>
+
+            {/* Sticky footer Save CTA */}
+            <View
+                style={{
+                    position: 'absolute',
+                    bottom: 0,
+                    left: 0,
+                    right: 0,
+                    paddingHorizontal: 20,
+                    paddingTop: 12,
+                    paddingBottom: 22,
+                    backgroundColor: EHR_SURFACE,
+                    borderTopWidth: 0.5,
+                    borderTopColor: EHR_OUTLINE_VARIANT,
+                    flexDirection: 'row',
+                    gap: 10,
+                }}
+            >
+                <View style={{ flex: 1 }}>
+                    <ViButton variant="ghost" full onPress={() => navigation.goBack()}>
+                        Đóng
+                    </ViButton>
+                </View>
+                <View style={{ flex: 2 }}>
+                    <ViButton variant="primary" full loading={saving} onPress={handleSave}>
+                        {saving ? 'Đang lưu…' : 'Lưu thông tin'}
+                    </ViButton>
+                </View>
+            </View>
         </SafeAreaView>
     );
 }
 
-function FieldLabel({ children }: { children: React.ReactNode }) {
+// ───────── ER Preview Card — what the doctor sees ─────────
+function ERPreviewCard({
+    fullName,
+    gender,
+    age,
+    dateOfBirth,
+    blood,
+    allergies,
+    firstContact,
+}: {
+    fullName?: string | null;
+    gender?: string | null;
+    age: number | null;
+    dateOfBirth?: string | null;
+    blood: string;
+    allergies: string[];
+    firstContact: Contact | null;
+}) {
     return (
-        <Text
+        <View
             style={{
-                fontFamily: SANS_SEMI,
-                fontSize: 11.5,
-                color: EHR_OUTLINE,
-                fontWeight: '600',
-                letterSpacing: 0.5,
-                textTransform: 'uppercase',
+                position: 'relative',
+                padding: 18,
+                backgroundColor: EHR_SURFACE_HIGH,
+                borderRadius: 14,
+                borderWidth: 0.5,
+                borderColor: EHR_OUTLINE_VARIANT,
             }}
         >
-            {children}
-        </Text>
+            {/* watermark stamp */}
+            <View
+                style={{
+                    position: 'absolute',
+                    right: 12,
+                    top: 10,
+                    paddingHorizontal: 8,
+                    paddingVertical: 3,
+                    borderWidth: 0.5,
+                    borderColor: `${EHR_PRIMARY}40`,
+                    borderRadius: 4,
+                }}
+            >
+                <Text
+                    style={{
+                        fontFamily: MONO,
+                        fontSize: 9,
+                        letterSpacing: 1,
+                        textTransform: 'uppercase',
+                        fontWeight: '700',
+                        color: EHR_PRIMARY,
+                    }}
+                >
+                    ER · Read-only
+                </Text>
+            </View>
+
+            {/* identity line */}
+            <Text
+                style={{
+                    fontFamily: SERIF_MEDIUM,
+                    fontSize: 19,
+                    color: EHR_ON_SURFACE,
+                    letterSpacing: -0.2,
+                    lineHeight: 23,
+                }}
+            >
+                {fullName || 'Chưa cập nhật tên'}
+            </Text>
+            <Text
+                style={{
+                    marginTop: 2,
+                    fontFamily: MONO,
+                    fontSize: 11.5,
+                    color: EHR_ON_SURFACE_VARIANT,
+                }}
+            >
+                {formatGender(gender)}
+                {age !== null ? ` · ${age} tuổi` : ''}
+                {dateOfBirth ? ` · ${formatVnDate(dateOfBirth)}` : ''}
+            </Text>
+
+            {/* CRITICAL — blood + allergies */}
+            <XStack style={{ marginTop: 14, gap: 16, alignItems: 'flex-start' }}>
+                <YStack>
+                    <Text
+                        style={{
+                            fontSize: 9,
+                            color: EHR_OUTLINE,
+                            letterSpacing: 0.8,
+                            textTransform: 'uppercase',
+                            fontWeight: '700',
+                        }}
+                    >
+                        Máu
+                    </Text>
+                    <Text
+                        style={{
+                            fontFamily: SERIF_MEDIUM,
+                            fontSize: 28,
+                            color: blood ? EHR_SECONDARY : EHR_OUTLINE,
+                            letterSpacing: -0.6,
+                            lineHeight: 32,
+                            marginTop: 4,
+                        }}
+                    >
+                        {blood || '—'}
+                    </Text>
+                </YStack>
+                <YStack style={{ flex: 1 }}>
+                    <Text
+                        style={{
+                            fontSize: 9,
+                            color: EHR_OUTLINE,
+                            letterSpacing: 0.8,
+                            textTransform: 'uppercase',
+                            fontWeight: '700',
+                        }}
+                    >
+                        Dị ứng · cảnh báo
+                    </Text>
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 5, marginTop: 6 }}>
+                        {allergies.length === 0 ? (
+                            <Text
+                                style={{
+                                    fontFamily: SANS,
+                                    fontSize: 12,
+                                    color: EHR_OUTLINE,
+                                    fontStyle: 'italic',
+                                }}
+                            >
+                                Không có thông tin
+                            </Text>
+                        ) : (
+                            allergies.map((a) => (
+                                <View
+                                    key={a}
+                                    style={{
+                                        paddingHorizontal: 9,
+                                        paddingVertical: 4,
+                                        borderRadius: 4,
+                                        backgroundColor: `${EHR_WARNING}1F`,
+                                        borderWidth: 0.5,
+                                        borderColor: `${EHR_WARNING}60`,
+                                    }}
+                                >
+                                    <Text
+                                        style={{
+                                            fontFamily: SANS_SEMI,
+                                            fontSize: 12,
+                                            color: EHR_WARNING,
+                                            fontWeight: '700',
+                                        }}
+                                    >
+                                        !  {a}
+                                    </Text>
+                                </View>
+                            ))
+                        )}
+                    </View>
+                </YStack>
+            </XStack>
+
+            {/* contact mini-strip */}
+            {firstContact ? (
+                <View
+                    style={{
+                        marginTop: 14,
+                        paddingTop: 12,
+                        borderTopWidth: 0.5,
+                        borderStyle: 'dashed',
+                        borderColor: EHR_OUTLINE_VARIANT,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: 8,
+                    }}
+                >
+                    <Text
+                        style={{
+                            fontSize: 9,
+                            color: EHR_OUTLINE,
+                            letterSpacing: 0.8,
+                            textTransform: 'uppercase',
+                            fontWeight: '700',
+                        }}
+                    >
+                        Liên hệ
+                    </Text>
+                    <Text
+                        style={{
+                            flex: 1,
+                            fontFamily: SANS_MEDIUM,
+                            fontSize: 11.5,
+                            color: EHR_ON_SURFACE,
+                        }}
+                        numberOfLines={1}
+                    >
+                        {firstContact.fullName || truncate(firstContact.contactAddress)}
+                        {firstContact.label ? (
+                            <Text style={{ color: EHR_OUTLINE }}> · {firstContact.label}</Text>
+                        ) : null}
+                    </Text>
+                </View>
+            ) : null}
+        </View>
     );
 }
+
+// ───────── SectionRow — one row in the "single document" layout ─────────
+function SectionRow({
+    label,
+    children,
+    trailing,
+    onTrailingPress,
+    critical,
+    hint,
+    last,
+}: {
+    label: string;
+    children: React.ReactNode;
+    trailing?: string;
+    onTrailingPress?: () => void;
+    critical?: boolean;
+    hint?: string;
+    last?: boolean;
+}) {
+    return (
+        <View
+            style={{
+                paddingVertical: 18,
+                borderBottomWidth: last ? 0 : 0.5,
+                borderColor: EHR_OUTLINE_VARIANT,
+            }}
+        >
+            <XStack style={{ alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 12 }}>
+                <XStack style={{ alignItems: 'baseline', gap: 6 }}>
+                    <Text
+                        style={{
+                            fontSize: 10,
+                            color: critical ? EHR_WARNING : EHR_OUTLINE,
+                            letterSpacing: 1.2,
+                            textTransform: 'uppercase',
+                            fontWeight: '700',
+                            fontFamily: SANS_SEMI,
+                        }}
+                    >
+                        {label}
+                    </Text>
+                    {critical ? (
+                        <Text
+                            style={{
+                                fontSize: 9,
+                                color: EHR_WARNING,
+                                letterSpacing: 0.5,
+                                fontWeight: '600',
+                            }}
+                        >
+                            (quan trọng)
+                        </Text>
+                    ) : null}
+                </XStack>
+                {trailing ? (
+                    onTrailingPress ? (
+                        <Pressable onPress={onTrailingPress} hitSlop={6}>
+                            <Text
+                                style={{
+                                    fontFamily: SANS_MEDIUM,
+                                    fontSize: 11.5,
+                                    color: EHR_ON_SURFACE_VARIANT,
+                                }}
+                            >
+                                {trailing} →
+                            </Text>
+                        </Pressable>
+                    ) : (
+                        <Text
+                            style={{
+                                fontFamily: SANS,
+                                fontSize: 11.5,
+                                color: EHR_OUTLINE,
+                            }}
+                        >
+                            {trailing}
+                        </Text>
+                    )
+                ) : null}
+            </XStack>
+            {children}
+            {hint ? (
+                <Text
+                    style={{
+                        marginTop: 8,
+                        fontFamily: SANS,
+                        fontSize: 11,
+                        color: EHR_OUTLINE,
+                        lineHeight: 16,
+                        fontStyle: 'italic',
+                    }}
+                >
+                    {hint}
+                </Text>
+            ) : null}
+        </View>
+    );
+}
+
+function KVRow({ k, v }: { k: string; v: string }) {
+    return (
+        <XStack style={{ justifyContent: 'space-between', alignItems: 'center', paddingVertical: 6 }}>
+            <Text style={{ fontFamily: SANS, fontSize: 13, color: EHR_ON_SURFACE_VARIANT }}>{k}</Text>
+            <Text style={{ fontFamily: SANS_MEDIUM, fontSize: 13, color: EHR_ON_SURFACE, fontWeight: '500' }}>{v}</Text>
+        </XStack>
+    );
+}
+
+void EHR_PRIMARY_CONTAINER;
+void EHR_DANGER;
