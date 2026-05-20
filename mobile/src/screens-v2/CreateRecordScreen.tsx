@@ -552,7 +552,7 @@ export default function CreateRecordScreen({ navigation, route: navRoute }: any)
                     </Text>
                 </View>
 
-                {/* Self-khai banner (clay) — design pattern: warm clay accent for "tự khai" data */}
+                {/* G.12.g — Self-khai banner uses CLAY token (warm data accent per design tokens.jsx) */}
                 {!isUpdateMode ? (
                     <View
                         style={{
@@ -560,9 +560,9 @@ export default function CreateRecordScreen({ navigation, route: navRoute }: any)
                             paddingVertical: 12,
                             paddingHorizontal: 14,
                             borderRadius: 12,
-                            backgroundColor: `${palette.EHR_SECONDARY}1A`,
+                            backgroundColor: `${palette.EHR_CLAY}1A`,
                             borderWidth: 0.5,
-                            borderColor: `${palette.EHR_SECONDARY}50`,
+                            borderColor: `${palette.EHR_CLAY}50`,
                             flexDirection: 'row',
                             gap: 10,
                         }}
@@ -571,7 +571,7 @@ export default function CreateRecordScreen({ navigation, route: navRoute }: any)
                             style={{
                                 width: 4,
                                 alignSelf: 'stretch',
-                                backgroundColor: palette.EHR_SECONDARY,
+                                backgroundColor: palette.EHR_CLAY,
                                 borderRadius: 2,
                             }}
                         />
@@ -585,7 +585,7 @@ export default function CreateRecordScreen({ navigation, route: navRoute }: any)
                             }}
                         >
                             Đây là{' '}
-                            <Text style={{ fontFamily: SANS_SEMI, color: palette.EHR_SECONDARY, fontWeight: '700' }}>
+                            <Text style={{ fontFamily: SANS_SEMI, color: palette.EHR_CLAY, fontWeight: '700' }}>
                                 hồ sơ tự khai
                             </Text>
                             . Khác với hồ sơ do bác sĩ tạo, nội dung này chưa được xác minh bởi tổ chức y tế.
