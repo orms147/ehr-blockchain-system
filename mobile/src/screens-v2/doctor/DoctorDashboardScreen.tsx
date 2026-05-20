@@ -591,17 +591,19 @@ export default function DoctorDashboardScreen() {
                                     </Text>
                                 </View>
                             ) : isVerifiedDoctor === false ? (
-                                // G.12.l — interactive button per design (was text-only pill)
+                                // G.12.l — interactive button per design (was text-only pill).
+                                // CredentialSubmit screen chưa tồn tại (Phase G.12.o + backend
+                                // credential endpoint pending) → show Alert thay vì navigate
+                                // để tránh "screen not handled" error.
                                 <Pressable
                                     onPress={() => {
-                                        try {
-                                            navigation.navigate('CredentialSubmit');
-                                        } catch {
-                                            Alert.alert(
-                                                'Xác minh CCHN',
-                                                'Tính năng gửi đơn xác minh CCHN sẽ được hoàn thiện trong phiên bản tới (Phase G.12.o + backend credential endpoint).',
-                                            );
-                                        }
+                                        Alert.alert(
+                                            'Xác minh CCHN',
+                                            'Tính năng gửi đơn xác minh chứng chỉ hành nghề đang được hoàn thiện.\n\n' +
+                                            'Trong khi chờ, bạn vẫn dùng app như bình thường nhưng bệnh nhân sẽ ' +
+                                            'thấy badge "chưa xác minh" khi bạn yêu cầu xem hồ sơ.',
+                                            [{ text: 'OK' }],
+                                        );
                                     }}
                                     style={({ pressed }) => ({
                                         marginTop: 12,
