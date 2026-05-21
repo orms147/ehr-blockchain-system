@@ -148,6 +148,7 @@ model RecordMetadata {
   title          String?   @db.VarChar(255) // Human readable title
   description    String?   @db.Text // Notes/description
   recordType     String?   @db.VarChar(50) // e.g. "diagnosis", "prescription", "lab_result"
+  versionNote    String?   @db.VarChar(500) // Doctor's note when creating an update version (G.12 spec Q3)
   createdBy      String    @db.VarChar(42)
   syncStatus     String    @default("confirmed") @db.VarChar(20) // pending, confirmed, failed
   txHash         String?   @db.VarChar(66)

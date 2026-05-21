@@ -69,6 +69,7 @@ const createRecordSchema = z.object({
     title: z.string().max(255).optional().nullable(),
     description: z.string().optional().nullable(),
     recordType: z.string().max(50).optional().nullable(),
+    versionNote: z.string().max(500).optional().nullable(),
 });
 
 const saveOnlySchema = z.object({
@@ -80,6 +81,7 @@ const saveOnlySchema = z.object({
     title: z.string().max(255).optional().nullable(),
     description: z.string().optional().nullable(),
     recordType: z.string().max(50).optional().nullable(),
+    versionNote: z.string().max(500).optional().nullable(),
     parentCidHash: z.string().regex(/^0x[a-fA-F0-9]{64}$/).optional().nullable(),
     txHash: z.string().regex(/^0x[a-fA-F0-9]{64}$/).optional().nullable(),
     // When doctor updates a patient's record, mobile provides a NaCl-sealed
@@ -91,7 +93,7 @@ const saveOnlySchema = z.object({
 // POST /api/records - Upload record with quota check and on-chain registration
 router.post('/', authenticate, async (req, res, next) => {
     try {
-        const { cidHash, recordTypeHash, parentCidHash, title, description, recordType } = createRecordSchema.parse(req.body);
+        const { cidHash, recordTypeHash, parentCidHash, title, description, recordType, versionNote } = createRecordSchema.parse(req.body);
         const walletAddress = normalizeAddress(req.user.walletAddress);
         const normalizedCidHash = normalizeHash(cidHash);
         const normalizedParentCidHash = normalizeHash(parentCidHash);
@@ -193,6 +195,7 @@ router.post('/', authenticate, async (req, res, next) => {
                     title: title || null,
                     description: description || null,
                     recordType: recordType || null,
+                    versionNote: versionNote || null,
                     syncStatus: RECORD_SYNC_STATUS.PENDING,
                     txHash: null,
                     submittedAt,
@@ -212,6 +215,7 @@ router.post('/', authenticate, async (req, res, next) => {
                     title: title || null,
                     description: description || null,
                     recordType: recordType || null,
+                    versionNote: versionNote || null,
                     syncStatus: RECORD_SYNC_STATUS.PENDING,
                     submittedAt,
                 },
@@ -299,6 +303,7 @@ router.post('/save-only', authenticate, async (req, res, next) => {
             title,
             description,
             recordType,
+            versionNote,
             parentCidHash,
             txHash,
             patientEncryptedPayload,
@@ -348,6 +353,7 @@ router.post('/save-only', authenticate, async (req, res, next) => {
                         title: title || existing.title || null,
                         description: description || existing.description || null,
                         recordType: recordType || existing.recordType || null,
+                        versionNote: versionNote || existing.versionNote || null,
                         parentCidHash: shouldPatchParent ? effectiveParentCidHash : preservedParent,
                         syncStatus: RECORD_SYNC_STATUS.CONFIRMED,
                         txHash: normalizedTxHash || existing.txHash,
@@ -370,6 +376,7 @@ router.post('/save-only', authenticate, async (req, res, next) => {
                     title: title || null,
                     description: description || null,
                     recordType: recordType || null,
+                    versionNote: versionNote || null,
                     parentCidHash: effectiveParentCidHash,
                     syncStatus: RECORD_SYNC_STATUS.CONFIRMED,
                     txHash: normalizedTxHash,
@@ -792,6 +799,7 @@ router.get('/:cidHash/meta', authenticate, async (req, res, next) => {
                 title: true,
                 description: true,
                 recordType: true,
+                versionNote: true,
                 ownerAddress: true,
                 createdBy: true,
                 createdAt: true,

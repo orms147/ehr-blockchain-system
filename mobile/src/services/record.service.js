@@ -26,6 +26,7 @@ export const recordService = {
         title = null,
         description = null,
         recordType = null,
+        versionNote = null,         // doctor's note when creating an update version (G.12 spec Q3)
         parentCidHash = null,
         txHash = null,
         patientEncryptedPayload = null, // NaCl-sealed {cid,aesKey} for patient
@@ -39,6 +40,7 @@ export const recordService = {
             title,
             description,
             recordType,
+            versionNote,
             parentCidHash,
             txHash,
             patientEncryptedPayload,
