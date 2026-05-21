@@ -1,40 +1,30 @@
-// CreateRecordScreen v2 — port of .design-bundle/project/screens-extras.jsx
-// PatientCreateRecordScreen. Patient tự tạo hồ sơ với 2 mode: Đơn giản (chụp
-// ảnh + ghi chú) và Chi tiết (full medical form: ICD-10, vital signs, đơn
-// thuốc per TT 04/2022 + TT 46/2018). Cinnabar reserved for the final
-// "Tạo hồ sơ" CTA (legal-action: register on-chain).
+// CreateRecordScreen v3 — text-rhythm editorial form per
+// viehp-doctor-forms-v2.html §2 + spec Q1 (RECORD_TYPES trimmed to 5).
 //
-// ALL handler logic preserved bit-for-bit from screens/CreateRecordScreen.tsx:
-//   - buildPayload (meta + summary + notes + observations + diagnoses +
-//     prescriptions + image attachment)
-//   - generateAESKey + encryptData + ipfsService.uploadEncrypted
-//   - createRecord (on-chain via relayer)
-//   - localRecordStore for retry recovery
-//   - autoPreShareNewRecord (Trusted Contact S18) fire-and-forget
-//   - SELF-KEYSHARE backup to backend so patient can recover on reinstall
-//   - Update mode: cascade new AES to all existing recipients of parent chain
-//   - error code mapping (QUOTA_EXHAUSTED / RECORD_EXISTS / etc.)
-//   - isMountedRef so late-arriving upload doesn't pop MainTabs
+// Patient self-declares a record. Two modes:
+//   - Nhanh: title + image + free-text note
+//   - Đầy đủ: full medical form (ICD-10 + vitals from VITAL_SPECS + Rx per TT 04/2022)
+//
+// Layout:
+//   PageHeader eyebrow="Bệnh nhân tự khai" title="Ghi lại đợt khám của bạn"
+//   Optional restore-draft banner (useDraft hook)
+//   Mode switch (Nhanh / Đầy đủ)
+//   SectionLabel "Loại hồ sơ" — horizontal scroll chips (canonical 5 types)
+//   SectionLabel "Thông tin" — title + description fields
+//   [Đầy đủ only] ICD-10 picker rows
+//   SectionLabel "Ảnh đính kèm"
+//   [Đầy đủ only] SectionLabel "Dấu hiệu sinh tồn" — VITAL_SPECS rows with flagVital()
+//   [Đầy đủ only] SectionLabel "Đơn thuốc" — Rx fields
+//   StickyFooter "Lưu hồ sơ" hint="Mã hoá end-to-end · IPFS · băm trên chuỗi"
+//
+// ALL business logic preserved from previous version — only UI restyled.
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Image, Pressable, ScrollView, TextInput, View, type KeyboardTypeOptions } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import { Text, XStack, YStack } from 'tamagui';
 import { keccak256, toBytes } from 'viem';
-import {
-    Activity,
-    FilePlus2,
-    HeartPulse,
-    ImagePlus,
-    Pill,
-    Plus,
-    Stethoscope,
-    TestTubeDiagonal,
-    Trash2,
-    X,
-    type LucideIcon,
-} from 'lucide-react-native';
+import { ImagePlus, Plus, Stethoscope, Trash2, X } from 'lucide-react-native';
 
 import Icd10Picker from '../components/Icd10Picker';
 import type { Icd10Code } from '../constants/icd10';
@@ -48,22 +38,21 @@ import { normalizeBase64 } from '../utils/base64';
 import localRecordStore from '../services/localRecordStore';
 import { autoPreShareNewRecord } from '../services/trustedContact.service';
 import useAuthStore from '../store/authStore';
-import ViCard from '../components-v2/ViCard';
-import ViButton from '../components-v2/ViButton';
-import { ViSectionLabel } from '../components-v2/ViChips';
-import { useEhrPalette, DARK } from '../constants/uiColors';
+import useDraft from '../hooks/useDraft';
+import { useEhrPalette } from '../constants/uiColors';
+import { RECORD_TYPES, resolveRecordType, type RecordTypeKey } from '../constants/recordTypes';
+import { VITAL_SPECS, flagVital, flagBp, abnormalNote, type VitalStatus } from '../constants/vitals';
+import {
+    PageHeader,
+    SectionLabel,
+    StickyFooter,
+    FormShell,
+} from '../components-v2/FormPrimitives';
 
-const SERIF = 'Fraunces_400Regular';
 const SANS = 'DMSans_400Regular';
 const SANS_MEDIUM = 'DMSans_500Medium';
 const SANS_SEMI = 'DMSans_600SemiBold';
-
-type RecordTypeOption = {
-    key: string;
-    label: string;
-    icon: LucideIcon;
-    tint: string;
-};
+const MONO = 'monospace';
 
 type SelectedImage = {
     uri: string;
@@ -75,10 +64,10 @@ type SelectedImage = {
     fileSize?: number | null;
 };
 
-type BuildPayloadInput = {
+type DraftState = {
     title: string;
     description: string;
-    recordTypeLabel: string;
+    recordType: RecordTypeKey;
     icd10Codes: Icd10Code[];
     diagnosisNote: string;
     medication: string;
@@ -97,17 +86,38 @@ type BuildPayloadInput = {
     weight: string;
     height: string;
     notes: string;
+    simpleMode: boolean;
+};
+
+type BuildPayloadInput = DraftState & {
+    recordTypeLabel: string;
     attachment?: SelectedImage | null;
 };
 
-// Tints reference DARK at module load (used as visual hints only — actual
-// JSX uses palette refs inside components for theme reactivity).
-const RECORD_TYPES: RecordTypeOption[] = [
-    { key: 'checkup', label: 'Khám tổng quát', icon: Stethoscope, tint: DARK.EHR_PRIMARY },
-    { key: 'lab_result', label: 'Xét nghiệm', icon: TestTubeDiagonal, tint: DARK.EHR_TERTIARY },
-    { key: 'prescription', label: 'Đơn thuốc', icon: Pill, tint: DARK.EHR_SECONDARY },
-    { key: 'vital_signs', label: 'Chỉ số sinh tồn', icon: HeartPulse, tint: DARK.EHR_PRIMARY },
-];
+const INITIAL_DRAFT: DraftState = {
+    title: '',
+    description: '',
+    recordType: 'general',
+    icd10Codes: [],
+    diagnosisNote: '',
+    medication: '',
+    dosage: '',
+    frequency: '',
+    route: '',
+    quantity: '',
+    duration: '',
+    instruction: '',
+    heartRate: '',
+    systolic: '',
+    diastolic: '',
+    temperature: '',
+    respRate: '',
+    spo2: '',
+    weight: '',
+    height: '',
+    notes: '',
+    simpleMode: true,
+};
 
 function toSerializableRecord(record: Record<string, any>) {
     const createdAtIso = record?.createdAt
@@ -130,12 +140,11 @@ function buildCreateRecordErrorMessage(submitError: any): string {
 }
 
 function splitLines(value: string): string[] {
-    return value.split(/\r?\n|;/).map((item: string) => item.trim()).filter(Boolean);
+    return value.split(/\r?\n|;/).map((item) => item.trim()).filter(Boolean);
 }
 
 function cleanNumber(value: string): string {
-    const trimmed = value.trim();
-    return trimmed ? trimmed : '';
+    return value.trim();
 }
 
 function buildPayload(input: BuildPayloadInput) {
@@ -203,51 +212,86 @@ function buildPayload(input: BuildPayloadInput) {
     };
 }
 
+function draftIsMeaningful(d: DraftState): boolean {
+    return Boolean(
+        d.title.trim() ||
+        d.description.trim() ||
+        d.diagnosisNote.trim() ||
+        d.medication.trim() ||
+        d.notes.trim() ||
+        d.icd10Codes.length > 0 ||
+        d.heartRate ||
+        d.systolic ||
+        d.diastolic ||
+        d.temperature ||
+        d.spo2 ||
+        d.respRate ||
+        d.weight ||
+        d.height,
+    );
+}
+
 export default function CreateRecordScreen({ navigation, route: navRoute }: any) {
     const palette = useEhrPalette();
     const { user } = useAuthStore();
     const recordApi: any = recordService;
     const isMountedRef = useRef(true);
     useEffect(() => () => { isMountedRef.current = false; }, []);
+
     const parentCidHash: string | null = navRoute?.params?.parentCidHash || null;
     const initialTitle: string = navRoute?.params?.initialTitle || '';
-    const initialRecordType: string | null = navRoute?.params?.initialRecordType || null;
+    const initialRecordTypeRaw: string | null = navRoute?.params?.initialRecordType || null;
+    const initialRecordType = initialRecordTypeRaw
+        ? resolveRecordType(initialRecordTypeRaw).key
+        : 'general';
     const isUpdateMode = Boolean(parentCidHash);
 
-    const [title, setTitle] = useState(initialTitle);
-    const [description, setDescription] = useState('');
-    const [recordType, setRecordType] = useState(
-        (initialRecordType && RECORD_TYPES.find((r) => r.key === initialRecordType)?.key) || RECORD_TYPES[0].key,
+    const draftScreenId = isUpdateMode ? 'createRecord.update' : 'createRecord.new';
+    const draftPatientKey = parentCidHash ? `parent.${parentCidHash}` : 'new';
+    const draftInitial = useMemo<DraftState>(
+        () => ({ ...INITIAL_DRAFT, title: initialTitle, recordType: initialRecordType }),
+        [initialTitle, initialRecordType],
     );
-    const [icd10Codes, setIcd10Codes] = useState<Icd10Code[]>([]);
-    const [icd10PickerOpen, setIcd10PickerOpen] = useState(false);
-    const [diagnosisNote, setDiagnosisNote] = useState('');
-    const [medication, setMedication] = useState('');
-    const [dosage, setDosage] = useState('');
-    const [frequency, setFrequency] = useState('');
-    const [route, setRoute] = useState('');
-    const [quantity, setQuantity] = useState('');
-    const [duration, setDuration] = useState('');
-    const [instruction, setInstruction] = useState('');
-    const [heartRate, setHeartRate] = useState('');
-    const [systolic, setSystolic] = useState('');
-    const [diastolic, setDiastolic] = useState('');
-    const [temperature, setTemperature] = useState('');
-    const [respRate, setRespRate] = useState('');
-    const [spo2, setSpo2] = useState('');
-    const [weight, setWeight] = useState('');
-    const [height, setHeight] = useState('');
-    const [notes, setNotes] = useState('');
-    const [simpleMode, setSimpleMode] = useState(true);
+
+    const {
+        draft,
+        update,
+        clear,
+        restorable,
+        applyRestore,
+        dismissRestore,
+        saveStatus,
+        savedAtMs,
+    } = useDraft<DraftState>({
+        screenId: draftScreenId,
+        patientKey: draftPatientKey,
+        initial: draftInitial,
+        isMeaningful: draftIsMeaningful,
+    });
+
+    const set = <K extends keyof DraftState>(key: K, value: DraftState[K]) =>
+        update((prev) => ({ ...prev, [key]: value }));
+
     const [selectedImage, setSelectedImage] = useState<SelectedImage | null>(null);
+    const [icd10PickerOpen, setIcd10PickerOpen] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isPickingImage, setIsPickingImage] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
-    const selectedType = useMemo<RecordTypeOption>(
-        () => RECORD_TYPES.find((item) => item.key === recordType) || RECORD_TYPES[0],
-        [recordType],
+    const selectedTypeSpec = useMemo(
+        () => RECORD_TYPES.find((t) => t.key === draft.recordType) || RECORD_TYPES[0],
+        [draft.recordType],
     );
+
+    const saveStatusLabel = useMemo(() => {
+        if (saveStatus === 'saving') return 'Tự lưu…';
+        if (saveStatus === 'saved' && savedAtMs) {
+            const d = new Date(savedAtMs);
+            return `Tự lưu · ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+        }
+        if (saveStatus === 'error') return 'Tự lưu lỗi';
+        return undefined;
+    }, [saveStatus, savedAtMs]);
 
     const pickImage = async () => {
         try {
@@ -287,17 +331,17 @@ export default function CreateRecordScreen({ navigation, route: navRoute }: any)
     };
 
     const handleSubmit = async () => {
-        if (!title.trim()) {
+        if (!draft.title.trim()) {
             Alert.alert('Thiếu tiêu đề', 'Hãy nhập tiêu đề hồ sơ trước khi tạo.');
             return;
         }
-        if (simpleMode) {
-            if (!selectedImage && !description.trim()) {
+        if (draft.simpleMode) {
+            if (!selectedImage && !draft.description.trim()) {
                 Alert.alert('Thiếu nội dung', 'Hãy chụp/chọn ảnh hoặc viết ghi chú cho hồ sơ.');
                 return;
             }
-        } else if (!description.trim() && !diagnosisNote.trim() && icd10Codes.length === 0
-            && !notes.trim() && !medication.trim() && !selectedImage) {
+        } else if (!draft.description.trim() && !draft.diagnosisNote.trim() && draft.icd10Codes.length === 0
+            && !draft.notes.trim() && !draft.medication.trim() && !selectedImage) {
             Alert.alert('Thiếu nội dung', 'Hãy nhập nội dung hoặc đính kèm ít nhất một ảnh cho hồ sơ.');
             return;
         }
@@ -310,33 +354,37 @@ export default function CreateRecordScreen({ navigation, route: navRoute }: any)
 
         try {
             const payload = buildPayload({
-                title, description, recordTypeLabel: selectedType.label, icd10Codes, diagnosisNote,
-                medication, dosage, frequency, route, quantity, duration, instruction,
-                heartRate: cleanNumber(heartRate), systolic: cleanNumber(systolic),
-                diastolic: cleanNumber(diastolic), temperature: cleanNumber(temperature),
-                respRate: cleanNumber(respRate), spo2: cleanNumber(spo2),
-                weight: cleanNumber(weight), height: cleanNumber(height),
-                notes, attachment: selectedImage,
+                ...draft,
+                recordTypeLabel: selectedTypeSpec.label,
+                heartRate: cleanNumber(draft.heartRate),
+                systolic: cleanNumber(draft.systolic),
+                diastolic: cleanNumber(draft.diastolic),
+                temperature: cleanNumber(draft.temperature),
+                respRate: cleanNumber(draft.respRate),
+                spo2: cleanNumber(draft.spo2),
+                weight: cleanNumber(draft.weight),
+                height: cleanNumber(draft.height),
+                attachment: selectedImage,
             });
 
             const aesKey = await generateAESKey();
             const encryptedData = await encryptData(payload, aesKey);
             const { cid } = await ipfsService.uploadEncrypted({
                 encryptedData,
-                metadata: { title: title.trim(), recordType },
+                metadata: { title: draft.title.trim(), recordType: draft.recordType },
             });
 
             const cidHash = keccak256(toBytes(cid));
-            const recordTypeHash = keccak256(toBytes(recordType));
+            const recordTypeHash = keccak256(toBytes(draft.recordType));
             const nowIso = new Date().toISOString();
 
             cidHashForRecovery = cidHash;
             localDraft = {
                 cid, aesKey,
-                title: title.trim(),
-                recordType, recordTypeHash,
+                title: draft.title.trim(),
+                recordType: draft.recordType, recordTypeHash,
                 parentCidHash,
-                description: description.trim(),
+                description: draft.description.trim(),
                 createdAt: nowIso,
                 createdBy: user?.walletAddress || null,
                 ownerAddress: user?.walletAddress || null,
@@ -349,7 +397,7 @@ export default function CreateRecordScreen({ navigation, route: navRoute }: any)
 
             const created = await recordApi.createRecord(
                 cidHash, recordTypeHash, parentCidHash,
-                title.trim(), description.trim() || null, recordType,
+                draft.title.trim(), draft.description.trim() || null, draft.recordType,
             );
 
             await localRecordStore.setKey(cidHash, {
@@ -365,9 +413,9 @@ export default function CreateRecordScreen({ navigation, route: navRoute }: any)
             const record = {
                 id: created?.id,
                 cidHash,
-                title: title.trim(),
-                type: recordType,
-                description: description.trim() || null,
+                title: draft.title.trim(),
+                type: draft.recordType,
+                description: draft.description.trim() || null,
                 date: new Date(created?.createdAt || Date.now()).toLocaleDateString('vi-VN'),
                 createdAt: new Date(created?.createdAt || Date.now()).toISOString(),
                 createdBy: user?.walletAddress,
@@ -427,6 +475,9 @@ export default function CreateRecordScreen({ navigation, route: navRoute }: any)
                 }
             }
 
+            // Wipe draft on successful submit
+            await clear();
+
             if (!isMountedRef.current) return;
 
             Alert.alert(
@@ -455,9 +506,9 @@ export default function CreateRecordScreen({ navigation, route: navRoute }: any)
                 }
                 const offlineRecord = {
                     cidHash: cidHashForRecovery,
-                    title: title.trim(),
-                    type: recordType,
-                    description: description.trim() || null,
+                    title: draft.title.trim(),
+                    type: draft.recordType,
+                    description: draft.description.trim() || null,
                     date: new Date().toLocaleDateString('vi-VN'),
                     createdAt: new Date().toISOString(),
                     createdBy: user?.walletAddress,
@@ -488,497 +539,599 @@ export default function CreateRecordScreen({ navigation, route: navRoute }: any)
     };
 
     const renderInput = (
-        label: string,
         value: string,
         onChangeText: (text: string) => void,
         options: { multiline?: boolean; placeholder?: string; keyboardType?: KeyboardTypeOptions } = {},
     ) => (
-        <YStack style={{ marginBottom: 12 }}>
-            <Text style={{ fontFamily: SANS_SEMI, fontSize: 12, color: palette.EHR_TEXT_MUTED, marginBottom: 6, letterSpacing: 0.3, textTransform: 'uppercase', fontWeight: '600' }}>
-                {label}
-            </Text>
-            <TextInput
-                value={value}
-                onChangeText={onChangeText}
-                placeholder={options.placeholder || ''}
-                placeholderTextColor={palette.EHR_OUTLINE}
-                keyboardType={options.keyboardType}
-                multiline={options.multiline}
-                textAlignVertical={options.multiline ? 'top' : 'center'}
-                style={{
-                    minHeight: options.multiline ? 90 : 48,
-                    borderRadius: 12,
-                    borderWidth: 0.5,
-                    borderColor: palette.EHR_OUTLINE_SOFT,
-                    backgroundColor: palette.EHR_SURFACE,
-                    paddingHorizontal: 14,
-                    paddingVertical: options.multiline ? 12 : 0,
-                    color: palette.EHR_ON_SURFACE,
-                    fontFamily: SANS,
-                    fontSize: 14,
-                }}
-            />
-        </YStack>
+        <TextInput
+            value={value}
+            onChangeText={onChangeText}
+            placeholder={options.placeholder || ''}
+            placeholderTextColor={palette.EHR_TEXT_MUTED}
+            keyboardType={options.keyboardType}
+            multiline={options.multiline}
+            textAlignVertical={options.multiline ? 'top' : 'center'}
+            style={{
+                minHeight: options.multiline ? 86 : 46,
+                borderRadius: 10,
+                borderWidth: 0.5,
+                borderColor: palette.EHR_OUTLINE_SOFT,
+                backgroundColor: palette.EHR_SURFACE_LOWEST,
+                paddingHorizontal: 14,
+                paddingVertical: options.multiline ? 12 : 0,
+                color: palette.EHR_ON_SURFACE,
+                fontFamily: SANS,
+                fontSize: 14,
+            }}
+        />
     );
 
+    const renderFieldLabel = (label: string) => (
+        <Text
+            style={{
+                fontFamily: MONO,
+                fontSize: 10.5,
+                color: palette.EHR_TEXT_MUTED,
+                letterSpacing: 0.6,
+                textTransform: 'uppercase',
+                fontWeight: '700',
+                marginBottom: 6,
+                marginTop: 12,
+            }}
+        >
+            {label}
+        </Text>
+    );
+
+    const footer = (
+        <StickyFooter
+            primary={isUpdateMode ? 'Cập nhật hồ sơ' : 'Lưu hồ sơ'}
+            hint="Mã hoá end-to-end · IPFS · băm trên chuỗi"
+            primaryLoading={isSubmitting}
+            onPrimary={handleSubmit}
+        />
+    );
+
+    const bp = flagBp(draft.systolic, draft.diastolic);
+
     return (
-        <SafeAreaView style={{ flex: 1, backgroundColor: palette.EHR_SURFACE }} edges={['left', 'right', 'bottom']}>
-            <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 36 }} showsVerticalScrollIndicator={false}>
-                {/* Hero */}
-                <View style={{ marginBottom: 18 }}>
-                    <Text
-                        style={{
-                            fontFamily: SERIF,
-                            fontSize: 28,
-                            color: palette.EHR_ON_SURFACE,
-                            letterSpacing: -0.5,
-                            lineHeight: 32,
-                        }}
-                    >
-                        {isUpdateMode ? 'Cập nhật hồ sơ' : 'Tạo hồ sơ mới'}
+        <FormShell footer={footer} saveStatusLabel={saveStatusLabel}>
+            <PageHeader
+                eyebrow={isUpdateMode ? 'Bệnh nhân tự cập nhật' : 'Bệnh nhân tự khai'}
+                title={isUpdateMode ? 'Cập nhật phiên bản mới' : 'Ghi lại đợt khám của bạn'}
+                subtitle={isUpdateMode
+                    ? 'Phiên bản mới liên kết hồ sơ gốc — bên đã chia sẻ vẫn truy cập được.'
+                    : 'Hồ sơ này có thể chia sẻ cho bác sĩ về sau. Không thay thế chẩn đoán y tế chính thức.'}
+            />
+
+            {/* Restore draft banner */}
+            {restorable ? (
+                <View
+                    style={{
+                        marginHorizontal: 22,
+                        marginBottom: 14,
+                        paddingVertical: 12,
+                        paddingHorizontal: 14,
+                        borderRadius: 10,
+                        borderWidth: 0.5,
+                        borderColor: palette.EHR_CLAY,
+                        backgroundColor: `${palette.EHR_CLAY}14`,
+                    }}
+                >
+                    <Text style={{ fontFamily: SANS_SEMI, fontSize: 13, color: palette.EHR_ON_SURFACE, fontWeight: '700', marginBottom: 4 }}>
+                        Có bản nháp đang lưu
                     </Text>
-                    <Text
-                        style={{
-                            marginTop: 6,
-                            fontFamily: SANS,
-                            fontSize: 13,
-                            color: palette.EHR_ON_SURFACE_VARIANT,
-                            lineHeight: 19,
-                        }}
-                    >
-                        {isUpdateMode
-                            ? 'Phiên bản mới liên kết hồ sơ gốc — bên đã chia sẻ vẫn truy cập được.'
-                            : 'Tự khai báo hồ sơ y tế. Mã hoá đầu cuối + đăng ký on-chain.'}
+                    <Text style={{ fontFamily: SANS, fontSize: 12, color: palette.EHR_ON_SURFACE_VARIANT, lineHeight: 17, marginBottom: 10 }}>
+                        Phát hiện hồ sơ tự lưu chưa hoàn tất. Khôi phục để tiếp tục, hoặc bỏ qua để bắt đầu mới.
+                    </Text>
+                    <XStack style={{ gap: 8 }}>
+                        <Pressable
+                            onPress={applyRestore}
+                            style={({ pressed }) => ({
+                                paddingVertical: 8,
+                                paddingHorizontal: 14,
+                                borderRadius: 8,
+                                backgroundColor: palette.EHR_ON_SURFACE,
+                                opacity: pressed ? 0.85 : 1,
+                            })}
+                        >
+                            <Text style={{ fontFamily: SANS_SEMI, fontSize: 12, color: palette.EHR_SURFACE, fontWeight: '700' }}>
+                                Khôi phục
+                            </Text>
+                        </Pressable>
+                        <Pressable
+                            onPress={dismissRestore}
+                            style={({ pressed }) => ({
+                                paddingVertical: 8,
+                                paddingHorizontal: 14,
+                                borderRadius: 8,
+                                borderWidth: 0.5,
+                                borderColor: palette.EHR_OUTLINE,
+                                opacity: pressed ? 0.7 : 1,
+                            })}
+                        >
+                            <Text style={{ fontFamily: SANS_SEMI, fontSize: 12, color: palette.EHR_ON_SURFACE, fontWeight: '600' }}>
+                                Bỏ qua
+                            </Text>
+                        </Pressable>
+                    </XStack>
+                </View>
+            ) : null}
+
+            {/* Tự-khai banner — only on create, not update */}
+            {!isUpdateMode ? (
+                <View
+                    style={{
+                        marginHorizontal: 22,
+                        marginBottom: 14,
+                        paddingVertical: 12,
+                        paddingHorizontal: 14,
+                        borderRadius: 10,
+                        backgroundColor: `${palette.EHR_CLAY}1A`,
+                        borderWidth: 0.5,
+                        borderColor: `${palette.EHR_CLAY}50`,
+                        flexDirection: 'row',
+                        gap: 10,
+                    }}
+                >
+                    <View style={{ width: 4, alignSelf: 'stretch', backgroundColor: palette.EHR_CLAY, borderRadius: 2 }} />
+                    <Text style={{ flex: 1, fontFamily: SANS, fontSize: 12, color: palette.EHR_ON_SURFACE, lineHeight: 18 }}>
+                        Đây là{' '}
+                        <Text style={{ fontFamily: SANS_SEMI, color: palette.EHR_CLAY, fontWeight: '700' }}>hồ sơ tự khai</Text>
+                        . Khác với hồ sơ do bác sĩ tạo, nội dung này chưa được xác minh bởi tổ chức y tế.
                     </Text>
                 </View>
+            ) : null}
 
-                {/* G.12.g — Self-khai banner uses CLAY token (warm data accent per design tokens.jsx) */}
-                {!isUpdateMode ? (
-                    <View
-                        style={{
-                            marginBottom: 16,
-                            paddingVertical: 12,
-                            paddingHorizontal: 14,
-                            borderRadius: 12,
-                            backgroundColor: `${palette.EHR_CLAY}1A`,
-                            borderWidth: 0.5,
-                            borderColor: `${palette.EHR_CLAY}50`,
-                            flexDirection: 'row',
-                            gap: 10,
-                        }}
-                    >
-                        <View
-                            style={{
-                                width: 4,
-                                alignSelf: 'stretch',
-                                backgroundColor: palette.EHR_CLAY,
-                                borderRadius: 2,
-                            }}
-                        />
-                        <Text
-                            style={{
-                                flex: 1,
-                                fontFamily: SANS,
-                                fontSize: 12,
-                                color: palette.EHR_ON_SURFACE,
-                                lineHeight: 18,
-                            }}
-                        >
-                            Đây là{' '}
-                            <Text style={{ fontFamily: SANS_SEMI, color: palette.EHR_CLAY, fontWeight: '700' }}>
-                                hồ sơ tự khai
-                            </Text>
-                            . Khác với hồ sơ do bác sĩ tạo, nội dung này chưa được xác minh bởi tổ chức y tế.
-                        </Text>
-                    </View>
-                ) : null}
-
-                {/* Mode switch */}
-                <XStack style={{ gap: 8, marginBottom: 16 }}>
-                    <Pressable style={{ flex: 1 }} onPress={() => setSimpleMode(true)}>
-                        <View
-                            style={{
-                                paddingVertical: 12,
-                                paddingHorizontal: 14,
-                                borderRadius: 12,
-                                borderWidth: simpleMode ? 1.5 : 0.5,
-                                borderColor: simpleMode ? palette.EHR_PRIMARY : palette.EHR_OUTLINE_SOFT,
-                                backgroundColor: simpleMode ? palette.EHR_PRIMARY_FIXED : palette.EHR_SURFACE_LOWEST,
-                            }}
-                        >
-                            <XStack style={{ alignItems: 'center', gap: 10 }}>
-                                <ImagePlus size={18} color={simpleMode ? palette.EHR_PRIMARY : palette.EHR_ON_SURFACE_VARIANT} />
-                                <YStack style={{ flex: 1 }}>
-                                    <Text style={{ fontFamily: SANS_SEMI, fontSize: 13.5, color: simpleMode ? palette.EHR_PRIMARY : palette.EHR_ON_SURFACE, fontWeight: '700' }}>
-                                        Nhanh
-                                    </Text>
-                                    <Text style={{ fontFamily: SANS, fontSize: 11, color: palette.EHR_TEXT_MUTED }}>
-                                        Tiêu đề + ảnh
-                                    </Text>
-                                </YStack>
-                            </XStack>
-                        </View>
-                    </Pressable>
-                    <Pressable style={{ flex: 1 }} onPress={() => setSimpleMode(false)}>
-                        <View
-                            style={{
-                                paddingVertical: 12,
-                                paddingHorizontal: 14,
-                                borderRadius: 12,
-                                borderWidth: !simpleMode ? 1.5 : 0.5,
-                                borderColor: !simpleMode ? palette.EHR_PRIMARY : palette.EHR_OUTLINE_SOFT,
-                                backgroundColor: !simpleMode ? palette.EHR_PRIMARY_FIXED : palette.EHR_SURFACE_LOWEST,
-                            }}
-                        >
-                            <XStack style={{ alignItems: 'center', gap: 10 }}>
-                                <Stethoscope size={18} color={!simpleMode ? palette.EHR_PRIMARY : palette.EHR_ON_SURFACE_VARIANT} />
-                                <YStack style={{ flex: 1 }}>
-                                    <Text style={{ fontFamily: SANS_SEMI, fontSize: 13.5, color: !simpleMode ? palette.EHR_PRIMARY : palette.EHR_ON_SURFACE, fontWeight: '700' }}>
-                                        Đầy đủ
-                                    </Text>
-                                    <Text style={{ fontFamily: SANS, fontSize: 11, color: palette.EHR_TEXT_MUTED }}>
-                                        Toàn bộ trường (ICD-10, Rx…)
-                                    </Text>
-                                </YStack>
-                            </XStack>
-                        </View>
-                    </Pressable>
+            {/* Mode switch */}
+            <View style={{ paddingHorizontal: 22, marginBottom: 18 }}>
+                <XStack style={{ gap: 8 }}>
+                    {([
+                        { id: true, label: 'Nhanh', sub: 'Tiêu đề + ảnh' },
+                        { id: false, label: 'Đầy đủ', sub: 'Vitals · Rx · ICD-10' },
+                    ] as const).map((m) => {
+                        const active = draft.simpleMode === m.id;
+                        return (
+                            <Pressable
+                                key={String(m.id)}
+                                onPress={() => set('simpleMode', m.id)}
+                                style={({ pressed }) => ({
+                                    flex: 1,
+                                    paddingVertical: 12,
+                                    paddingHorizontal: 14,
+                                    borderRadius: 10,
+                                    borderWidth: active ? 1.25 : 0.5,
+                                    borderColor: active ? palette.EHR_ON_SURFACE : palette.EHR_OUTLINE_SOFT,
+                                    backgroundColor: palette.EHR_SURFACE_LOWEST,
+                                    opacity: pressed ? 0.85 : 1,
+                                })}
+                            >
+                                <Text style={{ fontFamily: SANS_SEMI, fontSize: 14, color: palette.EHR_ON_SURFACE, fontWeight: '700' }}>
+                                    {m.label}
+                                </Text>
+                                <Text style={{ fontFamily: SANS, fontSize: 11, color: palette.EHR_TEXT_MUTED, marginTop: 2 }}>
+                                    {m.sub}
+                                </Text>
+                            </Pressable>
+                        );
+                    })}
                 </XStack>
+            </View>
 
-                {/* Record type selector — only in detail mode */}
-                {!simpleMode ? (
-                    <YStack style={{ marginBottom: 18 }}>
-                        <ViSectionLabel>Loại hồ sơ</ViSectionLabel>
-                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, paddingHorizontal: 20 }}>
-                            {RECORD_TYPES.map((type) => {
-                                const Icon = type.icon;
-                                const active = type.key === recordType;
-                                return (
-                                    <Pressable key={type.key} onPress={() => setRecordType(type.key)}>
-                                        <View
-                                            style={{
-                                                paddingVertical: 10,
-                                                paddingHorizontal: 14,
-                                                borderRadius: 14,
-                                                borderWidth: active ? 1.5 : 0.5,
-                                                borderColor: active ? type.tint : palette.EHR_OUTLINE_SOFT,
-                                                backgroundColor: active ? `${type.tint}1A` : palette.EHR_SURFACE_LOWEST,
-                                                flexDirection: 'row',
-                                                alignItems: 'center',
-                                                gap: 8,
-                                            }}
-                                        >
-                                            <Icon size={14} color={active ? type.tint : palette.EHR_OUTLINE} />
-                                            <Text
-                                                style={{
-                                                    fontFamily: SANS_MEDIUM,
-                                                    fontSize: 12.5,
-                                                    color: active ? type.tint : palette.EHR_ON_SURFACE_VARIANT,
-                                                    fontWeight: '600',
-                                                }}
-                                            >
-                                                {type.label}
-                                            </Text>
-                                        </View>
-                                    </Pressable>
-                                );
+            {/* TYPE — horizontal scroll chips (canonical 5) */}
+            <SectionLabel>Loại hồ sơ</SectionLabel>
+            <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={{ paddingHorizontal: 22, paddingBottom: 16, gap: 8 }}
+            >
+                {RECORD_TYPES.map((type) => {
+                    const active = type.key === draft.recordType;
+                    const Icon = type.icon;
+                    return (
+                        <Pressable
+                            key={type.key}
+                            onPress={() => set('recordType', type.key)}
+                            style={({ pressed }) => ({
+                                paddingVertical: 9,
+                                paddingHorizontal: 16,
+                                borderRadius: 999,
+                                borderWidth: 0.75,
+                                borderColor: active ? palette.EHR_ON_SURFACE : palette.EHR_OUTLINE_SOFT,
+                                backgroundColor: active ? palette.EHR_ON_SURFACE : palette.EHR_SURFACE_LOWEST,
+                                flexDirection: 'row',
+                                alignItems: 'center',
+                                gap: 6,
+                                opacity: pressed ? 0.85 : 1,
                             })}
-                        </View>
-                    </YStack>
-                ) : null}
-
-                {/* Content card */}
-                <ViCard padding={16} style={{ marginBottom: 14 }}>
-                    <Text
-                        style={{
-                            fontFamily: SERIF,
-                            fontSize: 17,
-                            color: palette.EHR_ON_SURFACE,
-                            letterSpacing: -0.2,
-                            marginBottom: 12,
-                        }}
-                    >
-                        {simpleMode ? 'Thông tin hồ sơ' : 'Nội dung chính'}
-                    </Text>
-                    {renderInput('Tiêu đề', title, setTitle, {
-                        placeholder: simpleMode
-                            ? 'Ví dụ: Ảnh đơn thuốc tháng 3'
-                            : 'Ví dụ: Khám tổng quát tháng 3/2026',
-                    })}
-                    {renderInput(simpleMode ? 'Ghi chú' : 'Mô tả ngắn', description, setDescription, {
-                        placeholder: simpleMode
-                            ? 'Ghi chú thêm về ảnh/giấy tờ này (tuỳ chọn)'
-                            : 'Tóm tắt nhanh kết quả hoặc mục đích buổi khám',
-                        multiline: true,
-                    })}
-
-                    {!simpleMode ? (
-                        <YStack style={{ marginBottom: 12 }}>
+                        >
+                            <Icon size={13} color={active ? palette.EHR_SURFACE : palette.EHR_ON_SURFACE_VARIANT} />
                             <Text
                                 style={{
                                     fontFamily: SANS_SEMI,
-                                    fontSize: 12,
-                                    color: palette.EHR_TEXT_MUTED,
-                                    marginBottom: 6,
-                                    letterSpacing: 0.3,
-                                    textTransform: 'uppercase',
+                                    fontSize: 12.5,
                                     fontWeight: '600',
+                                    color: active ? palette.EHR_SURFACE : palette.EHR_ON_SURFACE,
+                                    letterSpacing: 0.1,
                                 }}
                             >
-                                Chẩn đoán (ICD-10)
+                                {type.label}
                             </Text>
-                            {icd10Codes.length > 0 ? (
-                                <YStack style={{ gap: 6, marginBottom: 8 }}>
-                                    {icd10Codes.map((item) => (
-                                        <XStack
-                                            key={item.code}
-                                            style={{
-                                                alignItems: 'center',
-                                                gap: 10,
-                                                paddingVertical: 8,
-                                                paddingHorizontal: 10,
-                                                borderRadius: 10,
-                                                backgroundColor: palette.EHR_PRIMARY_FIXED,
-                                            }}
-                                        >
-                                            <View
-                                                style={{
-                                                    minWidth: 50,
-                                                    paddingHorizontal: 6,
-                                                    paddingVertical: 2,
-                                                    borderRadius: 6,
-                                                    backgroundColor: palette.EHR_PRIMARY,
-                                                    alignItems: 'center',
-                                                }}
-                                            >
-                                                <Text style={{ fontFamily: 'monospace', fontSize: 11, color: '#FAF7F1', fontWeight: '700' }}>
-                                                    {item.code}
-                                                </Text>
-                                            </View>
-                                            <Text style={{ flex: 1, fontFamily: SANS, fontSize: 12.5, color: palette.EHR_ON_SURFACE }}>
-                                                {item.name}
-                                            </Text>
-                                            <Pressable onPress={() => setIcd10Codes((prev) => prev.filter((c) => c.code !== item.code))}>
-                                                <X size={16} color={palette.EHR_DANGER} />
-                                            </Pressable>
-                                        </XStack>
-                                    ))}
-                                </YStack>
-                            ) : null}
-                            <Pressable onPress={() => setIcd10PickerOpen(true)}>
-                                <View
-                                    style={{
-                                        paddingVertical: 10,
-                                        borderRadius: 12,
-                                        borderWidth: 0.75,
-                                        borderStyle: 'dashed',
-                                        borderColor: palette.EHR_PRIMARY,
-                                        flexDirection: 'row',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        gap: 8,
-                                    }}
-                                >
-                                    <Plus size={14} color={palette.EHR_PRIMARY} />
-                                    <Text style={{ fontFamily: SANS_MEDIUM, fontSize: 12.5, color: palette.EHR_PRIMARY, fontWeight: '600' }}>
-                                        {icd10Codes.length > 0 ? 'Thêm mã ICD-10 khác' : 'Chọn mã ICD-10'}
-                                    </Text>
-                                </View>
-                            </Pressable>
-                        </YStack>
-                    ) : null}
+                        </Pressable>
+                    );
+                })}
+            </ScrollView>
 
-                    {!simpleMode ? renderInput('Ghi chú chẩn đoán', diagnosisNote, setDiagnosisNote, { placeholder: 'Mô tả thêm nếu không có trong ICD-10', multiline: true }) : null}
-                    {!simpleMode ? renderInput('Ghi chú thêm', notes, setNotes, { placeholder: 'Chi tiết bổ sung, lịch tái khám…', multiline: true }) : null}
-                </ViCard>
+            {/* CONTENT */}
+            <SectionLabel required>Thông tin</SectionLabel>
+            <View style={{ paddingHorizontal: 22, paddingBottom: 18 }}>
+                {renderFieldLabel('Tiêu đề')}
+                {renderInput(draft.title, (v) => set('title', v), {
+                    placeholder: draft.simpleMode
+                        ? 'Ví dụ: Ảnh đơn thuốc tháng 3'
+                        : 'Ví dụ: Khám tổng quát tháng 3/2026',
+                })}
+                {renderFieldLabel(draft.simpleMode ? 'Ghi chú' : 'Mô tả ngắn')}
+                {renderInput(draft.description, (v) => set('description', v), {
+                    placeholder: draft.simpleMode
+                        ? 'Ghi chú thêm về ảnh/giấy tờ này (tuỳ chọn)'
+                        : 'Tóm tắt nhanh kết quả hoặc mục đích buổi khám',
+                    multiline: true,
+                })}
 
-                {/* Image attachment */}
-                <ViCard padding={16} style={{ marginBottom: 14 }}>
-                    <Text
-                        style={{
-                            fontFamily: SERIF,
-                            fontSize: 17,
-                            color: palette.EHR_ON_SURFACE,
-                            letterSpacing: -0.2,
-                            marginBottom: 12,
-                        }}
-                    >
-                        Ảnh đính kèm (tuỳ chọn)
-                    </Text>
-                    {selectedImage ? (
-                        <View style={{ marginBottom: 10 }}>
-                            <View style={{ borderRadius: 14, overflow: 'hidden', borderWidth: 0.5, borderColor: palette.EHR_OUTLINE_SOFT }}>
-                                <Image
-                                    source={{ uri: selectedImage.uri }}
-                                    style={{ width: '100%', height: 200, backgroundColor: palette.EHR_SURFACE }}
-                                    resizeMode="cover"
-                                />
-                            </View>
-                            <Text style={{ marginTop: 6, fontFamily: SANS, fontSize: 11, color: palette.EHR_TEXT_MUTED }}>
-                                {selectedImage.fileName}
-                            </Text>
-                        </View>
-                    ) : null}
-                    <XStack style={{ gap: 8 }}>
-                        <View style={{ flex: 1 }}>
-                            <ViButton
-                                variant="ghost"
-                                full
-                                size="sm"
-                                onPress={pickImage}
-                                loading={isPickingImage}
-                                leftIcon={<ImagePlus size={14} color={palette.EHR_ON_SURFACE} />}
-                            >
-                                {selectedImage ? 'Chọn ảnh khác' : (isPickingImage ? 'Đang mở…' : 'Chọn ảnh')}
-                            </ViButton>
-                        </View>
-                        {selectedImage ? (
-                            <ViButton
-                                variant="danger"
-                                size="sm"
-                                onPress={() => setSelectedImage(null)}
-                                leftIcon={<Trash2 size={14} color={palette.EHR_DANGER} />}
-                            >
-                                Xoá
-                            </ViButton>
+                {!draft.simpleMode ? (
+                    <>
+                        {renderFieldLabel('Chẩn đoán (ICD-10)')}
+                        {draft.icd10Codes.length > 0 ? (
+                            <YStack style={{ gap: 6, marginBottom: 8 }}>
+                                {draft.icd10Codes.map((item) => (
+                                    <XStack
+                                        key={item.code}
+                                        style={{
+                                            alignItems: 'center',
+                                            gap: 10,
+                                            paddingVertical: 8,
+                                            paddingHorizontal: 10,
+                                            borderRadius: 8,
+                                            backgroundColor: palette.EHR_SURFACE_LOWEST,
+                                            borderWidth: 0.5,
+                                            borderColor: palette.EHR_OUTLINE_SOFT,
+                                        }}
+                                    >
+                                        <Text style={{ fontFamily: MONO, fontSize: 12, color: palette.EHR_ON_SURFACE, fontWeight: '700' }}>
+                                            {item.code}
+                                        </Text>
+                                        <Text style={{ flex: 1, fontFamily: SANS, fontSize: 12.5, color: palette.EHR_ON_SURFACE_VARIANT }}>
+                                            {item.name}
+                                        </Text>
+                                        <Pressable onPress={() => set('icd10Codes', draft.icd10Codes.filter((c) => c.code !== item.code))}>
+                                            <X size={14} color={palette.EHR_TEXT_MUTED} />
+                                        </Pressable>
+                                    </XStack>
+                                ))}
+                            </YStack>
                         ) : null}
-                    </XStack>
-                    <Text style={{ marginTop: 8, fontFamily: SANS, fontSize: 11, color: palette.EHR_TEXT_MUTED, lineHeight: 16 }}>
-                        Ảnh sẽ được mã hoá cùng nội dung trước khi upload lên IPFS.
-                    </Text>
-                </ViCard>
+                        <Pressable onPress={() => setIcd10PickerOpen(true)}>
+                            <View
+                                style={{
+                                    paddingVertical: 10,
+                                    borderRadius: 10,
+                                    borderWidth: 0.75,
+                                    borderStyle: 'dashed',
+                                    borderColor: palette.EHR_OUTLINE,
+                                    flexDirection: 'row',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    gap: 6,
+                                }}
+                            >
+                                <Plus size={13} color={palette.EHR_ON_SURFACE} />
+                                <Text style={{ fontFamily: SANS_SEMI, fontSize: 12.5, color: palette.EHR_ON_SURFACE, fontWeight: '600' }}>
+                                    {draft.icd10Codes.length > 0 ? 'Thêm mã ICD-10 khác' : 'Chọn mã ICD-10'}
+                                </Text>
+                            </View>
+                        </Pressable>
 
-                {/* Vital signs (detail mode) */}
-                {!simpleMode ? (
-                    <ViCard padding={16} style={{ marginBottom: 14 }}>
-                        <Text
-                            style={{
-                                fontFamily: SERIF,
-                                fontSize: 17,
-                                color: palette.EHR_ON_SURFACE,
-                                letterSpacing: -0.2,
-                                marginBottom: 4,
-                            }}
-                        >
-                            Dấu hiệu sinh tồn
-                        </Text>
-                        <Text style={{ fontFamily: SANS, fontSize: 11, color: palette.EHR_TEXT_MUTED, marginBottom: 12 }}>
-                            Theo chuẩn bệnh án điện tử (TT 46/2018/TT-BYT)
-                        </Text>
-                        <XStack style={{ gap: 10 }}>
-                            <View style={{ flex: 1 }}>{renderInput('Mạch (bpm)', heartRate, setHeartRate, { placeholder: '72', keyboardType: 'numeric' })}</View>
-                            <View style={{ flex: 1 }}>{renderInput('Nhịp thở', respRate, setRespRate, { placeholder: '18', keyboardType: 'numeric' })}</View>
-                        </XStack>
-                        <XStack style={{ gap: 10 }}>
-                            <View style={{ flex: 1 }}>{renderInput('HA tâm thu', systolic, setSystolic, { placeholder: '120', keyboardType: 'numeric' })}</View>
-                            <View style={{ flex: 1 }}>{renderInput('HA tâm trương', diastolic, setDiastolic, { placeholder: '80', keyboardType: 'numeric' })}</View>
-                        </XStack>
-                        <XStack style={{ gap: 10 }}>
-                            <View style={{ flex: 1 }}>{renderInput('Nhiệt độ (°C)', temperature, setTemperature, { placeholder: '36.8', keyboardType: 'decimal-pad' })}</View>
-                            <View style={{ flex: 1 }}>{renderInput('SpO2 (%)', spo2, setSpo2, { placeholder: '98', keyboardType: 'numeric' })}</View>
-                        </XStack>
-                        <XStack style={{ gap: 10 }}>
-                            <View style={{ flex: 1 }}>{renderInput('Cân nặng (kg)', weight, setWeight, { placeholder: '60', keyboardType: 'decimal-pad' })}</View>
-                            <View style={{ flex: 1 }}>{renderInput('Chiều cao (cm)', height, setHeight, { placeholder: '165', keyboardType: 'numeric' })}</View>
-                        </XStack>
-                        <XStack style={{ alignItems: 'center', gap: 6, marginTop: -4 }}>
-                            <Activity size={13} color={palette.EHR_TEXT_MUTED} />
-                            <Text style={{ fontFamily: SANS, fontSize: 11, color: palette.EHR_TEXT_MUTED }}>
-                                BMI được tính tự động từ cân nặng và chiều cao.
-                            </Text>
-                        </XStack>
-                    </ViCard>
+                        {renderFieldLabel('Ghi chú chẩn đoán')}
+                        {renderInput(draft.diagnosisNote, (v) => set('diagnosisNote', v), {
+                            placeholder: 'Mô tả thêm nếu không có trong ICD-10',
+                            multiline: true,
+                        })}
+
+                        {renderFieldLabel('Ghi chú thêm')}
+                        {renderInput(draft.notes, (v) => set('notes', v), {
+                            placeholder: 'Chi tiết bổ sung, lịch tái khám…',
+                            multiline: true,
+                        })}
+                    </>
                 ) : null}
+            </View>
 
-                {/* Prescription (detail mode) */}
-                {!simpleMode ? (
-                    <ViCard padding={16} style={{ marginBottom: 14 }}>
-                        <Text
-                            style={{
-                                fontFamily: SERIF,
-                                fontSize: 17,
-                                color: palette.EHR_ON_SURFACE,
-                                letterSpacing: -0.2,
-                                marginBottom: 4,
-                            }}
-                        >
-                            Đơn thuốc
-                        </Text>
-                        <Text style={{ fontFamily: SANS, fontSize: 11, color: palette.EHR_TEXT_MUTED, marginBottom: 12 }}>
-                            Theo chuẩn đơn thuốc điện tử (TT 04/2022/TT-BYT)
-                        </Text>
-                        {renderInput('Tên thuốc / hoạt chất', medication, setMedication, { placeholder: 'Paracetamol 500mg' })}
-                        <XStack style={{ gap: 10 }}>
-                            <View style={{ flex: 1 }}>{renderInput('Hàm lượng / Liều', dosage, setDosage, { placeholder: '1 viên' })}</View>
-                            <View style={{ flex: 1 }}>{renderInput('Đường dùng', route, setRoute, { placeholder: 'Uống / Tiêm' })}</View>
-                        </XStack>
-                        <XStack style={{ gap: 10 }}>
-                            <View style={{ flex: 1 }}>{renderInput('Số lần / ngày', frequency, setFrequency, { placeholder: '2 lần/ngày' })}</View>
-                            <View style={{ flex: 1 }}>{renderInput('Số ngày dùng', duration, setDuration, { placeholder: '5 ngày' })}</View>
-                        </XStack>
-                        {renderInput('Số lượng kê', quantity, setQuantity, { placeholder: '10 viên' })}
-                        {renderInput('Lời dặn bác sĩ', instruction, setInstruction, { placeholder: 'Uống sau ăn, tránh rượu bia…', multiline: true })}
-                        <XStack style={{ alignItems: 'flex-start', gap: 6, marginTop: -4 }}>
-                            <Pill size={13} color={palette.EHR_TEXT_MUTED} style={{ marginTop: 2 }} />
-                            <Text style={{ flex: 1, fontFamily: SANS, fontSize: 11, color: palette.EHR_TEXT_MUTED, lineHeight: 16 }}>
-                                Nếu để trống, hồ sơ vẫn được tạo mà không có đơn thuốc.
-                            </Text>
-                        </XStack>
-                    </ViCard>
-                ) : null}
-
-                {error ? (
-                    <View
-                        style={{
-                            padding: 12,
-                            borderRadius: 12,
-                            backgroundColor: `${palette.EHR_DANGER}14`,
-                            borderWidth: 0.5,
-                            borderColor: palette.EHR_DANGER,
-                            marginBottom: 14,
-                        }}
-                    >
-                        <Text style={{ fontFamily: SANS, fontSize: 12.5, color: palette.EHR_DANGER, lineHeight: 18 }}>
-                            {error}
+            {/* IMAGE */}
+            <SectionLabel trailing="Mã hoá cùng nội dung">Ảnh đính kèm</SectionLabel>
+            <View style={{ paddingHorizontal: 22, paddingBottom: 18 }}>
+                {selectedImage ? (
+                    <View style={{ marginBottom: 10 }}>
+                        <View style={{ borderRadius: 10, overflow: 'hidden', borderWidth: 0.5, borderColor: palette.EHR_OUTLINE_SOFT }}>
+                            <Image
+                                source={{ uri: selectedImage.uri }}
+                                style={{ width: '100%', height: 200, backgroundColor: palette.EHR_SURFACE }}
+                                resizeMode="cover"
+                            />
+                        </View>
+                        <Text style={{ marginTop: 6, fontFamily: MONO, fontSize: 11, color: palette.EHR_TEXT_MUTED }}>
+                            {selectedImage.fileName}
                         </Text>
                     </View>
                 ) : null}
+                <XStack style={{ gap: 8 }}>
+                    <Pressable
+                        onPress={pickImage}
+                        disabled={isPickingImage}
+                        style={({ pressed }) => ({
+                            flex: 1,
+                            paddingVertical: 11,
+                            borderRadius: 10,
+                            borderWidth: 0.5,
+                            borderColor: palette.EHR_OUTLINE,
+                            backgroundColor: palette.EHR_SURFACE_LOWEST,
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: 6,
+                            opacity: pressed ? 0.7 : 1,
+                        })}
+                    >
+                        <ImagePlus size={14} color={palette.EHR_ON_SURFACE} />
+                        <Text style={{ fontFamily: SANS_SEMI, fontSize: 12.5, color: palette.EHR_ON_SURFACE, fontWeight: '600' }}>
+                            {selectedImage ? 'Chọn ảnh khác' : (isPickingImage ? 'Đang mở…' : 'Chọn ảnh')}
+                        </Text>
+                    </Pressable>
+                    {selectedImage ? (
+                        <Pressable
+                            onPress={() => setSelectedImage(null)}
+                            style={({ pressed }) => ({
+                                paddingVertical: 11,
+                                paddingHorizontal: 14,
+                                borderRadius: 10,
+                                borderWidth: 0.5,
+                                borderColor: palette.EHR_CINNABAR_DEEP,
+                                flexDirection: 'row',
+                                alignItems: 'center',
+                                gap: 6,
+                                opacity: pressed ? 0.7 : 1,
+                            })}
+                        >
+                            <Trash2 size={14} color={palette.EHR_CINNABAR_DEEP} />
+                            <Text style={{ fontFamily: SANS_SEMI, fontSize: 12.5, color: palette.EHR_CINNABAR_DEEP, fontWeight: '600' }}>
+                                Xoá
+                            </Text>
+                        </Pressable>
+                    ) : null}
+                </XStack>
+            </View>
 
-                <ViButton
-                    variant="cinnabar"
-                    full
-                    size="lg"
-                    loading={isSubmitting}
-                    onPress={handleSubmit}
-                    leftIcon={isSubmitting ? undefined : <FilePlus2 size={16} color="#FAF7F1" />}
-                >
-                    {isSubmitting
-                        ? (isUpdateMode ? 'Đang cập nhật…' : 'Đang tạo hồ sơ…')
-                        : (isUpdateMode ? 'Cập nhật hồ sơ' : 'Tạo hồ sơ mới')}
-                </ViButton>
-                <Text
+            {/* VITALS (detail mode only) */}
+            {!draft.simpleMode ? (
+                <>
+                    <SectionLabel trailing="Theo TT 46/2018/TT-BYT">Dấu hiệu sinh tồn</SectionLabel>
+                    <View style={{ paddingHorizontal: 22, paddingBottom: 18 }}>
+                        {VITAL_SPECS.map((spec) => {
+                            // BP combo: render systolic + diastolic in a single row
+                            if (spec.id === 'bpSystolic') {
+                                return (
+                                    <VitalRow
+                                        key="bp"
+                                        label="Huyết áp"
+                                        unit="mmHg"
+                                        refLabel="< 140/90"
+                                        status={bp}
+                                        note={bp === 'high' ? 'Cao hơn ngưỡng' : bp === 'low' ? 'Thấp hơn ngưỡng' : null}
+                                    >
+                                        <XStack style={{ gap: 8, alignItems: 'center' }}>
+                                            <VitalInput
+                                                value={draft.systolic}
+                                                onChangeText={(v) => set('systolic', v)}
+                                                placeholder="120"
+                                                width={62}
+                                            />
+                                            <Text style={{ color: palette.EHR_TEXT_MUTED }}>/</Text>
+                                            <VitalInput
+                                                value={draft.diastolic}
+                                                onChangeText={(v) => set('diastolic', v)}
+                                                placeholder="80"
+                                                width={62}
+                                            />
+                                        </XStack>
+                                    </VitalRow>
+                                );
+                            }
+                            if (spec.id === 'bpDiastolic') return null; // rendered above
+                            const status: VitalStatus = flagVital(spec, (draft as any)[spec.id === 'hr' ? 'heartRate' : spec.id === 'temp' ? 'temperature' : spec.id === 'rr' ? 'respRate' : spec.id]);
+                            const fieldKey = spec.id === 'hr' ? 'heartRate'
+                                : spec.id === 'temp' ? 'temperature'
+                                : spec.id === 'rr' ? 'respRate'
+                                : spec.id;
+                            return (
+                                <VitalRow
+                                    key={spec.id}
+                                    label={spec.label}
+                                    unit={spec.unit}
+                                    refLabel={spec.refLabel}
+                                    status={status}
+                                    note={abnormalNote(spec, status)}
+                                >
+                                    <VitalInput
+                                        value={(draft as any)[fieldKey]}
+                                        onChangeText={(v) => set(fieldKey as any, v)}
+                                        placeholder={spec.placeholder || ''}
+                                        width={88}
+                                    />
+                                </VitalRow>
+                            );
+                        })}
+                        {renderFieldLabel('Chiều cao (cm)')}
+                        {renderInput(draft.height, (v) => set('height', v), { placeholder: '165', keyboardType: 'numeric' })}
+                        <Text style={{ marginTop: 8, fontFamily: SANS, fontSize: 11, color: palette.EHR_TEXT_MUTED }}>
+                            BMI tính tự động từ cân nặng và chiều cao.
+                        </Text>
+                    </View>
+                </>
+            ) : null}
+
+            {/* PRESCRIPTION (detail mode only) */}
+            {!draft.simpleMode ? (
+                <>
+                    <SectionLabel trailing="Theo TT 04/2022/TT-BYT">Đơn thuốc</SectionLabel>
+                    <View style={{ paddingHorizontal: 22, paddingBottom: 18 }}>
+                        {renderFieldLabel('Tên thuốc / hoạt chất')}
+                        {renderInput(draft.medication, (v) => set('medication', v), { placeholder: 'Paracetamol 500mg' })}
+                        <XStack style={{ gap: 10 }}>
+                            <View style={{ flex: 1 }}>
+                                {renderFieldLabel('Hàm lượng / Liều')}
+                                {renderInput(draft.dosage, (v) => set('dosage', v), { placeholder: '1 viên' })}
+                            </View>
+                            <View style={{ flex: 1 }}>
+                                {renderFieldLabel('Đường dùng')}
+                                {renderInput(draft.route, (v) => set('route', v), { placeholder: 'Uống / Tiêm' })}
+                            </View>
+                        </XStack>
+                        <XStack style={{ gap: 10 }}>
+                            <View style={{ flex: 1 }}>
+                                {renderFieldLabel('Số lần / ngày')}
+                                {renderInput(draft.frequency, (v) => set('frequency', v), { placeholder: '2 lần/ngày' })}
+                            </View>
+                            <View style={{ flex: 1 }}>
+                                {renderFieldLabel('Số ngày dùng')}
+                                {renderInput(draft.duration, (v) => set('duration', v), { placeholder: '5 ngày' })}
+                            </View>
+                        </XStack>
+                        {renderFieldLabel('Số lượng kê')}
+                        {renderInput(draft.quantity, (v) => set('quantity', v), { placeholder: '10 viên' })}
+                        {renderFieldLabel('Lời dặn')}
+                        {renderInput(draft.instruction, (v) => set('instruction', v), { placeholder: 'Uống sau ăn, tránh rượu bia…', multiline: true })}
+                    </View>
+                </>
+            ) : null}
+
+            {error ? (
+                <View
                     style={{
-                        marginTop: 10,
-                        textAlign: 'center',
-                        fontFamily: SANS,
-                        fontSize: 11,
-                        color: palette.EHR_TEXT_MUTED,
-                        lineHeight: 16,
+                        marginHorizontal: 22,
+                        marginBottom: 14,
+                        padding: 12,
+                        borderRadius: 10,
+                        backgroundColor: `${palette.EHR_DANGER}14`,
+                        borderWidth: 0.5,
+                        borderColor: palette.EHR_DANGER,
                     }}
                 >
-                    Sau khi tạo, bạn có thể mở chi tiết để giải mã nội dung. Khoá AES được lưu local + backup tự share lên server.
-                </Text>
-            </ScrollView>
+                    <Text style={{ fontFamily: SANS, fontSize: 12.5, color: palette.EHR_DANGER, lineHeight: 18 }}>
+                        {error}
+                    </Text>
+                </View>
+            ) : null}
 
             <Icd10Picker
                 visible={icd10PickerOpen}
                 onClose={() => setIcd10PickerOpen(false)}
                 onSelect={(item) => {
-                    setIcd10Codes((prev) => (prev.some((c) => c.code === item.code) ? prev : [...prev, item]));
+                    if (draft.icd10Codes.some((c) => c.code === item.code)) return;
+                    set('icd10Codes', [...draft.icd10Codes, item]);
                 }}
-                selectedCodes={icd10Codes.map((c) => c.code)}
+                selectedCodes={draft.icd10Codes.map((c) => c.code)}
             />
-        </SafeAreaView>
+        </FormShell>
     );
 }
 
+// VitalRow — 3-col grid: [label + ref + (input ; unit)] [status note]
+function VitalRow({
+    label,
+    unit,
+    refLabel,
+    status,
+    note,
+    children,
+}: {
+    label: string;
+    unit: string;
+    refLabel: string;
+    status: VitalStatus;
+    note?: string | null;
+    children: React.ReactNode;
+}) {
+    const palette = useEhrPalette();
+    const statusColor =
+        status === 'high' ? palette.EHR_CINNABAR_DEEP
+        : status === 'low' ? palette.EHR_SECONDARY
+        : palette.EHR_TEXT_MUTED;
+    return (
+        <View
+            style={{
+                paddingVertical: 12,
+                borderBottomWidth: 0.5,
+                borderBottomColor: palette.EHR_OUTLINE_SOFT,
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 12,
+            }}
+        >
+            <YStack style={{ flex: 1 }}>
+                <Text style={{ fontFamily: SANS_SEMI, fontSize: 13.5, color: palette.EHR_ON_SURFACE, fontWeight: '600' }}>
+                    {label}
+                </Text>
+                <Text style={{ fontFamily: MONO, fontSize: 10.5, color: palette.EHR_TEXT_MUTED, marginTop: 2, letterSpacing: 0.3 }}>
+                    {refLabel} {unit}
+                </Text>
+                {note ? (
+                    <Text style={{ fontFamily: SANS, fontSize: 11, color: statusColor, marginTop: 2 }}>
+                        {note}
+                    </Text>
+                ) : null}
+            </YStack>
+            <XStack style={{ alignItems: 'center', gap: 4 }}>
+                {children}
+                <Text style={{ fontFamily: SANS, fontSize: 11.5, color: palette.EHR_TEXT_MUTED, marginLeft: 4, minWidth: 50 }}>
+                    {unit}
+                </Text>
+            </XStack>
+        </View>
+    );
+}
+
+function VitalInput({
+    value,
+    onChangeText,
+    placeholder,
+    width = 80,
+}: {
+    value: string;
+    onChangeText: (text: string) => void;
+    placeholder: string;
+    width?: number;
+}) {
+    const palette = useEhrPalette();
+    return (
+        <TextInput
+            value={value}
+            onChangeText={onChangeText}
+            placeholder={placeholder}
+            placeholderTextColor={palette.EHR_TEXT_MUTED}
+            keyboardType="decimal-pad"
+            style={{
+                width,
+                minHeight: 40,
+                borderRadius: 8,
+                borderWidth: 0.5,
+                borderColor: palette.EHR_OUTLINE_SOFT,
+                backgroundColor: palette.EHR_SURFACE_LOWEST,
+                paddingHorizontal: 10,
+                color: palette.EHR_ON_SURFACE,
+                fontFamily: MONO,
+                fontSize: 14,
+                textAlign: 'center',
+            }}
+        />
+    );
+}
