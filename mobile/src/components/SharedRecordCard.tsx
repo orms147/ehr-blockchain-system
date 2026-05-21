@@ -18,6 +18,7 @@ import { XStack, YStack, Text } from 'tamagui';
 import { FilePlus2 } from 'lucide-react-native';
 
 import { useEhrPalette } from '../constants/uiColors';
+import { resolveRecordType } from '../constants/recordTypes';
 import { useUserProfile } from './UserChip';
 import { formatExpiry, getExpiryUrgency } from '../utils/dateFormatting';
 
@@ -32,16 +33,6 @@ const SERIF_MEDIUM = 'Fraunces_500Medium';
 const SANS = 'DMSans_400Regular';
 const SANS_SEMI = 'DMSans_600SemiBold';
 const MONO = 'monospace';
-
-const TYPE_LABEL: Record<string, string> = {
-    checkup: 'Khám tổng quát',
-    diagnosis: 'Khám chuyên khoa',
-    prescription: 'Đơn thuốc',
-    lab_result: 'Xét nghiệm',
-    imaging: 'Chẩn đoán hình ảnh',
-    vaccination: 'Tiêm chủng',
-    vital_signs: 'Chỉ số sinh tồn',
-};
 
 function splitDate(input?: string): { day: string; month: string } {
     if (!input) return { day: '—', month: '' };
@@ -69,7 +60,7 @@ export default function SharedRecordCard({ record, onView, onCreateUpdate }: Sha
     const { day, month } = splitDate(record?.createdAt);
     const recordType = record?.record?.recordType || record?.recordType || record?.type;
     const typeKey = String(recordType || '').toLowerCase();
-    const typeLabel = TYPE_LABEL[typeKey] || (typeKey ? typeKey : 'Hồ sơ y tế');
+    const typeLabel = typeKey ? resolveRecordType(typeKey).label : 'Hồ sơ y tế';
     const title = record?.record?.title || `CID ${String(record?.cidHash || '').slice(0, 10)}…`;
 
     const statusLower = String(record?.status || '').toLowerCase();

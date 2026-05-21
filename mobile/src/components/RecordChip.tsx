@@ -9,18 +9,10 @@ import React from 'react';
 import { Pressable, View } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import { Text, XStack, YStack } from 'tamagui';
-import {
-    FileText,
-    Activity,
-    Stethoscope,
-    Microscope,
-    Image as ImageIcon,
-    Syringe,
-    HeartPulse,
-} from 'lucide-react-native';
 
 import api from '../services/api';
 import { useEhrPalette } from '../constants/uiColors';
+import { resolveRecordType } from '../constants/recordTypes';
 
 export type RecordMeta = {
     cidHash: string;
@@ -28,6 +20,7 @@ export type RecordMeta = {
     title: string | null;
     description: string | null;
     recordType: string | null;
+    versionNote?: string | null;
     ownerAddress: string;
     createdBy: string;
     createdAt: string;
@@ -35,25 +28,6 @@ export type RecordMeta = {
 
 const truncate = (h?: string | null) =>
     h ? `${h.slice(0, 6)}…${h.slice(-4)}` : '';
-
-const TYPE_ICON: Record<string, any> = {
-    diagnosis: Stethoscope,
-    prescription: FileText,
-    lab_result: Microscope,
-    imaging: ImageIcon,
-    vaccination: Syringe,
-    vital_signs: HeartPulse,
-    default: FileText,
-};
-
-const TYPE_LABEL: Record<string, string> = {
-    diagnosis: 'Khám chuyên khoa',
-    prescription: 'Đơn thuốc',
-    lab_result: 'Xét nghiệm',
-    imaging: 'Chẩn đoán hình ảnh',
-    vaccination: 'Tiêm chủng',
-    vital_signs: 'Chỉ số sinh tồn',
-};
 
 export function useRecordMeta(cidHash: string | null | undefined) {
     return useQuery<RecordMeta | null>({
@@ -90,8 +64,9 @@ export default function RecordChip({
 
     const title = meta?.title || fallbackTitle || `Hồ sơ ${truncate(cidHash)}`;
     const recordType = meta?.recordType || null;
-    const typeLabel = recordType ? TYPE_LABEL[recordType] || recordType : null;
-    const Icon = recordType && TYPE_ICON[recordType] ? TYPE_ICON[recordType] : TYPE_ICON.default;
+    const spec = resolveRecordType(recordType);
+    const typeLabel = recordType ? spec.label : null;
+    const Icon = spec.icon;
 
     const Wrapper: any = onPress ? Pressable : View;
 

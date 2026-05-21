@@ -25,6 +25,7 @@ import useRecords from '../hooks/useRecords';
 import ViCard from '../components-v2/ViCard';
 import ViButton from '../components-v2/ViButton';
 import { useEhrPalette, DARK } from '../constants/uiColors';
+import { resolveRecordType } from '../constants/recordTypes';
 
 // Dead branch (G.6 isActivityView=false) — keep map referencing DARK constants
 // to compile. Will be ripped when activity view is fully removed.
@@ -44,17 +45,15 @@ const SANS = 'DMSans_400Regular';
 const SANS_MEDIUM = 'DMSans_500Medium';
 const SANS_SEMI = 'DMSans_600SemiBold';
 
-// G.6 — record.type filter chips (matches backend recordType enum 1:1 per design §filters).
-// "Tất cả" = all types; "activity" view moved to AccessLog (Quyền tab) per canonical structure.
+// G.12 — record.type filter chips trimmed to canonical 5 (general/lab/imaging/rx/vacc)
+// per viehp-doctor-forms-spec.html Q1. vital_signs dropped (it's a section, not a type).
 const TYPE_FILTER_OPTIONS = [
     { key: 'all', label: 'Tất cả' },
-    { key: 'checkup', label: 'Khám' },
-    { key: 'diagnosis', label: 'Chẩn đoán' },
-    { key: 'prescription', label: 'Đơn thuốc' },
-    { key: 'lab_result', label: 'Xét nghiệm' },
+    { key: 'general', label: 'Khám' },
+    { key: 'lab', label: 'Xét nghiệm' },
     { key: 'imaging', label: 'Hình ảnh' },
-    { key: 'vital_signs', label: 'Sinh tồn' },
-    { key: 'other', label: 'Khác' },
+    { key: 'rx', label: 'Đơn thuốc' },
+    { key: 'vacc', label: 'Tiêm chủng' },
 ] as const;
 
 type TypeFilterKey = (typeof TYPE_FILTER_OPTIONS)[number]['key'];
@@ -183,10 +182,10 @@ export default function RecordsScreen({ navigation }: any) {
     const filteredRecords = records.filter((r: any) => {
         if (r.archived) return false;
 
-        // Type axis
+        // Type axis — resolve legacy keys (checkup, lab_result, etc) to canonical
         if (typeFilter !== 'all') {
             const rType = String(r.recordType || r.type || '').toLowerCase();
-            if (rType !== typeFilter) return false;
+            if (resolveRecordType(rType).key !== typeFilter) return false;
         }
 
         // Status axis

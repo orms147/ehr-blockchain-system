@@ -39,6 +39,7 @@ import ViCard from '../components-v2/ViCard';
 import ViButton from '../components-v2/ViButton';
 import { ViStatusChip, ViModeChip } from '../components-v2/ViChips';
 import { useEhrPalette } from '../constants/uiColors';
+import { resolveRecordType } from '../constants/recordTypes';
 import { formatDateTime, formatExpiry, getExpiryUrgency } from '../utils/dateFormatting';
 
 const SERIF = 'Fraunces_400Regular';
@@ -79,17 +80,10 @@ const getRequestTypeLabel = (reqType?: number) => {
     }
 };
 
-const RECORD_TYPE_LABELS: Record<string, string> = {
-    checkup: 'Khám tổng quát',
-    lab_result: 'Xét nghiệm',
-    prescription: 'Đơn thuốc',
-    diagnosis: 'Chẩn đoán',
-    local_record: 'Hồ sơ tự tạo',
-};
-
 const getRecordTypeLabel = (code?: string | null) => {
     if (!code) return null;
-    return RECORD_TYPE_LABELS[code.toLowerCase()] || code;
+    if (code.toLowerCase() === 'local_record') return 'Hồ sơ tự tạo';
+    return resolveRecordType(code).label;
 };
 
 const formatDuration = (item: RequestItem) => {
