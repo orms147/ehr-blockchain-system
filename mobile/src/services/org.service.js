@@ -11,9 +11,21 @@ export const orgService = {
         return api.get('/api/org/my-org');
     },
 
-    // Get org members (doctors under this org)
-    async getOrgMembers(orgId) {
-        return api.get(`/api/org/${orgId}/members`);
+    // Get org members (doctors under this org). Returns enriched shape with
+    // fullName/specialty/licenseNumber/verifiedAt + filter counts per Wave C.
+    //   status: 'active' (default) | 'revoked' | 'all'
+    async getOrgMembers(orgId, status = 'active') {
+        return api.get(`/api/org/${orgId}/members`, { status });
+    },
+
+    // Wave C: mirror on-chain revokeDoctorVerification → flip member status
+    // to 'revoked'. Mobile broadcasts the contract tx, this updates the cache.
+    async mirrorRevokeMember(orgId, doctorAddress, txHash, reason = null) {
+        return api.post(`/api/org/${orgId}/revoke-member`, {
+            doctorAddress,
+            txHash,
+            reason,
+        });
     },
 
     // Legacy helper: approve a verification request by id

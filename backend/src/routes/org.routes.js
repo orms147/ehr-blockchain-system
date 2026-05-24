@@ -271,22 +271,159 @@ router.get('/my-org', authenticate, async (req, res, next) => {
 });
 
 // GET /api/org/:orgId/members - Get organization members
+// Wave C: enriched member list. Joins OrganizationMember with User +
+// DoctorProfile + VerificationRequest to give the mobile UI everything it
+// needs for the redesigned VerifiedDoctorRow (per viehp-ministry-org-actions
+// §2: name + specialty + GPHN license + verifiedAt date + status pill).
+//
+// Query param ?status= filters by lifecycle:
+//   - active (default): all current members (verified + pending)
+//   - revoked: members whose verification was revoked (kept for audit)
 router.get('/:orgId/members', authenticate, async (req, res, next) => {
     try {
         const { orgId } = req.params;
+        const statusFilter = String(req.query.status || 'active').toLowerCase();
+        const allowedStatuses = ['active', 'revoked', 'all'];
+        if (!allowedStatuses.includes(statusFilter)) {
+            return res.status(400).json({
+                code: 'INVALID_STATUS_FILTER',
+                error: `status must be one of ${allowedStatuses.join(', ')}`,
+            });
+        }
+
+        const where = { orgId };
+        if (statusFilter !== 'all') where.status = statusFilter;
 
         const members = await prisma.organizationMember.findMany({
-            where: {
-                orgId: orgId,
-                status: 'active',
-            },
+            where,
             orderBy: { joinedAt: 'desc' },
         });
 
-        res.json({
-            count: members.length,
-            members: members,
+        if (members.length === 0) {
+            return res.json({ count: 0, members: [] });
+        }
+
+        const addresses = members.map((m) => m.memberAddress);
+        const [users, latestVerifs] = await Promise.all([
+            prisma.user.findMany({
+                where: { walletAddress: { in: addresses } },
+                include: { doctorProfile: true },
+            }),
+            prisma.verificationRequest.findMany({
+                where: { doctorAddress: { in: addresses } },
+                orderBy: { createdAt: 'desc' },
+            }),
+        ]);
+
+        const userByAddr = new Map(users.map((u) => [u.walletAddress.toLowerCase(), u]));
+        // Pick the most recent verification request per doctor (already ordered desc).
+        const verifByAddr = new Map();
+        for (const v of latestVerifs) {
+            const key = v.doctorAddress.toLowerCase();
+            if (!verifByAddr.has(key)) verifByAddr.set(key, v);
+        }
+
+        const enriched = members.map((m) => {
+            const addr = m.memberAddress.toLowerCase();
+            const u = userByAddr.get(addr);
+            const v = verifByAddr.get(addr);
+            // Verification state derived from latest VerificationRequest.status.
+            // 'verified' = approved (cached, contract is source of truth — UI
+            //              should re-check on action). 'pending' / 'rejected'.
+            // If member.status='revoked' override to 'revoked' regardless.
+            let verificationState = 'pending';
+            if (m.status === 'revoked') verificationState = 'revoked';
+            else if (v?.status === 'approved') verificationState = 'verified';
+            else if (v?.status === 'rejected') verificationState = 'rejected';
+            return {
+                id: m.id,
+                memberAddress: m.memberAddress,
+                role: m.role,
+                status: m.status,
+                joinedAt: m.joinedAt,
+                leftAt: m.leftAt,
+                // Enrichment fields:
+                fullName: u?.fullName || v?.fullName || null,
+                specialty: u?.doctorProfile?.specialty || v?.specialty || null,
+                licenseNumber: u?.doctorProfile?.licenseNumber || v?.licenseNumber || null,
+                hospitalName: u?.doctorProfile?.hospitalName || null,
+                verifiedAt: v?.status === 'approved' ? v.reviewedAt : null,
+                verificationState,
+            };
         });
+
+        // Counts for filter chips — across all status filters so UI can render
+        // chip badges even when current view is filtered.
+        const allMembers = await prisma.organizationMember.findMany({
+            where: { orgId },
+            select: { status: true, memberAddress: true },
+        });
+        const allAddrs = allMembers.map((m) => m.memberAddress.toLowerCase());
+        const allVerifs = await prisma.verificationRequest.findMany({
+            where: { doctorAddress: { in: allAddrs } },
+            select: { doctorAddress: true, status: true, createdAt: true },
+            orderBy: { createdAt: 'desc' },
+        });
+        const latestVerifMap = new Map();
+        for (const v of allVerifs) {
+            const k = v.doctorAddress.toLowerCase();
+            if (!latestVerifMap.has(k)) latestVerifMap.set(k, v.status);
+        }
+        const counts = { verified: 0, pending: 0, revoked: 0 };
+        for (const m of allMembers) {
+            if (m.status === 'revoked') counts.revoked += 1;
+            else {
+                const v = latestVerifMap.get(m.memberAddress.toLowerCase());
+                if (v === 'approved') counts.verified += 1;
+                else counts.pending += 1;
+            }
+        }
+
+        res.json({
+            count: enriched.length,
+            members: enriched,
+            counts,
+        });
+    } catch (error) {
+        next(error);
+    }
+});
+
+// Wave C: mirror on-chain revokeDoctorVerification → flip OrganizationMember
+// to 'revoked'. The actual AccessControl.revokeDoctorVerification(doctor)
+// tx is broadcast from mobile (org admin pays gas). This endpoint just
+// updates the cache so the UI status flips instantly without waiting for
+// event-sync to catch up. Reason field accepted but stored TBD (UX Q3).
+router.post('/:orgId/revoke-member', authenticate, async (req, res, next) => {
+    try {
+        const { orgId } = req.params;
+        const { doctorAddress, txHash } = req.body || {};
+        if (!doctorAddress || !/^0x[a-fA-F0-9]{40}$/.test(doctorAddress)) {
+            return res.status(400).json({
+                code: 'INVALID_DOCTOR_ADDRESS',
+                error: 'doctorAddress must be a 0x-prefixed 40-hex string',
+            });
+        }
+        const callerAddress = req.user.walletAddress.toLowerCase();
+
+        // Only org admin can revoke (mirror contract permission — the on-chain
+        // tx would fail anyway, but reject early so we don't store stale state).
+        const adminMembership = await prisma.organizationMember.findFirst({
+            where: { orgId, memberAddress: callerAddress, role: 'admin', status: 'active' },
+        });
+        if (!adminMembership) {
+            return res.status(403).json({
+                code: 'NOT_ORG_ADMIN',
+                error: 'Chỉ admin tổ chức mới có thể thu hồi xác minh',
+            });
+        }
+
+        await prisma.organizationMember.updateMany({
+            where: { orgId, memberAddress: doctorAddress.toLowerCase() },
+            data: { status: 'revoked', leftAt: new Date() },
+        });
+
+        res.json({ success: true, status: 'revoked', doctorAddress: doctorAddress.toLowerCase(), txHash: txHash || null });
     } catch (error) {
         next(error);
     }
