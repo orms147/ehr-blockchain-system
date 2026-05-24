@@ -66,6 +66,23 @@ export const orgService = {
         return api.get('/api/org/all');
     },
 
+    // Wave E: list doctors NOT belonging to any organization. Ministry uses
+    // this to verify independent doctors directly. Filter status:
+    //   'pending' (default) | 'verified' | 'revoked' | 'all'
+    async getIndependentDoctors(status = 'pending') {
+        return api.get('/api/admin/independent-doctors', { status });
+    },
+
+    // Wave E: mirror on-chain verifyDoctorByMinistry tx → flip
+    // VerificationRequest.status='approved' + record txHash.
+    async mirrorVerifyDoctor(doctorAddress, txHash, credential = null) {
+        return api.post('/api/admin/verify-doctor-mirror', {
+            doctorAddress,
+            txHash,
+            credential,
+        });
+    },
+
     // Wave D: confirm/sync after Ministry broadcasts createOrganization tx.
     // Mobile parses OrganizationCreated event from receipt → posts orgId + name
     // + admins + txHash. Backend verifies receipt + writes Organization +

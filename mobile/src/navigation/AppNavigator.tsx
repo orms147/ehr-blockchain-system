@@ -47,6 +47,7 @@ import OrgPendingVerificationsScreen from '../screens-v2/org/OrgPendingVerificat
 
 import MinistryDashboardScreen from '../screens-v2/ministry/MinistryDashboardScreen';
 import MinistryCreateOrgScreen from '../screens-v2/ministry/MinistryCreateOrgScreen';
+import MinistryVerifyDoctorScreen from '../screens-v2/ministry/MinistryVerifyDoctorScreen';
 import SettingsScreen from '../screens-v2/SettingsScreen';
 import EditProfileScreen from '../screens-v2/EditProfileScreen';
 import RoleSelectionScreen from '../screens-v2/RoleSelectionScreen';
@@ -186,6 +187,7 @@ function MinistryTabs() {
             screenOptions={({ route }) => ({
                 tabBarIcon: ({ color, size }) => {
                     if (route.name === 'MinistryDashboard') return <Landmark color={color} size={size} strokeWidth={1.75} />;
+                    if (route.name === 'MinistryVerifyDoctor') return <Stethoscope color={color} size={size} strokeWidth={1.75} />;
                     if (route.name === 'Profile') return <CircleUser color={color} size={size} strokeWidth={1.75} />;
                     return null;
                 },
@@ -193,6 +195,7 @@ function MinistryTabs() {
             })}
         >
             <Tab.Screen name="MinistryDashboard" component={MinistryDashboardScreen} options={{ title: 'Tổng quan', headerShown: false }} />
+            <Tab.Screen name="MinistryVerifyDoctor" component={MinistryVerifyDoctorScreen} options={{ title: 'Bác sĩ' }} />
             <Tab.Screen name="Profile" component={ProfileScreen} options={{ title: 'Cá nhân' }} />
         </Tab.Navigator>
     );

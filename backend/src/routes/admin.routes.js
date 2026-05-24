@@ -373,4 +373,151 @@ router.get('/organizations', authenticate, isMinistry, async (req, res, next) =>
     }
 });
 
+// Wave E — GET /api/admin/independent-doctors
+// List doctors NOT belonging to any organization (independent practice).
+// Ministry uses this to verify doctors directly via verifyDoctorByMinistry.
+// Filter ?status= pending | verified | revoked | all (default pending).
+//
+// "Independent" = User has DoctorProfile AND is NOT in any active
+// OrganizationMember row.
+// "Verified" = on-chain VERIFIED_DOCTOR flag (cached via VerificationRequest
+// status='approved' for fast list — UI should re-check before write action).
+router.get('/independent-doctors', authenticate, isMinistry, async (req, res, next) => {
+    try {
+        const statusFilter = String(req.query.status || 'pending').toLowerCase();
+        const allowed = ['pending', 'verified', 'revoked', 'all'];
+        if (!allowed.includes(statusFilter)) {
+            return res.status(400).json({
+                code: 'INVALID_STATUS_FILTER',
+                error: `status must be one of ${allowed.join(', ')}`,
+            });
+        }
+
+        // 1. All users who have a doctor profile = candidate doctors.
+        const doctorProfiles = await prisma.doctorProfile.findMany({
+            include: { user: true },
+        });
+
+        // 2. Addresses of doctors in any ACTIVE org membership.
+        const orgMembers = await prisma.organizationMember.findMany({
+            where: { status: 'active' },
+            select: { memberAddress: true },
+        });
+        const orgMemberAddrs = new Set(orgMembers.map((m) => m.memberAddress.toLowerCase()));
+
+        // 3. Latest VerificationRequest per doctor → status mapping.
+        const allVerifs = await prisma.verificationRequest.findMany({
+            orderBy: { createdAt: 'desc' },
+        });
+        const latestVerifByAddr = new Map();
+        for (const v of allVerifs) {
+            const k = v.doctorAddress.toLowerCase();
+            if (!latestVerifByAddr.has(k)) latestVerifByAddr.set(k, v);
+        }
+
+        // 4. Build independent doctor list — exclude those in any org.
+        const independents = doctorProfiles
+            .filter((dp) => !orgMemberAddrs.has(dp.walletAddress.toLowerCase()))
+            .map((dp) => {
+                const addr = dp.walletAddress.toLowerCase();
+                const v = latestVerifByAddr.get(addr);
+                let state = 'pending';
+                if (v?.status === 'approved') state = 'verified';
+                else if (v?.status === 'rejected') state = 'rejected';
+                return {
+                    walletAddress: dp.walletAddress,
+                    fullName: dp.user?.fullName || v?.fullName || null,
+                    specialty: dp.specialty || v?.specialty || null,
+                    licenseNumber: dp.licenseNumber || v?.licenseNumber || null,
+                    verifiedAt: v?.status === 'approved' ? v.reviewedAt : null,
+                    verificationState: state,
+                    verificationRequestId: v?.id || null,
+                };
+            });
+
+        const counts = {
+            pending: independents.filter((d) => d.verificationState === 'pending').length,
+            verified: independents.filter((d) => d.verificationState === 'verified').length,
+            revoked: 0,  // No revoked state derivable from VerificationRequest;
+                        // future: add when verification revoke flow exists for independents
+        };
+
+        const filtered = statusFilter === 'all'
+            ? independents
+            : independents.filter((d) => d.verificationState === statusFilter);
+
+        res.json({
+            count: filtered.length,
+            doctors: filtered,
+            counts,
+        });
+    } catch (error) {
+        next(error);
+    }
+});
+
+// Wave E — POST /api/admin/verify-doctor-mirror
+// Mirror on-chain verifyDoctorByMinistry tx (Ministry pays gas, broadcasts
+// from mobile). Backend marks the doctor's VerificationRequest as approved
+// + stores reviewedBy/reviewedAt + txHash. If no VerificationRequest exists
+// (doctor independent never submitted), create one with status=approved so
+// subsequent listings reflect verified state.
+router.post('/verify-doctor-mirror', authenticate, isMinistry, async (req, res, next) => {
+    try {
+        const { doctorAddress, txHash, credential } = req.body || {};
+        if (!doctorAddress || !/^0x[a-fA-F0-9]{40}$/.test(doctorAddress)) {
+            return res.status(400).json({
+                code: 'INVALID_DOCTOR_ADDRESS',
+                error: 'doctorAddress must be a 0x-prefixed 40-hex string',
+            });
+        }
+        const addr = doctorAddress.toLowerCase();
+        const ministryAddr = req.user.walletAddress;
+
+        // Fetch the most recent VerificationRequest. If none, create one.
+        const existing = await prisma.verificationRequest.findFirst({
+            where: { doctorAddress: addr },
+            orderBy: { createdAt: 'desc' },
+        });
+
+        const doctorProfile = await prisma.doctorProfile.findUnique({
+            where: { walletAddress: addr },
+            include: { user: true },
+        });
+
+        const verifData = {
+            status: 'approved',
+            reviewedBy: ministryAddr,
+            reviewedAt: new Date(),
+        };
+
+        if (existing) {
+            await prisma.verificationRequest.update({
+                where: { id: existing.id },
+                data: verifData,
+            });
+        } else {
+            await prisma.verificationRequest.create({
+                data: {
+                    doctorAddress: addr,
+                    fullName: doctorProfile?.user?.fullName || 'Unknown',
+                    specialty: doctorProfile?.specialty || null,
+                    licenseNumber: doctorProfile?.licenseNumber || credential || null,
+                    organization: null,
+                    ...verifData,
+                },
+            });
+        }
+
+        res.json({
+            success: true,
+            doctorAddress: addr,
+            status: 'verified',
+            txHash: txHash || null,
+        });
+    } catch (error) {
+        next(error);
+    }
+});
+
 export default router;
