@@ -46,11 +46,77 @@ const SERIF = 'Fraunces_400Regular';
 const SANS = 'DMSans_400Regular';
 const SANS_MEDIUM = 'DMSans_500Medium';
 const SANS_SEMI = 'DMSans_600SemiBold';
+const MONO = 'monospace';
 
 const truncate = (addr?: string | null) =>
     addr ? `${addr.slice(0, 6)}…${addr.slice(-4)}` : '???';
 
 const ADDRESS_RE = /^0x[a-fA-F0-9]{40}$/;
+
+/**
+ * formatDotDate — "14·11·2025" mono format per polish pack §3 A·5.
+ * Returns null if date is invalid so caller can fall back to formatExpiry.
+ */
+function formatDotDate(input: string | Date | null | undefined): string | null {
+    if (!input) return null;
+    try {
+        const d = input instanceof Date ? input : new Date(input);
+        if (Number.isNaN(d.getTime())) return null;
+        const dd = String(d.getDate()).padStart(2, '0');
+        const mm = String(d.getMonth() + 1).padStart(2, '0');
+        return `${dd}·${mm}·${d.getFullYear()}`;
+    } catch {
+        return null;
+    }
+}
+
+/**
+ * KVGridRow — K/V row per polish pack §3 A·5 anatomy:
+ *   K: 90px mono uppercase muted
+ *   V: 1fr sans textPrimary (or mono for dates)
+ */
+function KVGridRow({
+    k,
+    v,
+    mono,
+    vColor,
+    palette,
+}: {
+    k: string;
+    v: string;
+    mono?: boolean;
+    vColor?: string;
+    palette: any;
+}) {
+    return (
+        <View style={{ flexDirection: 'row', alignItems: 'baseline', paddingVertical: 3 }}>
+            <Text
+                style={{
+                    width: 80,
+                    fontFamily: MONO,
+                    fontSize: 10.5,
+                    color: palette.EHR_TEXT_MUTED,
+                    letterSpacing: 0.8,
+                    textTransform: 'uppercase',
+                    fontWeight: '700',
+                }}
+            >
+                {k}
+            </Text>
+            <Text
+                style={{
+                    flex: 1,
+                    fontFamily: mono ? MONO : SANS,
+                    fontSize: mono ? 11.5 : 12,
+                    color: vColor || palette.EHR_ON_SURFACE,
+                    letterSpacing: mono ? 0.2 : 0,
+                }}
+            >
+                {v}
+            </Text>
+        </View>
+    );
+}
 
 function statusToken(item: DelegationRow): 'active' | 'expired' | 'revoked' {
     const isActive = item.status === 'active';
@@ -105,36 +171,86 @@ function DelegationCard({
             }}
         >
             <View style={{ padding: 18 }}>
-                {/* Status ribbon */}
+                {/* Top-right pill stack: status ribbon + clay sub-delegate badge
+                    per polish pack §3 A·5. Sub-delegate badge ALWAYS rendered
+                    so user sees whether re-delegation is allowed (clay full vs
+                    muted italic when off). */}
                 <View
                     style={{
                         position: 'absolute',
                         right: 14,
                         top: 14,
-                        paddingHorizontal: 8,
-                        paddingVertical: 3,
-                        borderRadius: 4,
-                        backgroundColor: `${ribbonTint}22`,
-                        borderWidth: 0.5,
-                        borderColor: `${ribbonTint}60`,
+                        gap: 4,
+                        alignItems: 'flex-end',
                     }}
                 >
-                    <Text
+                    <View
                         style={{
-                            fontFamily: SANS_SEMI,
-                            fontSize: 9,
-                            fontWeight: '700',
-                            letterSpacing: 0.8,
-                            textTransform: 'uppercase',
-                            color: ribbonTint,
+                            paddingHorizontal: 8,
+                            paddingVertical: 3,
+                            borderRadius: 4,
+                            backgroundColor: `${ribbonTint}22`,
+                            borderWidth: 0.5,
+                            borderColor: `${ribbonTint}60`,
                         }}
                     >
-                        {ribbonLabel}
-                    </Text>
+                        <Text
+                            style={{
+                                fontFamily: SANS_SEMI,
+                                fontSize: 9,
+                                fontWeight: '700',
+                                letterSpacing: 0.8,
+                                textTransform: 'uppercase',
+                                color: ribbonTint,
+                            }}
+                        >
+                            {ribbonLabel}
+                        </Text>
+                    </View>
+                    {item.allowSubDelegate ? (
+                        <View
+                            style={{
+                                paddingHorizontal: 7,
+                                paddingVertical: 3,
+                                borderRadius: 4,
+                                backgroundColor: `${palette.EHR_CLAY}2E`,
+                                borderWidth: 0.5,
+                                borderColor: `${palette.EHR_CLAY}66`,
+                                flexDirection: 'row',
+                                alignItems: 'center',
+                                gap: 4,
+                            }}
+                        >
+                            <Text style={{ fontFamily: SANS_SEMI, fontSize: 9, color: palette.EHR_CLAY, fontWeight: '700' }}>↻</Text>
+                            <Text
+                                style={{
+                                    fontFamily: SANS_SEMI,
+                                    fontSize: 9,
+                                    color: palette.EHR_CLAY,
+                                    letterSpacing: 0.3,
+                                    fontWeight: '600',
+                                }}
+                            >
+                                Uỷ quyền lại
+                            </Text>
+                        </View>
+                    ) : (
+                        <Text
+                            style={{
+                                fontFamily: SANS,
+                                fontSize: 9.5,
+                                color: palette.EHR_TEXT_MUTED,
+                                fontStyle: 'italic',
+                                letterSpacing: 0.2,
+                            }}
+                        >
+                            Chỉ một mình họ
+                        </Text>
+                    )}
                 </View>
 
                 {/* Identity */}
-                <View style={{ paddingRight: 90 }}>
+                <View style={{ paddingRight: 110 }}>
                     <UserChip address={item.delegateeAddress} expanded showAddress={false} />
                 </View>
 
@@ -188,29 +304,38 @@ function DelegationCard({
                     </Text>
                 ) : null}
 
-                {/* Dates */}
+                {/* KVRow grid — Phạm vi / Bắt đầu / Hết hạn per polish pack
+                    §3 A·5. K column 90px mono uppercase muted, V column sans
+                    textPrimary or mono for dates. Dashed separator above. */}
                 <View
                     style={{
                         marginTop: 14,
                         paddingTop: 12,
                         borderTopWidth: 0.5,
                         borderStyle: 'dashed',
-                        borderColor: palette.EHR_OUTLINE_VARIANT,
-                        flexDirection: 'row',
-                        justifyContent: 'space-between',
+                        borderTopColor: palette.EHR_OUTLINE_VARIANT,
                     }}
                 >
-                    <Text style={{ fontFamily: SANS, fontSize: 11, color: palette.EHR_TEXT_MUTED }}>
-                        Đến hạn{' '}
-                        <Text
-                            style={{
-                                fontFamily: 'monospace',
-                                color: expiringSoon ? palette.EHR_WARNING : palette.EHR_ON_SURFACE,
-                            }}
-                        >
-                            {formatExpiry(item.expiresAt)}
-                        </Text>
-                    </Text>
+                    {item.allowSubDelegate ? (
+                        <KVGridRow k="Phạm vi" v="Toàn bộ hồ sơ · có thể uỷ quyền tiếp" palette={palette} />
+                    ) : (
+                        <KVGridRow k="Phạm vi" v="Toàn bộ hồ sơ" palette={palette} />
+                    )}
+                    {(item as any).grantedAt || (item as any).createdAt ? (
+                        <KVGridRow
+                            k="Bắt đầu"
+                            v={formatDotDate((item as any).grantedAt || (item as any).createdAt) || '—'}
+                            mono
+                            palette={palette}
+                        />
+                    ) : null}
+                    <KVGridRow
+                        k="Hết hạn"
+                        v={formatDotDate(item.expiresAt) || formatExpiry(item.expiresAt)}
+                        mono
+                        vColor={expiringSoon ? palette.EHR_WARNING : palette.EHR_ON_SURFACE}
+                        palette={palette}
+                    />
                 </View>
             </View>
 
