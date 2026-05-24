@@ -44,9 +44,17 @@ export const requestService = {
         });
     },
 
-    // For patients: Archive a request (hiđể without on-chain reject)
+    // For patients: Archive a request (hide from list without on-chain reject)
     async archiveRequest(requestId) {
         return api.post('/api/relayer/archive-request', { requestId });
+    },
+
+    // For patients: Mirror on-chain rejectRequest to backend.
+    // The actual EHRSystemSecure.rejectRequest(reqId) tx is broadcast by mobile
+    // directly (patient pays gas). This call updates DB status + stores optional
+    // reason. Per Wave A spec — reason is free-text optional (~280 chars max).
+    async mirrorReject(requestId, txHash, reason = null) {
+        return api.post(`/api/requests/${requestId}/reject`, { txHash, reason });
     },
 
     // For doctors: Mark request as claimed after on-chain transaction

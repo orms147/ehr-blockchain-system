@@ -19,6 +19,7 @@ import { FlatList, RefreshControl, Alert, Pressable, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Bell, Check, X, Clock, User, FilePlus2 } from 'lucide-react-native';
 import { Text, XStack, YStack } from 'tamagui';
+import { parseGwei } from 'viem';
 
 import LoadingSpinner from '../components/LoadingSpinner';
 import UserChip from '../components/UserChip';
@@ -40,6 +41,20 @@ import ViButton from '../components-v2/ViButton';
 import { useEhrPalette } from '../constants/uiColors';
 import { resolveRecordType } from '../constants/recordTypes';
 import { formatDateTime, formatExpiry, getExpiryUrgency } from '../utils/dateFormatting';
+
+// On-chain rejectRequest ABI — minimal fragment, callable by patient OR
+// requester via direct walletClient. Reason is OFF-CHAIN (POST mirror) per
+// plan §4 decision: contract only stores rejected flag, reason in DB.
+const EHR_SYSTEM_ADDRESS = process.env.EXPO_PUBLIC_EHR_SYSTEM_ADDRESS as `0x${string}`;
+const REJECT_REQUEST_ABI = [
+    {
+        type: 'function',
+        name: 'rejectRequest',
+        inputs: [{ name: 'reqId', type: 'bytes32' }],
+        outputs: [],
+        stateMutability: 'nonpayable',
+    },
+] as const;
 
 const SERIF = 'Fraunces_400Regular';
 const SERIF_ITALIC = 'Fraunces_400Regular_Italic';
@@ -135,11 +150,13 @@ function statusPillTokens(status: string, palette: any): { label: string; color:
 const RequestRow = React.memo(function RequestRow({
     item,
     onApprove,
+    onReject,
     onArchive,
     isApproving,
 }: {
     item: RequestItem;
     onApprove: (r: RequestItem) => void;
+    onReject: (r: RequestItem) => void;
     onArchive: (r: RequestItem) => void;
     isApproving?: boolean;
 }) {
@@ -322,18 +339,20 @@ const RequestRow = React.memo(function RequestRow({
                 </View>
             ) : null}
 
-            {/* Approve / Archive */}
+            {/* Pending: Từ chối (cinnabar outline) + Phê duyệt (cinnabar fill).
+                Other statuses: only Ẩn (archive — hide from list, no on-chain).
+                Wave A.1: rejectRequest is REAL on-chain action; Ẩn is db-only. */}
             {isPending ? (
                 <XStack style={{ justifyContent: 'flex-end', gap: 8, marginTop: 14 }}>
                     <View>
                         <ViButton
-                            variant="ghost"
+                            variant="danger"
                             size="sm"
-                            onPress={() => onArchive(item)}
+                            onPress={() => onReject(item)}
                             disabled={isApproving}
-                            leftIcon={<X size={14} color={palette.EHR_TEXT_MUTED} />}
+                            leftIcon={<X size={14} color={palette.EHR_CINNABAR_DEEP} />}
                         >
-                            Ẩn
+                            Từ chối
                         </ViButton>
                     </View>
                     <View>
@@ -348,7 +367,20 @@ const RequestRow = React.memo(function RequestRow({
                         </ViButton>
                     </View>
                 </XStack>
-            ) : null}
+            ) : (
+                <XStack style={{ justifyContent: 'flex-end', gap: 8, marginTop: 14 }}>
+                    <View>
+                        <ViButton
+                            variant="ghost"
+                            size="sm"
+                            onPress={() => onArchive(item)}
+                            leftIcon={<X size={14} color={palette.EHR_TEXT_MUTED} />}
+                        >
+                            Ẩn
+                        </ViButton>
+                    </View>
+                </XStack>
+            )}
         </View>
     );
 });
@@ -591,6 +623,69 @@ export default function RequestsScreen() {
         }
     }, [refresh, approvingId]);
 
+    // ───────────────────────────────────────────────────────────────────
+    //  handleReject — Wave A.1: on-chain rejectRequest + backend mirror.
+    //  Patient ký gas trực tiếp (không sponsor) — same cost as approve.
+    //  Reason field is OFF-CHAIN (POST mirror) — contract chỉ flag rejected.
+    // ───────────────────────────────────────────────────────────────────
+    const handleReject = useCallback(async (request: RequestItem) => {
+        const reqId = request.requestId || request.id;
+        if (!reqId) { Alert.alert('Lỗi', 'Thiếu mã yêu cầu'); return; }
+        if (approvingId) return;
+
+        const confirmed = await new Promise<boolean>((resolve) => {
+            Alert.alert(
+                'Từ chối yêu cầu?',
+                'Bác sĩ sẽ nhận thông báo bị từ chối. Hành động này được ghi on-chain và không thể huỷ.\n\nBạn vẫn có thể duyệt yêu cầu mới từ bác sĩ này sau.',
+                [
+                    { text: 'Huỷ', style: 'cancel', onPress: () => resolve(false) },
+                    { text: 'Từ chối', style: 'destructive', onPress: () => resolve(true) },
+                ],
+                { cancelable: true, onDismiss: () => resolve(false) },
+            );
+        });
+        if (!confirmed) return;
+
+        setApprovingId(reqId);
+        try {
+            const { walletClient } = await walletActionService.getWalletContext();
+            const { gateOrThrow } = await import('../utils/biometricGate');
+            await gateOrThrow('Xác thực để từ chối yêu cầu');
+
+            // bytes32 — reqId from backend is hex string; ensure 0x prefix.
+            const reqIdHex = reqId.startsWith('0x') ? reqId : `0x${reqId}`;
+
+            const txHash = await walletClient.writeContract({
+                address: EHR_SYSTEM_ADDRESS,
+                abi: REJECT_REQUEST_ABI,
+                functionName: 'rejectRequest',
+                args: [reqIdHex as `0x${string}`],
+                gas: BigInt(200000),
+                maxFeePerGas: parseGwei('1.0'),
+                maxPriorityFeePerGas: parseGwei('0.1'),
+            });
+
+            // Mirror to backend — fire and forget. Backend uses event sync
+            // anyway, this just speeds up the UI status flip.
+            try {
+                await (requestService as any).mirrorReject(reqId, txHash, null);
+            } catch (mirrorErr) {
+                console.warn('Reject mirror failed (non-fatal):', mirrorErr);
+            }
+
+            Alert.alert(
+                'Đã từ chối',
+                'Yêu cầu đã được từ chối on-chain. Bác sĩ sẽ thấy trạng thái cập nhật sau vài giây.',
+            );
+            refresh();
+        } catch (error: any) {
+            console.error('[Reject] Failed:', error);
+            Alert.alert('Lỗi', error?.message || 'Không thể từ chối yêu cầu. Vui lòng thử lại.');
+        } finally {
+            setApprovingId(null);
+        }
+    }, [refresh, approvingId]);
+
     const handleArchive = useCallback((request: RequestItem) => {
         Alert.alert('Ẩn yêu cầu', 'Bạn có chắc chắn muốn ẩn yêu cầu này?', [
             { text: 'Huỷ', style: 'cancel' },
@@ -730,6 +825,7 @@ export default function RequestsScreen() {
                         <RequestRow
                             item={item}
                             onApprove={handleApprove}
+                            onReject={handleReject}
                             onArchive={handleArchive}
                             isApproving={approvingId === (item.requestId || item.id)}
                         />
