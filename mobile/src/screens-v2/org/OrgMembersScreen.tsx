@@ -83,13 +83,14 @@ export default function OrgMembersScreen() {
     const { token } = useAuthStore();
     const [members, setMembers] = useState<Member[]>([]);
     const [counts, setCounts] = useState<{ verified: number; pending: number; revoked: number }>({ verified: 0, pending: 0, revoked: 0 });
-    const [orgInfo, setOrgInfo] = useState<{ id: string; name: string } | null>(null);
+    const [orgInfo, setOrgInfo] = useState<{ id: string; name: string; chainOrgId?: string | number } | null>(null);
     const [searchTerm, setSearchTerm] = useState('');
     const [activeFilter, setActiveFilter] = useState<FilterKey>('verified');
     const [isLoading, setIsLoading] = useState(true);
     const [isRefreshing, setIsRefreshing] = useState(false);
 
     const [revokeTarget, setRevokeTarget] = useState<Member | null>(null);
+    const [addModalOpen, setAddModalOpen] = useState(false);
 
     const fetchData = useCallback(async (status: FilterKey = activeFilter) => {
         try {
@@ -99,7 +100,11 @@ export default function OrgMembersScreen() {
                 setOrgInfo(null);
                 return;
             }
-            setOrgInfo({ id: orgRes.organization.id, name: orgRes.organization.name });
+            setOrgInfo({
+                id: orgRes.organization.id,
+                name: orgRes.organization.name,
+                chainOrgId: orgRes.organization.chainOrgId,
+            });
             const backendStatus = status === 'revoked' ? 'revoked' : 'active';
             const membersRes: any = await orgService.getOrgMembers(orgRes.organization.id, backendStatus);
             const list: Member[] = Array.isArray(membersRes?.members) ? membersRes.members : [];
@@ -226,10 +231,11 @@ export default function OrgMembersScreen() {
                 })}
             </View>
 
-            {/* Search */}
-            <View style={{ paddingHorizontal: 22, paddingBottom: 10 }}>
+            {/* Search + Add */}
+            <View style={{ paddingHorizontal: 22, paddingBottom: 10, flexDirection: 'row', gap: 8 }}>
                 <View
                     style={{
+                        flex: 1,
                         flexDirection: 'row',
                         alignItems: 'center',
                         gap: 8,
@@ -244,7 +250,7 @@ export default function OrgMembersScreen() {
                     <TextInput
                         value={searchTerm}
                         onChangeText={setSearchTerm}
-                        placeholder="Tìm bác sĩ, chuyên khoa, GPHN, địa chỉ…"
+                        placeholder="Tìm bác sĩ, chuyên khoa, GPHN…"
                         placeholderTextColor={palette.EHR_TEXT_MUTED}
                         style={{
                             flex: 1,
@@ -255,6 +261,22 @@ export default function OrgMembersScreen() {
                         }}
                     />
                 </View>
+                <Pressable
+                    onPress={() => setAddModalOpen(true)}
+                    style={({ pressed }) => ({
+                        paddingHorizontal: 12,
+                        paddingVertical: 9,
+                        borderRadius: 10,
+                        backgroundColor: palette.EHR_ON_SURFACE,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: 4,
+                        opacity: pressed ? 0.85 : 1,
+                    })}
+                >
+                    <Text style={{ fontFamily: SANS_SEMI, fontSize: 16, color: palette.EHR_SURFACE, fontWeight: '700' }}>+</Text>
+                    <Text style={{ fontFamily: SANS_SEMI, fontSize: 12, color: palette.EHR_SURFACE, fontWeight: '600' }}>Thêm</Text>
+                </Pressable>
             </View>
 
             <FlatList
@@ -301,6 +323,17 @@ export default function OrgMembersScreen() {
                 onClose={() => setRevokeTarget(null)}
                 onSuccess={() => {
                     setRevokeTarget(null);
+                    handleRefresh();
+                }}
+            />
+
+            <AddMemberModal
+                visible={addModalOpen}
+                orgId={orgInfo?.id || null}
+                orgChainId={orgInfo?.chainOrgId || null}
+                onClose={() => setAddModalOpen(false)}
+                onSuccess={() => {
+                    setAddModalOpen(false);
                     handleRefresh();
                 }}
             />
@@ -769,6 +802,226 @@ function SectionHeader({ children, trailing }: { children: React.ReactNode; trai
                 </Text>
             ) : null}
         </View>
+    );
+}
+
+// Wave G — AddMemberModal: org admin enters doctor wallet address + role,
+// broadcasts AccessControl.addOrgMember on-chain, mirrors to backend.
+function AddMemberModal({
+    visible,
+    orgId,
+    orgChainId,
+    onClose,
+    onSuccess,
+}: {
+    visible: boolean;
+    orgId: string | null;
+    orgChainId: string | number | null;
+    onClose: () => void;
+    onSuccess: () => void;
+}) {
+    const palette = useEhrPalette();
+    const [doctorAddr, setDoctorAddr] = useState('');
+    const [role, setRole] = useState<'doctor' | 'admin'>('doctor');
+    const [isSubmitting, setIsSubmitting] = useState(false);
+
+    useEffect(() => {
+        if (visible) {
+            setDoctorAddr('');
+            setRole('doctor');
+            setIsSubmitting(false);
+        }
+    }, [visible]);
+
+    const addrValid = doctorAddr.length === 0 || /^0x[a-fA-F0-9]{40}$/.test(doctorAddr.trim());
+    const canSubmit = !!orgId && !!orgChainId && /^0x[a-fA-F0-9]{40}$/.test(doctorAddr.trim()) && !isSubmitting;
+
+    const handleAdd = async () => {
+        if (!canSubmit) return;
+        if (!ACCESS_CONTROL_ADDRESS) {
+            Alert.alert('Thiếu cấu hình', 'EXPO_PUBLIC_ACCESS_CONTROL_ADDRESS chưa được đặt.');
+            return;
+        }
+        setIsSubmitting(true);
+        try {
+            const { walletClient, account } = await walletActionService.getWalletContext();
+            const { gateOrThrow } = await import('../../utils/biometricGate');
+            await gateOrThrow('Xác thực để thêm thành viên on-chain');
+
+            const addr = doctorAddr.trim().toLowerCase() as `0x${string}`;
+            const txHash = await walletClient.writeContract({
+                account,
+                address: ACCESS_CONTROL_ADDRESS,
+                abi: ACCESS_CONTROL_ABI,
+                functionName: 'addOrgMember',
+                args: [BigInt(orgChainId!), addr],
+                gas: BigInt(250000),
+                maxFeePerGas: parseGwei('1.0'),
+                maxPriorityFeePerGas: parseGwei('0.1'),
+            });
+
+            // Mirror to backend so list updates instantly.
+            try {
+                await (orgService as any).addMember(orgId, addr, txHash, role);
+            } catch (mirrorErr: any) {
+                // If member already exists (db row), tx still went on-chain — non-fatal.
+                console.warn('AddMember mirror failed (non-fatal):', mirrorErr?.message);
+            }
+
+            Alert.alert(
+                'Đã thêm thành viên',
+                `${addr.slice(0, 8)}…${addr.slice(-4)} đã được ghi vào tổ chức on-chain. Bác sĩ này có thể bắt đầu các tác nghiệp theo role "${role}".`,
+            );
+            onSuccess();
+        } catch (error: any) {
+            const msg = String(error?.message || '');
+            if (msg.includes('NotOrgAdmin') || msg.includes('NotAuthorized')) {
+                Alert.alert('Không có quyền', 'Ví này không phải admin tổ chức trên on-chain.');
+            } else if (msg.includes('AlreadyMember')) {
+                Alert.alert('Đã là thành viên', 'Bác sĩ này đã có trong tổ chức rồi.');
+            } else if (msg.includes('insufficient funds')) {
+                Alert.alert('Không đủ ETH', 'Ví không đủ ETH cho phí gas.');
+            } else {
+                Alert.alert('Lỗi', msg || 'Không thể thêm thành viên.');
+            }
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    return (
+        <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+            <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' }}>
+                <View
+                    style={{
+                        backgroundColor: palette.EHR_SURFACE,
+                        borderTopLeftRadius: 22,
+                        borderTopRightRadius: 22,
+                        paddingHorizontal: 22,
+                        paddingTop: 12,
+                        paddingBottom: 22,
+                        borderTopWidth: 0.5,
+                        borderTopColor: palette.EHR_OUTLINE_SOFT,
+                    }}
+                >
+                    <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: palette.EHR_OUTLINE_SOFT, alignSelf: 'center', marginBottom: 14 }} />
+
+                    <Text style={{ fontFamily: MONO, fontSize: 10.5, color: palette.EHR_TEXT_MUTED, letterSpacing: 1, textTransform: 'uppercase', fontWeight: '700', marginBottom: 4 }}>
+                        addOrgMember(orgId, doctor)
+                    </Text>
+                    <Text style={{ fontFamily: SANS_SEMI, fontSize: 17, fontWeight: '700', color: palette.EHR_ON_SURFACE, letterSpacing: -0.2, marginBottom: 6 }}>
+                        Thêm bác sĩ vào tổ chức
+                    </Text>
+                    <Text style={{ fontFamily: SANS, fontSize: 13, color: palette.EHR_ON_SURFACE_VARIANT, lineHeight: 19 }}>
+                        Bác sĩ được thêm sẽ ký tx được dưới danh nghĩa cơ sở. Sau đó admin có thể duyệt verification của họ.
+                    </Text>
+
+                    {/* Address input */}
+                    <Text style={{ marginTop: 16, fontFamily: MONO, fontSize: 10.5, color: palette.EHR_TEXT_MUTED, letterSpacing: 0.8, textTransform: 'uppercase', fontWeight: '700', marginBottom: 6 }}>
+                        Địa chỉ ví bác sĩ
+                    </Text>
+                    <TextInput
+                        value={doctorAddr}
+                        onChangeText={setDoctorAddr}
+                        placeholder="0x… (40 ký tự hex)"
+                        placeholderTextColor={palette.EHR_TEXT_MUTED}
+                        autoCapitalize="none"
+                        autoCorrect={false}
+                        style={{
+                            minHeight: 46,
+                            paddingHorizontal: 14,
+                            paddingVertical: 12,
+                            borderRadius: 10,
+                            borderWidth: 0.5,
+                            borderColor: addrValid ? palette.EHR_OUTLINE_SOFT : palette.EHR_DANGER,
+                            backgroundColor: palette.EHR_SURFACE_LOWEST,
+                            color: palette.EHR_ON_SURFACE,
+                            fontFamily: MONO,
+                            fontSize: 13.5,
+                            letterSpacing: 0.2,
+                            fontWeight: '500',
+                        }}
+                    />
+
+                    {/* Role picker */}
+                    <Text style={{ marginTop: 14, fontFamily: MONO, fontSize: 10.5, color: palette.EHR_TEXT_MUTED, letterSpacing: 0.8, textTransform: 'uppercase', fontWeight: '700', marginBottom: 6 }}>
+                        Vai trò trong tổ chức
+                    </Text>
+                    <XStack style={{ gap: 8 }}>
+                        {([
+                            { id: 'doctor', label: 'Bác sĩ' },
+                            { id: 'admin', label: 'Admin' },
+                        ] as const).map((opt) => {
+                            const active = role === opt.id;
+                            return (
+                                <Pressable
+                                    key={opt.id}
+                                    onPress={() => setRole(opt.id)}
+                                    style={({ pressed }) => ({
+                                        flex: 1,
+                                        paddingVertical: 11,
+                                        borderRadius: 10,
+                                        borderWidth: active ? 1.25 : 0.5,
+                                        borderColor: active ? palette.EHR_ON_SURFACE : palette.EHR_OUTLINE_SOFT,
+                                        backgroundColor: active ? palette.EHR_ON_SURFACE : palette.EHR_SURFACE_LOWEST,
+                                        alignItems: 'center',
+                                        opacity: pressed ? 0.85 : 1,
+                                    })}
+                                >
+                                    <Text style={{ fontFamily: SANS_SEMI, fontSize: 13, fontWeight: '600', color: active ? palette.EHR_SURFACE : palette.EHR_ON_SURFACE }}>
+                                        {opt.label}
+                                    </Text>
+                                </Pressable>
+                            );
+                        })}
+                    </XStack>
+
+                    {/* Footer */}
+                    <XStack style={{ marginTop: 18, gap: 10 }}>
+                        <Pressable
+                            onPress={onClose}
+                            disabled={isSubmitting}
+                            style={({ pressed }) => ({
+                                flex: 1,
+                                paddingVertical: 14,
+                                borderRadius: 12,
+                                borderWidth: 0.5,
+                                borderColor: palette.EHR_OUTLINE,
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                minHeight: 50,
+                                opacity: pressed ? 0.7 : 1,
+                            })}
+                        >
+                            <Text style={{ fontFamily: SANS_SEMI, fontSize: 14, fontWeight: '600', color: palette.EHR_ON_SURFACE }}>
+                                Huỷ
+                            </Text>
+                        </Pressable>
+                        <Pressable
+                            onPress={handleAdd}
+                            disabled={!canSubmit}
+                            style={({ pressed }) => ({
+                                flex: 1.4,
+                                paddingVertical: 14,
+                                borderRadius: 12,
+                                backgroundColor: palette.EHR_ON_SURFACE,
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                minHeight: 50,
+                                opacity: !canSubmit ? 0.5 : pressed ? 0.85 : 1,
+                                flexDirection: 'row',
+                                gap: 6,
+                            })}
+                        >
+                            {isSubmitting ? <ActivityIndicator size="small" color={palette.EHR_SURFACE} /> : null}
+                            <Text style={{ fontFamily: SANS_SEMI, fontSize: 14, fontWeight: '700', color: palette.EHR_SURFACE, letterSpacing: 0.1 }}>
+                                {isSubmitting ? 'Đang ký…' : 'Thêm + ký tx'}
+                            </Text>
+                        </Pressable>
+                    </XStack>
+                </View>
+            </View>
+        </Modal>
     );
 }
 

@@ -73,6 +73,10 @@ const applyOrgSchema = z.object({
 const addMemberSchema = z.object({
     memberAddress: z.string().regex(/^0x[a-fA-F0-9]{40}$/),
     role: z.enum(['admin', 'doctor', 'nurse', 'staff']).default('doctor'),
+    // Wave G: mobile broadcasts AccessControl.addOrgMember on-chain (org admin
+    // pays gas) then POSTs here with txHash so backend mirrors DB. Optional
+    // for backwards-compat with the previous db-only flow.
+    txHash: z.string().regex(/^0x[a-fA-F0-9]{64}$/).optional().nullable(),
 });
 
 // ============ ORG APPLICATION ROUTES (Hybrid Flow) ============
@@ -474,6 +478,7 @@ router.post('/:orgId/add-member', authenticate, async (req, res, next) => {
             success: true,
             message: 'Đã thêm thành viên vào tổ chức',
             member: member,
+            txHash: data.txHash || null,
         });
     } catch (error) {
         next(error);

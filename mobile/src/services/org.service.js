@@ -36,9 +36,21 @@ export const orgService = {
         });
     },
 
-    // Remove a doctor from org
+    // Remove a doctor from org (legacy db-only). Wave G prefers
+    // on-chain removeOrgMember broadcast + mirror via addMember POST.
     async removeMember(orgId, memberId) {
         return api.post(`/api/org/${orgId}/remove-member/${memberId}`);
+    },
+
+    // Wave G: mirror on-chain addOrgMember tx → create OrganizationMember
+    // row. Mobile broadcasts AccessControl.addOrgMember(orgId, doctor) tx,
+    // then POSTs here with the tx hash for backend to mirror DB cache.
+    async addMember(orgId, memberAddress, txHash, role = 'doctor') {
+        return api.post(`/api/org/${orgId}/add-member`, {
+            memberAddress,
+            txHash,
+            role,
+        });
     },
 
     // Submit org application
