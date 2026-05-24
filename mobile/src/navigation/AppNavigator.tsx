@@ -48,6 +48,7 @@ import OrgPendingVerificationsScreen from '../screens-v2/org/OrgPendingVerificat
 import MinistryDashboardScreen from '../screens-v2/ministry/MinistryDashboardScreen';
 import MinistryCreateOrgScreen from '../screens-v2/ministry/MinistryCreateOrgScreen';
 import MinistryVerifyDoctorScreen from '../screens-v2/ministry/MinistryVerifyDoctorScreen';
+import MinistryOrgDetailScreen from '../screens-v2/ministry/MinistryOrgDetailScreen';
 import SettingsScreen from '../screens-v2/SettingsScreen';
 import EditProfileScreen from '../screens-v2/EditProfileScreen';
 import RoleSelectionScreen from '../screens-v2/RoleSelectionScreen';
@@ -306,6 +307,11 @@ function MainStackNavigator() {
                 name="MinistryCreateOrg"
                 component={MinistryCreateOrgScreen}
                 options={{ title: 'Tạo cơ sở y tế' }}
+            />
+            <Stack.Screen
+                name="MinistryOrgDetail"
+                component={MinistryOrgDetailScreen}
+                options={{ title: 'Hồ sơ cơ sở' }}
             />
         </Stack.Navigator>
     );

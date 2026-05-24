@@ -258,8 +258,19 @@ export default function MinistryDashboardScreen() {
                                 </Text>
                             </View>
                         ) : (
+                        // Wave F — each org row navigates to MinistryOrgDetail for compliance actions
                         organizations.map((org) => (
-                            <ViCard key={org.id || org.address || org.name} padding={14} style={{ marginBottom: 10 }}>
+                            <Pressable
+                                key={org.id || org.address || org.name}
+                                onPress={() => navigation.navigate('MinistryOrgDetail', {
+                                    orgId: org.id || 0,
+                                    name: org.name || org.orgName || 'Tổ chức',
+                                    primaryAdmin: (org as any).primaryAdmin || org.address || '',
+                                    backupAdmin: (org as any).backupAdmin || null,
+                                    active: (org as any).active !== false,
+                                })}
+                            >
+                            <ViCard padding={14} style={{ marginBottom: 10 }}>
                                 <XStack style={{ alignItems: 'center', gap: 10, marginBottom: 6 }}>
                                     <View
                                         style={{
@@ -294,6 +305,7 @@ export default function MinistryDashboardScreen() {
                                     {org.orgType === 'hospital' ? 'Bệnh viện' : 'Phòng khám'} · {org.doctorCount || 0} bác sĩ
                                 </Text>
                             </ViCard>
+                            </Pressable>
                         ))
                         )}
                     </>
