@@ -2,8 +2,9 @@
 // tổ chức list + pending applications + system smart contracts overview.
 
 import React, { useCallback, useEffect, useState } from 'react';
-import { Alert, RefreshControl, ScrollView, View } from 'react-native';
+import { Alert, Pressable, RefreshControl, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
 import { Text, XStack, YStack } from 'tamagui';
 import {
     Building2,
@@ -13,6 +14,7 @@ import {
     Landmark,
     ShieldCheck,
     Hourglass,
+    Plus,
 } from 'lucide-react-native';
 
 import RoleSwitcher from '../../components/RoleSwitcher';
@@ -53,6 +55,7 @@ const truncate = (addr?: string) => (addr ? `${addr.slice(0, 6)}…${addr.slice(
 
 export default function MinistryDashboardScreen() {
     const palette = useEhrPalette();
+    const navigation = useNavigation<any>();
     const { token } = useAuthStore();
     const [organizations, setOrganizations] = useState<OrgItem[]>([]);
     const [pendingApps, setPendingApps] = useState<PendingApp[]>([]);
@@ -224,14 +227,37 @@ export default function MinistryDashboardScreen() {
                 </View>
 
                 {activeTab === 'orgs' ? (
-                    organizations.length === 0 ? (
-                        <View style={{ paddingTop: 20, alignItems: 'center' }}>
-                            <Building2 size={26} color={palette.EHR_TEXT_MUTED} />
-                            <Text style={{ marginTop: 10, fontFamily: SANS, fontSize: 13, color: palette.EHR_TEXT_MUTED }}>
-                                Chưa có tổ chức nào đăng ký.
+                    <>
+                        {/* Wave D — CTA to create new org on-chain */}
+                        <Pressable
+                            onPress={() => navigation.navigate('MinistryCreateOrg')}
+                            style={({ pressed }) => ({
+                                marginBottom: 14,
+                                paddingVertical: 13,
+                                paddingHorizontal: 14,
+                                borderRadius: 12,
+                                backgroundColor: palette.EHR_ON_SURFACE,
+                                flexDirection: 'row',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                gap: 8,
+                                opacity: pressed ? 0.85 : 1,
+                            })}
+                        >
+                            <Plus size={16} color={palette.EHR_SURFACE} strokeWidth={2.4} />
+                            <Text style={{ fontFamily: SANS_SEMI, fontSize: 14, color: palette.EHR_SURFACE, fontWeight: '700', letterSpacing: 0.1 }}>
+                                Tạo cơ sở y tế mới
                             </Text>
-                        </View>
-                    ) : (
+                        </Pressable>
+
+                        {organizations.length === 0 ? (
+                            <View style={{ paddingTop: 20, alignItems: 'center' }}>
+                                <Building2 size={26} color={palette.EHR_TEXT_MUTED} />
+                                <Text style={{ marginTop: 10, fontFamily: SANS, fontSize: 13, color: palette.EHR_TEXT_MUTED }}>
+                                    Chưa có tổ chức nào đăng ký.
+                                </Text>
+                            </View>
+                        ) : (
                         organizations.map((org) => (
                             <ViCard key={org.id || org.address || org.name} padding={14} style={{ marginBottom: 10 }}>
                                 <XStack style={{ alignItems: 'center', gap: 10, marginBottom: 6 }}>
@@ -269,7 +295,8 @@ export default function MinistryDashboardScreen() {
                                 </Text>
                             </ViCard>
                         ))
-                    )
+                        )}
+                    </>
                 ) : null}
 
                 {activeTab === 'pending' ? (

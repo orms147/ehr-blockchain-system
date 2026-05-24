@@ -65,6 +65,22 @@ export const orgService = {
     async getAllOrganizations() {
         return api.get('/api/org/all');
     },
+
+    // Wave D: confirm/sync after Ministry broadcasts createOrganization tx.
+    // Mobile parses OrganizationCreated event from receipt → posts orgId + name
+    // + admins + txHash. Backend verifies receipt + writes Organization +
+    // OrganizationMember admin row.
+    async confirmOrgCreation({ orgId, name, primaryAdmin, backupAdmin, txHash, licenseCid = null, licenseUrl = null }) {
+        return api.post('/api/admin/confirm-org-creation', {
+            orgId: String(orgId),  // serialize BigInt safely
+            name,
+            primaryAdmin,
+            backupAdmin,
+            txHash,
+            licenseCid,
+            licenseUrl,
+        });
+    },
 };
 
 export default orgService;

@@ -46,6 +46,7 @@ import OrgMembersScreen from '../screens-v2/org/OrgMembersScreen';
 import OrgPendingVerificationsScreen from '../screens-v2/org/OrgPendingVerificationsScreen';
 
 import MinistryDashboardScreen from '../screens-v2/ministry/MinistryDashboardScreen';
+import MinistryCreateOrgScreen from '../screens-v2/ministry/MinistryCreateOrgScreen';
 import SettingsScreen from '../screens-v2/SettingsScreen';
 import EditProfileScreen from '../screens-v2/EditProfileScreen';
 import RoleSelectionScreen from '../screens-v2/RoleSelectionScreen';
@@ -297,6 +298,11 @@ function MainStackNavigator() {
                 name="Receipt"
                 component={ReceiptStandaloneScreen}
                 options={{ headerShown: false }}
+            />
+            <Stack.Screen
+                name="MinistryCreateOrg"
+                component={MinistryCreateOrgScreen}
+                options={{ title: 'Tạo cơ sở y tế' }}
             />
         </Stack.Navigator>
     );

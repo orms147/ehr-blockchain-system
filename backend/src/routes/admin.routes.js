@@ -194,15 +194,18 @@ router.post('/upload-license', authenticate, isMinistry, upload.single('licenseF
     }
 });
 
-// Validation schema for syncing
+// Validation schema for syncing.
+// Wave D 2026-05-24: orgId accepts string (from BigInt serialization in mobile);
+// licenseCid + licenseUrl optional (mobile createOrg flow skips license upload
+// for thesis demo — production should require both).
 const syncOrgSchema = z.object({
-    orgId: z.number().int().positive(),
+    orgId: z.union([z.number().int().positive(), z.string()]),
     name: z.string().min(2),
     primaryAdmin: z.string().regex(/^0x[a-fA-F0-9]{40}$/),
     backupAdmin: z.string().regex(/^0x[a-fA-F0-9]{40}$/).optional().nullable(),
     txHash: z.string().regex(/^0x[a-fA-F0-9]{64}$/),
-    licenseCid: z.string().min(10), // IPFS CID
-    licenseUrl: z.string().optional(),
+    licenseCid: z.string().optional().nullable(),
+    licenseUrl: z.string().optional().nullable(),
 });
 
 // POST /api/admin/confirm-org-creation - Step 3: Sync DB after On-chain Success
