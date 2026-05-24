@@ -22,6 +22,7 @@ import { Text, XStack, YStack } from 'tamagui';
 
 import LoadingSpinner from '../components/LoadingSpinner';
 import UserChip from '../components/UserChip';
+import RecordChip from '../components/RecordChip';
 import useRequests from '../hooks/useRequests';
 import requestService from '../services/request.service';
 import authService from '../services/auth.service';
@@ -35,17 +36,17 @@ import {
 } from '../services/nacl-crypto';
 import localRecordStore from '../services/localRecordStore';
 import walletActionService from '../services/walletAction.service';
-import ViCard from '../components-v2/ViCard';
 import ViButton from '../components-v2/ViButton';
-import { ViStatusChip, ViModeChip } from '../components-v2/ViChips';
 import { useEhrPalette } from '../constants/uiColors';
 import { resolveRecordType } from '../constants/recordTypes';
 import { formatDateTime, formatExpiry, getExpiryUrgency } from '../utils/dateFormatting';
 
 const SERIF = 'Fraunces_400Regular';
+const SERIF_ITALIC = 'Fraunces_400Regular_Italic';
 const SANS = 'DMSans_400Regular';
 const SANS_MEDIUM = 'DMSans_500Medium';
 const SANS_SEMI = 'DMSans_600SemiBold';
+const MONO = 'monospace';
 
 type RequestItem = {
     id?: string;
@@ -118,12 +119,17 @@ const getSignatureTimeLeft = (deadline?: string | null) => {
 
 const truncate = (addr?: string) => (addr ? `${addr.slice(0, 6)}…${addr.slice(-4)}` : '???');
 
-function statusToken(status?: string): 'pending' | 'active' | 'rejected' | 'expiring' {
-    const s = String(status || 'pending').toLowerCase();
-    if (s === 'approved') return 'active';
-    if (s === 'signed') return 'expiring';
-    if (s === 'rejected') return 'rejected';
-    return 'pending';
+/**
+ * statusPillTokens — per polish pack §3 A·1: dashed-border pill with
+ * status-tone color. warn (gold) pending · jade approved · cinnabar
+ * rejected · clay signed (awaiting doctor claim).
+ */
+function statusPillTokens(status: string, palette: any): { label: string; color: string } {
+    const s = status.toLowerCase();
+    if (s === 'approved') return { label: 'Đã duyệt', color: palette.EHR_TERTIARY };
+    if (s === 'signed') return { label: 'Đã ký · chờ nhận', color: palette.EHR_CLAY };
+    if (s === 'rejected') return { label: 'Từ chối', color: palette.EHR_CINNABAR_DEEP };
+    return { label: 'Chờ duyệt', color: palette.EHR_WARNING };
 }
 
 const RequestRow = React.memo(function RequestRow({
@@ -141,177 +147,171 @@ const RequestRow = React.memo(function RequestRow({
     const normalizedStatus = (item.status || 'pending').toLowerCase();
     const isPending = normalizedStatus === 'pending';
     const isSigned = normalizedStatus === 'signed';
+    const isFullDelegation = item.requestType === 1;
     const timeLeft = isSigned ? getSignatureTimeLeft(item.signatureDeadline) : null;
+    const statusPill = statusPillTokens(normalizedStatus, palette);
+    const scopeLabel = getRequestTypeLabel(item.requestType);
+    const durationLabel = formatDuration(item);
 
     return (
-        <ViCard padding={16} style={{ marginBottom: 12 }}>
-            <XStack style={{ alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 10, gap: 8 }}>
+        <View
+            style={{
+                paddingVertical: 16,
+                paddingHorizontal: 4,
+                borderBottomWidth: 0.5,
+                borderBottomColor: palette.EHR_OUTLINE_SOFT,
+            }}
+        >
+            {/* HEAD ROW — requester (serif italic) + dashed status pill (top-right) */}
+            <XStack style={{ alignItems: 'flex-start', justifyContent: 'space-between', gap: 10 }}>
                 <View style={{ flex: 1 }}>
-                    {/* G.2 — requester wallet → UserChip resolves name + specialty + hospital + verified badge */}
                     <UserChip address={item.requesterAddress} expanded showAddress={false} />
                 </View>
-                <ViStatusChip status={statusToken(normalizedStatus)} />
-            </XStack>
-
-            {/* Record identification panel */}
-            {item.requestType === 1 ? (
                 <View
                     style={{
-                        backgroundColor: `${palette.EHR_WARNING}1A`,
-                        borderRadius: 10,
-                        padding: 10,
-                        marginBottom: 10,
+                        paddingVertical: 3,
+                        paddingHorizontal: 8,
+                        borderRadius: 4,
                         borderWidth: 0.5,
-                        borderColor: `${palette.EHR_WARNING}50`,
+                        borderStyle: 'dashed',
+                        borderColor: statusPill.color,
                     }}
                 >
-                    <Text style={{ fontFamily: SANS_SEMI, fontSize: 12, color: palette.EHR_WARNING, fontWeight: '700' }}>
-                        Uỷ quyền toàn bộ
-                    </Text>
                     <Text
                         style={{
-                            marginTop: 2,
-                            fontFamily: SANS,
-                            fontSize: 12,
-                            color: palette.EHR_ON_SURFACE,
-                            lineHeight: 18,
+                            fontFamily: MONO,
+                            fontSize: 9.5,
+                            color: statusPill.color,
+                            letterSpacing: 0.8,
+                            textTransform: 'uppercase',
+                            fontWeight: '700',
                         }}
                     >
-                        Áp dụng cho TẤT CẢ hồ sơ của bạn — không gắn với một hồ sơ cụ thể.
+                        {statusPill.label}
                     </Text>
                 </View>
-            ) : (
-                <View
-                    style={{
-                        backgroundColor: palette.EHR_PRIMARY_FIXED,
-                        borderRadius: 10,
-                        padding: 10,
-                        marginBottom: 10,
-                    }}
-                >
-                    <XStack style={{ alignItems: 'center', gap: 6, marginBottom: item.recordDescription ? 6 : 0 }}>
-                        <FilePlus2 size={13} color={palette.EHR_PRIMARY} />
-                        <Text
-                            style={{
-                                fontFamily: SANS_SEMI,
-                                fontSize: 13,
-                                color: palette.EHR_PRIMARY,
-                                fontWeight: '700',
-                                flex: 1,
-                            }}
-                            numberOfLines={1}
-                        >
-                            {item.recordTitle || 'Hồ sơ chưa rõ tên'}
-                        </Text>
-                    </XStack>
-                    {item.recordDescription ? (
-                        <Text
-                            style={{
-                                fontFamily: SANS,
-                                fontSize: 12,
-                                color: palette.EHR_ON_SURFACE,
-                                lineHeight: 18,
-                                marginBottom: 4,
-                            }}
-                            numberOfLines={3}
-                        >
-                            {item.recordDescription}
-                        </Text>
-                    ) : null}
-                    <XStack style={{ flexWrap: 'wrap', gap: 6 }}>
-                        {item.recordType ? (
-                            <View
-                                style={{
-                                    paddingHorizontal: 6,
-                                    paddingVertical: 2,
-                                    borderRadius: 6,
-                                    backgroundColor: palette.EHR_SURFACE_LOWEST,
-                                }}
-                            >
-                                <Text
-                                    style={{
-                                        fontFamily: SANS_MEDIUM,
-                                        fontSize: 10.5,
-                                        color: palette.EHR_PRIMARY,
-                                        fontWeight: '600',
-                                    }}
-                                >
-                                    {getRecordTypeLabel(item.recordType)}
-                                </Text>
-                            </View>
-                        ) : null}
-                        {item.recordCreatedAt ? (
-                            <Text style={{ fontFamily: SANS, fontSize: 10.5, color: palette.EHR_TEXT_MUTED }}>
-                                {formatDate(item.recordCreatedAt)}
-                            </Text>
-                        ) : null}
-                        {item.parentCidHash ? (
-                            <Text style={{ fontFamily: SANS, fontSize: 10.5, color: palette.EHR_TEXT_MUTED }}>
-                                · Bản cập nhật
-                            </Text>
-                        ) : null}
-                    </XStack>
-                </View>
-            )}
+            </XStack>
 
-            {/* Metadata strip */}
-            <XStack
+            {/* KVROW SEPARATOR — 0.5px dashed borderSoft, marks head/body split.
+                RN borderStyle applies to all sides; we set only borderTopWidth
+                so only the top edge renders, others stay 0. */}
+            <View
                 style={{
-                    flexWrap: 'wrap',
-                    alignItems: 'center',
-                    gap: 8,
-                    marginBottom: isPending ? 12 : 0,
+                    marginTop: 12,
+                    paddingTop: 12,
+                    borderTopWidth: 0.5,
+                    borderStyle: 'dashed',
+                    borderTopColor: palette.EHR_OUTLINE_SOFT,
                 }}
             >
-                <ViModeChip mode={item.requestType === 2 ? 'read-delegate' : 'read-update'} />
-                {formatDuration(item) ? (
-                    <Text style={{ fontFamily: SANS_MEDIUM, fontSize: 11.5, color: palette.EHR_TEXT_MUTED }}>
-                        {formatDuration(item)}
-                    </Text>
-                ) : null}
-                <Text style={{ fontFamily: SANS, fontSize: 11, color: palette.EHR_TEXT_MUTED }}>
-                    {formatDate(item.createdAt)}
-                </Text>
-                {item.deadline && isPending ? (() => {
-                    const urgency = getExpiryUrgency(item.deadline);
-                    const urgent = urgency === 'urgent' || urgency === 'soon';
-                    const color =
-                        urgency === 'expired' ? palette.EHR_DANGER : urgent ? palette.EHR_WARNING : palette.EHR_OUTLINE;
-                    return (
-                        <XStack style={{ alignItems: 'center', gap: 4 }}>
-                            <Clock size={11} color={color} />
+                {/* BODY — RecordChip OR full-delegation warning */}
+                {isFullDelegation ? (
+                    <XStack style={{ alignItems: 'flex-start', gap: 8 }}>
+                        <View
+                            style={{
+                                width: 6,
+                                height: 6,
+                                borderRadius: 3,
+                                backgroundColor: palette.EHR_WARNING,
+                                marginTop: 6,
+                            }}
+                        />
+                        <View style={{ flex: 1 }}>
+                            <Text style={{ fontFamily: SANS_SEMI, fontSize: 12.5, color: palette.EHR_WARNING, fontWeight: '700' }}>
+                                Uỷ quyền toàn bộ
+                            </Text>
                             <Text
                                 style={{
-                                    fontFamily: SANS_MEDIUM,
-                                    fontSize: 11,
-                                    color,
-                                    fontWeight: urgent ? '700' : '500',
+                                    marginTop: 2,
+                                    fontFamily: SANS,
+                                    fontSize: 12,
+                                    color: palette.EHR_ON_SURFACE_VARIANT,
+                                    lineHeight: 17,
                                 }}
                             >
-                                Duyệt trước: {formatExpiry(item.deadline)}
+                                Áp dụng cho TẤT CẢ hồ sơ của bạn — không gắn với một hồ sơ cụ thể.
                             </Text>
-                        </XStack>
-                    );
-                })() : null}
-            </XStack>
+                        </View>
+                    </XStack>
+                ) : item.cidHash ? (
+                    <RecordChip cidHash={item.cidHash} fallbackTitle={item.recordTitle} showHash={false} />
+                ) : (
+                    <Text style={{ fontFamily: SANS, fontSize: 12.5, color: palette.EHR_TEXT_MUTED, fontStyle: 'italic' }}>
+                        {item.recordTitle || 'Hồ sơ chưa rõ tên'}
+                    </Text>
+                )}
+
+                {/* META STRIP — scope · duration · deadline urgency */}
+                <XStack
+                    style={{
+                        marginTop: 10,
+                        flexWrap: 'wrap',
+                        alignItems: 'center',
+                        gap: 10,
+                    }}
+                >
+                    <Text style={{ fontFamily: MONO, fontSize: 11, color: palette.EHR_ON_SURFACE_VARIANT, letterSpacing: 0.2 }}>
+                        {scopeLabel}
+                    </Text>
+                    {durationLabel ? (
+                        <>
+                            <Text style={{ color: palette.EHR_TEXT_MUTED }}>·</Text>
+                            <Text style={{ fontFamily: MONO, fontSize: 11, color: palette.EHR_TEXT_MUTED }}>
+                                {durationLabel}
+                            </Text>
+                        </>
+                    ) : null}
+                    {item.deadline && isPending ? (() => {
+                        const urgency = getExpiryUrgency(item.deadline);
+                        const urgent = urgency === 'urgent' || urgency === 'soon';
+                        const color =
+                            urgency === 'expired' ? palette.EHR_CINNABAR_DEEP : urgent ? palette.EHR_WARNING : palette.EHR_TEXT_MUTED;
+                        return (
+                            <>
+                                <Text style={{ color: palette.EHR_TEXT_MUTED }}>·</Text>
+                                <XStack style={{ alignItems: 'center', gap: 4 }}>
+                                    <Clock size={11} color={color} />
+                                    <Text style={{ fontFamily: MONO, fontSize: 11, color, fontWeight: urgent ? '700' : '400' }}>
+                                        Duyệt trước {formatExpiry(item.deadline)}
+                                    </Text>
+                                </XStack>
+                            </>
+                        );
+                    })() : null}
+                </XStack>
+            </View>
+
+            {/* FOOTER LINE — timestamp mono 11 muted + audit·log marker */}
+            <Text
+                style={{
+                    marginTop: 10,
+                    fontFamily: MONO,
+                    fontSize: 10.5,
+                    color: palette.EHR_TEXT_MUTED,
+                    letterSpacing: 0.2,
+                }}
+            >
+                {formatDate(item.createdAt)} · audit·log
+            </Text>
 
             {/* Signed: countdown for doctor to claim */}
             {isSigned && timeLeft ? (
                 <View
                     style={{
-                        marginTop: 8,
-                        paddingVertical: 10,
+                        marginTop: 10,
+                        paddingVertical: 8,
                         paddingHorizontal: 12,
-                        borderRadius: 10,
-                        backgroundColor: timeLeft.expired ? `${palette.EHR_DANGER}14` : `${palette.EHR_TERTIARY}14`,
+                        borderRadius: 8,
+                        borderLeftWidth: 2,
+                        borderLeftColor: timeLeft.expired ? palette.EHR_CINNABAR_DEEP : palette.EHR_TERTIARY,
+                        backgroundColor: timeLeft.expired ? `${palette.EHR_CINNABAR_DEEP}10` : `${palette.EHR_TERTIARY}10`,
                     }}
                 >
                     <Text
                         style={{
                             fontFamily: SANS_MEDIUM,
-                            fontSize: 12.5,
-                            color: timeLeft.expired ? palette.EHR_DANGER : palette.EHR_TERTIARY,
-                            textAlign: 'center',
+                            fontSize: 12,
+                            color: timeLeft.expired ? palette.EHR_CINNABAR_DEEP : palette.EHR_TERTIARY,
                             fontWeight: '600',
                         }}
                     >
@@ -324,7 +324,7 @@ const RequestRow = React.memo(function RequestRow({
 
             {/* Approve / Archive */}
             {isPending ? (
-                <XStack style={{ justifyContent: 'flex-end', gap: 8, marginTop: 12 }}>
+                <XStack style={{ justifyContent: 'flex-end', gap: 8, marginTop: 14 }}>
                     <View>
                         <ViButton
                             variant="ghost"
@@ -349,7 +349,7 @@ const RequestRow = React.memo(function RequestRow({
                     </View>
                 </XStack>
             ) : null}
-        </ViCard>
+        </View>
     );
 });
 

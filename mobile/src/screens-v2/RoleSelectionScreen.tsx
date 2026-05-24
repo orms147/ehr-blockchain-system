@@ -62,6 +62,24 @@ const REGISTRATION_OPTIONS = [
     },
 ] as const;
 
+/**
+ * ROLE_QUOTES — cinnabar pull-quote text per role, surfaced when a row is
+ * selected. Per polish pack §2: "moment activation" — gives the one-time
+ * decision visual weight without resurrecting marketing-cards.
+ */
+const ROLE_QUOTES: Record<string, { body: string; emphasis: string; cite: string }> = {
+    patient: {
+        body: 'Bạn là chủ sở hữu hồ sơ của mình. Không ai — kể cả bác sĩ, bệnh viện, hay Bộ Y tế — đọc được nếu bạn chưa cho phép.',
+        emphasis: 'chủ sở hữu',
+        cite: 'Cam kết của ViEH với bệnh nhân',
+    },
+    doctor: {
+        body: 'Mỗi lần bạn xem hồ sơ là một dấu vết on-chain. Bệnh nhân thấy mọi thao tác, vĩnh viễn — và đó là cách họ tin bạn.',
+        emphasis: 'vĩnh viễn',
+        cite: 'Cam kết của ViEH với bác sĩ',
+    },
+};
+
 const ROLE_FEATURES: Record<string, { title: string; features: { icon: any; text: string }[] }> = {
     patient: {
         title: 'Chức năng dành cho Bệnh nhân',
@@ -194,6 +212,10 @@ export default function RoleSelectionScreen() {
     ) => {
         const selected = selectedRole === role;
         const isBusy = busyRole === role;
+        // Per polish pack §2: when any row is selected, OTHER rows fade to 0.55
+        // so the selected row carries the visual weight.
+        const hasAnySelection = Boolean(selectedRole);
+        const dimmed = hasAnySelection && !selected;
         return (
             <Pressable
                 key={role}
@@ -205,7 +227,7 @@ export default function RoleSelectionScreen() {
                     borderTopWidth: index === 0 ? 0.5 : 0,
                     borderBottomWidth: 0.5,
                     borderColor: palette.EHR_OUTLINE_VARIANT,
-                    opacity: pressed ? 0.6 : busyRole && !isBusy ? 0.5 : 1,
+                    opacity: pressed ? 0.6 : busyRole && !isBusy ? 0.5 : dimmed ? 0.55 : 1,
                 })}
             >
                 <XStack style={{ alignItems: 'center', gap: 12 }}>
@@ -376,19 +398,95 @@ export default function RoleSelectionScreen() {
                             })}
                     </YStack>
 
+                    {/* Activation pull-quote — appears when a role is selected.
+                        Cinnabar left-border, serif italic body, mono cite.
+                        Per polish pack §2 "moment activation" pattern. */}
+                    {selectedRole && ROLE_QUOTES[selectedRole] ? (
+                        <View
+                            style={{
+                                marginTop: 24,
+                                paddingVertical: 18,
+                                paddingHorizontal: 18,
+                                borderLeftWidth: 2,
+                                borderLeftColor: palette.EHR_CINNABAR_DEEP,
+                                backgroundColor: `${palette.EHR_CINNABAR_DEEP}10`,
+                            }}
+                        >
+                            <Text
+                                style={{
+                                    fontFamily: SERIF_ITALIC,
+                                    fontStyle: 'italic',
+                                    fontSize: 38,
+                                    lineHeight: 19,
+                                    color: palette.EHR_CINNABAR_DEEP,
+                                    marginBottom: 14,
+                                }}
+                            >
+                                &ldquo;
+                            </Text>
+                            <Text
+                                style={{
+                                    fontFamily: SERIF_ITALIC,
+                                    fontStyle: 'italic',
+                                    fontSize: 15.5,
+                                    lineHeight: 23,
+                                    color: palette.EHR_ON_SURFACE,
+                                    letterSpacing: -0.1,
+                                }}
+                            >
+                                {ROLE_QUOTES[selectedRole].body.split(ROLE_QUOTES[selectedRole].emphasis).map((part, i, arr) => (
+                                    <React.Fragment key={i}>
+                                        {part}
+                                        {i < arr.length - 1 ? (
+                                            <Text style={{ color: palette.EHR_CINNABAR_DEEP, fontStyle: 'italic' }}>
+                                                {ROLE_QUOTES[selectedRole].emphasis}
+                                            </Text>
+                                        ) : null}
+                                    </React.Fragment>
+                                ))}
+                            </Text>
+                            <Text
+                                style={{
+                                    marginTop: 12,
+                                    fontFamily: 'monospace',
+                                    fontSize: 10,
+                                    color: palette.EHR_TEXT_MUTED,
+                                    letterSpacing: 1.2,
+                                    textTransform: 'uppercase',
+                                    fontWeight: '700',
+                                }}
+                            >
+                                — {ROLE_QUOTES[selectedRole].cite}
+                            </Text>
+                        </View>
+                    ) : null}
+
                     <View style={{ height: 14 }} />
 
-                    {/* CTA */}
-                    <ViButton
-                        variant="primary"
-                        full
-                        size="lg"
-                        loading={Boolean(busyRole)}
-                        disabled={!selectedRole}
-                        onPress={handleContinue}
-                    >
-                        {registrationMode ? 'Tiếp tục đăng ký' : 'Tiếp tục'}
-                    </ViButton>
+                    {/* CTA — label swaps to "Tiếp tục với vai trò X" when role
+                        chosen, per polish pack §2 footer fine-print swap. */}
+                    {(() => {
+                        const selectedLabel = selectedRole === 'patient' ? 'Bệnh nhân'
+                            : selectedRole === 'doctor' ? 'Bác sĩ'
+                            : ROLE_CONFIG_MAP[selectedRole || '']?.label || '';
+                        const ctaLabel = !selectedRole
+                            ? (registrationMode ? 'Tiếp tục đăng ký' : 'Tiếp tục')
+                            : registrationMode
+                                ? `Tiếp tục với vai trò ${selectedLabel}`
+                                : `Đăng nhập với vai trò ${selectedLabel}`;
+                        return (
+                            <ViButton
+                                variant="cinnabar"
+                                full
+                                size="lg"
+                                loading={Boolean(busyRole)}
+                                disabled={!selectedRole}
+                                onPress={handleContinue}
+                            >
+                                {ctaLabel}
+                            </ViButton>
+                        );
+                    })()}
 
                     <Text
                         style={{

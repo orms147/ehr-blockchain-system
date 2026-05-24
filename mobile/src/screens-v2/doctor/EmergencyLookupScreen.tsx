@@ -44,6 +44,21 @@ type Contact = {
 
 const truncate = (addr?: string) => (addr ? `${addr.slice(0, 6)}…${addr.slice(-4)}` : '');
 
+/**
+ * emergencyRelationTone — map label string to color token per polish pack §3
+ * A·2. Same mapping as TrustedContactsScreen.relationTone — duplicated to
+ * avoid a shared-util import cycle for a 5-line helper.
+ */
+function emergencyRelationTone(label: string | null | undefined, palette: any): string {
+    if (!label) return palette.EHR_TEXT_MUTED;
+    const l = label.toLowerCase().trim();
+    if (l.includes('vợ') || l.includes('chồng') || l === 'spouse') return palette.EHR_CINNABAR_DEEP;
+    if (l.includes('cha') || l.includes('mẹ') || l.includes('bố') || l === 'parent') return palette.EHR_CLAY;
+    if (l.includes('con') || l === 'child') return palette.EHR_TERTIARY;
+    if (l.includes('anh') || l.includes('chị') || l.includes('em') || l === 'sibling') return palette.EHR_OUTLINE;
+    return palette.EHR_TEXT_MUTED;
+}
+
 export default function EmergencyLookupScreen() {
     const palette = useEhrPalette();
     const [cccdInput, setCccdInput] = useState('');
@@ -370,70 +385,109 @@ export default function EmergencyLookupScreen() {
                                 Bệnh nhân chưa có Người thân tin cậy nào. Không thể truy cập hồ sơ trong tình huống này.
                             </Text>
                         ) : (
-                            contacts.map((c) => (
-                                <ViCard key={c.contactAddress} padding={14} style={{ marginBottom: 10 }}>
-                                    <XStack style={{ alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                            contacts.map((c) => {
+                                const tone = emergencyRelationTone(c.label, palette);
+                                return (
+                                    <View
+                                        key={c.contactAddress}
+                                        style={{
+                                            paddingVertical: 12,
+                                            paddingHorizontal: 12,
+                                            marginBottom: 8,
+                                            borderRadius: 12,
+                                            backgroundColor: palette.EHR_SURFACE_LOWEST,
+                                            borderWidth: 0.5,
+                                            borderColor: palette.EHR_OUTLINE_SOFT,
+                                            flexDirection: 'row',
+                                            alignItems: 'center',
+                                            gap: 10,
+                                        }}
+                                    >
+                                        {/* Cinnabar-tinted heart avatar */}
                                         <View
                                             style={{
-                                                width: 32,
-                                                height: 32,
-                                                borderRadius: 16,
-                                                backgroundColor: palette.EHR_PRIMARY_FIXED,
+                                                width: 40,
+                                                height: 40,
+                                                borderRadius: 20,
+                                                backgroundColor: `${palette.EHR_CINNABAR_DEEP}2E`,
                                                 alignItems: 'center',
                                                 justifyContent: 'center',
                                             }}
                                         >
-                                            <Heart size={14} color={palette.EHR_PRIMARY} />
+                                            <Heart size={18} color={palette.EHR_CINNABAR_DEEP} fill={palette.EHR_CINNABAR_DEEP} />
                                         </View>
                                         <YStack style={{ flex: 1, minWidth: 0 }}>
+                                            <XStack style={{ alignItems: 'baseline', gap: 6, flexWrap: 'wrap' }}>
+                                                <Text
+                                                    style={{
+                                                        fontFamily: SANS_SEMI,
+                                                        fontSize: 14,
+                                                        color: palette.EHR_ON_SURFACE,
+                                                        fontWeight: '600',
+                                                    }}
+                                                    numberOfLines={1}
+                                                >
+                                                    {c.fullName || truncate(c.contactAddress)}
+                                                </Text>
+                                                {c.label ? (
+                                                    <View
+                                                        style={{
+                                                            paddingHorizontal: 6,
+                                                            paddingVertical: 2,
+                                                            borderRadius: 3,
+                                                            backgroundColor: `${tone}2E`,
+                                                        }}
+                                                    >
+                                                        <Text
+                                                            style={{
+                                                                fontSize: 10,
+                                                                fontFamily: SANS_SEMI,
+                                                                color: tone,
+                                                                letterSpacing: 0.3,
+                                                                fontWeight: '600',
+                                                            }}
+                                                        >
+                                                            {c.label}
+                                                        </Text>
+                                                    </View>
+                                                ) : null}
+                                            </XStack>
                                             <Text
                                                 style={{
-                                                    fontFamily: SANS_MEDIUM,
-                                                    fontSize: 14,
-                                                    color: palette.EHR_ON_SURFACE,
-                                                    fontWeight: '700',
+                                                    marginTop: 2,
+                                                    fontFamily: 'monospace',
+                                                    fontSize: 10.5,
+                                                    color: palette.EHR_TEXT_MUTED,
+                                                    letterSpacing: 0.2,
                                                 }}
                                                 numberOfLines={1}
                                             >
-                                                {c.fullName || truncate(c.contactAddress)}
+                                                {truncate(c.contactAddress)}
                                             </Text>
-                                            {c.label ? (
-                                                <Text
-                                                    style={{
-                                                        fontFamily: SANS,
-                                                        fontSize: 11.5,
-                                                        color: palette.EHR_TEXT_MUTED,
-                                                    }}
-                                                >
-                                                    {c.label}
-                                                </Text>
-                                            ) : null}
                                         </YStack>
-                                    </XStack>
-                                    {c.phone ? (
-                                        <ViButton
-                                            variant="cinnabar"
-                                            full
-                                            size="sm"
-                                            onPress={() => callContact(c.phone)}
-                                            leftIcon={<Phone size={13} color="#FAF7F1" />}
-                                        >
-                                            Gọi {c.phone}
-                                        </ViButton>
-                                    ) : (
-                                        <Text
-                                            style={{
-                                                fontFamily: SANS,
-                                                fontSize: 11.5,
-                                                color: palette.EHR_TEXT_MUTED,
-                                                fontStyle: 'italic',
-                                            }}
-                                        >
-                                            (Không có số điện thoại)
-                                        </Text>
-                                    )}
-                                </ViCard>
-                            ))
+                                        {c.phone ? (
+                                            <Pressable
+                                                onPress={() => callContact(c.phone)}
+                                                style={({ pressed }) => ({
+                                                    paddingHorizontal: 14,
+                                                    paddingVertical: 10,
+                                                    borderRadius: 8,
+                                                    backgroundColor: palette.EHR_CINNABAR_DEEP,
+                                                    flexDirection: 'row',
+                                                    alignItems: 'center',
+                                                    gap: 6,
+                                                    opacity: pressed ? 0.85 : 1,
+                                                })}
+                                            >
+                                                <Phone size={13} color="#FAF7F1" />
+                                                <Text style={{ fontFamily: SANS_SEMI, fontSize: 12, color: '#FAF7F1', fontWeight: '700' }}>
+                                                    Gọi
+                                                </Text>
+                                            </Pressable>
+                                        ) : null}
+                                    </View>
+                                );
+                            })
                         )}
                     </>
                 ) : null}

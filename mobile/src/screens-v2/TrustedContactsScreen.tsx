@@ -51,6 +51,20 @@ type Contact = {
 
 const truncate = (addr?: string) => (addr ? `${addr.slice(0, 6)}…${addr.slice(-4)}` : '');
 
+/**
+ * relationTone — map label string to color token per polish pack §3 A·2.
+ * Falls back to muted/slate for unknown labels.
+ */
+function relationTone(label: string | null | undefined, palette: any): string {
+    if (!label) return palette.EHR_TEXT_MUTED;
+    const l = label.toLowerCase().trim();
+    if (l.includes('vợ') || l.includes('chồng') || l === 'spouse') return palette.EHR_CINNABAR_DEEP;
+    if (l.includes('cha') || l.includes('mẹ') || l.includes('bố') || l === 'parent') return palette.EHR_CLAY;
+    if (l.includes('con') || l === 'child') return palette.EHR_TERTIARY;
+    if (l.includes('anh') || l.includes('chị') || l.includes('em') || l === 'sibling') return palette.EHR_OUTLINE;
+    return palette.EHR_TEXT_MUTED;
+}
+
 export default function TrustedContactsScreen() {
     const palette = useEhrPalette();
     const queryClient = useQueryClient();
@@ -171,98 +185,111 @@ export default function TrustedContactsScreen() {
         }
     };
 
-    const renderItem = ({ item }: { item: Contact }) => (
-        <View
-            style={{
-                paddingVertical: 14,
-                paddingHorizontal: 14,
-                backgroundColor: palette.EHR_SURFACE_LOWEST,
-                borderWidth: 0.5,
-                borderColor: palette.EHR_OUTLINE_SOFT,
-                borderRadius: 14,
-                marginBottom: 10,
-            }}
-        >
-            <XStack style={{ alignItems: 'center', gap: 12 }}>
-                <View
-                    style={{
-                        width: 40,
-                        height: 40,
-                        borderRadius: 20,
-                        backgroundColor: palette.EHR_PRIMARY_FIXED,
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                    }}
-                >
-                    <Heart size={18} color={palette.EHR_PRIMARY} />
-                </View>
-                <YStack style={{ flex: 1, minWidth: 0 }}>
-                    <XStack style={{ alignItems: 'baseline', gap: 8 }}>
+    const renderItem = ({ item }: { item: Contact }) => {
+        const tone = relationTone(item.label, palette);
+        return (
+            <View
+                style={{
+                    paddingVertical: 12,
+                    paddingHorizontal: 14,
+                    backgroundColor: palette.EHR_SURFACE_LOWEST,
+                    borderWidth: 0.5,
+                    borderColor: palette.EHR_OUTLINE_SOFT,
+                    borderRadius: 12,
+                    marginBottom: 8,
+                }}
+            >
+                <XStack style={{ alignItems: 'center', gap: 10 }}>
+                    {/* Cinnabar-tinted heart avatar — heart icon FILLED cinnabar */}
+                    <View
+                        style={{
+                            width: 40,
+                            height: 40,
+                            borderRadius: 20,
+                            backgroundColor: `${palette.EHR_CINNABAR_DEEP}2E`,
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                        }}
+                    >
+                        <Heart size={18} color={palette.EHR_CINNABAR_DEEP} fill={palette.EHR_CINNABAR_DEEP} />
+                    </View>
+                    <YStack style={{ flex: 1, minWidth: 0 }}>
+                        <XStack style={{ alignItems: 'baseline', gap: 6, flexWrap: 'wrap' }}>
+                            <Text
+                                style={{
+                                    fontFamily: SANS_SEMI,
+                                    fontSize: 14,
+                                    color: palette.EHR_ON_SURFACE,
+                                    fontWeight: '600',
+                                }}
+                                numberOfLines={1}
+                            >
+                                {item.fullName || truncate(item.contactAddress)}
+                            </Text>
+                            {item.label ? (
+                                <View
+                                    style={{
+                                        paddingHorizontal: 6,
+                                        paddingVertical: 2,
+                                        borderRadius: 3,
+                                        backgroundColor: `${tone}2E`,
+                                    }}
+                                >
+                                    <Text
+                                        style={{
+                                            fontSize: 10,
+                                            fontFamily: SANS_SEMI,
+                                            color: tone,
+                                            letterSpacing: 0.3,
+                                            fontWeight: '600',
+                                        }}
+                                    >
+                                        {item.label}
+                                    </Text>
+                                </View>
+                            ) : null}
+                        </XStack>
                         <Text
                             style={{
-                                fontFamily: SANS_MEDIUM,
-                                fontSize: 14.5,
-                                color: palette.EHR_ON_SURFACE,
+                                marginTop: 2,
+                                fontFamily: 'monospace',
+                                fontSize: 10.5,
+                                color: palette.EHR_TEXT_MUTED,
+                                letterSpacing: 0.2,
                             }}
                             numberOfLines={1}
                         >
-                            {item.fullName || truncate(item.contactAddress)}
+                            {truncate(item.contactAddress)}
                         </Text>
-                        {item.label ? (
-                            <Text
-                                style={{
-                                    fontSize: 11,
-                                    paddingHorizontal: 7,
-                                    paddingVertical: 2,
-                                    backgroundColor: palette.EHR_SURFACE,
-                                    borderRadius: 4,
-                                    color: palette.EHR_TEXT_MUTED,
-                                    letterSpacing: 0.2,
-                                    fontFamily: SANS,
-                                }}
-                            >
-                                {item.label}
-                            </Text>
-                        ) : null}
-                    </XStack>
-                    <Text
-                        style={{
-                            marginTop: 3,
-                            fontFamily: 'monospace',
-                            fontSize: 11,
-                            color: palette.EHR_TEXT_MUTED,
-                        }}
-                        numberOfLines={1}
+                    </YStack>
+                    <Pressable
+                        onPress={() => handleRemove(item)}
+                        disabled={removingAddr === item.contactAddress}
+                        style={({ pressed }) => ({
+                            paddingHorizontal: 10,
+                            paddingVertical: 6,
+                            borderRadius: 6,
+                            borderWidth: 0.5,
+                            borderColor: palette.EHR_CINNABAR_DEEP,
+                            opacity: pressed ? 0.6 : 1,
+                        })}
                     >
-                        {truncate(item.contactAddress)}
-                    </Text>
-                </YStack>
-                <Pressable
-                    onPress={() => handleRemove(item)}
-                    disabled={removingAddr === item.contactAddress}
-                    style={({ pressed }) => ({
-                        paddingHorizontal: 12,
-                        paddingVertical: 6,
-                        borderRadius: 8,
-                        borderWidth: 0.5,
-                        borderColor: palette.EHR_PRIMARY,
-                        opacity: pressed ? 0.6 : 1,
-                    })}
-                >
-                    <Text
-                        style={{
-                            fontFamily: SANS_MEDIUM,
-                            fontSize: 12,
-                            color: palette.EHR_PRIMARY,
-                            fontWeight: '600',
-                        }}
-                    >
-                        {removingAddr === item.contactAddress ? 'Đang...' : 'Thu hồi'}
-                    </Text>
-                </Pressable>
-            </XStack>
-        </View>
-    );
+                        <Text
+                            style={{
+                                fontFamily: SANS_SEMI,
+                                fontSize: 11,
+                                color: palette.EHR_CINNABAR_DEEP,
+                                fontWeight: '600',
+                                letterSpacing: 0.2,
+                            }}
+                        >
+                            {removingAddr === item.contactAddress ? 'Đang…' : 'Thu hồi'}
+                        </Text>
+                    </Pressable>
+                </XStack>
+            </View>
+        );
+    };
 
     return (
         <SafeAreaView style={{ flex: 1, backgroundColor: palette.EHR_SURFACE }}>

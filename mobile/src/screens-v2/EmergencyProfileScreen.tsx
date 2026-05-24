@@ -534,6 +534,11 @@ export default function EmergencyProfileScreen() {
                     </SectionRow>
                 </View>
 
+                {/* "Bạn sẽ được tìm thấy như thế nào" — 3-step demo flowchart
+                    per viehp-screens-polish-pack.html §1. Educational moment
+                    explaining the emergency lookup flow to the patient. */}
+                <HowYouWillBeFound />
+
                 {/* Footer note */}
                 <View
                     style={{
@@ -907,6 +912,150 @@ function KVRow({ k, v }: { k: string; v: string }) {
             <Text style={{ fontFamily: SANS, fontSize: 13, color: palette.EHR_ON_SURFACE_VARIANT }}>{k}</Text>
             <Text style={{ fontFamily: SANS_MEDIUM, fontSize: 13, color: palette.EHR_ON_SURFACE, fontWeight: '500' }}>{v}</Text>
         </XStack>
+    );
+}
+
+/**
+ * HowYouWillBeFound — 3-step educational flowchart per polish pack §1.
+ * Vertical timeline (mobile-narrow) connecting 3 scenes:
+ *   T+0s — Bạn bất tỉnh · Có CCCD trong ví
+ *   T+5s — Bác sĩ gõ 12 số CCCD vào app
+ *   T+6s — App hiện danh tính + máu + dị ứng + người thân
+ * Spine + cinnabar dots + serif italic heading. This is the demo moment.
+ */
+function HowYouWillBeFound() {
+    const palette = useEhrPalette();
+    const steps = [
+        {
+            time: 'T + 0s',
+            heading: 'Bạn bất tỉnh.',
+            body: 'Không phản ứng. Trong ví chỉ có một mảnh nhựa — CCCD 12 số.',
+        },
+        {
+            time: 'T + 5s',
+            heading: 'Bác sĩ cấp cứu gõ 12 số.',
+            body: 'App băm CCCD trên thiết bị, đối chiếu hash với chuỗi. Không CCCD gốc nào rời máy.',
+        },
+        {
+            time: 'T + 6s',
+            heading: 'App hiện đủ thông tin.',
+            body: 'Danh tính · nhóm máu · dị ứng · 1 nút Gọi người thân. Audit-log gửi về máy bạn.',
+        },
+    ];
+    return (
+        <View style={{ marginTop: 28, marginHorizontal: 20 }}>
+            <Text
+                style={{
+                    fontFamily: MONO,
+                    fontSize: 10.5,
+                    color: palette.EHR_TEXT_MUTED,
+                    letterSpacing: 1.2,
+                    textTransform: 'uppercase',
+                    fontWeight: '700',
+                    marginBottom: 6,
+                }}
+            >
+                Khi bạn cần đến nó
+            </Text>
+            <Text
+                style={{
+                    fontFamily: SERIF_MEDIUM,
+                    fontSize: 22,
+                    color: palette.EHR_ON_SURFACE,
+                    letterSpacing: -0.3,
+                    lineHeight: 26,
+                    marginBottom: 18,
+                }}
+            >
+                Bạn sẽ được{' '}
+                <Text style={{ fontStyle: 'italic', color: palette.EHR_CINNABAR_DEEP }}>tìm thấy</Text>
+                {' '}như thế nào?
+            </Text>
+
+            {/* Timeline with spine + dots */}
+            <View style={{ position: 'relative', paddingLeft: 22 }}>
+                {/* Vertical spine — drawn behind dots */}
+                <View
+                    style={{
+                        position: 'absolute',
+                        left: 5,
+                        top: 8,
+                        bottom: 8,
+                        width: 0.5,
+                        backgroundColor: palette.EHR_OUTLINE_SOFT,
+                    }}
+                />
+                {steps.map((step, i) => (
+                    <View
+                        key={step.time}
+                        style={{
+                            paddingBottom: i === steps.length - 1 ? 0 : 18,
+                        }}
+                    >
+                        {/* Dot */}
+                        <View
+                            style={{
+                                position: 'absolute',
+                                left: -22,
+                                top: 4,
+                                width: 12,
+                                height: 12,
+                                borderRadius: 6,
+                                backgroundColor: palette.EHR_SURFACE,
+                                borderWidth: 1.25,
+                                borderColor: palette.EHR_CINNABAR_DEEP,
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                            }}
+                        >
+                            <View
+                                style={{
+                                    width: 5,
+                                    height: 5,
+                                    borderRadius: 2.5,
+                                    backgroundColor: palette.EHR_CINNABAR_DEEP,
+                                }}
+                            />
+                        </View>
+                        <Text
+                            style={{
+                                fontFamily: MONO,
+                                fontSize: 10,
+                                color: palette.EHR_CINNABAR_DEEP,
+                                letterSpacing: 1.2,
+                                textTransform: 'uppercase',
+                                fontWeight: '700',
+                                marginBottom: 4,
+                            }}
+                        >
+                            {step.time}
+                        </Text>
+                        <Text
+                            style={{
+                                fontFamily: SERIF,
+                                fontSize: 15,
+                                color: palette.EHR_ON_SURFACE,
+                                letterSpacing: -0.2,
+                                lineHeight: 20,
+                                marginBottom: 4,
+                            }}
+                        >
+                            {step.heading}
+                        </Text>
+                        <Text
+                            style={{
+                                fontFamily: SANS,
+                                fontSize: 12.5,
+                                color: palette.EHR_ON_SURFACE_VARIANT,
+                                lineHeight: 18,
+                            }}
+                        >
+                            {step.body}
+                        </Text>
+                    </View>
+                ))}
+            </View>
+        </View>
     );
 }
 
