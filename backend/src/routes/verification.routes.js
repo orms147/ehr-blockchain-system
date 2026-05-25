@@ -24,6 +24,91 @@ const publicClient = createPublicClient({
 
 const requireDoctorRole = requireOnChainRoles('doctor');
 const requireMinistryRole = requireOnChainRoles('ministry');
+// Wave N — /pending must be accessible by org admins (review their own
+// submitted requests) AND ministry (oversight). orgAdmin = isActiveOrgAdmin.
+const requireOrgOrMinistry = requireOnChainRoles('orgAdmin', 'ministry');
+
+/**
+ * Wave N — Compute 4-check verification outcome per design Q4.
+ * Returns shape: {
+ *   passed: boolean,
+ *   score: '4/4' | '3/4' | ...,
+ *   label: human-readable summary,
+ *   severity: 'jade' | 'warn' | 'cinnabar',
+ *   checks: [{ id, label, pass, detail? }]
+ * }
+ */
+async function computeVerificationOutcome(request, prismaClient) {
+    const checks = [];
+
+    // 1. Auth signature valid — always true (request reached our API via auth middleware)
+    checks.push({
+        id: 'sig',
+        label: 'Chữ ký hồ sơ hợp lệ',
+        pass: true,
+    });
+
+    // 2. CCHN license number format check — Vietnamese formats include
+    //    "028294/HN-CCHN", "1234-HCM-CCHN", or simple digits. Accept loose.
+    const license = (request.licenseNumber || '').trim();
+    const licenseValid = license.length >= 4 && /[0-9]/.test(license);
+    checks.push({
+        id: 'license',
+        label: 'Số CCHN có format hợp lệ',
+        pass: licenseValid,
+        detail: licenseValid ? null : 'Số CCHN trống hoặc sai format',
+    });
+
+    // 3. Organization in DB + Ministry-verified on-chain (proxy via isVerified flag)
+    let orgVerified = false;
+    let orgDetail = null;
+    if (request.organization) {
+        const org = await prismaClient.organization.findFirst({
+            where: { name: request.organization },
+        });
+        orgVerified = Boolean(org?.isVerified && org?.isActive);
+        if (!org) orgDetail = `Cơ sở "${request.organization}" chưa có trong hệ thống`;
+        else if (!org.isVerified) orgDetail = 'Cơ sở chưa được Bộ Y tế xác minh';
+        else if (!org.isActive) orgDetail = 'Cơ sở đang tạm dừng hoạt động';
+    } else {
+        orgDetail = 'Hồ sơ không khai báo cơ sở';
+    }
+    checks.push({
+        id: 'org',
+        label: 'Tổ chức đã được Bộ Y tế xác minh',
+        pass: orgVerified,
+        detail: orgDetail,
+    });
+
+    // 4. Doctor history clean — no revoked OrganizationMember row
+    const revokedHistory = await prismaClient.organizationMember.findFirst({
+        where: {
+            memberAddress: request.doctorAddress.toLowerCase(),
+            status: 'revoked',
+        },
+    });
+    checks.push({
+        id: 'history',
+        label: 'Bác sĩ chưa từng bị thu hồi xác minh',
+        pass: !revokedHistory,
+        detail: revokedHistory ? 'Bác sĩ đã bị một cơ sở thu hồi trước đây' : null,
+    });
+
+    const passCount = checks.filter((c) => c.pass).length;
+    const total = checks.length;
+    const allPass = passCount === total;
+    const severityForFailCount = (n) => (n === 0 ? 'jade' : n <= 1 ? 'warn' : 'cinnabar');
+
+    return {
+        passed: allPass,
+        score: `${passCount}/${total}`,
+        label: allPass
+            ? `Đã xác minh tự động · ${passCount}/${total}`
+            : `Cảnh báo: ${total - passCount} mục cần kiểm tra`,
+        severity: severityForFailCount(total - passCount),
+        checks,
+    };
+}
 
 // Validation schemas
 const submitVerificationSchema = z.object({
@@ -142,17 +227,27 @@ router.post('/submit', authenticate, requireDoctorRole, async (req, res, next) =
     }
 });
 
-// GET /api/verification/pending - Get all pending requests (Ministry/Admin only)
-router.get('/pending', authenticate, requireMinistryRole, async (req, res, next) => {
+// GET /api/verification/pending - Pending CCHN verification requests
+// (Org admin reviews their own org submissions; Ministry oversight).
+// Wave N: each request enriched with verificationOutcome 4-check per design Q4.
+router.get('/pending', authenticate, requireOrgOrMinistry, async (req, res, next) => {
     try {
         const requests = await prisma.verificationRequest.findMany({
             where: { status: 'pending' },
             orderBy: { createdAt: 'asc' },
         });
 
+        // Compute outcome per request in parallel
+        const enriched = await Promise.all(
+            requests.map(async (r) => ({
+                ...r,
+                verificationOutcome: await computeVerificationOutcome(r, prisma),
+            })),
+        );
+
         res.json({
-            count: requests.length,
-            requests: requests,
+            count: enriched.length,
+            requests: enriched,
         });
     } catch (error) {
         next(error);

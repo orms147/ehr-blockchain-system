@@ -3,7 +3,7 @@
 // gated). Wiring preserved bit-for-bit.
 
 import React, { useCallback, useEffect, useState } from 'react';
-import { Alert, FlatList, RefreshControl, View } from 'react-native';
+import { Alert, FlatList, Pressable, RefreshControl, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Text, XStack, YStack } from 'tamagui';
 import { Clock, Check, X, Award } from 'lucide-react-native';
@@ -26,6 +26,21 @@ const SANS_SEMI = 'DMSans_600SemiBold';
 
 const ACCESS_CONTROL_ADDRESS = process.env.EXPO_PUBLIC_ACCESS_CONTROL_ADDRESS as `0x${string}`;
 
+type VerificationCheck = {
+    id: string;
+    label: string;
+    pass: boolean;
+    detail?: string | null;
+};
+
+type VerificationOutcome = {
+    passed: boolean;
+    score: string;
+    label: string;
+    severity: 'jade' | 'warn' | 'cinnabar';
+    checks: VerificationCheck[];
+};
+
 type PendingItem = {
     id: string;
     fullName?: string;
@@ -35,9 +50,12 @@ type PendingItem = {
     specialty?: string;
     requestedAt?: string;
     createdAt?: string;
+    verificationOutcome?: VerificationOutcome;
 };
 
 const truncate = (addr?: string) => (addr ? `${addr.slice(0, 6)}…${addr.slice(-4)}` : '???');
+
+const MONO = 'monospace';
 
 function PendingRow({
     item,
@@ -51,9 +69,20 @@ function PendingRow({
     onReject: (i: PendingItem) => void;
 }) {
     const palette = useEhrPalette();
+    const [expanded, setExpanded] = useState(false);
+    const outcome = item.verificationOutcome;
+
+    const outcomeColor = !outcome
+        ? palette.EHR_TEXT_MUTED
+        : outcome.severity === 'jade'
+            ? palette.EHR_TERTIARY
+            : outcome.severity === 'warn'
+                ? palette.EHR_WARNING
+                : palette.EHR_CINNABAR_DEEP;
+
     return (
         <ViCard padding={14} style={{ marginBottom: 10 }}>
-            <XStack style={{ alignItems: 'center', gap: 12, marginBottom: 12 }}>
+            <XStack style={{ alignItems: 'flex-start', gap: 12, marginBottom: 12 }}>
                 <View
                     style={{
                         width: 44,
@@ -90,6 +119,87 @@ function PendingRow({
                     </Text>
                 </YStack>
             </XStack>
+
+            {/* Wave N — 4-check outcome line. Tap to expand check details. */}
+            {outcome ? (
+                <Pressable
+                    onPress={() => setExpanded((v) => !v)}
+                    style={({ pressed }) => ({
+                        marginBottom: 12,
+                        paddingVertical: 9,
+                        paddingHorizontal: 11,
+                        borderRadius: 8,
+                        backgroundColor: `${outcomeColor}10`,
+                        borderLeftWidth: 2,
+                        borderLeftColor: outcomeColor,
+                        opacity: pressed ? 0.85 : 1,
+                    })}
+                >
+                    <XStack style={{ alignItems: 'center', gap: 6 }}>
+                        <View
+                            style={{
+                                width: 6,
+                                height: 6,
+                                borderRadius: 3,
+                                backgroundColor: outcomeColor,
+                            }}
+                        />
+                        <Text
+                            style={{
+                                flex: 1,
+                                fontFamily: SANS_SEMI,
+                                fontSize: 11.5,
+                                color: outcomeColor,
+                                fontWeight: '700',
+                                letterSpacing: 0.2,
+                            }}
+                        >
+                            {outcome.label}
+                        </Text>
+                        <Text style={{ fontFamily: MONO, fontSize: 10, color: outcomeColor, fontWeight: '600' }}>
+                            {expanded ? '▴' : '▾'}
+                        </Text>
+                    </XStack>
+                    {expanded ? (
+                        <View style={{ marginTop: 10, gap: 6 }}>
+                            {outcome.checks.map((c) => (
+                                <XStack key={c.id} style={{ alignItems: 'flex-start', gap: 7 }}>
+                                    <Text
+                                        style={{
+                                            fontFamily: MONO,
+                                            fontSize: 11,
+                                            color: c.pass ? palette.EHR_TERTIARY : palette.EHR_CINNABAR_DEEP,
+                                            marginTop: 1,
+                                            fontWeight: '700',
+                                        }}
+                                    >
+                                        {c.pass ? '✓' : '✗'}
+                                    </Text>
+                                    <YStack style={{ flex: 1 }}>
+                                        <Text style={{ fontFamily: SANS, fontSize: 11.5, color: palette.EHR_ON_SURFACE, lineHeight: 16 }}>
+                                            {c.label}
+                                        </Text>
+                                        {!c.pass && c.detail ? (
+                                            <Text
+                                                style={{
+                                                    fontFamily: SANS,
+                                                    fontSize: 10.5,
+                                                    color: palette.EHR_TEXT_MUTED,
+                                                    fontStyle: 'italic',
+                                                    marginTop: 1,
+                                                }}
+                                            >
+                                                {c.detail}
+                                            </Text>
+                                        ) : null}
+                                    </YStack>
+                                </XStack>
+                            ))}
+                        </View>
+                    ) : null}
+                </Pressable>
+            ) : null}
+
             <XStack style={{ gap: 8 }}>
                 <View style={{ flex: 1 }}>
                     <ViButton

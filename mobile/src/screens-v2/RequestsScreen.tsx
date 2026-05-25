@@ -14,7 +14,7 @@
 //     doctor mark-claimed (not immediate shareKey)
 //   - archiveRequest for "Ẩn yêu cầu"
 
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { FlatList, RefreshControl, Alert, Pressable, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Bell, Check, X, Clock, User, FilePlus2 } from 'lucide-react-native';
@@ -23,6 +23,7 @@ import { Text, XStack, YStack } from 'tamagui';
 import LoadingSpinner from '../components/LoadingSpinner';
 import UserChip from '../components/UserChip';
 import RecordChip from '../components/RecordChip';
+import useAuthStore from '../store/authStore';
 import useRequests from '../hooks/useRequests';
 import requestService from '../services/request.service';
 import authService from '../services/auth.service';
@@ -40,6 +41,7 @@ import { gateOrThrow } from '../utils/biometricGate';
 import ViButton from '../components-v2/ViButton';
 import ConsentSheet, { type ConsentPhase, type ConsentRequest } from '../components-v2/ConsentSheet';
 import PendingChainOverlay, { type ChainStage } from '../components-v2/PendingChainOverlay';
+import SignReceipt, { type SignReceiptData } from '../components-v2/SignReceipt';
 import { useEhrPalette } from '../constants/uiColors';
 import { resolveRecordType } from '../constants/recordTypes';
 import { formatDateTime, formatExpiry, getExpiryUrgency } from '../utils/dateFormatting';
@@ -376,6 +378,7 @@ const RequestRow = React.memo(function RequestRow({
 
 export default function RequestsScreen() {
     const palette = useEhrPalette();
+    const { user } = useAuthStore();
     const { requests, isLoading, isRefreshing, refresh } = useRequests();
     const [activeFilter, setActiveFilter] = useState<FilterKey>('all');
     const [approvingId, setApprovingId] = useState<string | null>(null);
@@ -385,6 +388,9 @@ export default function RequestsScreen() {
     const [sheetPhase, setSheetPhase] = useState<ConsentPhase>('idle');
     const [overlayStage, setOverlayStage] = useState<ChainStage | null>(null);
     const [overlayCtx, setOverlayCtx] = useState<{ contextLabel: string; txHash: string | null } | null>(null);
+
+    // Wave O — SignReceipt shown after PendingChainOverlay completes
+    const [receiptData, setReceiptData] = useState<SignReceiptData | null>(null);
 
     const normalizedRequests = useMemo(() => {
         return (requests || []).map((r: RequestItem) => ({
@@ -758,42 +764,69 @@ export default function RequestsScreen() {
         // Overlay auto-closes 1.2s after stage=2 via its own onDone
     }, [consentTarget]);
 
+    /** Wave O — overlay finished. Open SignReceipt screen; refresh list when
+     *  receipt closes. ceremonyAction tells receipt which title to render. */
+    const ceremonyActionRef = useRef<'approve' | 'reject'>('approve');
+
     const handleOverlayDone = useCallback(() => {
+        const r = consentTarget;
         setOverlayStage(null);
+        // Don't clear overlayCtx yet — receipt may use the tx hash
+        setReceiptData({
+            action: ceremonyActionRef.current,
+            signerName: (user as any)?.fullName || null,
+            recipientName: r?.requesterAddress ? `BS. ${r.requesterAddress.slice(0, 8)}…${r.requesterAddress.slice(-4)}` : null,
+            recipientOrg: null,
+            recordTitle: r?.recordTitle || (r?.cidHash ? `${r.cidHash.slice(0, 10)}…` : null),
+            scopeLabel:
+                r?.requestType === 1 ? 'Uỷ quyền toàn bộ'
+                : r?.requestType === 2 ? 'Đọc & uỷ quyền lại'
+                : 'Đọc & cập nhật',
+            validityLabel: formatDuration(r as RequestItem) || undefined,
+            signedAt: new Date().toISOString(),
+            txHashShort: overlayCtx?.txHash || null,
+        });
+        setConsentTarget(null); // free up consent state — receipt has own copy
+    }, [consentTarget, overlayCtx, user]);
+
+    const handleReceiptDone = useCallback(() => {
+        setReceiptData(null);
         setOverlayCtx(null);
         refresh();
     }, [refresh]);
 
     const runApproveCeremony = useCallback(async () => {
         if (!consentTarget) return;
+        ceremonyActionRef.current = 'approve';
         setSheetPhase('signing');
         try {
             await handleApprove(consentTarget);
             setSheetPhase('done');
             setTimeout(() => {
-                closeConsentSheet();
+                setSheetPhase('idle'); // sheet auto-closes via consentTarget null after overlay done
                 launchOverlay(null); // approve doesn't surface tx hash easily; show ceremony without
             }, 1400);
         } catch {
             setSheetPhase('idle');
             // handleApprove already showed its own Alert
         }
-    }, [consentTarget, handleApprove, closeConsentSheet, launchOverlay]);
+    }, [consentTarget, handleApprove, launchOverlay]);
 
     const runRejectCeremony = useCallback(async () => {
         if (!consentTarget) return;
+        ceremonyActionRef.current = 'reject';
         setSheetPhase('signing');
         try {
             await handleReject(consentTarget);
             setSheetPhase('done');
             setTimeout(() => {
-                closeConsentSheet();
+                setSheetPhase('idle');
                 launchOverlay(null);
             }, 1400);
         } catch {
             setSheetPhase('idle');
         }
-    }, [consentTarget, handleReject, closeConsentSheet, launchOverlay]);
+    }, [consentTarget, handleReject, launchOverlay]);
 
     if (isLoading && !isRefreshing) {
         return <LoadingSpinner message="Đang tải danh sách yêu cầu..." />;
@@ -947,6 +980,13 @@ export default function RequestsScreen() {
                 contextLabel={overlayCtx?.contextLabel}
                 txHashShort={overlayCtx?.txHash || null}
                 onDone={handleOverlayDone}
+            />
+
+            {/* Wave O — SignReceipt opened from overlay done; CTA → refresh */}
+            <SignReceipt
+                visible={!!receiptData}
+                data={receiptData}
+                onDone={handleReceiptDone}
             />
         </SafeAreaView>
     );
