@@ -39,6 +39,7 @@ import DoctorDelegatableRecordsScreen from '../screens-v2/doctor/DoctorDelegatab
 import DoctorDelegatedPatientsScreen from '../screens-v2/doctor/DoctorDelegatedPatientsScreen';
 import DoctorOutgoingSharesScreen from '../screens-v2/doctor/DoctorOutgoingSharesScreen';
 import EmergencyLookupScreen from '../screens-v2/doctor/EmergencyLookupScreen';
+import CredentialSubmitScreen from '../screens-v2/doctor/CredentialSubmitScreen';
 import TrustedContactsScreen from '../screens-v2/TrustedContactsScreen';
 
 import OrgDashboardScreen from '../screens-v2/org/OrgDashboardScreen';
@@ -312,6 +313,11 @@ function MainStackNavigator() {
                 name="MinistryOrgDetail"
                 component={MinistryOrgDetailScreen}
                 options={{ title: 'Hồ sơ cơ sở' }}
+            />
+            <Stack.Screen
+                name="CredentialSubmit"
+                component={CredentialSubmitScreen}
+                options={{ title: 'Xác minh CCHN' }}
             />
         </Stack.Navigator>
     );

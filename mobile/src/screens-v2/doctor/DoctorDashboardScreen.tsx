@@ -591,20 +591,11 @@ export default function DoctorDashboardScreen() {
                                     </Text>
                                 </View>
                             ) : isVerifiedDoctor === false ? (
-                                // G.12.l — interactive button per design (was text-only pill).
-                                // CredentialSubmit screen chưa tồn tại (Phase G.12.o + backend
-                                // credential endpoint pending) → show Alert thay vì navigate
-                                // để tránh "screen not handled" error.
+                                // Wave M — pill navigates to CredentialSubmitScreen per design
+                                // viehp-credential-submit.html. Screen handles all 5 states
+                                // (idle/signing/submitted/approved/rejected) internally.
                                 <Pressable
-                                    onPress={() => {
-                                        Alert.alert(
-                                            'Xác minh CCHN',
-                                            'Tính năng gửi đơn xác minh chứng chỉ hành nghề đang được hoàn thiện.\n\n' +
-                                            'Trong khi chờ, bạn vẫn dùng app như bình thường nhưng bệnh nhân sẽ ' +
-                                            'thấy badge "chưa xác minh" khi bạn yêu cầu xem hồ sơ.',
-                                            [{ text: 'OK' }],
-                                        );
-                                    }}
+                                    onPress={() => navigation.navigate('CredentialSubmit')}
                                     style={({ pressed }) => ({
                                         marginTop: 12,
                                         alignSelf: 'flex-start',
