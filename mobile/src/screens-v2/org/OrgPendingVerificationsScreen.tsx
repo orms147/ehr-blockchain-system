@@ -13,6 +13,7 @@ import orgService from '../../services/org.service';
 import verificationService from '../../services/verification.service';
 import useAuthStore from '../../store/authStore';
 import walletActionService from '../../services/walletAction.service';
+import { gateOrThrow } from '../../utils/biometricGate';
 import { ACCESS_CONTROL_ABI } from '../../abi/contractABI';
 import ViCard from '../../components-v2/ViCard';
 import ViButton from '../../components-v2/ViButton';
@@ -170,7 +171,6 @@ export default function OrgPendingVerificationsScreen() {
                             return;
                         }
                         const { walletClient, account } = await walletActionService.getWalletContext();
-                        const { gateOrThrow } = await import('../../utils/biometricGate');
                         await gateOrThrow('Để xác thực bác sĩ on-chain');
                         const [doctorAddr, credential] = contractCall.args;
                         const txHash = await walletClient.writeContract({

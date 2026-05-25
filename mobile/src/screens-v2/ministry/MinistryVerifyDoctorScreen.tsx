@@ -19,6 +19,7 @@ import { parseGwei } from 'viem';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import orgService from '../../services/org.service';
 import walletActionService from '../../services/walletAction.service';
+import { gateOrThrow } from '../../utils/biometricGate';
 import useAuthStore from '../../store/authStore';
 import { useEhrPalette } from '../../constants/uiColors';
 import { ACCESS_CONTROL_ABI } from '../../abi/contractABI';
@@ -98,7 +99,6 @@ export default function MinistryVerifyDoctorScreen() {
         setVerifyingAddr(doctorAddr);
         try {
             const { walletClient, account } = await walletActionService.getWalletContext();
-            const { gateOrThrow } = await import('../../utils/biometricGate');
             await gateOrThrow('Bộ Y tế xác minh trực tiếp bác sĩ');
 
             const txHash = await walletClient.writeContract({

@@ -37,6 +37,7 @@ import {
 } from '../services/nacl-crypto';
 import localRecordStore from '../services/localRecordStore';
 import walletActionService from '../services/walletAction.service';
+import { gateOrThrow } from '../utils/biometricGate';
 import ViButton from '../components-v2/ViButton';
 import { useEhrPalette } from '../constants/uiColors';
 import { resolveRecordType } from '../constants/recordTypes';
@@ -649,7 +650,6 @@ export default function RequestsScreen() {
         setApprovingId(reqId);
         try {
             const { walletClient } = await walletActionService.getWalletContext();
-            const { gateOrThrow } = await import('../utils/biometricGate');
             await gateOrThrow('Xác thực để từ chối yêu cầu');
 
             // bytes32 — reqId from backend is hex string; ensure 0x prefix.

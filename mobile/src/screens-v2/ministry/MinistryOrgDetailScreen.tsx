@@ -27,6 +27,7 @@ import { X } from 'lucide-react-native';
 import { parseGwei } from 'viem';
 
 import walletActionService from '../../services/walletAction.service';
+import { gateOrThrow } from '../../utils/biometricGate';
 import { useEhrPalette } from '../../constants/uiColors';
 import { ACCESS_CONTROL_ABI } from '../../abi/contractABI';
 
@@ -63,7 +64,6 @@ export default function MinistryOrgDetailScreen({ route, navigation }: any) {
         }
         try {
             const { walletClient, account } = await walletActionService.getWalletContext();
-            const { gateOrThrow } = await import('../../utils/biometricGate');
             await gateOrThrow(newActive ? 'Mở lại cơ sở' : 'Tạm dừng cơ sở');
 
             const txHash = await walletClient.writeContract({
@@ -97,7 +97,6 @@ export default function MinistryOrgDetailScreen({ route, navigation }: any) {
         }
         try {
             const { walletClient, account } = await walletActionService.getWalletContext();
-            const { gateOrThrow } = await import('../../utils/biometricGate');
             await gateOrThrow('Thu hồi xác minh cơ sở');
 
             const txHash = await walletClient.writeContract({

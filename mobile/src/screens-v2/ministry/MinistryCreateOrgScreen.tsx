@@ -20,6 +20,7 @@ import { arbitrumSepolia } from 'viem/chains';
 
 import orgService from '../../services/org.service';
 import walletActionService from '../../services/walletAction.service';
+import { gateOrThrow } from '../../utils/biometricGate';
 import { ACCESS_CONTROL_ABI } from '../../abi/contractABI';
 import { useEhrPalette } from '../../constants/uiColors';
 import {
@@ -84,7 +85,6 @@ export default function MinistryCreateOrgScreen({ navigation }: any) {
         setIsSubmitting(true);
         try {
             const { walletClient, account } = await walletActionService.getWalletContext();
-            const { gateOrThrow } = await import('../../utils/biometricGate');
             await gateOrThrow('Xác thực để tạo tổ chức y tế mới');
 
             const trimmedName = name.trim();

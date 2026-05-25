@@ -25,6 +25,7 @@ import { parseGwei } from 'viem';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import orgService from '../../services/org.service';
 import walletActionService from '../../services/walletAction.service';
+import { gateOrThrow } from '../../utils/biometricGate';
 import useAuthStore from '../../store/authStore';
 import { useEhrPalette } from '../../constants/uiColors';
 import { PickerRow } from '../../components-v2/FormPrimitives';
@@ -506,7 +507,6 @@ function RevokeDoctorModal({
         setIsSubmitting(true);
         try {
             const { walletClient, account } = await walletActionService.getWalletContext();
-            const { gateOrThrow } = await import('../../utils/biometricGate');
             await gateOrThrow('Xác thực để thu hồi xác minh bác sĩ');
 
             const txHash = await walletClient.writeContract({
@@ -845,7 +845,6 @@ function AddMemberModal({
         setIsSubmitting(true);
         try {
             const { walletClient, account } = await walletActionService.getWalletContext();
-            const { gateOrThrow } = await import('../../utils/biometricGate');
             await gateOrThrow('Xác thực để thêm thành viên on-chain');
 
             const addr = doctorAddr.trim().toLowerCase() as `0x${string}`;

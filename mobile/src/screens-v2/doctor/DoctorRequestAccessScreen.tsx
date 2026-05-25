@@ -35,6 +35,7 @@ import { arbitrumSepolia } from 'viem/chains';
 import api from '../../services/api';
 import walletActionService from '../../services/walletAction.service';
 import { withRpcRetry, formatChainError } from '../../utils/rpcRetry';
+import { gateOrThrow } from '../../utils/biometricGate';
 import QrAddressScanner from '../../components/QrAddressScanner';
 import PatientIdentityInline from '../../components/PatientIdentityInline';
 import { useEhrPalette } from '../../constants/uiColors';
@@ -229,7 +230,6 @@ export default function DoctorRequestAccessScreen() {
             const targetPatient = patientAddress.trim().toLowerCase() as `0x${string}`;
 
             const { walletClient } = await walletActionService.getWalletContext();
-            const { gateOrThrow } = await import('../../utils/biometricGate');
             await gateOrThrow('Để gửi yêu cầu truy cập hồ sơ');
 
             const onChainHours = Math.max(1, Math.ceil(durationHours));
@@ -326,7 +326,23 @@ export default function DoctorRequestAccessScreen() {
             setCustomDays('');
             setReason('');
         } catch (error: any) {
-            Alert.alert('Lỗi', formatChainError(error, 'Không thể gửi yêu cầu. Vui lòng thử lại.'));
+            // Dump ALL useful error fields in 1 log so LogBox/Alert dễ đọc
+            const dump = {
+                name: error?.name,
+                message: error?.message,
+                shortMessage: error?.shortMessage,
+                code: error?.code,
+                details: error?.details,
+                metaMessages: error?.metaMessages,
+                cause: error?.cause?.message || String(error?.cause),
+                stack: error?.stack?.split('\n').slice(0, 3).join(' | '),
+            };
+            console.error('[DoctorRequestAccess] FULL DUMP:', JSON.stringify(dump, null, 2));
+            const msg = formatChainError(error, 'Không thể gửi yêu cầu. Vui lòng thử lại.');
+            Alert.alert(
+                'Lỗi',
+                `${msg}\n\n— DEBUG —\n${error?.shortMessage || error?.message || JSON.stringify(dump).slice(0, 200)}`,
+            );
         } finally {
             setIsSubmitting(false);
         }

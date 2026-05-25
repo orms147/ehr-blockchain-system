@@ -35,6 +35,7 @@ import { encryptData, generateAESKey } from '../../services/crypto';
 import { encryptForRecipient, getOrCreateEncryptionKeypair } from '../../services/nacl-crypto';
 import ipfsService from '../../services/ipfs.service';
 import walletActionService from '../../services/walletAction.service';
+import { gateOrThrow } from '../../utils/biometricGate';
 import keyShareService from '../../services/keyShare.service';
 import authService from '../../services/auth.service';
 import recordService from '../../services/record.service';
@@ -357,7 +358,6 @@ export default function DoctorCreateUpdateScreen({ navigation, route }: any) {
             const doctorEncKeyHash = keccak256(toBytes(aesKey));
 
             const { walletClient, address: myAddress } = await walletActionService.getWalletContext();
-            const { gateOrThrow } = await import('../../utils/biometricGate');
             await gateOrThrow('Để lưu hồ sơ y tế lên blockchain');
 
             const txHash = await walletClient.writeContract({

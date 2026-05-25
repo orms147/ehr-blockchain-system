@@ -49,6 +49,7 @@ import keyShareService from '../../services/keyShare.service';
 import recordService from '../../services/record.service';
 import requestService from '../../services/request.service';
 import walletActionService from '../../services/walletAction.service';
+import { gateOrThrow } from '../../utils/biometricGate';
 import consentService from '../../services/consent.service';
 import { runKeyShareHealer } from '../../services/keyShareHealer.service';
 import { formatChainError } from '../../utils/rpcRetry';
@@ -280,7 +281,6 @@ export default function DoctorDashboardScreen() {
         if (!accepted) return;
         setClaimingId(claim.requestId);
         try {
-            const { gateOrThrow } = await import('../../utils/biometricGate');
             await gateOrThrow('Để xác nhận yêu cầu truy cập hồ sơ');
             const { walletClient } = await walletActionService.getWalletContext();
             const gasOpts = {
