@@ -3723,6 +3723,29 @@ export const EHR_SYSTEM_SECURE_ABI = [
   },
   {
     "type": "function",
+    "name": "rejectRequestBySig",
+    "inputs": [
+      {
+        "name": "reqId",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "deadline",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "signature",
+        "type": "bytes",
+        "internalType": "bytes"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "renounceOwnership",
     "inputs": [],
     "outputs": [],

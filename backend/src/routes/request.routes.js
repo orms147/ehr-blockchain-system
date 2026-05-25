@@ -7,6 +7,7 @@ import { createPublicClient, http, keccak256, encodePacked } from 'viem';
 import { arbitrumSepolia } from 'viem/chains';
 import { requireOnChainRoles } from '../middleware/onChainRole.js';
 import { applyShare, applyStatusFlip } from '../services/keyShareWriter.service.js';
+import relayerService from '../services/relayer.service.js';
 import {
     RequestType,
     OnChainRequestStatus,
@@ -662,59 +663,122 @@ router.post('/mark-claimed', authenticate, requireDoctorRole, async (req, res, n
 // GET /api/requests/as-delegate - Get requests pending for my delegators
 // Moved /as-delegate to top (before /:requestId) to prevent route collision
 
-// POST /api/requests/:requestId/reject — Wave A.2: mirror on-chain
-// rejectRequest tx. Patient broadcasts EHRSystemSecure.rejectRequest(reqId)
-// directly (pays own gas), then hits this endpoint to flip DB status from
-// 'pending'/'signed' → 'rejected' so the doctor's outgoing list updates
-// instantly without waiting for event-sync.
-//
-// Body: { txHash: string (required), reason: string|null (optional, defer
-// schema decision until UX Q3 answered — dropdown vs free-text) }
-router.post('/:requestId/reject', authenticate, async (req, res, next) => {
+// GET /api/requests/:requestId/reject-message — Wave K helper
+// Returns the EIP-712 typed data mobile must sign for sponsored reject.
+// Patient (or requester) signs off-chain → posts signature to POST below.
+router.get('/:requestId/reject-message', authenticate, async (req, res, next) => {
     try {
         const { requestId } = req.params;
-        const { txHash } = req.body || {};
         const callerAddress = req.user.walletAddress.toLowerCase();
 
-        const request = await prisma.accessRequest.findUnique({
-            where: { requestId },
-        });
+        const request = await prisma.accessRequest.findUnique({ where: { requestId } });
         if (!request) {
-            return res.status(404).json({
-                code: 'REQUEST_NOT_FOUND',
-                error: 'Request not found',
-            });
+            return res.status(404).json({ code: 'REQUEST_NOT_FOUND', error: 'Request not found' });
         }
-        // Only patient (or requester themselves) can reject. Mirror contract
-        // permission: EHRSystemSecure.rejectRequest checks patient/requester.
         const isPatient = request.patientAddress.toLowerCase() === callerAddress;
         const isRequester = request.requesterAddress.toLowerCase() === callerAddress;
         if (!isPatient && !isRequester) {
-            return res.status(403).json({
-                code: 'REJECT_FORBIDDEN',
-                error: 'Only patient or requester can reject this request',
-            });
+            return res.status(403).json({ code: 'REJECT_FORBIDDEN', error: 'Only patient or requester can reject' });
         }
-        // Don't allow reject if already claimed (consent already minted) or
-        // already rejected. Pending/signed is OK.
         if (request.status === 'claimed' || request.status === 'rejected') {
             return res.status(409).json({
                 code: 'REJECT_BAD_STATE',
-                error: `Cannot reject request in status '${request.status}'`,
+                error: `Cannot reject in status '${request.status}'`,
                 currentStatus: request.status,
             });
         }
 
+        // 30 minute signing window — generous; signature locked to deadline.
+        const deadline = Math.floor(Date.now() / 1000) + 30 * 60;
+
+        // EIP-712 typed data — must match REJECT_TYPEHASH in EHRSystemSecure.sol.
+        const typedData = {
+            domain: {
+                name: 'EHR System Secure',
+                version: '2',
+                chainId: Number(process.env.CHAIN_ID || 421614),
+                verifyingContract: process.env.EHR_SYSTEM_ADDRESS,
+            },
+            types: {
+                RejectRequest: [
+                    { name: 'reqId', type: 'bytes32' },
+                    { name: 'deadline', type: 'uint256' },
+                ],
+            },
+            primaryType: 'RejectRequest',
+            message: {
+                reqId: requestId,
+                deadline: String(deadline),
+            },
+        };
+
+        res.json({ typedData, deadline });
+    } catch (error) {
+        next(error);
+    }
+});
+
+// POST /api/requests/:requestId/reject — Wave K: sponsored reject.
+// Mobile signs EIP-712 from /reject-message, posts signature here. Backend
+// relayer broadcasts EHRSystemSecure.rejectRequestBySig(reqId, deadline,
+// signature). Patient KHÔNG cần ETH cho action này.
+//
+// Body: { signature: 0x..., deadline: number, reason?: string }
+router.post('/:requestId/reject', authenticate, async (req, res, next) => {
+    try {
+        const { requestId } = req.params;
+        const { signature, deadline } = req.body || {};
+        const callerAddress = req.user.walletAddress.toLowerCase();
+
+        if (!signature || !/^0x[a-fA-F0-9]+$/.test(signature)) {
+            return res.status(400).json({ code: 'INVALID_SIGNATURE', error: 'signature required' });
+        }
+        if (!deadline || typeof deadline !== 'number') {
+            return res.status(400).json({ code: 'INVALID_DEADLINE', error: 'deadline (unix seconds) required' });
+        }
+
+        const request = await prisma.accessRequest.findUnique({ where: { requestId } });
+        if (!request) {
+            return res.status(404).json({ code: 'REQUEST_NOT_FOUND', error: 'Request not found' });
+        }
+        const isPatient = request.patientAddress.toLowerCase() === callerAddress;
+        const isRequester = request.requesterAddress.toLowerCase() === callerAddress;
+        if (!isPatient && !isRequester) {
+            return res.status(403).json({ code: 'REJECT_FORBIDDEN', error: 'Only patient or requester can reject' });
+        }
+        if (request.status === 'claimed' || request.status === 'rejected') {
+            return res.status(409).json({
+                code: 'REJECT_BAD_STATE',
+                error: `Cannot reject in status '${request.status}'`,
+                currentStatus: request.status,
+            });
+        }
+
+        // Broadcast via sponsor — contract verifies signer == patient OR requester.
+        let txHash;
+        try {
+            const result = await relayerService.sponsorReject(
+                callerAddress,
+                requestId,
+                deadline,
+                signature,
+            );
+            txHash = result?.txHash || null;
+        } catch (relayerErr) {
+            console.error('[reject] sponsor failed:', relayerErr?.message);
+            return res.status(500).json({
+                code: 'REJECT_SPONSOR_FAILED',
+                error: relayerErr?.message || 'Could not broadcast reject',
+            });
+        }
+
+        // Sync DB (mirror) after on-chain confirmation.
         await prisma.accessRequest.update({
             where: { requestId },
-            data: {
-                status: 'rejected',
-                txHash: txHash || request.txHash,
-            },
+            data: { status: 'rejected', txHash: txHash || request.txHash },
         });
 
-        // Cleanup any awaiting_claim KeyShare staged for this request — doctor
-        // shouldn't see it as available after rejection.
+        // Cleanup awaiting_claim KeyShare — doctor shouldn't see stale entry.
         try {
             await prisma.keyShare.updateMany({
                 where: {
@@ -728,7 +792,7 @@ router.post('/:requestId/reject', authenticate, async (req, res, next) => {
             console.warn('[reject] KeyShare cleanup non-fatal:', cleanupErr?.message);
         }
 
-        res.json({ success: true, status: 'rejected', requestId });
+        res.json({ success: true, status: 'rejected', requestId, txHash });
     } catch (error) {
         next(error);
     }

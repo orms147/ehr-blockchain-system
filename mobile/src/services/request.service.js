@@ -49,12 +49,21 @@ export const requestService = {
         return api.post('/api/relayer/archive-request', { requestId });
     },
 
-    // For patients: Mirror on-chain rejectRequest to backend.
-    // The actual EHRSystemSecure.rejectRequest(reqId) tx is broadcast by mobile
-    // directly (patient pays gas). This call updates DB status + stores optional
-    // reason. Per Wave A spec — reason is free-text optional (~280 chars max).
-    async mirrorReject(requestId, txHash, reason = null) {
-        return api.post(`/api/requests/${requestId}/reject`, { txHash, reason });
+    // Wave K — fetch EIP-712 typed data for sponsored reject. Mobile signs
+    // returned typedData with patient/requester wallet, then posts signature
+    // to rejectWithSignature() below. Returns { typedData, deadline }.
+    async getRejectMessage(requestId) {
+        return api.get(`/api/requests/${requestId}/reject-message`);
+    },
+
+    // Wave K — submit signature for sponsored reject. Backend relayer
+    // broadcasts EHRSystemSecure.rejectRequestBySig() and updates DB status.
+    async rejectWithSignature(requestId, signature, deadline, reason = null) {
+        return api.post(`/api/requests/${requestId}/reject`, {
+            signature,
+            deadline,
+            reason,
+        });
     },
 
     // For doctors: Mark request as claimed after on-chain transaction

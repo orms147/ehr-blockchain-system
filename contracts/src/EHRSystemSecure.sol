@@ -27,6 +27,12 @@ contract EHRSystemSecure is IEHRSystem, Ownable, Pausable, ReentrancyGuard, EIP7
         "ConfirmRequest(bytes32 reqId,address requester,address patient,bytes32 rootCidHash,uint8 reqType,uint256 deadline)"
     );
 
+    // EIP-712 Typehash for sponsored reject — patient signs off-chain so
+    // backend relayer can broadcast (patient KHÔNG cần ETH để từ chối).
+    bytes32 private constant REJECT_TYPEHASH = keccak256(
+        "RejectRequest(bytes32 reqId,uint256 deadline)"
+    );
+
     // Immutables
     IAccessControl public immutable accessControl;
     IRecordRegistry public immutable recordRegistry;
@@ -253,14 +259,57 @@ contract EHRSystemSecure is IEHRSystem, Ownable, Pausable, ReentrancyGuard, EIP7
     function rejectRequest(bytes32 reqId) external override whenNotPaused nonReentrant {
         AccessRequest storage req = _accessRequests[reqId];
         _requireValidRequest(req);
-        
+
         if (msg.sender != req.requester && msg.sender != req.patient) {
             revert NotParty();
         }
 
         req.status = RequestStatus.Rejected;
-        
+
         emit RequestRejected(reqId, msg.sender, uint40(block.timestamp));
+    }
+
+    /**
+     * @notice Reject access request with patient (or requester) signature.
+     *         Sponsored flow — relayer broadcasts the tx, patient/requester
+     *         signs EIP-712 off-chain. Avoids requiring ETH in patient ví just
+     *         to refuse a request.
+     * @param reqId Request ID to reject
+     * @param deadline Signature deadline (must be in future)
+     * @param signature EIP-712 signature from patient OR requester
+     *
+     * Event emits the recovered signer (not msg.sender = relayer) so the
+     * RequestRejected.rejectedBy field preserves audit meaning: it's the
+     * party who actually authorized the rejection.
+     */
+    function rejectRequestBySig(
+        bytes32 reqId,
+        uint256 deadline,
+        bytes calldata signature
+    ) external override whenNotPaused nonReentrant {
+        if (block.timestamp > deadline) revert RequestExpired();
+
+        AccessRequest storage req = _accessRequests[reqId];
+        _requireValidRequest(req);
+
+        bytes32 structHash = keccak256(abi.encode(
+            REJECT_TYPEHASH,
+            reqId,
+            deadline
+        ));
+        bytes32 digest = _hashTypedDataV4(structHash);
+        address signer = ECDSA.recover(digest, signature);
+
+        // Signer must be either patient OR original requester — same permission
+        // model as rejectRequest(). Relayer (msg.sender) is intentionally
+        // unchecked because the signature already authorizes the action.
+        if (signer != req.patient && signer != req.requester) {
+            revert NotParty();
+        }
+
+        req.status = RequestStatus.Rejected;
+
+        emit RequestRejected(reqId, signer, uint40(block.timestamp));
     }
 
     // ============ INTERNAL FUNCTIONS ============

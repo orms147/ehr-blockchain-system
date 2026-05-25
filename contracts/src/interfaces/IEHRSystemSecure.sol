@@ -89,6 +89,7 @@ interface IEHRSystem {
     function confirmAccessRequest(bytes32 reqId) external;
     function confirmAccessRequestWithSignature(bytes32 reqId, uint256 deadline, bytes calldata signature) external;
     function rejectRequest(bytes32 reqId) external;
+    function rejectRequestBySig(bytes32 reqId, uint256 deadline, bytes calldata signature) external;
 
     // ============ VIEW FUNCTIONS ============
     

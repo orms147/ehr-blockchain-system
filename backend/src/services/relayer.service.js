@@ -9,6 +9,7 @@ import {
     ACCESS_CONTROL_ABI,
     RECORD_REGISTRY_ABI,
     CONSENT_LEDGER_ABI,
+    EHR_SYSTEM_SECURE_ABI,
 } from '../config/contractABI.js';
 import { withRpcRetry } from '../utils/rpcRetry.js';
 import { invalidateRoleCache } from '../config/blockchain.js';
@@ -25,6 +26,7 @@ const CONTRACTS = {
     ACCESS_CONTROL: process.env.ACCESS_CONTROL_ADDRESS,
     RECORD_REGISTRY: process.env.RECORD_REGISTRY_ADDRESS,
     CONSENT_LEDGER: process.env.CONSENT_LEDGER_ADDRESS,
+    EHR_SYSTEM: process.env.EHR_SYSTEM_ADDRESS,
 };
 
 const sponsorAccount = process.env.SPONSOR_PRIVATE_KEY
@@ -783,6 +785,34 @@ export async function restoreRequest(walletAddress, requestId) {
     return { restored: true };
 }
 
+// Wave K — sponsor patient/requester rejecting an access request.
+// EHRSystemSecure.rejectRequestBySig verifies EIP-712 signature; relayer
+// can be msg.sender. Counts against the same 100/month pool.
+export async function sponsorReject(walletAddress, reqId, deadline, signature) {
+    ensureSponsorWalletConfigured();
+
+    const signer = walletAddress.toLowerCase();
+    await consumeQuota(signer, 'reject');
+
+    const hash = await withRpcRetry(
+        () => walletClient.writeContract({
+            address: CONTRACTS.EHR_SYSTEM,
+            abi: EHR_SYSTEM_SECURE_ABI,
+            functionName: 'rejectRequestBySig',
+            args: [reqId, BigInt(deadline), signature],
+        }),
+        { label: 'sponsorReject.writeContract' },
+    );
+
+    const receipt = await withRpcRetry(
+        () => publicClient.waitForTransactionReceipt({ hash }),
+        { label: 'sponsorReject.waitForReceipt' },
+    );
+
+    await bumpSignatureCounter(signer);
+    return { txHash: hash, receipt };
+}
+
 export default {
     getQuotaStatus,
     sponsorRegisterPatient,
@@ -792,6 +822,7 @@ export default {
     sponsorGrantConsent,
     sponsorDelegateAuthority,
     sponsorSetTrustedContact,
+    sponsorReject,
     getGrantContext,
     archiveRequest,
     getArchivedRequests,
