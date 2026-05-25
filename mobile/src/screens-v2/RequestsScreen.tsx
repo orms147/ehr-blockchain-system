@@ -38,6 +38,8 @@ import localRecordStore from '../services/localRecordStore';
 import walletActionService from '../services/walletAction.service';
 import { gateOrThrow } from '../utils/biometricGate';
 import ViButton from '../components-v2/ViButton';
+import ConsentSheet, { type ConsentPhase, type ConsentRequest } from '../components-v2/ConsentSheet';
+import PendingChainOverlay, { type ChainStage } from '../components-v2/PendingChainOverlay';
 import { useEhrPalette } from '../constants/uiColors';
 import { resolveRecordType } from '../constants/recordTypes';
 import { formatDateTime, formatExpiry, getExpiryUrgency } from '../utils/dateFormatting';
@@ -329,33 +331,30 @@ const RequestRow = React.memo(function RequestRow({
                 </View>
             ) : null}
 
-            {/* Pending: Từ chối (cinnabar outline) + Phê duyệt (cinnabar fill).
-                Other statuses: only Ẩn (archive — hide from list, no on-chain).
-                Wave A.1: rejectRequest is REAL on-chain action; Ẩn is db-only. */}
+            {/* Wave L: per Claude Design screens-extras.jsx:336 — row has TWO
+                buttons. Both route through the ConsentSheet ceremony (parent
+                handles state). "Từ chối" ghost on the left, "Mở để ký" primary
+                on the right with flex spacer between (visual separation). */}
             {isPending ? (
-                <XStack style={{ justifyContent: 'flex-end', gap: 8, marginTop: 14 }}>
-                    <View>
-                        <ViButton
-                            variant="danger"
-                            size="sm"
-                            onPress={() => onReject(item)}
-                            disabled={isApproving}
-                            leftIcon={<X size={14} color={palette.EHR_CINNABAR_DEEP} />}
-                        >
-                            Từ chối
-                        </ViButton>
-                    </View>
-                    <View>
-                        <ViButton
-                            variant="cinnabar"
-                            size="sm"
-                            onPress={() => onApprove(item)}
-                            loading={isApproving}
-                            leftIcon={isApproving ? undefined : <Check size={14} color="#FEFBF5" />}
-                        >
-                            {isApproving ? 'Đang ký…' : 'Phê duyệt'}
-                        </ViButton>
-                    </View>
+                <XStack style={{ gap: 8, marginTop: 14, alignItems: 'center' }}>
+                    <ViButton
+                        variant="ghost"
+                        size="sm"
+                        onPress={() => onReject(item)}
+                        disabled={isApproving}
+                    >
+                        Từ chối
+                    </ViButton>
+                    <View style={{ flex: 1 }} />
+                    <ViButton
+                        variant="cinnabar"
+                        size="sm"
+                        onPress={() => onApprove(item)}
+                        loading={isApproving}
+                        leftIcon={isApproving ? undefined : <Check size={14} color="#FEFBF5" />}
+                    >
+                        {isApproving ? 'Đang ký…' : 'Mở để ký'}
+                    </ViButton>
                 </XStack>
             ) : (
                 <XStack style={{ justifyContent: 'flex-end', gap: 8, marginTop: 14 }}>
@@ -380,6 +379,12 @@ export default function RequestsScreen() {
     const { requests, isLoading, isRefreshing, refresh } = useRequests();
     const [activeFilter, setActiveFilter] = useState<FilterKey>('all');
     const [approvingId, setApprovingId] = useState<string | null>(null);
+
+    // Wave L — ConsentSheet/PendingChainOverlay state machine
+    const [consentTarget, setConsentTarget] = useState<RequestItem | null>(null);
+    const [sheetPhase, setSheetPhase] = useState<ConsentPhase>('idle');
+    const [overlayStage, setOverlayStage] = useState<ChainStage | null>(null);
+    const [overlayCtx, setOverlayCtx] = useState<{ contextLabel: string; txHash: string | null } | null>(null);
 
     const normalizedRequests = useMemo(() => {
         return (requests || []).map((r: RequestItem) => ({
@@ -700,6 +705,96 @@ export default function RequestsScreen() {
         ]);
     }, [refresh]);
 
+    // ───────────────────────────────────────────────────────────────────
+    //  Wave L — ConsentSheet ceremony orchestrator
+    //  Row "Mở để ký" / "Từ chối" → openConsentSheet
+    //  Sheet "Ký đồng ý" → runApproveCeremony → handleApprove + animate
+    //  Sheet "Từ chối"   → runRejectCeremony  → handleReject + animate
+    // ───────────────────────────────────────────────────────────────────
+    const openConsentSheet = useCallback((req: RequestItem) => {
+        setConsentTarget(req);
+        setSheetPhase('idle');
+    }, []);
+
+    const closeConsentSheet = useCallback(() => {
+        setConsentTarget(null);
+        setSheetPhase('idle');
+    }, []);
+
+    /** Build the ConsentRequest projection passed to ConsentSheet for display */
+    const consentDetails = useMemo<ConsentRequest | null>(() => {
+        if (!consentTarget) return null;
+        const r = consentTarget;
+        const scopeLabel =
+            r.requestType === 1 ? 'Uỷ quyền toàn bộ'
+            : r.requestType === 2 ? 'Đọc & uỷ quyền lại'
+            : 'Đọc & cập nhật';
+        const durationLabel = formatDuration(r);
+        return {
+            recipientName: 'Bác sĩ',  // UserChip handles fancier display; sheet uses raw addr-derived label
+            recipientOrg: null,
+            recordTitle: r.recordTitle || (r.cidHash ? `${r.cidHash.slice(0, 10)}…` : 'Hồ sơ chưa rõ'),
+            scopeLabel,
+            expiryLabel: durationLabel || undefined,
+            reason: (r as any).reason || null,
+        };
+    }, [consentTarget]);
+
+    /** Schedule PendingChainOverlay after sheet's done phase finishes */
+    const launchOverlay = useCallback((txHash: string | null) => {
+        const r = consentTarget;
+        if (!r) return;
+        const ctxLabel = r.requesterAddress
+            ? `${r.requesterAddress.slice(0, 6)}…${r.requesterAddress.slice(-4)}`
+            : 'Bác sĩ · on-chain';
+        setOverlayCtx({
+            contextLabel: ctxLabel,
+            txHash: txHash ? `${txHash.slice(0, 6)}…${txHash.slice(-4)}` : null,
+        });
+        setOverlayStage(0);
+        // Stage progression — matches design pacing (~2.5s total)
+        setTimeout(() => setOverlayStage(1), 700);
+        setTimeout(() => setOverlayStage(2), 1800);
+        // Overlay auto-closes 1.2s after stage=2 via its own onDone
+    }, [consentTarget]);
+
+    const handleOverlayDone = useCallback(() => {
+        setOverlayStage(null);
+        setOverlayCtx(null);
+        refresh();
+    }, [refresh]);
+
+    const runApproveCeremony = useCallback(async () => {
+        if (!consentTarget) return;
+        setSheetPhase('signing');
+        try {
+            await handleApprove(consentTarget);
+            setSheetPhase('done');
+            setTimeout(() => {
+                closeConsentSheet();
+                launchOverlay(null); // approve doesn't surface tx hash easily; show ceremony without
+            }, 1400);
+        } catch {
+            setSheetPhase('idle');
+            // handleApprove already showed its own Alert
+        }
+    }, [consentTarget, handleApprove, closeConsentSheet, launchOverlay]);
+
+    const runRejectCeremony = useCallback(async () => {
+        if (!consentTarget) return;
+        setSheetPhase('signing');
+        try {
+            await handleReject(consentTarget);
+            setSheetPhase('done');
+            setTimeout(() => {
+                closeConsentSheet();
+                launchOverlay(null);
+            }, 1400);
+        } catch {
+            setSheetPhase('idle');
+        }
+    }, [consentTarget, handleReject, closeConsentSheet, launchOverlay]);
+
     if (isLoading && !isRefreshing) {
         return <LoadingSpinner message="Đang tải danh sách yêu cầu..." />;
     }
@@ -817,8 +912,8 @@ export default function RequestsScreen() {
                     renderItem={({ item }: { item: any }) => (
                         <RequestRow
                             item={item}
-                            onApprove={handleApprove}
-                            onReject={handleReject}
+                            onApprove={openConsentSheet}
+                            onReject={openConsentSheet}
                             onArchive={handleArchive}
                             isApproving={approvingId === (item.requestId || item.id)}
                         />
@@ -834,6 +929,25 @@ export default function RequestsScreen() {
                     showsVerticalScrollIndicator={false}
                 />
             )}
+
+            {/* Wave L — ConsentSheet ceremony for approve/reject */}
+            <ConsentSheet
+                open={!!consentTarget && overlayStage === null}
+                request={consentDetails}
+                phase={sheetPhase}
+                onApprove={runApproveCeremony}
+                onReject={runRejectCeremony}
+                onClose={closeConsentSheet}
+            />
+
+            {/* Wave L — PendingChainOverlay shown after sheet 'done' closes */}
+            <PendingChainOverlay
+                visible={overlayStage !== null}
+                stage={(overlayStage ?? 0) as ChainStage}
+                contextLabel={overlayCtx?.contextLabel}
+                txHashShort={overlayCtx?.txHash || null}
+                onDone={handleOverlayDone}
+            />
         </SafeAreaView>
     );
 }
