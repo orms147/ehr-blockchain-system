@@ -424,10 +424,10 @@ export default function RequestsScreen() {
     // ───────────────────────────────────────────────────────────────────
     //  handleApprove — verbatim from screens/RequestsScreen.tsx
     // ───────────────────────────────────────────────────────────────────
-    const handleApprove = useCallback(async (request: RequestItem) => {
+    const handleApprove = useCallback(async (request: RequestItem): Promise<boolean> => {
         const reqId = request.requestId || request.id;
-        if (!reqId) { Alert.alert('Lỗi', 'Thiếu mã yêu cầu'); return; }
-        if (approvingId) return;
+        if (!reqId) { Alert.alert('Lỗi', 'Thiếu mã yêu cầu'); return false; }
+        if (approvingId) return false;
 
         const doctorAddr = (request.requesterAddress || '').toLowerCase();
         if (doctorAddr) {
@@ -445,7 +445,7 @@ export default function RequestsScreen() {
                             { cancelable: true, onDismiss: () => resolve(false) },
                         );
                     });
-                    if (!confirmed) return;
+                    if (!confirmed) return false;
                 }
             } catch {}
         }
@@ -481,7 +481,7 @@ export default function RequestsScreen() {
                                 { cancelable: true, onDismiss: () => resolve(false) },
                             );
                         });
-                        if (!confirmed) return;
+                        if (!confirmed) return false;
                     }
                 }
             } catch {}
@@ -592,6 +592,9 @@ export default function RequestsScreen() {
                 cascadePayloads.length > 0 ? cascadePayloads : undefined,
             );
 
+            // Wave O — success Alert removed; SignReceipt is the success ceremony.
+            // Warning Alerts (partial-share failures) kept because receipt doesn't
+            // surface per-version skipped info.
             if (cascadeBuildError) {
                 Alert.alert(
                     'Phê duyệt thành công nhưng cảnh báo',
@@ -609,20 +612,16 @@ export default function RequestsScreen() {
                     '(thường gặp khi hồ sơ được tạo trước khi bạn đăng nhập app lần đầu). ' +
                     'Hãy yêu cầu bác sĩ tạo các phiên bản đó tự re-share để khôi phục.',
                 );
-            } else {
-                Alert.alert(
-                    'Thành công',
-                    'Đã phê duyệt. Bác sĩ sẽ nhận quyền truy cập sau khi xác nhận trên blockchain.',
-                );
             }
-            refresh();
+            return true;
         } catch (error) {
             console.error(error);
             Alert.alert('Lỗi', 'Không thể phê duyệt yêu cầu.');
+            throw error;
         } finally {
             setApprovingId(null);
         }
-    }, [refresh, approvingId]);
+    }, [approvingId]);
 
     // ───────────────────────────────────────────────────────────────────
     //  handleReject — Wave K: SPONSORED reject.
@@ -630,10 +629,10 @@ export default function RequestsScreen() {
     //  EHRSystemSecure.rejectRequestBySig — patient KHÔNG cần ETH.
     //  Cùng pattern với handleApprove (consistent UX, both sponsored).
     // ───────────────────────────────────────────────────────────────────
-    const handleReject = useCallback(async (request: RequestItem) => {
+    const handleReject = useCallback(async (request: RequestItem): Promise<boolean> => {
         const reqId = request.requestId || request.id;
-        if (!reqId) { Alert.alert('Lỗi', 'Thiếu mã yêu cầu'); return; }
-        if (approvingId) return;
+        if (!reqId) { Alert.alert('Lỗi', 'Thiếu mã yêu cầu'); return false; }
+        if (approvingId) return false;
 
         const confirmed = await new Promise<boolean>((resolve) => {
             Alert.alert(
@@ -646,7 +645,7 @@ export default function RequestsScreen() {
                 { cancelable: true, onDismiss: () => resolve(false) },
             );
         });
-        if (!confirmed) return;
+        if (!confirmed) return false;
 
         setApprovingId(reqId);
         try {
@@ -667,28 +666,27 @@ export default function RequestsScreen() {
             });
 
             // 3. POST signature → backend broadcasts via relayer (sponsor gas)
-            const result: any = await (requestService as any).rejectWithSignature(
+            await (requestService as any).rejectWithSignature(
                 reqId,
                 signature,
                 deadline,
                 null, // reason — defer until UX Q3 dropdown decision
             );
 
-            Alert.alert(
-                'Đã từ chối',
-                `Yêu cầu đã được từ chối on-chain. Bác sĩ sẽ thấy trạng thái cập nhật ngay.\n\nTx: ${String(result?.txHash || '').slice(0, 14)}…`,
-            );
-            refresh();
+            // Wave O — success Alert removed; SignReceipt ("Biên nhận từ chối")
+            // is the success ceremony.
+            return true;
         } catch (error: any) {
             console.error('[Reject] Failed:', error);
             Alert.alert(
                 'Lỗi',
                 error?.message || error?.shortMessage || 'Không thể từ chối yêu cầu. Vui lòng thử lại.',
             );
+            throw error;
         } finally {
             setApprovingId(null);
         }
-    }, [refresh, approvingId]);
+    }, [approvingId]);
 
     const handleArchive = useCallback((request: RequestItem) => {
         Alert.alert('Ẩn yêu cầu', 'Bạn có chắc chắn muốn ẩn yêu cầu này?', [
@@ -800,15 +798,23 @@ export default function RequestsScreen() {
         ceremonyActionRef.current = 'approve';
         setSheetPhase('signing');
         try {
-            await handleApprove(consentTarget);
+            const ok = await handleApprove(consentTarget);
+            if (!ok) {
+                // Patient cancelled at a confirm Alert (unverified doctor / downgrade
+                // warning). NO sign happened — close sheet, do NOT launch overlay/receipt.
+                setSheetPhase('idle');
+                setConsentTarget(null);
+                return;
+            }
             setSheetPhase('done');
             setTimeout(() => {
                 setSheetPhase('idle'); // sheet auto-closes via consentTarget null after overlay done
                 launchOverlay(null); // approve doesn't surface tx hash easily; show ceremony without
             }, 1400);
         } catch {
+            // handleApprove threw on real error → already alerted; just close sheet
             setSheetPhase('idle');
-            // handleApprove already showed its own Alert
+            setConsentTarget(null);
         }
     }, [consentTarget, handleApprove, launchOverlay]);
 
@@ -817,7 +823,12 @@ export default function RequestsScreen() {
         ceremonyActionRef.current = 'reject';
         setSheetPhase('signing');
         try {
-            await handleReject(consentTarget);
+            const ok = await handleReject(consentTarget);
+            if (!ok) {
+                setSheetPhase('idle');
+                setConsentTarget(null);
+                return;
+            }
             setSheetPhase('done');
             setTimeout(() => {
                 setSheetPhase('idle');
@@ -825,6 +836,7 @@ export default function RequestsScreen() {
             }, 1400);
         } catch {
             setSheetPhase('idle');
+            setConsentTarget(null);
         }
     }, [consentTarget, handleReject, launchOverlay]);
 
