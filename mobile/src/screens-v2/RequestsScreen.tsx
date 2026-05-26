@@ -490,6 +490,9 @@ export default function RequestsScreen() {
         setApprovingId(reqId);
         try {
             const { walletClient, address } = await walletActionService.getWalletContext();
+            // Audit P0 (2026-05-26) — biometric gate trước EIP-712 sign, parity với handleReject.
+            // Patient cấp consent = grant doctor toàn quyền truy cập medical records → bắt buộc MFA.
+            await gateOrThrow('Xác thực để cấp quyền truy cập hồ sơ');
             const { typedData, deadline } = await requestService.getApprovalMessage(reqId);
             const signature = await walletActionService.signTypedData(walletClient, {
                 domain: typedData.domain,

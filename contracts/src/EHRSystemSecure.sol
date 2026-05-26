@@ -98,22 +98,22 @@ contract EHRSystemSecure is IEHRSystem, Ownable, Pausable, ReentrancyGuard, EIP7
             validForHours = 7 * 24; // Default: 7 days
         }
 
-        // Validate based on request type
-        bool requesterIsPatient = accessControl.isPatient(msg.sender);
-        
+        // Audit P1 (2026-05-26) — requester PHẢI là Doctor hoặc Organization cho mọi
+        // RequestType. Trước: chỉ FullDelegation enforce role → patient bị spam request
+        // từ EOA bất kỳ. Patient vẫn phải approve qua sig nên không drain asset, nhưng
+        // UI patient hiện request giả danh → phishing surface. Move role gate ra trước.
+        if (accessControl.isPatient(msg.sender)) revert InvalidRequest();
+        {
+            bool isDoctor_ = accessControl.isDoctor(msg.sender);
+            bool isOrg_ = accessControl.isOrganization(msg.sender);
+            if (!isDoctor_ && !isOrg_) revert InvalidRequest();
+        }
+
+        // Validate rootCidHash presence based on request type
         if (reqType == RequestType.DirectAccess || reqType == RequestType.RecordDelegation) {
-            // These require a specific record
             if (rootCidHash == bytes32(0)) revert InvalidRequest();
         } else if (reqType == RequestType.FullDelegation) {
-            // Full delegation should NOT have a specific record
             if (rootCidHash != bytes32(0)) revert InvalidRequest();
-            
-            // Only doctors/orgs can request full delegation
-            if (requesterIsPatient) revert InvalidRequest();
-            
-            bool isDoctor = accessControl.isDoctor(msg.sender);
-            bool isOrg = accessControl.isOrganization(msg.sender);
-            if (!isDoctor && !isOrg) revert InvalidRequest();
         }
 
         bytes32 reqId = keccak256(abi.encode(
