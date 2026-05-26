@@ -4,6 +4,8 @@
 
 ## Setup tổng (1 lần duy nhất)
 
+> ⚠ **Ministry wallet constraint (2026-05-26)**: ví Ministry chỉ tồn tại trong browser MetaMask (mất seed → chỉ ký được qua web). Mobile app KHÔNG dùng được role Ministry. Tất cả Ministry tx chạy qua **Arbiscan Write Contract tab**. URGENT: export MetaMask private key → password manager NGAY trước khi browser cache wipe.
+
 | Item | Status |
 |---|---|
 | Backend `npm run dev` xanh (port 3001) | [ ] |
@@ -11,9 +13,23 @@
 | Device 1: Patient wallet — login Google/email | [ ] |
 | Device 2: Doctor wallet — login + verify role on-chain | [ ] |
 | Device 3: Org Admin wallet — đã được createOrganization assign | [ ] |
-| Device 4: Ministry wallet — JWT có role MINISTRY | [ ] |
+| **Browser MetaMask**: ví Ministry connected · private key đã backup | [ ] |
 | Arbitrum Sepolia explorer mở tab: `https://sepolia.arbiscan.io` | [ ] |
 | Graph Studio dashboard mở: query EHR v0.1.4 | [ ] |
+
+### Ministry actions via Arbiscan — quick reference
+
+5 function Ministry-only. Mở contract → tab **Contract → Write Contract** → **Connect Wallet** (MetaMask) → expand function → nhập args → Write → ký MetaMask popup.
+
+| Function | Contract | Address |
+|---|---|---|
+| `createOrganization(name, primaryAdmin, backupAdmin)` | AccessControl | `0xA2b937a88c130aD211D12Dc2BC482Cb49CDdD7Cb` |
+| `verifyDoctorByMinistry(doctor, credential)` | AccessControl | same |
+| `setOrgActive(orgId, active)` | AccessControl | same |
+| `revokeOrgVerification(orgId)` | AccessControl | same |
+| `setOrgAdmins(orgId, newPrimary, newBackup)` | AccessControl | same |
+
+Sau khi tx confirm: backend `eventSync.service.js` auto sync DB (~30s) → mobile pull thấy state mới qua các role khác.
 
 ---
 
@@ -86,25 +102,28 @@
 
 - [ ] **L7.1** Doctor unverified mở CredentialSubmitScreen → nhập CCHN + chọn org + upload PDF → submit → backend `/api/verification/submit` → org/ministry list pending
 - [ ] **L7.2** Org admin: OrgPendingVerifications → bấm Approve doctor → biometric → `verifyDoctor` tx → doctor get VERIFIED_DOCTOR flag on-chain → doctor side "canAccess" no longer refuse
-- [ ] **L7.3** Ministry: MinistryVerifyDoctor → list independent doctors → verify 1 doctor không thuộc org → `verifyDoctorByMinistry` → cùng kết quả VERIFIED_DOCTOR
+- [ ] **L7.3** 🌐 **Via Arbiscan** (Ministry wallet only browser): mở contract AccessControl → Write → `verifyDoctorByMinistry(doctor=0x..., credential="VERIFIED")` → MetaMask sign → tx confirm → backend sync → doctor flag VERIFIED_DOCTOR on-chain (mobile doctor refresh thấy có thể request access patient)
 - [ ] **L7.4** Org admin revoke verification doctor: OrgMembers → row doctor verified → bấm "Thu hồi" → typeword `THU HOI` → tx → doctor mất flag → request mới fail canAccess
 
 **Checkpoints**: DoctorVerified event · VerificationRequest backend status `approved`/`revoked` · Doctor profile `isVerified` flag flip
 
 ---
 
-## L8 — Verification (Org + Ministry governance) (35 min · Ministry + 2 admin wallets parallel)
+## L8 — Verification (Org + Ministry governance) (35 min · Browser MetaMask + 2 mobile admin wallets parallel)
 
-- [ ] **L8.1** Ministry: MinistryCreateOrgScreen → tên "BV Test Wave8" + 2 wallet admin (primary + backup) → biometric → `createOrganization` tx → org appear `/api/admin/organizations` → subgraph index Organization entity
-- [ ] **L8.2** Primary admin login: thấy role ORGANIZATION → mở OrgDashboard → org info đúng tên
-- [ ] **L8.3** Ministry: MinistryOrgDetail → bấm "Tạm dừng" (setOrgActive false) → tx → org admin thử addOrgMember → revert `NotActiveOrg`
-- [ ] **L8.4** Ministry: revokeOrgVerification typeword `THU HOI` → org `isVerified=false` → doctor thuộc org thử request → canAccess fail
-- [ ] **L8.5** ⚠ **Fix #1 + #2 verify**:
-  - Ministry tạo org với primary = chính Ministry's wallet → CTA disabled + footerHint "Bạn (Ministry) không thể tự làm admin cơ sở mới"
-  - Ministry tạo org với primary = `0x000…0000` → CTA disabled + hint "Ví chính không thể là 0x000…"
-  - Org admin add member với doctor = chính org admin wallet → CTA disabled + inline error "Bạn là admin tổ chức — không thể tự thêm mình làm thành viên"
+> Ministry actions chạy qua **Arbiscan Write Contract**, không qua mobile. Org admin login mobile bình thường.
 
-**Checkpoints**: OrganizationCreated event · OrganizationStatusChanged event · Backend Organization row sync · Mobile Ministry/Org dashboards refresh đúng
+- [ ] **L8.1** 🌐 **Via Arbiscan**: AccessControl → Write → `createOrganization(name="BV Test Wave8", primaryAdmin=0x..., backupAdmin=0x...)` → MetaMask sign → tx confirm → check Arbiscan event log có `OrganizationCreated(orgId, name, primary, backup)` → backend `/api/admin/organizations` GET trả về org mới → subgraph entity Organization index trong v0.1.4
+- [ ] **L8.2** Primary admin login mobile (Web3Auth Google bằng email tương ứng wallet primary): role ORGANIZATION → mở OrgDashboard → org info đúng tên + orgId match Arbiscan event
+- [ ] **L8.3** 🌐 **Via Arbiscan**: `setOrgActive(orgId=X, active=false)` → tx confirm → mobile Org admin thử OrgMembers → "Thêm bác sĩ" → ký tx → revert `NotActiveOrg` (toast lỗi mobile)
+- [ ] **L8.4** 🌐 **Via Arbiscan**: `revokeOrgVerification(orgId=X)` → tx confirm → org `isVerified=false` → mobile doctor thuộc org thử requestAccess patient → canAccess fail (mobile reject)
+- [ ] **L8.5** ⚠ **Fix #1 + #2 verify** (chạy mobile, KHÔNG cần Arbiscan):
+  - Mobile MinistryCreateOrgScreen (UI vẫn render được khi login bằng wallet KHÔNG phải Ministry — purely test UI gate): nhập primary = wallet đang login → CTA disabled + footerHint "Bạn (Ministry) không thể tự làm admin cơ sở mới"
+  - Nhập primary = `0x0000000000000000000000000000000000000000` → CTA disabled + hint "Ví chính không thể là 0x000…"
+  - Mobile Org admin OrgMembers → AddMember → nhập doctor = chính org admin wallet → CTA disabled + inline error "Bạn là admin tổ chức — không thể tự thêm mình làm thành viên"
+  - Note: L8.5 chỉ test client-side validation UI. Server/contract block đã verified ở L8.1-L8.4 (Ministry không cần test self-create qua Arbiscan vì validation P1 chỉ tồn tại mobile UI layer).
+
+**Checkpoints**: OrganizationCreated event Arbiscan · OrganizationStatusChanged event · Backend Organization row sync (xem qua `/api/admin/organizations` JSON response) · Mobile Org dashboard refresh đúng sau khi Ministry tx confirm
 
 ---
 
@@ -178,7 +197,8 @@
 - [ ] L4.1 (revoke cascade)
 - [ ] L5.2, L5.3, L5.4, L5.6 (request flow + P1 #2 + Wave O fix)
 - [ ] L7.2 (org verify doctor — unblock canAccess)
-- [ ] L8.1, L8.5 (Ministry create + Fix #1+#2)
+- [ ] L8.1 🌐 (Arbiscan createOrganization — proof end-to-end Ministry → backend → mobile sync work)
+- [ ] L8.5 (Fix #1+#2 mobile UI validation)
 - [ ] L11.1.a (P0 verify)
 - [ ] L11.3 (cancel paths)
 
