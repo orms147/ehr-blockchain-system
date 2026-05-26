@@ -694,15 +694,42 @@ router.get('/chain/:cidHash', authenticate, async (req, res, next) => {
 });
 
 // GET /api/records/chain-cids/:cidHash - Get ALL cidHashes in a chain (for chain-wide sharing)
+//
+// Audit P1 (2026-05-26) — gate: caller PHẢI là owner of root record OR có
+// active KeyShare cho cidHash. Trước: bất kỳ user authenticated nào enumerate
+// được chain topology + metadata → leak. KeyShare existence proof có quyền
+// (lighter than on-chain canAccess; KeyShare đã được gate khi grant).
 router.get('/chain-cids/:cidHash', authenticate, async (req, res, next) => {
     try {
         const startCidHash = normalizeHash(req.params.cidHash);
+        const callerAddress = normalizeAddress(req.user.walletAddress);
+
         const currentRecord = await findConfirmedRecordByCidHash(startCidHash, {
-            select: { cidHash: true, parentCidHash: true },
+            select: { cidHash: true, parentCidHash: true, ownerAddress: true },
         });
 
         if (!currentRecord) {
             return res.status(404).json({ code: 'RECORD_NOT_FOUND', error: 'Record not found', message: 'Record not found' });
+        }
+
+        const isOwner = normalizeAddress(currentRecord.ownerAddress) === callerAddress;
+        if (!isOwner) {
+            const activeShare = await prisma.keyShare.findFirst({
+                where: {
+                    cidHash: startCidHash,
+                    recipientAddress: callerAddress,
+                    status: { in: ['pending', 'claimed'] },
+                    OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
+                },
+                select: { id: true },
+            });
+            if (!activeShare) {
+                return res.status(403).json({
+                    code: 'ONCHAIN_ROLE_FORBIDDEN',
+                    error: 'Bạn không có quyền truy cập chuỗi hồ sơ này',
+                    message: 'Bạn không có quyền truy cập chuỗi hồ sơ này',
+                });
+            }
         }
 
         const allCids = new Set();

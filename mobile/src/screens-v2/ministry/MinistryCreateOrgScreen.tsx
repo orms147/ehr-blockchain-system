@@ -23,6 +23,7 @@ import walletActionService from '../../services/walletAction.service';
 import { gateOrThrow } from '../../utils/biometricGate';
 import { ACCESS_CONTROL_ABI } from '../../abi/contractABI';
 import { useEhrPalette } from '../../constants/uiColors';
+import useAuthStore from '../../store/authStore';
 import {
     PageHeader,
     SectionLabel,
@@ -42,10 +43,18 @@ const publicClient = createPublicClient({
     transport: http(ARBITRUM_RPC, { retryCount: 0 }),
 });
 
-const isValidAddress = (a: string) => /^0x[a-fA-F0-9]{40}$/.test(a.trim());
+const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
+const isValidAddress = (a: string) => {
+    const trimmed = a.trim();
+    if (!/^0x[a-fA-F0-9]{40}$/.test(trimmed)) return false;
+    if (trimmed.toLowerCase() === ZERO_ADDRESS) return false;
+    return true;
+};
 
 export default function MinistryCreateOrgScreen({ navigation }: any) {
     const palette = useEhrPalette();
+    const { user } = useAuthStore();
+    const ministryAddr = (user?.walletAddress || '').toLowerCase();
 
     const [name, setName] = useState('');
     const [primaryAdmin, setPrimaryAdmin] = useState('');
@@ -55,6 +64,10 @@ export default function MinistryCreateOrgScreen({ navigation }: any) {
     const primaryValid = primaryAdmin.length === 0 || isValidAddress(primaryAdmin);
     const backupValid = backupAdmin.length === 0 || isValidAddress(backupAdmin);
     const walletsDifferent = primaryAdmin.trim().toLowerCase() !== backupAdmin.trim().toLowerCase();
+    // Audit P1 — Ministry không được tự đặt mình làm admin org mới (vai trò xung đột:
+    // Ministry là governance layer, không phải vận hành cơ sở). Same với backup wallet.
+    const primaryIsMinistry = ministryAddr && primaryAdmin.trim().toLowerCase() === ministryAddr;
+    const backupIsMinistry = ministryAddr && backupAdmin.trim().toLowerCase() === ministryAddr;
 
     const canSubmit = useMemo(() => {
         return (
@@ -62,18 +75,24 @@ export default function MinistryCreateOrgScreen({ navigation }: any) {
             isValidAddress(primaryAdmin) &&
             isValidAddress(backupAdmin) &&
             walletsDifferent &&
+            !primaryIsMinistry &&
+            !backupIsMinistry &&
             !isSubmitting
         );
-    }, [name, primaryAdmin, backupAdmin, walletsDifferent, isSubmitting]);
+    }, [name, primaryAdmin, backupAdmin, walletsDifferent, primaryIsMinistry, backupIsMinistry, isSubmitting]);
 
     const footerHint = useMemo(() => {
         if (isSubmitting) return 'Đừng đóng app · chờ 8–14 giây';
         if (!name.trim()) return 'Cần điền tên cơ sở và 2 ví quản trị';
+        if (primaryAdmin.trim().toLowerCase() === ZERO_ADDRESS) return 'Ví chính không thể là 0x000…';
         if (!isValidAddress(primaryAdmin)) return 'Ví quản trị chính chưa hợp lệ';
+        if (backupAdmin.trim().toLowerCase() === ZERO_ADDRESS) return 'Ví dự phòng không thể là 0x000…';
         if (!isValidAddress(backupAdmin)) return 'Ví dự phòng chưa hợp lệ';
         if (!walletsDifferent) return 'Hai ví phải khác nhau';
+        if (primaryIsMinistry) return 'Bạn (Ministry) không thể tự làm admin cơ sở mới';
+        if (backupIsMinistry) return 'Ví dự phòng không thể là chính ví Ministry';
         return 'Ký bằng FaceID · gas trả từ ví Ministry';
-    }, [isSubmitting, name, primaryAdmin, backupAdmin, walletsDifferent]);
+    }, [isSubmitting, name, primaryAdmin, backupAdmin, walletsDifferent, primaryIsMinistry, backupIsMinistry]);
 
     const handleSubmit = async () => {
         if (!canSubmit) return;

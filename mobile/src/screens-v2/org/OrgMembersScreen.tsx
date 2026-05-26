@@ -821,6 +821,8 @@ function AddMemberModal({
     onSuccess: () => void;
 }) {
     const palette = useEhrPalette();
+    const { user } = useAuthStore();
+    const orgAdminAddr = (user?.walletAddress || '').toLowerCase();
     const [doctorAddr, setDoctorAddr] = useState('');
     const [role, setRole] = useState<'doctor' | 'admin'>('doctor');
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -833,8 +835,22 @@ function AddMemberModal({
         }
     }, [visible]);
 
-    const addrValid = doctorAddr.length === 0 || /^0x[a-fA-F0-9]{40}$/.test(doctorAddr.trim());
-    const canSubmit = !!orgId && !!orgChainId && /^0x[a-fA-F0-9]{40}$/.test(doctorAddr.trim()) && !isSubmitting;
+    const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
+    const trimmedAddr = doctorAddr.trim().toLowerCase();
+    const formatValid = /^0x[a-fA-F0-9]{40}$/.test(doctorAddr.trim());
+    const isZero = trimmedAddr === ZERO_ADDRESS;
+    // Audit P1 — org admin không được tự thêm chính mình làm member. Org admin role
+    // ≠ doctor member role: admin có quyền quản trị, member là role tác nghiệp y khoa.
+    // Self-add tạo state mâu thuẫn (1 ví vừa admin vừa member của cùng org).
+    const isSelfAdd = !!orgAdminAddr && trimmedAddr === orgAdminAddr;
+    const addrValid = doctorAddr.length === 0 || (formatValid && !isZero && !isSelfAdd);
+    const canSubmit =
+        !!orgId &&
+        !!orgChainId &&
+        formatValid &&
+        !isZero &&
+        !isSelfAdd &&
+        !isSubmitting;
 
     const handleAdd = async () => {
         if (!canSubmit) return;
@@ -941,6 +957,15 @@ function AddMemberModal({
                             fontWeight: '500',
                         }}
                     />
+                    {doctorAddr.length > 0 && !addrValid ? (
+                        <Text style={{ marginTop: 6, fontFamily: SANS, fontSize: 11.5, color: palette.EHR_DANGER }}>
+                            {isSelfAdd
+                                ? 'Bạn là admin tổ chức — không thể tự thêm mình làm thành viên'
+                                : isZero
+                                ? 'Địa chỉ 0x000… không hợp lệ'
+                                : 'Sai định dạng EVM (0x + 40 ký tự hex)'}
+                        </Text>
+                    ) : null}
 
                     {/* Role picker */}
                     <Text style={{ marginTop: 14, fontFamily: MONO, fontSize: 10.5, color: palette.EHR_TEXT_MUTED, letterSpacing: 0.8, textTransform: 'uppercase', fontWeight: '700', marginBottom: 6 }}>

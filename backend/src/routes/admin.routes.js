@@ -63,12 +63,26 @@ const rejectSchema = z.object({
     reason: z.string().min(10).max(500),
 });
 
+// Audit P1 — whitelist status filter cho mọi list endpoint admin.
+// orgApplicationStatus dùng cho /org-applications. Semantic khác từ
+// independentDoctorStatus nên giữ riêng (independent dùng 'verified'/'revoked').
+const orgApplicationStatusSchema = z.object({
+    status: z.enum(['pending', 'approved', 'rejected', 'all']).optional(),
+});
+
 // GET /api/admin/org-applications - List all applications
 router.get('/org-applications', authenticate, isMinistry, async (req, res, next) => {
     try {
-        const { status } = req.query;
-
-        const where = status ? { status } : {};
+        const parsed = orgApplicationStatusSchema.safeParse(req.query);
+        if (!parsed.success) {
+            return res.status(400).json({
+                code: 'INVALID_STATUS',
+                error: 'status phải là pending | approved | rejected | all',
+                message: 'status phải là pending | approved | rejected | all',
+            });
+        }
+        const { status } = parsed.data;
+        const where = status && status !== 'all' ? { status } : {};
 
         const applications = await prisma.orgApplication.findMany({
             where,
