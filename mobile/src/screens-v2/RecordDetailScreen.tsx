@@ -36,7 +36,7 @@ import {
     View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { QrCode, Lock, Clock, FileText, User, Share2, Unlock, X, FilePlus2, Copy } from 'lucide-react-native';
+import { QrCode, Lock, Clock, FileText, User, Share2, Unlock, X, FilePlus2, Copy, Eye, Fingerprint, AlertTriangle, Check as CheckIcon } from 'lucide-react-native';
 import * as Clipboard from 'expo-clipboard';
 import { Text, XStack, YStack } from 'tamagui';
 
@@ -56,14 +56,16 @@ import localRecordStore from '../services/localRecordStore';
 import { formatExpiry } from '../utils/dateFormatting';
 import ViCard from '../components-v2/ViCard';
 import ViButton from '../components-v2/ViButton';
-import { ViSectionLabel, ViModeChip, ViSourceChip } from '../components-v2/ViChips';
+import { ViSectionLabel, ViSourceChip } from '../components-v2/ViChips';
 import { useEhrPalette } from '../constants/uiColors';
 
 const SERIF = 'Fraunces_400Regular';
 const SERIF_MEDIUM = 'Fraunces_500Medium';
+const SERIF_ITALIC = 'Fraunces_400Regular_Italic';
 const SANS = 'DMSans_400Regular';
 const SANS_MEDIUM = 'DMSans_500Medium';
 const SANS_SEMI = 'DMSans_600SemiBold';
+const MONO = 'monospace';
 
 type RouteRecord = {
     cidHash?: string;
@@ -1088,6 +1090,7 @@ export default function RecordDetailScreen({ route, navigation }: any) {
             <ShareModal
                 visible={showShareModal}
                 onClose={() => setShowShareModal(false)}
+                recordTitle={record.title || record.type || 'Hồ sơ y tế'}
                 shareAddress={shareAddress}
                 setShareAddress={setShareAddress}
                 shareType={shareType}
@@ -1389,10 +1392,24 @@ function KV({ label, value }: { label: string; value: string }) {
     );
 }
 
-// ───────── ShareModal (ConsentSheet) ─────────
+// ───────── ShareModal — redesigned per viehp-share-sheet.html (2026-05-26) ─────────
+//
+// Key changes vs old:
+//   • Header: mono cinnabar eyebrow + serif title with record name in italic
+//   • Address: hint row below shows valid/error feedback (regex check, no API)
+//   • Mode picker: SINGLE container, divider between rows, LEFT RAIL active
+//     (NO peach bg). Right-side 38×38 glyph (eye/share-fork) replaces redundant
+//     ViModeChip — chip was duplicating the row title.
+//   • Pills: INK FILL active (EHR_ON_SURFACE) — NOT peach. "5 phút"/"10 phút"
+//     prefixed with a mono "TEST" micro-tag in warning color.
+//   • Custom expiry: number + unit toggle match the ink-fill style.
+//   • Editorial note: border-left explaining encryption + revoke.
+//   • Sticky footer: CTA appends chosen expiry inline. Hint paired with
+//     Fingerprint glyph.
 function ShareModal(props: {
     visible: boolean;
     onClose: () => void;
+    recordTitle: string;
     shareAddress: string;
     setShareAddress: (v: string) => void;
     shareType: 'read-update' | 'read-delegate';
@@ -1411,133 +1428,354 @@ function ShareModal(props: {
 }) {
     const palette = useEhrPalette();
     const {
-        visible, onClose, shareAddress, setShareAddress, shareType, setShareType,
+        visible, onClose, recordTitle, shareAddress, setShareAddress, shareType, setShareType,
         showDelegateOption, shareExpiryHours, setShareExpiryHours, customExpiryOpen,
         setCustomExpiryOpen, customExpiryValue, setCustomExpiryValue,
         customExpiryUnit, setCustomExpiryUnit, onConfirm, isSharing,
     } = props;
 
-    const opts: { value: 'read-update' | 'read-delegate'; label: string; sub: string }[] = [
-        { value: 'read-update', label: 'Đọc & cập nhật', sub: 'Bác sĩ đọc toàn bộ hồ sơ + các phiên bản sau' },
+    const opts: { value: 'read-update' | 'read-delegate'; label: string; sub: string; Glyph: any }[] = [
+        { value: 'read-update', label: 'Đọc & cập nhật', sub: 'Bác sĩ đọc toàn bộ hồ sơ + các phiên bản sau', Glyph: Eye },
     ];
     if (showDelegateOption) {
-        opts.push({ value: 'read-delegate', label: 'Đọc & uỷ quyền lại', sub: 'Bác sĩ đọc + có thể chia sẻ lại cho bác sĩ khác' });
+        opts.push({ value: 'read-delegate', label: 'Đọc & uỷ quyền lại', sub: 'Bác sĩ đọc + có thể chia sẻ lại cho bác sĩ khác', Glyph: Share2 });
     }
 
-    const expiryChoices: { label: string; value: number | null }[] = [
+    const expiryChoices: { label: string; value: number | null; test?: boolean }[] = [
         { label: 'Không giới hạn', value: null },
-        { label: '5 phút (test)', value: 5 / 60 },
-        { label: '10 phút (test)', value: 10 / 60 },
+        { label: '5 phút', value: 5 / 60, test: true },
+        { label: '10 phút', value: 10 / 60, test: true },
         { label: '1 giờ', value: 1 },
         { label: '24 giờ', value: 24 },
         { label: '7 ngày', value: 24 * 7 },
         { label: '30 ngày', value: 24 * 30 },
     ];
 
+    // Address validation — regex only, no API lookup. Live feedback in hint row.
+    const trimmedAddr = shareAddress.trim();
+    const addrState: 'default' | 'valid' | 'error' =
+        !trimmedAddr ? 'default'
+        : /^0x[a-fA-F0-9]{40}$/.test(trimmedAddr) ? 'valid'
+        : 'error';
+
+    // CTA label appends chosen expiry inline ("Xác nhận chia sẻ · 7 ngày")
+    const ctaExpiryLabel: string | null = (() => {
+        if (customExpiryOpen) {
+            if (!customExpiryValue) return null;
+            return `${customExpiryValue} ${customExpiryUnit === 'day' ? 'ngày' : 'giờ'}`;
+        }
+        const m = expiryChoices.find((c) => c.value === shareExpiryHours);
+        return m ? m.label : null;
+    })();
+
+    const ctaDisabled = isSharing || addrState !== 'valid';
+
     return (
         <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
             <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' }}>
                 <View
                     style={{
-                        backgroundColor: palette.EHR_SURFACE_LOWEST,
+                        backgroundColor: palette.EHR_SURFACE,
                         borderTopLeftRadius: 24,
                         borderTopRightRadius: 24,
-                        padding: 22,
-                        paddingBottom: 36,
-                        maxHeight: '90%',
+                        maxHeight: '88%',
+                        borderTopWidth: 0.5,
+                        borderTopColor: palette.EHR_OUTLINE_VARIANT,
                     }}
                 >
-                    <XStack style={{ alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-                        <Text style={{ fontFamily: SERIF, fontSize: 22, color: palette.EHR_ON_SURFACE, letterSpacing: -0.2 }}>
-                            Chia sẻ hồ sơ
-                        </Text>
+                    {/* Drag handle */}
+                    <View
+                        style={{
+                            width: 36,
+                            height: 4,
+                            borderRadius: 2,
+                            backgroundColor: palette.EHR_OUTLINE,
+                            alignSelf: 'center',
+                            marginTop: 11,
+                            marginBottom: 12,
+                            opacity: 0.55,
+                        }}
+                    />
+
+                    {/* Header — eyebrow + serif title with italic record name + close */}
+                    <XStack
+                        style={{
+                            alignItems: 'flex-start',
+                            justifyContent: 'space-between',
+                            paddingHorizontal: 22,
+                            paddingBottom: 14,
+                            gap: 14,
+                        }}
+                    >
+                        <View style={{ flex: 1 }}>
+                            <Text
+                                style={{
+                                    fontFamily: MONO,
+                                    fontSize: 10.5,
+                                    fontWeight: '700',
+                                    letterSpacing: 1.4,
+                                    textTransform: 'uppercase',
+                                    color: palette.EHR_CINNABAR_DEEP,
+                                }}
+                            >
+                                Cấp quyền cho bác sĩ
+                            </Text>
+                            <Text
+                                style={{
+                                    marginTop: 7,
+                                    fontFamily: SERIF,
+                                    fontSize: 21,
+                                    fontWeight: '500',
+                                    color: palette.EHR_ON_SURFACE,
+                                    letterSpacing: -0.2,
+                                    lineHeight: 26,
+                                }}
+                            >
+                                Chia sẻ <Text style={{ fontFamily: SERIF_ITALIC, fontStyle: 'italic' }}>{recordTitle}</Text>
+                            </Text>
+                        </View>
                         <Pressable onPress={onClose} hitSlop={10}>
-                            <X size={20} color={palette.EHR_TEXT_MUTED} />
+                            <View
+                                style={{
+                                    width: 32,
+                                    height: 32,
+                                    borderRadius: 16,
+                                    borderWidth: 0.5,
+                                    borderColor: palette.EHR_OUTLINE_VARIANT,
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    marginTop: 4,
+                                }}
+                            >
+                                <X size={14} color={palette.EHR_ON_SURFACE_VARIANT} />
+                            </View>
                         </Pressable>
                     </XStack>
-                    <ScrollView showsVerticalScrollIndicator={false}>
-                        <Text style={{ fontFamily: SANS, fontSize: 13, color: palette.EHR_ON_SURFACE_VARIANT, marginBottom: 12, lineHeight: 18 }}>
-                            Nhập địa chỉ ví của bác sĩ. Khoá hồ sơ sẽ được mã hoá đầu-cuối cho ví đó.
-                        </Text>
+
+                    <ScrollView
+                        style={{ paddingHorizontal: 22 }}
+                        contentContainerStyle={{ paddingBottom: 16 }}
+                        showsVerticalScrollIndicator={false}
+                    >
+                        {/* ── Address ── */}
+                        <XStack
+                            style={{
+                                marginTop: 4,
+                                marginBottom: 9,
+                                alignItems: 'baseline',
+                                justifyContent: 'space-between',
+                            }}
+                        >
+                            <Text
+                                style={{
+                                    fontFamily: MONO,
+                                    fontSize: 10.5,
+                                    fontWeight: '700',
+                                    letterSpacing: 1.2,
+                                    textTransform: 'uppercase',
+                                    color: palette.EHR_ON_SURFACE_VARIANT,
+                                }}
+                            >
+                                Địa chỉ ví bác sĩ
+                            </Text>
+                            <Text style={{ fontFamily: SANS, fontSize: 11, color: palette.EHR_TEXT_MUTED }}>
+                                Dán hoặc nhập 0x…
+                            </Text>
+                        </XStack>
                         <TextInput
                             value={shareAddress}
                             onChangeText={setShareAddress}
                             placeholder="0x..."
-                            placeholderTextColor={palette.EHR_OUTLINE}
+                            placeholderTextColor={palette.EHR_TEXT_MUTED}
                             autoCapitalize="none"
                             autoCorrect={false}
                             style={{
-                                borderWidth: 0.5,
-                                borderColor: palette.EHR_OUTLINE_SOFT,
-                                borderRadius: 10,
-                                paddingVertical: 12,
+                                borderWidth: addrState === 'error' ? 1 : 0.5,
+                                borderColor:
+                                    addrState === 'error' ? palette.EHR_DANGER
+                                    : addrState === 'valid' ? palette.EHR_TERTIARY
+                                    : palette.EHR_OUTLINE_VARIANT,
+                                borderRadius: 12,
+                                paddingVertical: 13,
                                 paddingHorizontal: 14,
-                                fontFamily: 'monospace',
-                                fontSize: 13,
+                                fontFamily: MONO,
+                                fontSize: 12.5,
                                 color: palette.EHR_ON_SURFACE,
-                                backgroundColor: palette.EHR_SURFACE,
-                                marginBottom: 16,
+                                backgroundColor: palette.EHR_SURFACE_CONTAINER,
                             }}
                         />
+                        {addrState !== 'default' ? (
+                            <XStack style={{ marginTop: 7, alignItems: 'center', gap: 6 }}>
+                                {addrState === 'valid' ? (
+                                    <CheckIcon size={12} color={palette.EHR_TERTIARY} />
+                                ) : (
+                                    <AlertTriangle size={12} color={palette.EHR_DANGER} />
+                                )}
+                                <Text
+                                    style={{
+                                        fontFamily: SANS,
+                                        fontSize: 11.5,
+                                        color: addrState === 'valid' ? palette.EHR_TERTIARY : palette.EHR_DANGER,
+                                    }}
+                                >
+                                    {addrState === 'valid' ? 'Định dạng EVM hợp lệ' : 'Địa chỉ không đúng định dạng EVM (0x + 40 ký tự hex)'}
+                                </Text>
+                            </XStack>
+                        ) : null}
 
-                        <Text style={{ fontFamily: SANS_SEMI, fontSize: 11, color: palette.EHR_TEXT_MUTED, marginBottom: 8, letterSpacing: 0.4, textTransform: 'uppercase', fontWeight: '600' }}>
+                        {/* ── Mode picker — single container, LEFT RAIL active, right glyph ── */}
+                        <Text
+                            style={{
+                                marginTop: 22,
+                                marginBottom: 9,
+                                fontFamily: MONO,
+                                fontSize: 10.5,
+                                fontWeight: '700',
+                                letterSpacing: 1.2,
+                                textTransform: 'uppercase',
+                                color: palette.EHR_ON_SURFACE_VARIANT,
+                            }}
+                        >
                             Loại quyền truy cập
                         </Text>
-                        <YStack style={{ gap: 8, marginBottom: 16 }}>
-                            {opts.map((opt) => {
+                        <View
+                            style={{
+                                backgroundColor: palette.EHR_SURFACE_CONTAINER,
+                                borderWidth: 0.5,
+                                borderColor: palette.EHR_OUTLINE_VARIANT,
+                                borderRadius: 14,
+                                overflow: 'hidden',
+                            }}
+                        >
+                            {opts.map((opt, idx) => {
                                 const active = shareType === opt.value;
+                                const Glyph = opt.Glyph;
                                 return (
                                     <Pressable key={opt.value} onPress={() => setShareType(opt.value)}>
                                         <View
                                             style={{
                                                 flexDirection: 'row',
-                                                alignItems: 'center',
-                                                borderWidth: active ? 1.5 : 0.5,
-                                                borderColor: active ? palette.EHR_PRIMARY : palette.EHR_OUTLINE_SOFT,
-                                                borderRadius: 12,
-                                                padding: 12,
-                                                backgroundColor: active ? palette.EHR_PRIMARY_FIXED : palette.EHR_SURFACE,
+                                                alignItems: 'flex-start',
+                                                gap: 13,
+                                                paddingVertical: 14,
+                                                paddingHorizontal: 15,
+                                                borderTopWidth: idx === 0 ? 0 : 0.5,
+                                                borderTopColor: palette.EHR_OUTLINE_SOFT,
+                                                position: 'relative',
                                             }}
                                         >
+                                            {/* Left rail when active */}
+                                            {active ? (
+                                                <View
+                                                    style={{
+                                                        position: 'absolute',
+                                                        left: 0,
+                                                        top: 8,
+                                                        bottom: 8,
+                                                        width: 2.5,
+                                                        backgroundColor: palette.EHR_PRIMARY,
+                                                        borderTopRightRadius: 2,
+                                                        borderBottomRightRadius: 2,
+                                                    }}
+                                                />
+                                            ) : null}
+                                            {/* Radio disc */}
                                             <View
                                                 style={{
-                                                    width: 18,
-                                                    height: 18,
-                                                    borderRadius: 9,
-                                                    borderWidth: 2,
-                                                    borderColor: active ? palette.EHR_PRIMARY : palette.EHR_OUTLINE_VARIANT,
-                                                    backgroundColor: active ? palette.EHR_PRIMARY : 'transparent',
-                                                    marginRight: 10,
+                                                    width: 20,
+                                                    height: 20,
+                                                    borderRadius: 10,
+                                                    borderWidth: 1.25,
+                                                    borderColor: active ? palette.EHR_ON_SURFACE : palette.EHR_OUTLINE,
+                                                    alignItems: 'center',
+                                                    justifyContent: 'center',
+                                                    marginTop: 2,
                                                 }}
-                                            />
-                                            <YStack style={{ flex: 1 }}>
-                                                <XStack style={{ alignItems: 'center', gap: 8 }}>
-                                                    <Text
+                                            >
+                                                {active ? (
+                                                    <View
                                                         style={{
-                                                            fontFamily: SANS_SEMI,
-                                                            fontSize: 13.5,
-                                                            color: active ? palette.EHR_PRIMARY : palette.EHR_ON_SURFACE,
-                                                            fontWeight: '700',
+                                                            width: 9,
+                                                            height: 9,
+                                                            borderRadius: 4.5,
+                                                            backgroundColor: palette.EHR_ON_SURFACE,
                                                         }}
-                                                    >
-                                                        {opt.label}
-                                                    </Text>
-                                                    <ViModeChip mode={opt.value} />
-                                                </XStack>
-                                                <Text style={{ fontFamily: SANS, fontSize: 11.5, color: palette.EHR_TEXT_MUTED, marginTop: 4 }}>
+                                                    />
+                                                ) : null}
+                                            </View>
+                                            {/* Title + sub */}
+                                            <YStack style={{ flex: 1, minWidth: 0 }}>
+                                                <Text
+                                                    style={{
+                                                        fontFamily: SANS_SEMI,
+                                                        fontSize: 14.5,
+                                                        fontWeight: '600',
+                                                        color: palette.EHR_ON_SURFACE,
+                                                        letterSpacing: -0.1,
+                                                    }}
+                                                >
+                                                    {opt.label}
+                                                </Text>
+                                                <Text
+                                                    style={{
+                                                        marginTop: 4,
+                                                        fontFamily: SANS,
+                                                        fontSize: 12.5,
+                                                        color: palette.EHR_ON_SURFACE_VARIANT,
+                                                        lineHeight: 18,
+                                                    }}
+                                                >
                                                     {opt.sub}
                                                 </Text>
                                             </YStack>
+                                            {/* Right glyph */}
+                                            <View
+                                                style={{
+                                                    width: 38,
+                                                    height: 38,
+                                                    borderRadius: 10,
+                                                    borderWidth: 0.5,
+                                                    borderColor: active ? palette.EHR_OUTLINE_VARIANT : palette.EHR_OUTLINE_SOFT,
+                                                    backgroundColor: palette.EHR_SURFACE,
+                                                    alignItems: 'center',
+                                                    justifyContent: 'center',
+                                                    marginTop: 1,
+                                                }}
+                                            >
+                                                <Glyph size={18} color={active ? palette.EHR_PRIMARY : palette.EHR_ON_SURFACE_VARIANT} />
+                                            </View>
                                         </View>
                                     </Pressable>
                                 );
                             })}
-                        </YStack>
+                        </View>
 
-                        <Text style={{ fontFamily: SANS_SEMI, fontSize: 11, color: palette.EHR_TEXT_MUTED, marginBottom: 8, letterSpacing: 0.4, textTransform: 'uppercase', fontWeight: '600' }}>
-                            Thời hạn truy cập
-                        </Text>
-                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
+                        {/* ── Expiry pills — ink-fill active, TEST tag for 5/10 phút ── */}
+                        <XStack
+                            style={{
+                                marginTop: 22,
+                                marginBottom: 9,
+                                alignItems: 'baseline',
+                                justifyContent: 'space-between',
+                            }}
+                        >
+                            <Text
+                                style={{
+                                    fontFamily: MONO,
+                                    fontSize: 10.5,
+                                    fontWeight: '700',
+                                    letterSpacing: 1.2,
+                                    textTransform: 'uppercase',
+                                    color: palette.EHR_ON_SURFACE_VARIANT,
+                                }}
+                            >
+                                Thời hạn truy cập
+                            </Text>
+                            <Text style={{ fontFamily: SANS, fontSize: 11, color: palette.EHR_TEXT_MUTED }}>
+                                Tự thu hồi khi hết hạn
+                            </Text>
+                        </XStack>
+                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
                             {expiryChoices.map((opt) => {
                                 const active = !customExpiryOpen && shareExpiryHours === opt.value;
                                 return (
@@ -1550,20 +1788,45 @@ function ShareModal(props: {
                                     >
                                         <View
                                             style={{
+                                                flexDirection: 'row',
+                                                alignItems: 'center',
+                                                gap: 5,
                                                 paddingHorizontal: 12,
-                                                paddingVertical: 6,
+                                                paddingVertical: 7,
                                                 borderRadius: 999,
                                                 borderWidth: 0.5,
-                                                borderColor: active ? palette.EHR_PRIMARY : palette.EHR_OUTLINE_SOFT,
-                                                backgroundColor: active ? palette.EHR_PRIMARY_FIXED : palette.EHR_SURFACE,
+                                                borderColor: active ? palette.EHR_ON_SURFACE : palette.EHR_OUTLINE_VARIANT,
+                                                backgroundColor: active ? palette.EHR_ON_SURFACE : palette.EHR_SURFACE_CONTAINER,
                                             }}
                                         >
+                                            {opt.test ? (
+                                                <View
+                                                    style={{
+                                                        paddingHorizontal: 4,
+                                                        paddingVertical: 1.5,
+                                                        borderRadius: 3,
+                                                        backgroundColor: active ? 'rgba(255,255,255,0.18)' : `${palette.EHR_WARNING}2E`,
+                                                    }}
+                                                >
+                                                    <Text
+                                                        style={{
+                                                            fontFamily: MONO,
+                                                            fontSize: 8,
+                                                            fontWeight: '700',
+                                                            letterSpacing: 0.4,
+                                                            color: active ? palette.EHR_SURFACE : palette.EHR_WARNING,
+                                                        }}
+                                                    >
+                                                        TEST
+                                                    </Text>
+                                                </View>
+                                            ) : null}
                                             <Text
                                                 style={{
                                                     fontFamily: SANS_MEDIUM,
                                                     fontSize: 12,
-                                                    color: active ? palette.EHR_PRIMARY : palette.EHR_OUTLINE,
-                                                    fontWeight: active ? '700' : '500',
+                                                    fontWeight: active ? '600' : '500',
+                                                    color: active ? palette.EHR_SURFACE : palette.EHR_ON_SURFACE_VARIANT,
                                                 }}
                                             >
                                                 {opt.label}
@@ -1572,23 +1835,24 @@ function ShareModal(props: {
                                     </Pressable>
                                 );
                             })}
+                            {/* Tuỳ chỉnh pill */}
                             <Pressable onPress={() => setCustomExpiryOpen(true)}>
                                 <View
                                     style={{
                                         paddingHorizontal: 12,
-                                        paddingVertical: 6,
+                                        paddingVertical: 7,
                                         borderRadius: 999,
                                         borderWidth: 0.5,
-                                        borderColor: customExpiryOpen ? palette.EHR_PRIMARY : palette.EHR_OUTLINE_SOFT,
-                                        backgroundColor: customExpiryOpen ? palette.EHR_PRIMARY_FIXED : palette.EHR_SURFACE,
+                                        borderColor: customExpiryOpen ? palette.EHR_ON_SURFACE : palette.EHR_OUTLINE_VARIANT,
+                                        backgroundColor: customExpiryOpen ? palette.EHR_ON_SURFACE : palette.EHR_SURFACE_CONTAINER,
                                     }}
                                 >
                                     <Text
                                         style={{
                                             fontFamily: SANS_MEDIUM,
                                             fontSize: 12,
-                                            color: customExpiryOpen ? palette.EHR_PRIMARY : palette.EHR_OUTLINE,
-                                            fontWeight: customExpiryOpen ? '700' : '500',
+                                            fontWeight: customExpiryOpen ? '600' : '500',
+                                            color: customExpiryOpen ? palette.EHR_SURFACE : palette.EHR_ON_SURFACE_VARIANT,
                                         }}
                                     >
                                         Tuỳ chỉnh
@@ -1598,7 +1862,7 @@ function ShareModal(props: {
                         </View>
 
                         {customExpiryOpen ? (
-                            <XStack style={{ gap: 8, marginBottom: 16, alignItems: 'center' }}>
+                            <XStack style={{ marginTop: 12, gap: 8, alignItems: 'stretch' }}>
                                 <TextInput
                                     value={customExpiryValue}
                                     onChangeText={(text) => {
@@ -1611,83 +1875,123 @@ function ShareModal(props: {
                                         }
                                     }}
                                     placeholder="VD: 3"
-                                    placeholderTextColor={palette.EHR_OUTLINE}
+                                    placeholderTextColor={palette.EHR_TEXT_MUTED}
                                     keyboardType="number-pad"
                                     style={{
                                         flex: 1,
                                         borderWidth: 0.5,
-                                        borderColor: palette.EHR_OUTLINE_SOFT,
+                                        borderColor: palette.EHR_OUTLINE_VARIANT,
                                         borderRadius: 10,
-                                        padding: 10,
-                                        fontFamily: SANS,
-                                        fontSize: 13.5,
+                                        paddingVertical: 11,
+                                        paddingHorizontal: 13,
+                                        fontFamily: SANS_SEMI,
+                                        fontSize: 14,
                                         color: palette.EHR_ON_SURFACE,
-                                        backgroundColor: palette.EHR_SURFACE,
+                                        backgroundColor: palette.EHR_SURFACE_CONTAINER,
                                     }}
                                 />
-                                {(['hour', 'day'] as const).map((unit) => {
-                                    const active = customExpiryUnit === unit;
-                                    return (
-                                        <Pressable
-                                            key={unit}
-                                            onPress={() => {
-                                                setCustomExpiryUnit(unit);
-                                                const num = parseInt(customExpiryValue, 10);
-                                                if (!Number.isNaN(num) && num > 0) {
-                                                    setShareExpiryHours(unit === 'day' ? num * 24 : num);
-                                                }
-                                            }}
-                                        >
-                                            <View
-                                                style={{
-                                                    paddingHorizontal: 14,
-                                                    paddingVertical: 10,
-                                                    borderRadius: 10,
-                                                    borderWidth: 0.5,
-                                                    borderColor: active ? palette.EHR_PRIMARY : palette.EHR_OUTLINE_SOFT,
-                                                    backgroundColor: active ? palette.EHR_PRIMARY_FIXED : palette.EHR_SURFACE,
+                                <View
+                                    style={{
+                                        flexDirection: 'row',
+                                        padding: 3,
+                                        gap: 2,
+                                        backgroundColor: palette.EHR_SURFACE_CONTAINER,
+                                        borderWidth: 0.5,
+                                        borderColor: palette.EHR_OUTLINE_VARIANT,
+                                        borderRadius: 10,
+                                    }}
+                                >
+                                    {(['hour', 'day'] as const).map((unit) => {
+                                        const active = customExpiryUnit === unit;
+                                        return (
+                                            <Pressable
+                                                key={unit}
+                                                onPress={() => {
+                                                    setCustomExpiryUnit(unit);
+                                                    const num = parseInt(customExpiryValue, 10);
+                                                    if (!Number.isNaN(num) && num > 0) {
+                                                        setShareExpiryHours(unit === 'day' ? num * 24 : num);
+                                                    }
                                                 }}
                                             >
-                                                <Text
+                                                <View
                                                     style={{
-                                                        fontFamily: SANS_MEDIUM,
-                                                        fontSize: 12.5,
-                                                        color: active ? palette.EHR_PRIMARY : palette.EHR_OUTLINE,
-                                                        fontWeight: active ? '700' : '500',
+                                                        paddingHorizontal: 14,
+                                                        paddingVertical: 7,
+                                                        borderRadius: 7,
+                                                        backgroundColor: active ? palette.EHR_ON_SURFACE : 'transparent',
                                                     }}
                                                 >
-                                                    {unit === 'hour' ? 'Giờ' : 'Ngày'}
-                                                </Text>
-                                            </View>
-                                        </Pressable>
-                                    );
-                                })}
+                                                    <Text
+                                                        style={{
+                                                            fontFamily: SANS_SEMI,
+                                                            fontSize: 12.5,
+                                                            fontWeight: '600',
+                                                            color: active ? palette.EHR_SURFACE : palette.EHR_ON_SURFACE_VARIANT,
+                                                        }}
+                                                    >
+                                                        {unit === 'hour' ? 'Giờ' : 'Ngày'}
+                                                    </Text>
+                                                </View>
+                                            </Pressable>
+                                        );
+                                    })}
+                                </View>
                             </XStack>
-                        ) : (
-                            <View style={{ marginBottom: 16 }} />
-                        )}
+                        ) : null}
 
+                        {/* Editorial note */}
+                        <View
+                            style={{
+                                marginTop: 18,
+                                paddingVertical: 10,
+                                paddingHorizontal: 14,
+                                borderLeftWidth: 1.5,
+                                borderLeftColor: palette.EHR_OUTLINE,
+                            }}
+                        >
+                            <Text style={{ fontFamily: SANS, fontSize: 11.5, color: palette.EHR_ON_SURFACE_VARIANT, lineHeight: 18 }}>
+                                Khoá hồ sơ được mã hoá đầu-cuối cho ví đích.{' '}
+                                <Text style={{ fontWeight: '600', color: palette.EHR_ON_SURFACE }}>Bạn có thể thu hồi</Text>{' '}
+                                bất cứ lúc nào trong mục Quyền truy cập.
+                            </Text>
+                        </View>
+                    </ScrollView>
+
+                    {/* Sticky footer */}
+                    <View
+                        style={{
+                            paddingHorizontal: 22,
+                            paddingTop: 13,
+                            paddingBottom: 22,
+                            borderTopWidth: 0.5,
+                            borderTopColor: palette.EHR_OUTLINE_VARIANT,
+                            backgroundColor: palette.EHR_SURFACE,
+                        }}
+                    >
                         <ViButton
                             variant="cinnabar"
                             full
                             loading={isSharing}
-                            onPress={isSharing ? undefined : onConfirm}
+                            disabled={ctaDisabled}
+                            onPress={ctaDisabled ? undefined : onConfirm}
                         >
-                            {isSharing ? 'Đang chia sẻ…' : 'Xác nhận chia sẻ'}
+                            {isSharing ? 'Đang ký…' : `Xác nhận chia sẻ${ctaExpiryLabel ? ` · ${ctaExpiryLabel}` : ''}`}
                         </ViButton>
-                        <Text
+                        <XStack
                             style={{
-                                marginTop: 10,
-                                fontFamily: SANS,
-                                fontSize: 11,
-                                color: palette.EHR_TEXT_MUTED,
-                                textAlign: 'center',
-                                lineHeight: 16,
+                                marginTop: 9,
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                gap: 7,
                             }}
                         >
-                            Bạn sẽ ký bằng vân tay để cấp quyền on-chain.
-                        </Text>
-                    </ScrollView>
+                            <Fingerprint size={12} color={palette.EHR_TEXT_MUTED} />
+                            <Text style={{ fontFamily: SANS, fontSize: 11.5, color: palette.EHR_TEXT_MUTED }}>
+                                Bạn sẽ ký bằng vân tay để cấp quyền on-chain.
+                            </Text>
+                        </XStack>
+                    </View>
                 </View>
             </View>
         </Modal>
