@@ -693,7 +693,7 @@ function GrantAuthorityModal({
                                 lineHeight: 16,
                             }}
                         >
-                            Miễn phí gas (tính 1/100 lượt ký/tháng) · biometric prompt sẽ hiện
+                            Miễn phí (tính 1/100 lượt ký/tháng) · sẽ yêu cầu vân tay
                         </Text>
                     </ScrollView>
                 </View>
@@ -892,7 +892,7 @@ function ExtendSheet({
                             fontStyle: 'italic',
                         }}
                     >
-                        Biometric prompt sẽ hiện · gas sponsor (1/100 lượt ký/tháng).
+                        Sẽ yêu cầu vân tay · miễn phí (1/100 lượt ký/tháng).
                     </Text>
                 </Pressable>
             </Pressable>
@@ -974,7 +974,7 @@ export default function DelegationScreen() {
     const handleRevoke = (item: DelegationRow) => {
         Alert.alert(
             'Thu hồi uỷ quyền',
-            `Thu hồi quyền của ${truncate(item.delegateeAddress)}?\n\nTất cả các uỷ quyền con và hồ sơ bác sĩ này đã chia sẻ cho người khác sẽ bị vô hiệu (epoch cascade on-chain).`,
+            `Thu hồi quyền của ${truncate(item.delegateeAddress)}?\n\nTất cả các uỷ quyền con và hồ sơ bác sĩ này đã chia sẻ cho người khác sẽ bị vô hiệu.`,
             [
                 { text: 'Huỷ', style: 'cancel' },
                 {
@@ -1189,7 +1189,7 @@ export default function DelegationScreen() {
                                     lineHeight: 16,
                                 }}
                             >
-                                Khi thu hồi, tất cả uỷ quyền con (sub-delegation) + hồ sơ bác sĩ đã chia sẻ dựa vào uỷ quyền này cũng sẽ bị vô hiệu (epoch cascade on-chain).
+                                Khi thu hồi, tất cả uỷ quyền con + hồ sơ bác sĩ đã chia sẻ dựa vào uỷ quyền này cũng sẽ bị vô hiệu.
                             </Text>
                         </View>
                     </View>

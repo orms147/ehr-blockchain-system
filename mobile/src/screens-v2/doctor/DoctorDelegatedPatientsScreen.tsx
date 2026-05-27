@@ -156,7 +156,7 @@ function ShareRecordModal({
                     const confirmed = await new Promise<boolean>((resolve) => {
                         Alert.alert(
                             'Bác sĩ chưa xác minh',
-                            'Bác sĩ này chưa được tổ chức y tế xác minh on-chain. Hồ sơ sẽ CHỈ ĐỌC ĐƯỢC sau khi họ được xác minh.\n\nBạn có muốn tiếp tục?',
+                            'Bác sĩ này chưa được tổ chức y tế xác minh. Hồ sơ sẽ CHỈ ĐỌC ĐƯỢC sau khi họ được xác minh.\n\nBạn có muốn tiếp tục?',
                             [
                                 { text: 'Huỷ', style: 'cancel', onPress: () => resolve(false) },
                                 { text: 'Vẫn chia sẻ', style: 'destructive', onPress: () => resolve(true) },
@@ -230,7 +230,7 @@ function ShareRecordModal({
             } catch (keyShareErr: any) {
                 Alert.alert(
                     'Cảnh báo',
-                    `Đã cấp quyền on-chain (tx: ${result.txHash.slice(0, 14)}…) nhưng KHÔNG tạo được bản mã hoá khoá cho bác sĩ mới. Họ sẽ thấy consent nhưng KHÔNG giải mã được. Lỗi: ${keyShareErr?.message || keyShareErr}`,
+                    `Đã cấp quyền (mã: ${result.txHash.slice(0, 14)}…) nhưng KHÔNG tạo được khoá mã hoá cho bác sĩ mới. Họ sẽ thấy quyền nhưng KHÔNG đọc được nội dung. Lỗi: ${keyShareErr?.message || keyShareErr}`,
                 );
                 reset();
                 onDone();
@@ -370,13 +370,13 @@ function ShareRecordModal({
                                     lineHeight: 16,
                                 }}
                             >
-                                Cấp consent on-chain + tạo KeyShare NaCl cho bác sĩ nhận. Họ sẽ giải mã được ngay.
+                                Cấp quyền truy cập + tạo khoá mã hoá cho bác sĩ nhận. Họ sẽ đọc được ngay.
                             </Text>
                         </View>
 
                         <View style={{ height: 18 }} />
                         <ViButton variant="cinnabar" full loading={submitting} onPress={handleSubmit}>
-                            {submitting ? 'Đang ký…' : 'Ký & Cấp on-chain'}
+                            {submitting ? 'Đang ký…' : 'Ký & Cấp quyền'}
                         </ViButton>
                     </ScrollView>
                 </View>

@@ -91,7 +91,7 @@ export default function MinistryCreateOrgScreen({ navigation }: any) {
         if (!walletsDifferent) return 'Hai ví phải khác nhau';
         if (primaryIsMinistry) return 'Bạn (Ministry) không thể tự làm admin cơ sở mới';
         if (backupIsMinistry) return 'Ví dự phòng không thể là chính ví Ministry';
-        return 'Ký bằng FaceID · gas trả từ ví Ministry';
+        return 'Ký bằng vân tay · miễn phí';
     }, [isSubmitting, name, primaryAdmin, backupAdmin, walletsDifferent, primaryIsMinistry, backupIsMinistry]);
 
     const handleSubmit = async () => {
@@ -130,8 +130,8 @@ export default function MinistryCreateOrgScreen({ navigation }: any) {
             const orgId = (events[0] as any)?.args?.orgId;
             if (orgId == null) {
                 Alert.alert(
-                    'Tx confirmed but event missing',
-                    'Tx đã ghi on-chain nhưng không parse được OrganizationCreated event. Vui lòng kiểm tra trên Arbiscan.',
+                    'Giao dịch thành công nhưng thiếu sự kiện',
+                    'Đã ghi nhận nhưng không lấy được mã cơ sở. Vui lòng kiểm tra danh sách hoặc thử lại.',
                 );
                 return;
             }
@@ -146,15 +146,15 @@ export default function MinistryCreateOrgScreen({ navigation }: any) {
 
             Alert.alert(
                 'Đã tạo cơ sở',
-                `Cơ sở "${trimmedName}" đã được ghi on-chain (orgId: ${String(orgId)}). Cả 2 admin wallet đã có quyền quản trị.`,
+                `Cơ sở "${trimmedName}" đã được tạo (mã: ${String(orgId)}). Cả 2 ví admin đã có quyền quản trị.`,
                 [{ text: 'OK', onPress: () => navigation?.goBack?.() }],
             );
         } catch (error: any) {
             const msg = String(error?.message || '');
             if (msg.includes('NotMinistry')) {
-                Alert.alert('Không có quyền on-chain', 'Ví này không phải Ministry.');
+                Alert.alert('Không có quyền', 'Ví này không phải Bộ Y tế.');
             } else if (msg.includes('insufficient funds')) {
-                Alert.alert('Không đủ ETH', 'Ví Ministry không đủ ETH để trả phí gas.');
+                Alert.alert('Số dư không đủ', 'Ví Bộ Y tế không đủ để trả phí.');
             } else {
                 Alert.alert('Lỗi', msg || 'Không thể tạo cơ sở. Vui lòng thử lại.');
             }
@@ -178,7 +178,7 @@ export default function MinistryCreateOrgScreen({ navigation }: any) {
             <PageHeader
                 eyebrow="createOrganization(name, primaryAdmin, backupAdmin)"
                 title="Đăng ký cơ sở y tế mới"
-                subtitle="Cơ sở sẽ được ghi on-chain và nhận trạng thái đã xác minh ngay. Sau đó quản trị viên có thể bắt đầu xác minh bác sĩ."
+                subtitle="Cơ sở sẽ được tạo và nhận trạng thái đã xác minh ngay. Sau đó quản trị viên có thể bắt đầu xác minh bác sĩ."
             />
 
             {/* TÊN CƠ SỞ */}

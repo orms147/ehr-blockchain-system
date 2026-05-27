@@ -361,7 +361,7 @@ export default function DoctorDelegatableRecordsScreen() {
                         />
 
                         <ViButton variant="cinnabar" full loading={sharing} onPress={handleReShare}>
-                            {sharing ? 'Đang ký…' : 'Ký & Uỷ quyền on-chain'}
+                            {sharing ? 'Đang ký…' : 'Ký & Uỷ quyền'}
                         </ViButton>
                     </View>
                 </View>

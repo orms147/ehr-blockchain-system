@@ -529,18 +529,18 @@ function RevokeDoctorModal({
 
             Alert.alert(
                 'Đã thu hồi',
-                `${doctorDisplay} mất quyền xác minh on-chain. Họ vẫn xem được các hồ sơ đã có nhưng không ký tx mới được nữa.`,
+                `${doctorDisplay} đã bị thu hồi xác minh. Họ vẫn xem được các hồ sơ đã có nhưng không thể ký mới được nữa.`,
             );
             onSuccess();
         } catch (error: any) {
             const msg = String(error?.message || '');
             if (msg.includes('NotAuthorized') || msg.includes('NotVerifiedOrg')) {
                 Alert.alert(
-                    'Không có quyền on-chain',
+                    'Không có quyền',
                     'Ví này không phải admin tổ chức đã xác minh.',
                 );
             } else if (msg.includes('insufficient funds')) {
-                Alert.alert('Không đủ ETH', 'Ví của bạn không đủ ETH để trả phí giao dịch.');
+                Alert.alert('Số dư không đủ', 'Ví của bạn không đủ để trả phí.');
             } else {
                 Alert.alert('Lỗi', msg || 'Không thể thu hồi xác minh.');
             }
@@ -861,7 +861,7 @@ function AddMemberModal({
         setIsSubmitting(true);
         try {
             const { walletClient, account } = await walletActionService.getWalletContext();
-            await gateOrThrow('Xác thực để thêm thành viên on-chain');
+            await gateOrThrow('Xác thực để thêm thành viên');
 
             const addr = doctorAddr.trim().toLowerCase() as `0x${string}`;
             const txHash = await walletClient.writeContract({
@@ -885,17 +885,17 @@ function AddMemberModal({
 
             Alert.alert(
                 'Đã thêm thành viên',
-                `${addr.slice(0, 8)}…${addr.slice(-4)} đã được ghi vào tổ chức on-chain. Bác sĩ này có thể bắt đầu các tác nghiệp theo role "${role}".`,
+                `${addr.slice(0, 8)}…${addr.slice(-4)} đã được thêm vào tổ chức. Bác sĩ này có thể bắt đầu tác nghiệp với vai trò "${role}".`,
             );
             onSuccess();
         } catch (error: any) {
             const msg = String(error?.message || '');
             if (msg.includes('NotOrgAdmin') || msg.includes('NotAuthorized')) {
-                Alert.alert('Không có quyền', 'Ví này không phải admin tổ chức trên on-chain.');
+                Alert.alert('Không có quyền', 'Ví này không phải admin tổ chức.');
             } else if (msg.includes('AlreadyMember')) {
                 Alert.alert('Đã là thành viên', 'Bác sĩ này đã có trong tổ chức rồi.');
             } else if (msg.includes('insufficient funds')) {
-                Alert.alert('Không đủ ETH', 'Ví không đủ ETH cho phí gas.');
+                Alert.alert('Số dư không đủ', 'Ví không đủ để trả phí.');
             } else {
                 Alert.alert('Lỗi', msg || 'Không thể thêm thành viên.');
             }

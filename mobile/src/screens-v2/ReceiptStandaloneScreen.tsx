@@ -87,7 +87,7 @@ export default function ReceiptStandaloneScreen() {
 
     const openTxOnArbiscan = () => {
         if (!txHash) {
-            Alert.alert('Không có Tx hash', 'Biên nhận này không có mã giao dịch on-chain.');
+            Alert.alert('Không có mã giao dịch', 'Biên nhận này không kèm mã giao dịch.');
             return;
         }
         Linking.openURL(`https://sepolia.arbiscan.io/tx/${txHash}`);
@@ -259,7 +259,7 @@ export default function ReceiptStandaloneScreen() {
                                     {formatViDate(receipt.grantedAt)} → {formatViDate(receipt.expiresAt)}
                                 </Text>
                             </KVRow>
-                            <KVRow k="Tx on-chain">
+                            <KVRow k="Mã giao dịch">
                                 <Pressable onPress={openTxOnArbiscan}>
                                     <XStack style={{ alignItems: 'center', gap: 6 }}>
                                         <Text
@@ -299,7 +299,7 @@ export default function ReceiptStandaloneScreen() {
                                 lineHeight: 17,
                             }}
                         >
-                            Biên nhận này được lưu vĩnh viễn trên nhật ký on-chain. Bạn có thể thu hồi quyền bất cứ lúc nào ở mục Quyền truy cập.
+                            Biên nhận này được lưu vĩnh viễn. Bạn có thể thu hồi quyền bất cứ lúc nào ở mục Quyền truy cập.
                         </Text>
                     </View>
 

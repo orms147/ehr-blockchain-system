@@ -87,7 +87,7 @@ export default function MinistryVerifyDoctorScreen() {
         const confirmed = await new Promise<boolean>((resolve) => {
             Alert.alert(
                 'Xác minh bác sĩ',
-                `${doctor.fullName || truncate(doctorAddr)}\n${doctor.specialty || 'Chưa rõ chuyên khoa'} · ${doctor.licenseNumber || 'không có GPHN'}\n\nBạn xác nhận đã đối chiếu giấy phép và đồng ý xác minh on-chain.`,
+                `${doctor.fullName || truncate(doctorAddr)}\n${doctor.specialty || 'Chưa rõ chuyên khoa'} · ${doctor.licenseNumber || 'không có GPHN'}\n\nBạn xác nhận đã đối chiếu giấy phép và đồng ý xác minh.`,
                 [
                     { text: 'Huỷ', style: 'cancel', onPress: () => resolve(false) },
                     { text: 'Xác minh', onPress: () => resolve(true) },
@@ -120,15 +120,15 @@ export default function MinistryVerifyDoctorScreen() {
 
             Alert.alert(
                 'Đã xác minh',
-                `${doctor.fullName || truncate(doctorAddr)} đã được xác minh on-chain. Bác sĩ có thể bắt đầu request access tới hồ sơ bệnh nhân.`,
+                `${doctor.fullName || truncate(doctorAddr)} đã được xác minh. Bác sĩ có thể bắt đầu yêu cầu truy cập hồ sơ bệnh nhân.`,
             );
             handleRefresh();
         } catch (error: any) {
             const msg = String(error?.message || '');
             if (msg.includes('NotMinistry')) {
-                Alert.alert('Không có quyền on-chain', 'Ví này không phải Ministry.');
+                Alert.alert('Không có quyền', 'Ví này không phải Bộ Y tế.');
             } else if (msg.includes('insufficient funds')) {
-                Alert.alert('Không đủ ETH', 'Ví Ministry không đủ ETH để trả phí gas.');
+                Alert.alert('Số dư không đủ', 'Ví Bộ Y tế không đủ để trả phí.');
             } else {
                 Alert.alert('Lỗi', msg || 'Không thể xác minh bác sĩ.');
             }

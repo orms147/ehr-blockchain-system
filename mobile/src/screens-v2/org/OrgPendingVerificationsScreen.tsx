@@ -272,7 +272,7 @@ export default function OrgPendingVerificationsScreen() {
                         const res: any = await verificationService.approveVerification(item.id);
                         const contractCall = res?.contractCall;
                         if (!contractCall?.args?.[0]) {
-                            Alert.alert('Thành công (off-chain)', 'Đã duyệt nhưng không có dữ liệu on-chain.');
+                            Alert.alert('Đã duyệt (lưu tạm)', 'Đã duyệt nhưng chưa ghi nhận vào hệ thống chính.');
                             fetchData();
                             return;
                         }
@@ -281,7 +281,7 @@ export default function OrgPendingVerificationsScreen() {
                             return;
                         }
                         const { walletClient, account } = await walletActionService.getWalletContext();
-                        await gateOrThrow('Để xác thực bác sĩ on-chain');
+                        await gateOrThrow('Để xác thực bác sĩ');
                         const [doctorAddr, credential] = contractCall.args;
                         const txHash = await walletClient.writeContract({
                             account,
@@ -290,17 +290,17 @@ export default function OrgPendingVerificationsScreen() {
                             functionName: 'verifyDoctor',
                             args: [doctorAddr, credential || 'VERIFIED'],
                         });
-                        Alert.alert('Thành công', `Đã xác thực on-chain.\nTx: ${String(txHash).slice(0, 14)}…`);
+                        Alert.alert('Thành công', `Đã xác thực bác sĩ.\nMã giao dịch: ${String(txHash).slice(0, 14)}…`);
                         fetchData();
                     } catch (e: any) {
                         const msg = String(e?.message || '');
                         if (msg.includes('NotAuthorized') || msg.includes('NotVerifiedOrg')) {
                             Alert.alert(
-                                'Không có quyền on-chain',
+                                'Không có quyền',
                                 'Ví này không phải admin tổ chức đã được xác minh.',
                             );
                         } else if (msg.includes('insufficient funds')) {
-                            Alert.alert('Không đủ ETH', 'Ví của bạn không đủ ETH để trả phí giao dịch.');
+                            Alert.alert('Số dư không đủ', 'Ví của bạn không đủ để trả phí.');
                         } else {
                             Alert.alert('Lỗi', msg || 'Không thể xác thực bác sĩ.');
                         }
