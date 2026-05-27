@@ -767,16 +767,59 @@ router.get('/chain-cids/:cidHash', authenticate, async (req, res, next) => {
         const rootCid = await findRoot(startCidHash);
         await findAllChildren(rootCid);
 
-        const records = await prisma.recordMetadata.findMany({
+        const allRecords = await prisma.recordMetadata.findMany({
             where: buildConfirmedRecordWhere({ cidHash: { in: Array.from(allCids) } }),
             orderBy: { createdAt: 'asc' },
         });
 
+        // BUG FIX (2026-05-28): non-owner phải chỉ thấy version mà MÌNH có
+        // active KeyShare. Trước: gate đầu endpoint chỉ check 1 KeyShare cho
+        // startCidHash → pass → trả TOÀN BỘ chain metadata (title, cidHash của
+        // version doctor không có quyền). Hệ quả user-reported: doctor mất
+        // quyền v1/v2, tạo update v3/v4 → vẫn thấy chain metadata leak.
+        // Owner luôn thấy đủ.
+        let records = allRecords;
+        let filteredCids = allCids;
+        if (!isOwner) {
+            const myShares = await prisma.keyShare.findMany({
+                where: {
+                    recipientAddress: callerAddress,
+                    cidHash: { in: Array.from(allCids) },
+                    status: { in: ['pending', 'claimed'] },
+                    OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
+                },
+                select: { cidHash: true },
+            });
+            const allowedCids = new Set(myShares.map(s => s.cidHash.toLowerCase()));
+            // Cũng cho phép version mà caller là createdBy (doctor tự tạo,
+            // chưa có KeyShare row nhưng có local AES) — NHƯNG chỉ nếu chain
+            // root không có revoked KeyShare cho doctor (parity logic với
+            // /api/key-share/my synthesis).
+            const myRevoked = await prisma.keyShare.findMany({
+                where: {
+                    recipientAddress: callerAddress,
+                    cidHash: { in: Array.from(allCids) },
+                    status: 'revoked',
+                },
+                select: { cidHash: true },
+            });
+            const hasAnyRevokeInChain = myRevoked.length > 0;
+            if (!hasAnyRevokeInChain) {
+                for (const r of allRecords) {
+                    if (r.createdBy?.toLowerCase() === callerAddress) {
+                        allowedCids.add(r.cidHash.toLowerCase());
+                    }
+                }
+            }
+            records = allRecords.filter(r => allowedCids.has(r.cidHash.toLowerCase()));
+            filteredCids = new Set(records.map(r => r.cidHash));
+        }
+
         res.json({
             rootCidHash: rootCid,
-            chainCids: Array.from(allCids),
+            chainCids: Array.from(filteredCids),
             records,
-            count: allCids.size,
+            count: records.length,
         });
     } catch (error) {
         next(error);

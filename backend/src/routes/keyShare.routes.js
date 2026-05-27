@@ -515,7 +515,7 @@ router.get('/my', authenticate, async (req, res, next) => {
         });
         const revokedCids = new Set(revokedRows.map((r) => r.cidHash?.toLowerCase()).filter(Boolean));
         const excludeCids = Array.from(new Set([...existingCids, ...revokedCids]));
-        const orphanCreated = await prisma.recordMetadata.findMany({
+        const orphanCreatedRaw = await prisma.recordMetadata.findMany({
             where: {
                 createdBy: recipientAddress,
                 syncStatus: 'confirmed',
@@ -523,6 +523,55 @@ router.get('/my', authenticate, async (req, res, next) => {
             },
             orderBy: { createdAt: 'desc' },
         });
+
+        // BUG FIX (2026-05-28): walk parent chain when checking revoked status.
+        // Scenario user-reported: doctor mất quyền v1/v2 (patient revoke cascade)
+        // → doctor tạo update v3, v4. orphanCreated trả về v3/v4 (cidHash KHÔNG
+        // ở revokedCids vì revoke chỉ direct match v1/v2). Synthesis tạo KeyShare
+        // ảo cho v3/v4 → doctor dashboard hiển thị "Hồ sơ đã nhận" + click thấy
+        // toàn bộ chain metadata. → Leak: doctor xem được tên/metadata version
+        // tạo AFTER patient đã revoke.
+        //
+        // Fix: walk parentCidHash chain cho mỗi revoked + orphanCreated; nếu
+        // chain root nào giao nhau → exclude orphan.
+        const ZERO_HASH = '0x0000000000000000000000000000000000000000000000000000000000000000';
+        const chainRootCache = new Map(); // cidHash → root cidHash
+        async function findChainRoot(cid) {
+            const startLower = cid.toLowerCase();
+            if (chainRootCache.has(startLower)) return chainRootCache.get(startLower);
+            let current = startLower;
+            const path = [current];
+            const seen = new Set(path);
+            for (let depth = 0; depth < 20; depth++) {
+                const rec = await prisma.recordMetadata.findUnique({
+                    where: { cidHash: current },
+                    select: { parentCidHash: true },
+                });
+                const parent = rec?.parentCidHash?.toLowerCase();
+                if (!parent || parent === ZERO_HASH || seen.has(parent)) break;
+                current = parent;
+                seen.add(current);
+                path.push(current);
+            }
+            // Cache root for every node in walk path
+            for (const node of path) chainRootCache.set(node, current);
+            return current;
+        }
+
+        // Compute roots of all revoked chains
+        const revokedRoots = new Set();
+        for (const cid of revokedCids) {
+            revokedRoots.add(await findChainRoot(cid));
+        }
+
+        // Filter orphanCreated: drop any record whose chain root has been revoked
+        // for this doctor (transitive — covers doctor-created updates AFTER revoke).
+        const orphanCreated = [];
+        for (const rec of orphanCreatedRaw) {
+            const root = await findChainRoot(rec.cidHash);
+            if (revokedRoots.has(root)) continue;
+            orphanCreated.push(rec);
+        }
 
         // Build a lookup of existing real KeyShare allowDelegate values keyed
         // by cidHash, so synth rows can inherit the chain's effective delegate
