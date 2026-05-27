@@ -15,7 +15,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Animated, Modal, Pressable, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Text } from 'tamagui';
-import { Check } from 'lucide-react-native';
+import { Check, X as XIcon } from 'lucide-react-native';
 
 import { useEhrPalette } from '../constants/uiColors';
 import ViWordmark from './ViWordmark';
@@ -206,7 +206,11 @@ export default function SignReceipt({ visible, data, onDone }: SignReceiptProps)
                                     chữ ký điện tử
                                 </Text>
                             </View>
-                            <CinnabarSeal palette={palette} dateLabel={formatSealDate(data.signedAt)} />
+                            <CinnabarSeal
+                                palette={palette}
+                                dateLabel={formatSealDate(data.signedAt)}
+                                action={data.action}
+                            />
                         </View>
                     </View>
 
@@ -309,8 +313,17 @@ function PaperGrain({ palette }: { palette: any }) {
     );
 }
 
-// CinnabarSeal — animated stamp-in cinnabar circle with date label
-function CinnabarSeal({ palette, dateLabel }: { palette: any; dateLabel: string }) {
+// CinnabarSeal — animated stamp-in cinnabar circle with date label.
+// `action='reject'` → X icon (từ chối); mặc định / 'approve' → Check icon.
+function CinnabarSeal({
+    palette,
+    dateLabel,
+    action,
+}: {
+    palette: any;
+    dateLabel: string;
+    action?: 'approve' | 'reject';
+}) {
     const scale = useRef(new Animated.Value(0.5)).current;
     const opacity = useRef(new Animated.Value(0)).current;
     const rotate = useRef(new Animated.Value(-12)).current;
@@ -340,7 +353,11 @@ function CinnabarSeal({ palette, dateLabel }: { palette: any; dateLabel: string 
                 backgroundColor: `${palette.EHR_CINNABAR_DEEP}14`,
             }}
         >
-            <Check size={28} color={palette.EHR_CINNABAR_DEEP} strokeWidth={2.8} />
+            {action === 'reject' ? (
+                <XIcon size={28} color={palette.EHR_CINNABAR_DEEP} strokeWidth={2.8} />
+            ) : (
+                <Check size={28} color={palette.EHR_CINNABAR_DEEP} strokeWidth={2.8} />
+            )}
             <Text
                 style={{
                     marginTop: 1,
