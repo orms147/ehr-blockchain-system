@@ -308,7 +308,10 @@ function AllGranteeCard({
                         color: palette.EHR_TEXT_MUTED,
                     }}
                 >
-                    Hết hạn:{' '}
+                    {(() => {
+                        const isExpired = new Date(item.expiresAt).getTime() < Date.now();
+                        return isExpired ? 'Đã hết hạn lúc: ' : 'Hết hạn: ';
+                    })()}
                     {new Date(item.expiresAt).toLocaleString('vi-VN', {
                         day: '2-digit',
                         month: '2-digit',
@@ -318,17 +321,27 @@ function AllGranteeCard({
                     })}
                 </Text>
             ) : null}
-            <View style={{ marginTop: 12 }}>
-                <ViButton
-                    variant="danger"
-                    full
-                    size="sm"
-                    loading={isRevoking}
-                    onPress={() => onRevoke(item)}
-                >
-                    {isRevoking ? 'Đang thu hồi…' : 'Thu hồi quyền'}
-                </ViButton>
-            </View>
+            {/* Bug fix: ẩn nút "Thu hồi quyền" khi consent đã hết hạn.
+                Revoke chỉ ý nghĩa khi quyền còn active — expired = backend
+                + on-chain canAccess đã trả false, doctor đã không truy cập
+                được nữa. Nút này gây nhầm "chưa thu hồi". */}
+            {(() => {
+                const isExpired = !!item.expiresAt && new Date(item.expiresAt).getTime() < Date.now();
+                if (isExpired) return null;
+                return (
+                    <View style={{ marginTop: 12 }}>
+                        <ViButton
+                            variant="danger"
+                            full
+                            size="sm"
+                            loading={isRevoking}
+                            onPress={() => onRevoke(item)}
+                        >
+                            {isRevoking ? 'Đang thu hồi…' : 'Thu hồi quyền'}
+                        </ViButton>
+                    </View>
+                );
+            })()}
         </ViCard>
     );
 }

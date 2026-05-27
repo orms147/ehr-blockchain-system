@@ -104,11 +104,14 @@ function LockGlyph({ color }: { color: string }) {
 function ExpiredRow({
     item,
     last,
+    versionCount = 1,
     onRequestAgain,
     onAuditLog,
 }: {
     item: ExpiredItem;
     last: boolean;
+    /** Số phiên bản trong cùng chain (nếu group > 1 sẽ render subtitle). */
+    versionCount?: number;
     onRequestAgain: () => void;
     onAuditLog: () => void;
 }) {
@@ -167,6 +170,18 @@ function ExpiredRow({
                             </>
                         ) : null}
                     </Text>
+                    {versionCount > 1 ? (
+                        <Text
+                            style={{
+                                marginTop: 3,
+                                fontSize: 11.5,
+                                color: palette.EHR_TEXT_MUTED,
+                                fontFamily: SANS,
+                            }}
+                        >
+                            Hồ sơ gốc + {versionCount - 1} phiên bản
+                        </Text>
+                    ) : null}
                 </YStack>
             </XStack>
 
@@ -282,6 +297,63 @@ export default function DoctorExpiredRecordsScreen({ navigation }: any) {
         fetchExpired();
     }, [fetchExpired]);
 
+    // Group expired KeyShares theo chain root (giống AccessLogScreen.groupConsents
+    // phía patient). Mỗi chain → 1 row hiển thị "Hồ sơ gốc + N phiên bản" thay
+    // vì list flat từng version. Walk parentCidHash chain dùng data sẵn trong
+    // record.parentCidHash của các item; stop khi parent không tồn tại trong map
+    // (treat current as root).
+    const groupedExpired = useMemo(() => {
+        const parentByCid = new Map<string, string | null>();
+        for (const item of expiredRecords) {
+            const cid = String(item.cidHash || '').toLowerCase();
+            if (!cid) continue;
+            const parent = (item as any)?.record?.parentCidHash;
+            const parentLc = parent ? String(parent).toLowerCase() : null;
+            // Treat ZERO_HASH as no-parent
+            const ZERO = '0x0000000000000000000000000000000000000000000000000000000000000000';
+            parentByCid.set(cid, parentLc && parentLc !== ZERO ? parentLc : null);
+        }
+        const findRoot = (cid: string): string => {
+            let current = cid;
+            const seen = new Set<string>();
+            while (true) {
+                if (seen.has(current)) return current; // cycle guard
+                seen.add(current);
+                const parent = parentByCid.get(current);
+                if (!parent || !parentByCid.has(parent)) return current;
+                current = parent;
+            }
+        };
+
+        type Group = {
+            key: string;
+            rootCidHash: string;
+            senderAddress: string;
+            versionCount: number;
+            rootItem: ExpiredItem;
+        };
+        const map = new Map<string, Group>();
+        for (const item of expiredRecords) {
+            const cid = String(item.cidHash || '').toLowerCase();
+            if (!cid) continue;
+            const sender = String(item.senderAddress || item.record?.ownerAddress || '').toLowerCase();
+            const root = findRoot(cid);
+            const key = `${sender}:${root}`;
+            const existing = map.get(key);
+            if (!existing) {
+                map.set(key, {
+                    key, rootCidHash: root, senderAddress: sender,
+                    versionCount: 1, rootItem: item,
+                });
+            } else {
+                existing.versionCount += 1;
+                // Prefer root item (cidHash === rootCidHash) as anchor item for actions
+                if (cid === root) existing.rootItem = item;
+            }
+        }
+        return Array.from(map.values());
+    }, [expiredRecords]);
+
     const handleRequestAgain = (item: ExpiredItem) => {
         const ownerAddr = item.record?.ownerAddress || item.senderAddress;
         if (!ownerAddr) {
@@ -311,13 +383,13 @@ export default function DoctorExpiredRecordsScreen({ navigation }: any) {
 
     if (isLoading) return <LoadingSpinner message="Đang tải hồ sơ hết hạn..." />;
 
-    const count = expiredRecords.length;
+    const count = groupedExpired.length;
 
     return (
         <SafeAreaView style={{ flex: 1, backgroundColor: palette.EHR_SURFACE }} edges={['right', 'left']}>
             <FlatList
-                data={expiredRecords}
-                keyExtractor={(item, index) => item.id?.toString() || item.cidHash || `expired-${index}`}
+                data={groupedExpired}
+                keyExtractor={(g) => g.key}
                 contentContainerStyle={{ paddingBottom: 32 }}
                 refreshControl={
                     <RefreshControl
@@ -400,12 +472,13 @@ export default function DoctorExpiredRecordsScreen({ navigation }: any) {
                         ) : null}
                     </>
                 }
-                renderItem={({ item, index }) => (
+                renderItem={({ item: group, index }) => (
                     <ExpiredRow
-                        item={item}
-                        last={index === expiredRecords.length - 1}
-                        onRequestAgain={() => handleRequestAgain(item)}
-                        onAuditLog={() => handleAuditLog(item)}
+                        item={group.rootItem}
+                        versionCount={group.versionCount}
+                        last={index === groupedExpired.length - 1}
+                        onRequestAgain={() => handleRequestAgain(group.rootItem)}
+                        onAuditLog={() => handleAuditLog(group.rootItem)}
                     />
                 )}
                 ListEmptyComponent={
