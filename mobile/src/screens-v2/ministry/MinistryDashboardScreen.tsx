@@ -210,7 +210,7 @@ export default function MinistryDashboardScreen() {
                         const label =
                             key === 'orgs' ? `Tổ chức (${organizations.length})`
                                 : key === 'pending' ? `Chờ duyệt (${pendingApps.length})`
-                                    : 'Smart Contracts';
+                                    : 'Hệ thống';
                         return (
                             <View key={key} style={{ flex: 1 }}>
                                 <ViButton
@@ -382,7 +382,7 @@ export default function MinistryDashboardScreen() {
                                 marginBottom: 12,
                             }}
                         >
-                            Smart Contracts (Arbitrum Sepolia)
+                            Cấu hình hệ thống
                         </Text>
                         {['AccessControl', 'RecordRegistry', 'ConsentLedger', 'DoctorUpdate', 'EHRSystemSecure'].map((name) => (
                             <XStack

@@ -272,7 +272,7 @@ export default function DoctorOutgoingSharesScreen() {
                                     lineHeight: 17,
                                 }}
                             >
-                                Mỗi lần chia sẻ lại đều ghi sổ on-chain. Bệnh nhân thấy toàn bộ chuỗi:{' '}
+                                Mỗi lần chia sẻ lại đều được ghi nhận vĩnh viễn. Bệnh nhân thấy toàn bộ chuỗi:{' '}
                                 <Text style={{ color: palette.EHR_ON_SURFACE_VARIANT }}>
                                     bệnh nhân → bạn → người nhận
                                 </Text>

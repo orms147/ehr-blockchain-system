@@ -419,7 +419,7 @@ export default function DoctorRequestAccessScreen() {
     const footer = (
         <StickyFooter
             primary="Ký và gửi yêu cầu"
-            hint="Yêu cầu được ghi on-chain · bạn ký phí gas · tự pre-approve sau 17s"
+            hint="Yêu cầu được ghi nhận vĩnh viễn · bạn trả phí · tự duyệt sau 17 giây"
             primaryLoading={isSubmitting}
             primaryDisabled={!canSubmit}
             onPrimary={handleSubmit}

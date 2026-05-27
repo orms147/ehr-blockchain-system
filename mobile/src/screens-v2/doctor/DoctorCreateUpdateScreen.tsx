@@ -358,7 +358,7 @@ export default function DoctorCreateUpdateScreen({ navigation, route }: any) {
             const doctorEncKeyHash = keccak256(toBytes(aesKey));
 
             const { walletClient, address: myAddress } = await walletActionService.getWalletContext();
-            await gateOrThrow('Để lưu hồ sơ y tế lên blockchain');
+            await gateOrThrow('Để lưu hồ sơ y tế vào hệ thống');
 
             const txHash = await walletClient.writeContract({
                 address: DOCTOR_UPDATE_ADDRESS,
@@ -461,8 +461,8 @@ export default function DoctorCreateUpdateScreen({ navigation, route }: any) {
             Alert.alert(
                 isCreateNewRoot ? 'Đã tạo hồ sơ' : 'Đã cập nhật hồ sơ',
                 isCreateNewRoot
-                    ? 'Hồ sơ mới đã được lưu lên blockchain. Bệnh nhân sẽ thấy ngay.'
-                    : 'Phiên bản mới đã được lưu lên blockchain. Bệnh nhân và các bác sĩ có quyền sẽ thấy ngay.',
+                    ? 'Hồ sơ mới đã được lưu vào hệ thống. Bệnh nhân sẽ thấy ngay.'
+                    : 'Phiên bản mới đã được lưu vào hệ thống. Bệnh nhân và các bác sĩ có quyền sẽ thấy ngay.',
                 [{
                     text: 'OK',
                     onPress: () => {
