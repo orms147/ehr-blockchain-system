@@ -303,8 +303,21 @@ async function loginWithWeb3Auth(loginProvider = 'google', options = {}) {
 
     try {
         const loginParams = { loginProvider, redirectUrl };
+        // Fix bug "logout → login user khác vẫn vào dashboard cũ": Google +
+        // social OAuth (Apple/Facebook/etc.) cache session ở browser Custom
+        // Tabs. Web3Auth logout không clear cookie browser → next login auto
+        // pick last account → cùng wallet → cùng identity. Force prompt=
+        // select_account để bắt user chọn lại tài khoản OAuth.
+        const SOCIAL_PROVIDERS_WITH_ACCOUNT_PICKER = ['google', 'facebook', 'apple', 'discord', 'twitter'];
+        const extraLoginOptions = {};
         if (loginHint) {
-            loginParams.extraLoginOptions = { login_hint: loginHint };
+            extraLoginOptions.login_hint = loginHint;
+        }
+        if (SOCIAL_PROVIDERS_WITH_ACCOUNT_PICKER.includes(loginProvider)) {
+            extraLoginOptions.prompt = 'select_account';
+        }
+        if (Object.keys(extraLoginOptions).length > 0) {
+            loginParams.extraLoginOptions = extraLoginOptions;
         }
         await withTimeout(
             web3authInstance.login(loginParams),

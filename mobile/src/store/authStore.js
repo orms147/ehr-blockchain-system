@@ -3,6 +3,7 @@ import * as SecureStore from 'expo-secure-store';
 import api from '../services/api';
 import walletActionService from '../services/walletAction.service';
 import localRecordStore from '../services/localRecordStore';
+import { clearEncryptionKeypair } from '../services/nacl-crypto';
 import { deriveRolesFromUser, resolveActiveRole, sanitizeRoles } from '../utils/authRoles';
 import { setSentryUser } from '../lib/sentry';
 import { queryClient } from '../lib/queryClient';
@@ -188,6 +189,16 @@ const useAuthStore = create((set, get) => ({
             await localRecordStore.clear();
         } catch (err) {
             console.warn('Logout: clear ehr_local_records failed', err);
+        }
+
+        // NaCl encryption keypair (ehr_nacl_*) is derived from wallet signature
+        // → per-user secret. Without clear, user B login sees ghost of A's pubkey
+        // until first getOrCreateEncryptionKeypair call overwrites — but that may
+        // be too late if backend reads stale pubkey first. Wipe for clean slate.
+        try {
+            await clearEncryptionKeypair();
+        } catch (err) {
+            console.warn('Logout: clear nacl keypair failed', err);
         }
 
         setSentryUser(null);
