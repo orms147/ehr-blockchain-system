@@ -477,7 +477,7 @@ export default function RecordsScreen({ navigation }: any) {
                                     color: palette.EHR_TEXT_MUTED,
                                 }}
                             >
-                                Mã hoá + IPFS + on-chain
+                                Mã hoá · Lưu vĩnh viễn
                             </Text>
                         </Pressable>
                     </View>
@@ -507,7 +507,7 @@ export default function RecordsScreen({ navigation }: any) {
                         >
                             {isActivityView
                                 ? 'Khi bạn tạo/chia sẻ hồ sơ, hoạt động sẽ ghi lại tại đây.'
-                                : 'Tạo hồ sơ đầu tiên để bắt đầu lưu trữ dữ liệu y tế trên blockchain.'}
+                                : 'Tạo hồ sơ đầu tiên để bắt đầu lưu trữ dữ liệu y tế an toàn.'}
                         </Text>
                     </View>
                 }

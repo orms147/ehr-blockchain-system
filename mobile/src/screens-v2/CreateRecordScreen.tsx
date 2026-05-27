@@ -128,14 +128,14 @@ function toSerializableRecord(record: Record<string, any>) {
 
 function buildCreateRecordErrorMessage(submitError: any): string {
     const code = submitError?.code || submitError?.data?.code;
-    if (code === 'QUOTA_EXHAUSTED') return 'Đã hết quota upload miễn phí. Hãy kết nối ví có ETH hoặc thử lại sau.';
-    if (code === 'PATIENT_NOT_REGISTERED') return 'Tài khoản chưa được đăng ký patient on-chain. Thử đăng nhập lại rồi tạo hồ sơ lại.';
-    if (code === 'SPONSOR_NOT_AUTHORIZED' || code === 'RELAYER_NOT_AUTHORIZED') return 'Hệ thống sponsor chưa được cấp quyền trên smart contract. Cần cập nhật backend contract config.';
-    if (code === 'RELAYER_NOT_CONFIGURED') return 'Backend chưa cấu hình SPONSOR_PRIVATE_KEY hoặc RPC URL.';
-    if (code === 'RECORD_EXISTS') return 'Hồ sơ này đã tồn tại trên blockchain. Vui lòng làm mới danh sách hồ sơ.';
-    if (code === 'CID_RESERVED') return 'CID này đang được dùng bởi một lượt upload khác. Vui lòng tạo lại hồ sơ mới.';
+    if (code === 'QUOTA_EXHAUSTED') return 'Đã hết lượt lưu miễn phí trong tháng. Vui lòng thử lại sau.';
+    if (code === 'PATIENT_NOT_REGISTERED') return 'Tài khoản chưa được đăng ký. Vui lòng đăng nhập lại rồi tạo hồ sơ lại.';
+    if (code === 'SPONSOR_NOT_AUTHORIZED' || code === 'RELAYER_NOT_AUTHORIZED') return 'Hệ thống chưa được cấp quyền. Vui lòng liên hệ quản trị viên.';
+    if (code === 'RELAYER_NOT_CONFIGURED') return 'Hệ thống chưa sẵn sàng. Vui lòng liên hệ quản trị viên.';
+    if (code === 'RECORD_EXISTS') return 'Hồ sơ này đã tồn tại trong hệ thống. Vui lòng làm mới danh sách hồ sơ.';
+    if (code === 'CID_RESERVED') return 'Mã hồ sơ này đang được dùng bởi một lượt khác. Vui lòng tạo lại hồ sơ mới.';
     if (code === 'MAX_CHILDREN_REACHED') return 'Bản ghi gốc đã đạt giới hạn số phiên bản. Hãy tạo hồ sơ gốc mới.';
-    if (submitError?.status === 429) return 'Backend đang bị giới hạn tài nguyên tạm thời. Vui lòng thử lại sau ít phút.';
+    if (submitError?.status === 429) return 'Hệ thống đang bận. Vui lòng thử lại sau ít phút.';
     return submitError?.message || 'Không thể tạo hồ sơ mới';
 }
 
@@ -483,8 +483,8 @@ export default function CreateRecordScreen({ navigation, route: navRoute }: any)
             Alert.alert(
                 isUpdateMode ? 'Cập nhật hồ sơ thành công' : 'Tạo hồ sơ thành công',
                 isUpdateMode
-                    ? 'Phiên bản mới đã được mã hoá, lưu IPFS và liên kết với hồ sơ gốc.'
-                    : 'Hồ sơ mới đã được mã hoá, lưu IPFS và đăng ký lên hệ thống.',
+                    ? 'Phiên bản mới đã được mã hoá, lưu trữ an toàn và liên kết với hồ sơ gốc.'
+                    : 'Hồ sơ mới đã được mã hoá và đăng ký lên hệ thống.',
             );
             if (navigation.canGoBack?.()) {
                 navigation.replace('RecordDetail', { record: toSerializableRecord(record) });
@@ -516,8 +516,8 @@ export default function CreateRecordScreen({ navigation, route: navRoute }: any)
                     ownerAddress: user?.walletAddress,
                 };
                 Alert.alert(
-                    'On-chain tạm thời thất bại',
-                    `${message}\n\nDữ liệu đã được lưu local, bạn có thể mở chi tiết để xem/giải mã và thử lại sau.`,
+                    'Lưu tạm thời thất bại',
+                    `${message}\n\nDữ liệu đã được lưu trên máy, bạn có thể mở chi tiết để xem/giải mã và thử lại sau.`,
                     [
                         {
                             text: 'Mở chi tiết',
@@ -586,7 +586,7 @@ export default function CreateRecordScreen({ navigation, route: navRoute }: any)
     const footer = (
         <StickyFooter
             primary={isUpdateMode ? 'Cập nhật hồ sơ' : 'Lưu hồ sơ'}
-            hint="Mã hoá end-to-end · IPFS · băm trên chuỗi"
+            hint="Mã hoá đầu-cuối · Lưu trữ an toàn"
             primaryLoading={isSubmitting}
             onPrimary={handleSubmit}
         />

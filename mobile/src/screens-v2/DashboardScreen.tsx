@@ -702,7 +702,7 @@ function RecordRow({ record, onPress }: { record: any; onPress: () => void }) {
                             color: palette.EHR_WARNING,
                         }}
                     >
-                        Đang đồng bộ on-chain…
+                        Đang đồng bộ…
                     </Text>
                 ) : null}
             </View>
@@ -758,7 +758,7 @@ function EmptyRecords({ onCreate }: { onCreate: () => void }) {
                     lineHeight: 20,
                 }}
             >
-                Tạo hồ sơ đầu tiên để bắt đầu lưu trữ dữ liệu y tế được mã hoá trên blockchain.
+                Tạo hồ sơ đầu tiên để bắt đầu lưu trữ dữ liệu y tế được mã hoá an toàn.
             </Text>
             <Pressable
                 onPress={onCreate}

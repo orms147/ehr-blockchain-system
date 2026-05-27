@@ -387,7 +387,7 @@ export default function LoginScreen({ navigation }: any) {
                                 maxWidth: 320,
                             }}
                         >
-                            Web3Auth không lưu mật khẩu. Khoá ví của bạn được phân tán + mã hoá đầu cuối.
+                            Hệ thống không lưu mật khẩu. Dữ liệu của bạn được bảo mật bằng mã hoá đầu-cuối.
                         </Text>
                     </View>
 
@@ -526,7 +526,7 @@ export default function LoginScreen({ navigation }: any) {
                                 fontWeight: '600',
                             }}
                         >
-                            Web3Auth · Bảo mật phân tán
+                            ViEH · Bảo mật phân quyền
                         </Text>
                         <View style={{ width: 14, height: 0.5, backgroundColor: palette.EHR_OUTLINE_SOFT }} />
                     </View>

@@ -74,7 +74,7 @@ const ROLE_QUOTES: Record<string, { body: string; emphasis: string; cite: string
         cite: 'Cam kết của ViEH với bệnh nhân',
     },
     doctor: {
-        body: 'Mỗi lần bạn xem hồ sơ là một dấu vết on-chain. Bệnh nhân thấy mọi thao tác, vĩnh viễn — và đó là cách họ tin bạn.',
+        body: 'Mỗi lần bạn xem hồ sơ đều được ghi lại vĩnh viễn. Bệnh nhân thấy mọi thao tác — và đó là cách họ tin bạn.',
         emphasis: 'vĩnh viễn',
         cite: 'Cam kết của ViEH với bác sĩ',
     },
@@ -109,12 +109,12 @@ function mapRegistrationError(error: any) {
     }
     const raw = String(error?.message || '').toLowerCase();
     if (raw.includes('relayer') && raw.includes('not configured')) {
-        return 'Backend chưa cấu hình relayer. Cần thiết lập SPONSOR_PRIVATE_KEY và contract address.';
+        return 'Hệ thống chưa sẵn sàng. Vui lòng liên hệ quản trị viên.';
     }
     if (raw.includes('not authorized') || raw.includes('authorize')) {
-        return 'Ví relayer chưa được cấp quyền trên AccessControl. Vui lòng kiểm tra authorizedRelayers.';
+        return 'Hệ thống chưa được cấp quyền. Vui lòng liên hệ quản trị viên.';
     }
-    return error?.message || 'Không thể đăng ký role on-chain. Vui lòng thử lại.';
+    return error?.message || 'Không thể đăng ký vai trò. Vui lòng thử lại.';
 }
 
 export default function RoleSelectionScreen() {
@@ -171,12 +171,12 @@ export default function RoleSelectionScreen() {
             if (!synced?.roles?.length) {
                 Alert.alert(
                     'Đang đồng bộ',
-                    'Role đã đăng ký on-chain nhưng chưa sync. Hệ thống sẽ tự cập nhật trong vài giây.',
+                    'Vai trò đã được đăng ký, hệ thống sẽ tự cập nhật trong vài giây.',
                 );
                 await completeRoleSelection(role);
                 return;
             }
-            Alert.alert('Thành công', 'Đăng ký role on-chain thành công.');
+            Alert.alert('Thành công', 'Đăng ký vai trò thành công.');
         } catch (error: any) {
             Alert.alert('Đăng ký thất bại', mapRegistrationError(error));
         } finally {
@@ -623,7 +623,7 @@ export default function RoleSelectionScreen() {
                                     lineHeight: 17,
                                 }}
                             >
-                                Đăng ký role là một giao dịch on-chain (gas sponsor) — không thể huỷ bỏ.
+                                Sau khi đồng ý, việc đăng ký được ghi lại vĩnh viễn và không thể huỷ bỏ.
                             </Text>
                         </ScrollView>
                     </View>

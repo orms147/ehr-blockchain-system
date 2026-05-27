@@ -130,7 +130,7 @@ export default function SettingsScreen() {
                             lineHeight: 18,
                         }}
                     >
-                        Quản lý hồ sơ, ví blockchain và bảo mật của bạn.
+                        Quản lý hồ sơ, ví và bảo mật của bạn.
                     </Text>
                 </View>
 
@@ -148,12 +148,12 @@ export default function SettingsScreen() {
                     </ViCard>
                 </View>
 
-                {/* ───────── Ví Blockchain ───────── G.12.c — HexRow pattern */}
-                <ViSectionLabel>Ví blockchain</ViSectionLabel>
+                {/* ───────── Ví của bạn ───────── G.12.c — HexRow pattern */}
+                <ViSectionLabel>Ví của bạn</ViSectionLabel>
                 <View style={{ paddingHorizontal: 20, marginBottom: 18 }}>
                     {walletAddress ? (
                         <HexRow
-                            label="Địa chỉ ví (Arbitrum Sepolia)"
+                            label="Địa chỉ ví"
                             value={walletAddress}
                             head={8}
                             tail={6}
