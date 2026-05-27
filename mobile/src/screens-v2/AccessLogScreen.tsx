@@ -166,10 +166,28 @@ const GroupCard = React.memo(function GroupCard({
     onRevoke: (g: GroupedConsent) => void;
 }) {
     const palette = useEhrPalette();
-    const isActive = group.status === 'active';
+    // group.status='active' khi CÓ ÍT NHẤT 1 phiên bản còn quyền. NHƯNG khi
+    // latestExpiresAt được hiển thị "Đã hết hạn" (toàn bộ phiên bản có expiry
+    // đã qua), user nhìn lệch giữa badge "Còn hiệu lực" + label "Đã hết hạn"
+    // + nút "Thu hồi" → confused "bug hiện thu hồi hồ sơ hết hạn".
+    // Fix: ẩn nút khi displayed expiry past. Trường hợp hiếm có chain mixed
+    // (1 phiên bản unlimited active + 2 phiên bản expired) user có thể revoke
+    // qua tab "Mọi người" theo từng KeyShare cụ thể.
+    const displayExpired = !!group.latestExpiresAt
+        && new Date(group.latestExpiresAt).getTime() < Date.now();
+    const isActive = group.status === 'active' && !displayExpired;
     const isRevoking = revokingKeys.has(group.groupKey);
     const urgency = getExpiryUrgency(group.latestExpiresAt);
-    const statusToken = group.status === 'revoked' ? 'revoked' : group.status === 'expired' ? 'expired' : urgency === 'urgent' || urgency === 'soon' ? 'expiring' : 'active';
+    // Badge token: ưu tiên 'expired' khi displayed expiry past (consistent với
+    // việc ẩn nút thu hồi ở trên) → tránh nghịch lý badge "Còn hiệu lực" cạnh
+    // label "Đã hết hạn".
+    const statusToken = group.status === 'revoked'
+        ? 'revoked'
+        : group.status === 'expired' || displayExpired
+            ? 'expired'
+            : urgency === 'urgent' || urgency === 'soon'
+                ? 'expiring'
+                : 'active';
 
     return (
         <ViCard padding={16} style={{ marginBottom: 10 }}>
