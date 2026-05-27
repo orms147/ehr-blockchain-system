@@ -37,6 +37,13 @@ export interface ConsentSheetProps {
     open: boolean;
     request: ConsentRequest | null;
     phase: ConsentPhase;
+    /**
+     * Intent quyết định button nào prominent (cinnabar primary, vị trí trên):
+     * - 'approve' (default): "Ký đồng ý" prominent — user bấm "Mở để ký" trên row
+     * - 'reject': "Từ chối" prominent — user bấm "Từ chối" trên row
+     * Tránh user vào reject mode mà thấy "Ký đồng ý" nổi bật → bấm nhầm.
+     */
+    intent?: 'approve' | 'reject';
     /** Caller controls primary action — fires when user taps "Ký đồng ý" */
     onApprove: () => void;
     /** Caller controls reject action — fires when user taps "Từ chối" */
@@ -46,7 +53,7 @@ export interface ConsentSheetProps {
 }
 
 export default function ConsentSheet({
-    open, request, phase, onApprove, onReject, onClose,
+    open, request, phase, intent = 'approve', onApprove, onReject, onClose,
 }: ConsentSheetProps) {
     const palette = useEhrPalette();
 
@@ -61,8 +68,12 @@ export default function ConsentSheet({
             animationType="slide"
             onRequestClose={canDismiss ? onClose : undefined}
         >
-            <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' }}>
-                <View
+            <Pressable
+                style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' }}
+                onPress={canDismiss ? onClose : undefined}
+            >
+                <Pressable
+                    onPress={(e) => e.stopPropagation()}
                     style={{
                         backgroundColor: palette.EHR_SURFACE,
                         borderTopLeftRadius: 22,
@@ -170,38 +181,76 @@ export default function ConsentSheet({
                                 </Text>
                             </View>
 
-                            {/* PHASE-dependent footer */}
+                            {/* PHASE-dependent footer.
+                                Intent='reject' → "Từ chối" prominent ở vị trí trên + màu danger;
+                                "Đồng ý" ghost ở dưới. Tránh user bấm nhầm approve khi muốn reject. */}
                             {phase === 'idle' ? (
                                 <View style={{ marginTop: 18, gap: 10 }}>
-                                    <Pressable
-                                        onPress={onApprove}
-                                        style={({ pressed }) => ({
-                                            paddingVertical: 16,
-                                            borderRadius: 12,
-                                            backgroundColor: palette.EHR_CINNABAR_DEEP,
-                                            alignItems: 'center',
-                                            opacity: pressed ? 0.85 : 1,
-                                        })}
-                                    >
-                                        <Text style={{ fontFamily: SANS_SEMI, fontSize: 15, fontWeight: '700', color: '#FBF8F1', letterSpacing: 0.1 }}>
-                                            Ký đồng ý
-                                        </Text>
-                                    </Pressable>
-                                    <Pressable
-                                        onPress={onReject}
-                                        style={({ pressed }) => ({
-                                            paddingVertical: 14,
-                                            borderRadius: 12,
-                                            borderWidth: 0.5,
-                                            borderColor: palette.EHR_OUTLINE,
-                                            alignItems: 'center',
-                                            opacity: pressed ? 0.7 : 1,
-                                        })}
-                                    >
-                                        <Text style={{ fontFamily: SANS_SEMI, fontSize: 14, fontWeight: '600', color: palette.EHR_ON_SURFACE }}>
-                                            Từ chối
-                                        </Text>
-                                    </Pressable>
+                                    {intent === 'reject' ? (
+                                        <>
+                                            <Pressable
+                                                onPress={onReject}
+                                                style={({ pressed }) => ({
+                                                    paddingVertical: 16,
+                                                    borderRadius: 12,
+                                                    backgroundColor: palette.EHR_CINNABAR_DEEP,
+                                                    alignItems: 'center',
+                                                    opacity: pressed ? 0.85 : 1,
+                                                })}
+                                            >
+                                                <Text style={{ fontFamily: SANS_SEMI, fontSize: 15, fontWeight: '700', color: '#FBF8F1', letterSpacing: 0.1 }}>
+                                                    Xác nhận từ chối
+                                                </Text>
+                                            </Pressable>
+                                            <Pressable
+                                                onPress={onApprove}
+                                                style={({ pressed }) => ({
+                                                    paddingVertical: 14,
+                                                    borderRadius: 12,
+                                                    borderWidth: 0.5,
+                                                    borderColor: palette.EHR_OUTLINE,
+                                                    alignItems: 'center',
+                                                    opacity: pressed ? 0.7 : 1,
+                                                })}
+                                            >
+                                                <Text style={{ fontFamily: SANS_SEMI, fontSize: 14, fontWeight: '600', color: palette.EHR_ON_SURFACE }}>
+                                                    Ký đồng ý
+                                                </Text>
+                                            </Pressable>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Pressable
+                                                onPress={onApprove}
+                                                style={({ pressed }) => ({
+                                                    paddingVertical: 16,
+                                                    borderRadius: 12,
+                                                    backgroundColor: palette.EHR_CINNABAR_DEEP,
+                                                    alignItems: 'center',
+                                                    opacity: pressed ? 0.85 : 1,
+                                                })}
+                                            >
+                                                <Text style={{ fontFamily: SANS_SEMI, fontSize: 15, fontWeight: '700', color: '#FBF8F1', letterSpacing: 0.1 }}>
+                                                    Ký đồng ý
+                                                </Text>
+                                            </Pressable>
+                                            <Pressable
+                                                onPress={onReject}
+                                                style={({ pressed }) => ({
+                                                    paddingVertical: 14,
+                                                    borderRadius: 12,
+                                                    borderWidth: 0.5,
+                                                    borderColor: palette.EHR_OUTLINE,
+                                                    alignItems: 'center',
+                                                    opacity: pressed ? 0.7 : 1,
+                                                })}
+                                            >
+                                                <Text style={{ fontFamily: SANS_SEMI, fontSize: 14, fontWeight: '600', color: palette.EHR_ON_SURFACE }}>
+                                                    Từ chối
+                                                </Text>
+                                            </Pressable>
+                                        </>
+                                    )}
                                 </View>
                             ) : null}
 
@@ -210,8 +259,8 @@ export default function ConsentSheet({
                             {phase === 'done' ? <DonePhase palette={palette} /> : null}
                         </View>
                     </ScrollView>
-                </View>
-            </View>
+                </Pressable>
+            </Pressable>
         </Modal>
     );
 }

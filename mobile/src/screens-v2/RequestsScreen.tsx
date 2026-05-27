@@ -453,19 +453,26 @@ export default function RequestsScreen() {
         if (request.cidHash && request.requestType !== 1 && doctorAddr) {
             try {
                 const existing: any = await keyShareService.getKeyForRecord(request.cidHash);
-                const alreadyActive = existing?.status && existing.status !== 'revoked' && existing.status !== 'rejected';
+                const oldExpiryMs = existing?.expiresAt
+                    ? new Date(existing.expiresAt).getTime()
+                    : Number.POSITIVE_INFINITY;
+                const oldStillActive = oldExpiryMs > Date.now();
+                // Bug fix (2026-05-27): quyền cũ đã hết hạn KHÔNG cần cảnh báo ghi đè
+                // vì không còn gì để "đè" — request mới chỉ là cấp lại lần đầu.
+                // Trước đây alreadyActive chỉ filter status='revoked/rejected' →
+                // expired KeyShare vẫn trigger warning sai.
+                const alreadyActive = existing?.status
+                    && existing.status !== 'revoked'
+                    && existing.status !== 'rejected'
+                    && oldStillActive;
                 if (alreadyActive) {
                     const oldAllowDelegate = existing.allowDelegate === true;
                     const newAllowDelegate = request.requestType === 2;
-                    const oldExpiryMs = existing.expiresAt
-                        ? new Date(existing.expiresAt).getTime()
-                        : Number.POSITIVE_INFINITY;
                     const newExpiryMs = request.consentDurationHours
                         ? Date.now() + request.consentDurationHours * 3600 * 1000
                         : Number.POSITIVE_INFINITY;
-                    const oldStillActive = oldExpiryMs > Date.now();
                     const flagDowngrade = oldAllowDelegate && !newAllowDelegate;
-                    const durationDowngrade = oldStillActive && newExpiryMs < oldExpiryMs;
+                    const durationDowngrade = newExpiryMs < oldExpiryMs;
                     if (flagDowngrade || durationDowngrade) {
                         const reason = flagDowngrade
                             ? `Quyền hiện tại: ${oldAllowDelegate ? '"Đọc & uỷ quyền lại"' : '"Đọc & cập nhật"'}. Yêu cầu mới sẽ giảm quyền.`
@@ -718,10 +725,19 @@ export default function RequestsScreen() {
     //  Sheet "Ký đồng ý" → runApproveCeremony → handleApprove + animate
     //  Sheet "Từ chối"   → runRejectCeremony  → handleReject + animate
     // ───────────────────────────────────────────────────────────────────
-    const openConsentSheet = useCallback((req: RequestItem) => {
+    // Sheet intent: 'approve' (default — row "Mở để ký") vs 'reject' (row
+    // "Từ chối"). Controls which button hiện prominent trong sheet → avoid
+    // user click "Mở để ký" mặc dù đã muốn từ chối từ đầu.
+    const [sheetIntent, setSheetIntent] = useState<'approve' | 'reject'>('approve');
+
+    const openConsentSheet = useCallback((req: RequestItem, intent: 'approve' | 'reject' = 'approve') => {
         setConsentTarget(req);
+        setSheetIntent(intent);
         setSheetPhase('idle');
     }, []);
+
+    const openConsentSheetApprove = useCallback((req: RequestItem) => openConsentSheet(req, 'approve'), [openConsentSheet]);
+    const openConsentSheetReject = useCallback((req: RequestItem) => openConsentSheet(req, 'reject'), [openConsentSheet]);
 
     const closeConsentSheet = useCallback(() => {
         setConsentTarget(null);
@@ -960,8 +976,8 @@ export default function RequestsScreen() {
                     renderItem={({ item }: { item: any }) => (
                         <RequestRow
                             item={item}
-                            onApprove={openConsentSheet}
-                            onReject={openConsentSheet}
+                            onApprove={openConsentSheetApprove}
+                            onReject={openConsentSheetReject}
                             onArchive={handleArchive}
                             isApproving={approvingId === (item.requestId || item.id)}
                         />
@@ -983,6 +999,7 @@ export default function RequestsScreen() {
                 open={!!consentTarget && overlayStage === null}
                 request={consentDetails}
                 phase={sheetPhase}
+                intent={sheetIntent}
                 onApprove={runApproveCeremony}
                 onReject={runRejectCeremony}
                 onClose={closeConsentSheet}

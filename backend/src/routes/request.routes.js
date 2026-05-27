@@ -17,6 +17,7 @@ import {
 } from '../constants/contractEnums.js';
 import { createLogger } from '../utils/logger.js';
 import pushService from '../services/push.service.js';
+import { emitToUser } from '../services/socket.service.js';
 
 const log = createLogger('RequestRoutes');
 const router = Router();
@@ -790,6 +791,31 @@ router.post('/:requestId/reject', authenticate, async (req, res, next) => {
             });
         } catch (cleanupErr) {
             console.warn('[reject] KeyShare cleanup non-fatal:', cleanupErr?.message);
+        }
+
+        // Notify doctor (requester) that patient đã từ chối — fire-and-forget.
+        // Trước fix này doctor side phải poll outgoing list mới thấy status đổi
+        // → bug user-reported "doctor vẫn hiện đang chờ dù patient từ chối".
+        try {
+            // Socket emit (real-time UI update khi doctor app foreground)
+            emitToUser(request.requesterAddress, 'request:rejected', {
+                requestId,
+                cidHash: request.cidHash,
+                patientAddress: request.patientAddress,
+                rejectedAt: new Date().toISOString(),
+            });
+        } catch (socketErr) {
+            console.warn('[reject] socket emit doctor non-fatal:', socketErr?.message);
+        }
+        try {
+            // Push notification (khi app background)
+            await pushService.sendPushToWallet(request.requesterAddress, {
+                title: 'Yêu cầu bị từ chối',
+                body: 'Bệnh nhân đã từ chối yêu cầu truy cập hồ sơ của bạn.',
+                data: { type: 'access_request_rejected', requestId },
+            });
+        } catch (pushErr) {
+            console.warn('[reject] push notify doctor non-fatal:', pushErr?.message);
         }
 
         res.json({ success: true, status: 'rejected', requestId, txHash });
