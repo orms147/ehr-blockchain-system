@@ -719,7 +719,7 @@ export default function AccessLogScreen() {
             'Thu hồi quyền',
             `Thu hồi quyền của ${truncate(g.granteeAddress)} cho hồ sơ "${g.recordTitle || g.cidHash.slice(0, 10) + '…'}"?\n\n` +
             `Nguồn: ${sourceText}\n\n` +
-            'Đây là thao tác on-chain, sẽ trừ 1 lượt chữ ký miễn phí.',
+            'Thao tác này sẽ trừ 1 lượt chữ ký miễn phí.',
             [
                 { text: 'Huỷ', style: 'cancel' },
                 {
@@ -737,7 +737,7 @@ export default function AccessLogScreen() {
                                 },
                                 g.cidHash,
                             );
-                            Alert.alert('Thành công', 'Đã thu hồi quyền on-chain.');
+                            Alert.alert('Thành công', 'Đã thu hồi quyền.');
                             fetchAllGrantees();
                             fetchConsents();
                         } catch (err: any) {
@@ -935,7 +935,7 @@ export default function AccessLogScreen() {
                                             {delegationLogs.length} bản ghi
                                         </Text>
                                         <Text style={{ fontFamily: SANS, fontSize: 11, color: palette.EHR_TEXT_MUTED }}>
-                                            Audit on-chain
+                                            Nhật ký kiểm toán
                                         </Text>
                                     </XStack>
                                 }

@@ -437,7 +437,7 @@ export default function RequestsScreen() {
                     const confirmed = await new Promise<boolean>((resolve) => {
                         Alert.alert(
                             'Bác sĩ chưa xác minh',
-                            'Bác sĩ này chưa được tổ chức y tế xác minh on-chain. Hồ sơ bạn cấp quyền sẽ CHỈ ĐỌC ĐƯỢC sau khi họ được xác minh.\n\nBạn có muốn tiếp tục?',
+                            'Bác sĩ này chưa được tổ chức y tế xác minh. Hồ sơ bạn cấp quyền sẽ CHỈ ĐỌC ĐƯỢC sau khi họ được xác minh.\n\nBạn có muốn tiếp tục?',
                             [
                                 { text: 'Huỷ', style: 'cancel', onPress: () => resolve(false) },
                                 { text: 'Vẫn duyệt', style: 'destructive', onPress: () => resolve(true) },
@@ -640,7 +640,7 @@ export default function RequestsScreen() {
         const confirmed = await new Promise<boolean>((resolve) => {
             Alert.alert(
                 'Từ chối yêu cầu?',
-                'Bác sĩ sẽ nhận thông báo bị từ chối. Hành động này được ghi on-chain và không thể huỷ.\n\nBạn vẫn có thể duyệt yêu cầu mới từ bác sĩ này sau.',
+                'Bác sĩ sẽ nhận thông báo bị từ chối. Hành động này được ghi lại vĩnh viễn và không thể huỷ.\n\nBạn vẫn có thể duyệt yêu cầu mới từ bác sĩ này sau.',
                 [
                     { text: 'Huỷ', style: 'cancel', onPress: () => resolve(false) },
                     { text: 'Từ chối', style: 'destructive', onPress: () => resolve(true) },
@@ -753,7 +753,7 @@ export default function RequestsScreen() {
         if (!r) return;
         const ctxLabel = r.requesterAddress
             ? `${r.requesterAddress.slice(0, 6)}…${r.requesterAddress.slice(-4)}`
-            : 'Bác sĩ · on-chain';
+            : 'Bác sĩ';
         setOverlayCtx({
             contextLabel: ctxLabel,
             txHash: txHash ? `${txHash.slice(0, 6)}…${txHash.slice(-4)}` : null,

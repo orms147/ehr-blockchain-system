@@ -332,7 +332,7 @@ export default function DoctorDashboardScreen() {
             } else {
                 Alert.alert(
                     'Đã nhận quyền truy cập!',
-                    'Consent đã được mint on-chain. Hồ sơ sẽ xuất hiện trong danh sách bên dưới.',
+                    'Quyền truy cập đã được ghi nhận. Hồ sơ sẽ xuất hiện trong danh sách bên dưới.',
                 );
             }
             invalidateAll();
@@ -375,7 +375,7 @@ export default function DoctorDashboardScreen() {
         if (isVerifiedDoctor === false) {
             Alert.alert(
                 'Bác sĩ chưa xác minh',
-                'Tài khoản bác sĩ của bạn chưa được tổ chức y tế xác minh on-chain.\n\n' +
+                'Tài khoản bác sĩ của bạn chưa được tổ chức y tế xác minh.\n\n' +
                 'Bạn không thể xem hồ sơ được chia sẻ cho đến khi được xác minh. ' +
                 'Liên hệ tổ chức y tế của bạn để được duyệt.\n\n' +
                 'Sau khi xác minh, tất cả hồ sơ đã được chia sẻ sẽ tự động mở khóa — không cần bệnh nhân chia sẻ lại.',
@@ -384,8 +384,8 @@ export default function DoctorDashboardScreen() {
         }
         if (record?.status === 'awaiting_claim') {
             Alert.alert(
-                'Cần xác nhận on-chain',
-                'Bệnh nhân đã duyệt, nhưng bạn chưa nhận quyền trên blockchain. Hãy bấm "Nhận truy cập" ở mục "Chờ nhận truy cập" phía trên trước.',
+                'Cần xác nhận',
+                'Bệnh nhân đã duyệt, nhưng bạn chưa nhận quyền. Hãy bấm "Nhận truy cập" ở mục "Chờ nhận truy cập" phía trên trước.',
             );
             return;
         }

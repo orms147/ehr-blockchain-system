@@ -39,8 +39,8 @@ export interface PendingChainOverlayProps {
 }
 
 const STAGES_LABELS: Array<{ label: string; sub: string }> = [
-    { label: 'Phát đi chữ ký', sub: 'Mã hoá và gửi tới mạng' },
-    { label: 'Đang xác nhận', sub: 'Backend relayer broadcasts' },
+    { label: 'Phát đi chữ ký', sub: 'Đang mã hoá và gửi đi' },
+    { label: 'Đang xác nhận', sub: 'Hệ thống đang xử lý' },
     { label: 'Đã ghi nhận', sub: 'Vĩnh viễn không sửa được' },
 ];
 
@@ -59,7 +59,7 @@ export default function PendingChainOverlay({
 
     const labels = useMemo(() => {
         if (stage === 2 && txHashShort) {
-            return [...STAGES_LABELS.slice(0, 2), { label: 'Đã ghi nhận', sub: `Tx · ${txHashShort}` }];
+            return [...STAGES_LABELS.slice(0, 2), { label: 'Đã ghi nhận', sub: `Mã giao dịch · ${txHashShort}` }];
         }
         return STAGES_LABELS;
     }, [stage, txHashShort]);

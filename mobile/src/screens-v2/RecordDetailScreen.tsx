@@ -132,13 +132,13 @@ function classifyDecryptError(error: any): string {
         return 'Quyền truy cập đã hết hạn. Vui lòng yêu cầu gia hạn.';
     }
     if (code === 'CONSENT_NOT_FOUND') {
-        return 'Chưa có quyền on-chain cho hồ sơ này. Vui lòng yêu cầu truy cập.';
+        return 'Chưa có quyền truy cập hồ sơ này. Vui lòng yêu cầu cấp quyền.';
     }
     if (code === 'DOCTOR_NOT_VERIFIED') {
-        return 'Tài khoản bác sĩ của bạn chưa được tổ chức y tế xác minh on-chain. Liên hệ quản trị viên tổ chức để được duyệt.';
+        return 'Tài khoản bác sĩ của bạn chưa được tổ chức y tế xác minh. Liên hệ quản trị viên tổ chức để được duyệt.';
     }
     if (code === 'CREATOR_KEY_LOST') {
-        return 'Khoá AES của hồ sơ chỉ được lưu trên thiết bị đã tạo. Hãy mở lại trên thiết bị cũ hoặc liên hệ quản trị viên để phục hồi.';
+        return 'Khoá mã hoá của hồ sơ chỉ được lưu trên thiết bị đã tạo. Hãy mở lại trên thiết bị cũ hoặc liên hệ quản trị viên để phục hồi.';
     }
     if (code === 'OWNER_KEY_MISSING') {
         return 'Chưa có khoá chia sẻ cho hồ sơ này. Có thể bác sĩ cập nhật chưa chia sẻ khoá cho bạn.';
@@ -418,7 +418,7 @@ export default function RecordDetailScreen({ route, navigation }: any) {
             : '';
 
         let title = 'Chia sẻ thành công';
-        let body = `Đã cấp quyền on-chain (tx: ${grantResult.txHash.slice(0, 10)}…).\nCòn ${grantResult.signaturesRemaining} chữ ký miễn phí tháng này.${verifyWarn}`;
+        let body = `Đã cấp quyền (mã: ${grantResult.txHash.slice(0, 10)}…).\nCòn ${grantResult.signaturesRemaining} chữ ký miễn phí tháng này.${verifyWarn}`;
         if (cascadeFailures.length > 0 || cascadeSkipped.length > 0) {
             title = 'Chia sẻ một phần';
             const list = [
@@ -565,7 +565,7 @@ export default function RecordDetailScreen({ route, navigation }: any) {
             let msg: string;
             if (raw.includes('quota') || raw.includes('miễn phí')) {
                 title = 'Hết lượt miễn phí';
-                msg = 'Bạn đã dùng hết lượt giao dịch on-chain miễn phí trong tháng. Hãy thử lại tháng sau hoặc dùng ví riêng.';
+                msg = 'Bạn đã dùng hết lượt chữ ký miễn phí trong tháng. Hãy thử lại tháng sau.';
             } else {
                 msg = formatChainError(err, 'Không thể chia sẻ hồ sơ. Vui lòng thử lại.');
             }
@@ -1042,7 +1042,7 @@ export default function RecordDetailScreen({ route, navigation }: any) {
                                 Chia sẻ qua địa chỉ ví
                             </Text>
                             <Text style={{ fontFamily: SANS, fontSize: 11.5, color: palette.EHR_TEXT_MUTED, marginTop: 2 }}>
-                                Cấp quyền on-chain cho bác sĩ
+                                Cấp quyền truy cập cho bác sĩ
                             </Text>
                         </YStack>
                     </Pressable>
@@ -1988,7 +1988,7 @@ function ShareModal(props: {
                         >
                             <Fingerprint size={12} color={palette.EHR_TEXT_MUTED} />
                             <Text style={{ fontFamily: SANS, fontSize: 11.5, color: palette.EHR_TEXT_MUTED }}>
-                                Bạn sẽ ký bằng vân tay để cấp quyền on-chain.
+                                Bạn sẽ ký bằng vân tay để cấp quyền.
                             </Text>
                         </XStack>
                     </View>

@@ -297,8 +297,8 @@ export default function DoctorExpiredRecordsScreen({ navigation }: any) {
 
     const handleAuditLog = (item: ExpiredItem) => {
         Alert.alert(
-            'Audit log',
-            `CID: ${item.cidHash?.slice(0, 24)}…\nThời điểm hết hạn: ${formatVnDate(item.expiresAt)}\n\nFull audit log sẽ hiển thị on-chain events liên quan.`,
+            'Nhật ký kiểm toán',
+            `Mã hồ sơ: ${item.cidHash?.slice(0, 24)}…\nThời điểm hết hạn: ${formatVnDate(item.expiresAt)}\n\nNhật ký đầy đủ sẽ hiển thị các sự kiện liên quan.`,
         );
     };
 

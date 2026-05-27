@@ -161,7 +161,7 @@ export default function SignReceipt({ visible, data, onDone }: SignReceiptProps)
                             {data.scopeLabel ? <RcptRow k="Phạm vi" v={data.scopeLabel} palette={palette} /> : null}
                             {data.validityLabel ? <RcptRow k="Hiệu lực" v={data.validityLabel} palette={palette} /> : null}
                             <RcptRow k="Thời điểm ký" v={formatSignedAt(data.signedAt)} mono palette={palette} />
-                            {data.txHashShort ? <RcptRow k="Tx hash" v={data.txHashShort} mono palette={palette} /> : null}
+                            {data.txHashShort ? <RcptRow k="Mã giao dịch" v={data.txHashShort} mono palette={palette} /> : null}
                         </View>
 
                         {/* Signature area: serif italic name + CinnabarSeal */}

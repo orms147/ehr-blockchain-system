@@ -214,7 +214,7 @@ export default function DoctorRequestAccessScreen() {
 
         const trimmedCid = cidHash.trim();
         if (selectedReqType !== 1 && !isValidCidHash(trimmedCid)) {
-            Alert.alert('CID không hợp lệ', 'CID Hash phải bắt đầu bằng 0x và có đúng 64 ký tự hex.');
+            Alert.alert('Mã hồ sơ không hợp lệ', 'Vui lòng nhập đúng định dạng mã hồ sơ.');
             return;
         }
 
@@ -459,7 +459,7 @@ export default function DoctorRequestAccessScreen() {
             <HexInputRow
                 value={selectedReqType === 1 ? '' : cidHash}
                 onChangeText={setCidHash}
-                placeholder="Quét QR hoặc dán mã CID (0x…)"
+                placeholder="Quét QR hoặc dán mã hồ sơ"
                 invalid={!cidLooksValid}
                 disabled={selectedReqType === 1}
                 onQrPress={() => setCidScannerOpen(true)}
@@ -585,8 +585,8 @@ export default function DoctorRequestAccessScreen() {
                 visible={cidScannerOpen}
                 onClose={() => setCidScannerOpen(false)}
                 mode="cidHash"
-                title="Quét mã CID"
-                subtitle="Hướng camera vào QR mã CID hồ sơ"
+                title="Quét mã hồ sơ"
+                subtitle="Hướng camera vào QR mã hồ sơ"
                 onScanned={(cid) => {
                     setCidHash(cid.toLowerCase());
                     setCidScannerOpen(false);
