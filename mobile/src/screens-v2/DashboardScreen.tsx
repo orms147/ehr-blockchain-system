@@ -20,6 +20,7 @@ import useAuthStore from '../store/authStore';
 import useRecords from '../hooks/useRecords';
 import useRequests from '../hooks/useRequests';
 import RoleSwitcher from '../components/RoleSwitcher';
+import { useUserProfile } from '../components/UserChip';
 import { useEhrPalette } from '../constants/uiColors';
 
 const SERIF = 'Fraunces_400Regular';
@@ -398,7 +399,6 @@ export default function DashboardScreen({ navigation }: any) {
                             onPress={handleOpenRequests}
                             accent={palette.EHR_SECONDARY}
                             divider
-                            mono
                         />
                     </XStack>
                 </View>
@@ -626,6 +626,17 @@ function RecordRow({ record, onPress }: { record: any; onPress: () => void }) {
     const palette = useEhrPalette();
     const date = parseDateParts(record?.date, record?.createdAt);
 
+    // Resolve creator label. Trước: hiển thị raw "BS. 0xcdfa..." (cắt address).
+    // Sau: nếu doctor có profile.fullName trên backend → "BS. {fullName}",
+    // fallback "BS. {truncate(address)}" nếu chưa có profile. Patient tự tạo
+    // hiển thị "Bạn".
+    const isCreatedByDoctor = !!record?.isCreatedByDoctor;
+    const profileQ = useUserProfile(isCreatedByDoctor ? record?.createdBy : null);
+    const truncate = (a?: string) => (a ? `${a.slice(0, 6)}…${a.slice(-4)}` : '');
+    const creatorLabel = isCreatedByDoctor
+        ? `BS. ${profileQ.data?.fullName || truncate(record?.createdBy)}`
+        : 'Bạn';
+
     return (
         <Pressable
             onPress={onPress}
@@ -690,7 +701,7 @@ function RecordRow({ record, onPress }: { record: any; onPress: () => void }) {
                     }}
                     numberOfLines={1}
                 >
-                    {record.createdByDisplay || 'Bạn'}
+                    {creatorLabel}
                     {record.type ? ` · ${record.type}` : ''}
                 </Text>
                 {record.syncStatus && record.syncStatus !== 'confirmed' ? (
@@ -711,15 +722,20 @@ function RecordRow({ record, onPress }: { record: any; onPress: () => void }) {
 }
 
 function parseDateParts(viDate?: string, isoDate?: string) {
-    // useRecords already produced viDate = "DD/MM/YYYY"
+    // useRecords already produced viDate = "DD/MM/YYYY".
+    // Đồng bộ format số với RecordsScreen (RecordCard splitDate dùng MM số,
+    // không text "Năm/Tư"). User feedback: "28 Năm" gây hiểu nhầm là "28 tuổi".
     if (viDate && /^\d{1,2}\/\d{1,2}\/\d{4}$/.test(viDate)) {
         const [day, month] = viDate.split('/');
-        return { day, month: VI_MONTH_SHORT[Number(month) - 1] || month };
+        return { day: day.padStart(2, '0'), month: month.padStart(2, '0') };
     }
     if (isoDate) {
         const d = new Date(isoDate);
         if (!Number.isNaN(d.getTime())) {
-            return { day: String(d.getDate()).padStart(2, '0'), month: VI_MONTH_SHORT[d.getMonth()] };
+            return {
+                day: String(d.getDate()).padStart(2, '0'),
+                month: String(d.getMonth() + 1).padStart(2, '0'),
+            };
         }
     }
     return { day: '—', month: '—' };

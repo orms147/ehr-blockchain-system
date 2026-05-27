@@ -57,6 +57,7 @@ import { formatExpiry } from '../utils/dateFormatting';
 import ViCard from '../components-v2/ViCard';
 import ViButton from '../components-v2/ViButton';
 import { ViSectionLabel, ViSourceChip } from '../components-v2/ViChips';
+import { useUserProfile } from '../components/UserChip';
 import { useEhrPalette } from '../constants/uiColors';
 
 const SERIF = 'Fraunces_400Regular';
@@ -159,6 +160,20 @@ export default function RecordDetailScreen({ route, navigation }: any) {
     const creatorAddrLc = String((record as any)?.createdBy || '').toLowerCase();
     const iAmOwner = !!me && (me === ownerAddrLc || me === creatorAddrLc);
     const isRecordOwner = !!me && me === ownerAddrLc;
+
+    // Resolve creator display name (similar pattern với Dashboard RecordRow).
+    // Backend trả về wallet address → mobile lookup profile.fullName qua
+    // useUserProfile. Fallback truncate(address) nếu chưa có profile.
+    const isCreatedBySelf = !!me && creatorAddrLc === me;
+    const creatorProfileQ = useUserProfile(!isCreatedBySelf ? (record as any)?.createdBy : null);
+    const headerCreatorLabel = (() => {
+        if (isCreatedBySelf) return 'Bạn';
+        const addr = (record as any)?.createdBy;
+        if (!addr) return 'Người tạo không rõ';
+        const short = `${String(addr).slice(0, 6)}…${String(addr).slice(-4)}`;
+        const fullName = creatorProfileQ.data?.fullName;
+        return fullName ? `BS. ${fullName}` : `BS. ${short}`;
+    })();
 
     const [isDecrypting, setIsDecrypting] = useState(false);
     const [decryptedData, setDecryptedData] = useState<any>(null);
@@ -683,7 +698,7 @@ export default function RecordDetailScreen({ route, navigation }: any) {
                     <XStack style={{ alignItems: 'center', gap: 8 }}>
                         <User size={13} color={palette.EHR_TEXT_MUTED} />
                         <Text style={{ fontFamily: SANS, fontSize: 13, color: palette.EHR_TEXT_MUTED }}>
-                            {record.createdByDisplay || 'Người tạo không rõ'}
+                            {headerCreatorLabel}
                         </Text>
                     </XStack>
                 </ViCard>
@@ -843,86 +858,15 @@ export default function RecordDetailScreen({ route, navigation }: any) {
                                                     record: { ...v, createdAt: v?.createdAt ? new Date(v.createdAt).toISOString() : null },
                                                 });
                                             return (
-                                                <View key={v.cidHash || idx} style={{ position: 'relative', marginBottom: 16 }}>
-                                                    {/* Dot — solid ink if current, hollow ring else */}
-                                                    <View
-                                                        style={{
-                                                            position: 'absolute',
-                                                            left: -16,
-                                                            top: 6,
-                                                            width: 11,
-                                                            height: 11,
-                                                            borderRadius: 6,
-                                                            backgroundColor: isCurrent ? palette.EHR_ON_SURFACE : palette.EHR_SURFACE,
-                                                            borderWidth: 0.75,
-                                                            borderColor: isCurrent ? palette.EHR_ON_SURFACE : palette.EHR_OUTLINE,
-                                                        }}
-                                                    />
-                                                    <Pressable onPress={onPress} disabled={isCurrent}>
-                                                        <XStack style={{ alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
-                                                            <Text
-                                                                style={{
-                                                                    fontFamily: 'Fraunces_500Medium',
-                                                                    fontStyle: 'italic',
-                                                                    fontSize: 15,
-                                                                    fontWeight: '600',
-                                                                    color: palette.EHR_ON_SURFACE,
-                                                                }}
-                                                            >
-                                                                v{idx + 1}
-                                                            </Text>
-                                                            {v.createdAt ? (
-                                                                <Text
-                                                                    style={{
-                                                                        fontSize: 12,
-                                                                        color: palette.EHR_TEXT_MUTED,
-                                                                        letterSpacing: 0.2,
-                                                                        fontFamily: 'monospace',
-                                                                    }}
-                                                                >
-                                                                    {new Date(v.createdAt).toLocaleDateString('vi-VN')}
-                                                                </Text>
-                                                            ) : null}
-                                                            {isCurrent ? (
-                                                                <Text
-                                                                    style={{
-                                                                        fontSize: 10,
-                                                                        color: palette.EHR_PRIMARY,
-                                                                        fontWeight: '700',
-                                                                        letterSpacing: 0.6,
-                                                                        textTransform: 'uppercase',
-                                                                        fontFamily: SANS_SEMI,
-                                                                    }}
-                                                                >
-                                                                    Hiện tại
-                                                                </Text>
-                                                            ) : null}
-                                                        </XStack>
-                                                        <Text
-                                                            style={{
-                                                                marginTop: 4,
-                                                                fontSize: 13.5,
-                                                                color: palette.EHR_ON_SURFACE_VARIANT,
-                                                                lineHeight: 19,
-                                                                fontFamily: SANS,
-                                                            }}
-                                                            numberOfLines={2}
-                                                        >
-                                                            {v.title || `Phiên bản ${idx + 1}`}
-                                                        </Text>
-                                                        <Text
-                                                            style={{
-                                                                marginTop: 4,
-                                                                fontFamily: 'monospace',
-                                                                fontSize: 10.5,
-                                                                color: palette.EHR_TEXT_MUTED,
-                                                            }}
-                                                            numberOfLines={1}
-                                                        >
-                                                            {String(v.cidHash || '').slice(0, 18)}…
-                                                        </Text>
-                                                    </Pressable>
-                                                </View>
+                                                <VersionRow
+                                                    key={v.cidHash || idx}
+                                                    version={v}
+                                                    idx={idx}
+                                                    isCurrent={isCurrent}
+                                                    onPress={onPress}
+                                                    palette={palette}
+                                                    meAddr={me}
+                                                />
                                             );
                                         })}
                                     </View>
@@ -1148,6 +1092,131 @@ export default function RecordDetailScreen({ route, navigation }: any) {
                 </Pressable>
             </Modal>
         </SafeAreaView>
+    );
+}
+
+// ───────── VersionRow (timeline item) ─────────
+// Tách thành subcomponent để dùng useUserProfile hook resolve creator name
+// — KHÔNG thể gọi hook bên trong .map() callback.
+function VersionRow({
+    version,
+    idx,
+    isCurrent,
+    onPress,
+    palette,
+    meAddr,
+}: {
+    version: any;
+    idx: number;
+    isCurrent: boolean;
+    onPress?: () => void;
+    palette: any;
+    meAddr: string;
+}) {
+    const creator = String(version?.createdBy || '').toLowerCase();
+    const isMine = !!meAddr && creator === meAddr;
+    const profileQ = useUserProfile(!isMine && creator ? creator : null);
+    const creatorLabel = (() => {
+        if (!creator) return null;
+        if (isMine) return 'Bạn';
+        const short = `${creator.slice(0, 6)}…${creator.slice(-4)}`;
+        const fullName = profileQ.data?.fullName;
+        return fullName ? `BS. ${fullName}` : `BS. ${short}`;
+    })();
+
+    return (
+        <View style={{ position: 'relative', marginBottom: 16 }}>
+            <View
+                style={{
+                    position: 'absolute',
+                    left: -16,
+                    top: 6,
+                    width: 11,
+                    height: 11,
+                    borderRadius: 6,
+                    backgroundColor: isCurrent ? palette.EHR_ON_SURFACE : palette.EHR_SURFACE,
+                    borderWidth: 0.75,
+                    borderColor: isCurrent ? palette.EHR_ON_SURFACE : palette.EHR_OUTLINE,
+                }}
+            />
+            <Pressable onPress={onPress} disabled={isCurrent}>
+                <XStack style={{ alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
+                    <Text
+                        style={{
+                            fontFamily: 'Fraunces_500Medium',
+                            fontStyle: 'italic',
+                            fontSize: 15,
+                            fontWeight: '600',
+                            color: palette.EHR_ON_SURFACE,
+                        }}
+                    >
+                        v{idx + 1}
+                    </Text>
+                    {version.createdAt ? (
+                        <Text
+                            style={{
+                                fontSize: 12,
+                                color: palette.EHR_TEXT_MUTED,
+                                letterSpacing: 0.2,
+                                fontFamily: 'monospace',
+                            }}
+                        >
+                            {new Date(version.createdAt).toLocaleDateString('vi-VN')}
+                        </Text>
+                    ) : null}
+                    {isCurrent ? (
+                        <Text
+                            style={{
+                                fontSize: 10,
+                                color: palette.EHR_PRIMARY,
+                                fontWeight: '700',
+                                letterSpacing: 0.6,
+                                textTransform: 'uppercase',
+                                fontFamily: SANS_SEMI,
+                            }}
+                        >
+                            Hiện tại
+                        </Text>
+                    ) : null}
+                </XStack>
+                <Text
+                    style={{
+                        marginTop: 4,
+                        fontSize: 13.5,
+                        color: palette.EHR_ON_SURFACE_VARIANT,
+                        lineHeight: 19,
+                        fontFamily: SANS,
+                    }}
+                    numberOfLines={2}
+                >
+                    {version.title || `Phiên bản ${idx + 1}`}
+                </Text>
+                {creatorLabel ? (
+                    <Text
+                        style={{
+                            marginTop: 3,
+                            fontFamily: SANS,
+                            fontSize: 11.5,
+                            color: palette.EHR_TEXT_MUTED,
+                        }}
+                        numberOfLines={1}
+                    >
+                        Người tạo: {creatorLabel}
+                    </Text>
+                ) : null}
+                <Text
+                    style={{
+                        marginTop: 4,
+                        fontFamily: 'monospace',
+                        fontSize: 10.5,
+                        color: palette.EHR_TEXT_MUTED,
+                    }}
+                    numberOfLines={1}
+                >
+                    {String(version.cidHash || '').slice(0, 18)}…
+                </Text>
+            </Pressable>
+        </View>
     );
 }
 
