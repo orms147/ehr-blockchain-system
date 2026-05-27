@@ -289,7 +289,14 @@ export default function DoctorExpiredRecordsScreen({ navigation }: any) {
             return;
         }
         if (navigation?.navigate) {
-            navigation.navigate('RequestAccess', { patientAddress: ownerAddr, cidHash: item.cidHash });
+            // RequestAccess là tab inside DoctorTabs (Tier 2). DoctorTabs render
+            // qua RoleBasedTabs đăng ký trong MainStack với name="MainTabs" (line
+            // 228 AppNavigator). DoctorExpiredRecords là modal trong cùng MainStack
+            // → navigate qua MainTabs wrapper với nested screen syntax.
+            navigation.navigate('MainTabs', {
+                screen: 'RequestAccess',
+                params: { patientAddress: ownerAddr, cidHash: item.cidHash },
+            });
         } else {
             Alert.alert('Yêu cầu lại', 'Mở màn "Yêu cầu" để gửi request mới.');
         }

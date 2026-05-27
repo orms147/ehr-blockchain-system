@@ -24,9 +24,10 @@
 //   - 17s auto-confirmAccessRequest as requester (Step B pre-pay)
 //   - POST /api/requests/create mirror to DB
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Alert, Pressable, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useRoute } from '@react-navigation/native';
 import { CheckCircle, QrCode } from 'lucide-react-native';
 import { Text, XStack, YStack } from 'tamagui';
 import { createPublicClient, http, parseEventLogs, parseGwei } from 'viem';
@@ -141,9 +142,23 @@ const isValidCidHash = (h: string) => /^0x[a-fA-F0-9]{64}$/.test(h);
 
 export default function DoctorRequestAccessScreen() {
     const palette = useEhrPalette();
+    const route = useRoute<any>();
 
     const [patientAddress, setPatientAddress] = useState('');
     const [cidHash, setCidHash] = useState('');
+
+    // Pre-fill từ "Yêu cầu lại" của DoctorExpiredRecords (route params).
+    // Tab cũng được điều hướng thường (không có params) — chỉ apply khi có.
+    useEffect(() => {
+        const paramAddr = route.params?.patientAddress;
+        const paramCid = route.params?.cidHash;
+        if (paramAddr && typeof paramAddr === 'string') {
+            setPatientAddress(paramAddr);
+        }
+        if (paramCid && typeof paramCid === 'string') {
+            setCidHash(paramCid);
+        }
+    }, [route.params?.patientAddress, route.params?.cidHash]);
     const [scope, setScope] = useState<ScopeId>('rw');
     const [tp, setTp] = useState<TimePresetId>('7d');
     const [customDays, setCustomDays] = useState('');
