@@ -51,7 +51,7 @@ const TYPE_FILTER_OPTIONS = [
     { key: 'all', label: 'Tất cả' },
     { key: 'general', label: 'Khám' },
     { key: 'lab', label: 'Xét nghiệm' },
-    { key: 'imaging', label: 'Hình ảnh' },
+    { key: 'imaging', label: 'Chẩn đoán hình ảnh' },
     { key: 'rx', label: 'Đơn thuốc' },
     { key: 'vacc', label: 'Tiêm chủng' },
 ] as const;

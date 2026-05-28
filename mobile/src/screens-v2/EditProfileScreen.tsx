@@ -18,6 +18,7 @@ import { Alert, Pressable, ScrollView, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Text, XStack, YStack } from 'tamagui';
 import { Save, Pencil } from 'lucide-react-native';
+import { useQueryClient } from '@tanstack/react-query';
 
 import LoadingSpinner from '../components/LoadingSpinner';
 import profileService from '../services/profile.service';
@@ -40,7 +41,8 @@ const GENDERS = [
 
 export default function EditProfileScreen({ navigation }: any) {
     const palette = useEhrPalette();
-    const { token } = useAuthStore();
+    const { token, user, refreshAuthSession } = useAuthStore() as any;
+    const queryClient = useQueryClient();
     const [isLoading, setIsLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
 
@@ -93,6 +95,21 @@ export default function EditProfileScreen({ navigation }: any) {
             }
 
             await profileService.updateMyProfile(payload);
+
+            // Live update: refresh authStore.user (cho SettingsScreen header +
+            // mọi nơi đọc user.fullName) + invalidate UserChip cache cho ví của
+            // chính mình (cho mọi list hiển thị tên qua useUserProfile).
+            // Trước đây phải logout + login mới thấy tên mới — feedback A1.2.
+            try {
+                await refreshAuthSession?.();
+            } catch (refreshErr) {
+                console.warn('refreshAuthSession after profile save failed:', refreshErr);
+            }
+            const myAddr = (user?.walletAddress || (user as any)?.address || '').toLowerCase();
+            if (myAddr) {
+                queryClient.invalidateQueries({ queryKey: ['userProfile', myAddr] });
+            }
+
             Alert.alert('Thành công', 'Đã cập nhật thông tin cá nhân.', [
                 { text: 'OK', onPress: () => navigation.goBack() },
             ]);

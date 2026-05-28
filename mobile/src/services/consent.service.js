@@ -19,9 +19,11 @@ const CONSENT_LEDGER_ADDRESS = process.env.EXPO_PUBLIC_CONSENT_LEDGER_ADDRESS;
  * Doctor A re-shares a record to Doctor B via per-record delegation.
  * Calls ConsentLedger.grantUsingRecordDelegation (msg.sender = doctor A).
  *
- * SECURITY (defense-in-depth): clamp expireAt to sender's own consent expiry
- * so B cannot outlive A. Contract also enforces this (FIX audit #8), but we
- * cap client-side too so the user sees the correct duration in the UI.
+ * SECURITY: contract caps B's expiry to A's own consent expiry (FIX audit #8
+ * in ConsentLedger.sol:615-623) — A KHÔNG được cấp quyền dài hơn quyền chính
+ * mình. Cap là silent (không revert), nên sau khi tx confirm hàm này READ
+ * BACK consent từ contract qua getConsent() để biết expireAt thật → caller
+ * dùng giá trị thật ghi backend + báo user nếu đã bị cap.
  *
  * @param {object} params
  * @param {string} params.patientAddress
@@ -29,7 +31,13 @@ const CONSENT_LEDGER_ADDRESS = process.env.EXPO_PUBLIC_CONSENT_LEDGER_ADDRESS;
  * @param {string} params.rootCidHash
  * @param {string} params.aesKey
  * @param {number} [params.expiresAtMs]
- * @param {number} [params.senderConsentExpireAtSec]
+ * @returns {Promise<{
+ *   txHash: string,
+ *   encKeyHash: string,
+ *   requestedExpireAtSec: number,
+ *   actualExpireAtSec: number,
+ *   wasClamped: boolean,
+ * }>}
  */
 export async function delegateOnChain({
     patientAddress,
@@ -37,22 +45,13 @@ export async function delegateOnChain({
     rootCidHash,
     aesKey,
     expiresAtMs,
-    senderConsentExpireAtSec = 0,
 }) {
     if (!CONSENT_LEDGER_ADDRESS) {
         throw new Error('Thiếu EXPO_PUBLIC_CONSENT_LEDGER_ADDRESS trong env.');
     }
     const { walletClient, account } = await walletActionService.getWalletContext();
     const encKeyHash = keccak256(toBytes(aesKey));
-    let expireAt = expiresAtMs ? Math.floor(expiresAtMs / 1000) : 0;
-
-    // Defense-in-depth: cap to sender's own consent expiry.
-    // Contract enforces this too (FIX audit #8) but capping here gives correct UX.
-    if (senderConsentExpireAtSec > 0) {
-        if (expireAt === 0 || expireAt > senderConsentExpireAtSec) {
-            expireAt = senderConsentExpireAtSec;
-        }
-    }
+    const requestedExpireAtSec = expiresAtMs ? Math.floor(expiresAtMs / 1000) : 0;
 
     const publicClient = createPublicClient({
         chain: arbitrumSepolia,
@@ -79,12 +78,39 @@ export async function delegateOnChain({
             granteeAddress,
             rootCidHash,
             encKeyHash,
-            expireAt,
+            requestedExpireAtSec,
         ],
     }));
 
     await withRpcRetry(() => publicClient.waitForTransactionReceipt({ hash }));
-    return { txHash: hash, encKeyHash, clampedExpireAt: expireAt };
+
+    // Read back B's consent từ contract để lấy actual expireAt (contract có
+    // thể đã cap silent xuống A's expiry). Đây là source of truth on-chain.
+    let actualExpireAtSec = requestedExpireAtSec;
+    try {
+        const consent = await withRpcRetry(() => publicClient.readContract({
+            address: CONSENT_LEDGER_ADDRESS,
+            abi: CONSENT_LEDGER_ABI,
+            functionName: 'getConsent',
+            args: [patientAddress, granteeAddress, rootCidHash],
+        }));
+        actualExpireAtSec = Number(consent?.expireAt ?? requestedExpireAtSec);
+    } catch (err) {
+        console.warn('[delegateOnChain] getConsent read-back failed; falling back to requested expiry', err);
+    }
+
+    const wasClamped =
+        requestedExpireAtSec !== 0 &&
+        actualExpireAtSec !== 0 &&
+        actualExpireAtSec < requestedExpireAtSec;
+
+    return {
+        txHash: hash,
+        encKeyHash,
+        requestedExpireAtSec,
+        actualExpireAtSec,
+        wasClamped,
+    };
 }
 
 /**

@@ -100,13 +100,20 @@ export default function DoctorDelegatableRecordsScreen() {
                 ? Date.now() + parseInt(expiryDays, 10) * 86400000
                 : (selected.expiresAt ? new Date(selected.expiresAt).getTime() : 0);
 
-            await consentService.delegateOnChain({
+            const delegateResult = await consentService.delegateOnChain({
                 patientAddress: patient,
                 granteeAddress: addr,
                 rootCidHash: selected.rootCidHash || selected.cidHash,
                 aesKey: localRecord.aesKey,
                 expiresAtMs,
             });
+
+            // Hệ thống tự rút thời hạn xuống bằng quyền của bạn (không thể cấp
+            // dài hơn quyền chính mình). Dùng giá trị thật từ contract để ghi
+            // backend KeyShare — tránh lệch giữa UI và quyền on-chain.
+            const effectiveExpiresAtMs = delegateResult.actualExpireAtSec
+                ? delegateResult.actualExpireAtSec * 1000
+                : 0;
 
             const { walletClient } = await walletActionService.getWalletContext();
             const myKeypair = await getOrCreateEncryptionKeypair(walletClient, myAddress!);
@@ -118,7 +125,7 @@ export default function DoctorDelegatableRecordsScreen() {
                 recipientAddress: addr,
                 encryptedPayload,
                 senderPublicKey: myKeypair.publicKey,
-                expiresAt: expiresAtMs ? new Date(expiresAtMs).toISOString() : null,
+                expiresAt: effectiveExpiresAtMs ? new Date(effectiveExpiresAtMs).toISOString() : null,
                 allowDelegate: false,
             });
 
@@ -139,7 +146,7 @@ export default function DoctorDelegatableRecordsScreen() {
                             recipientAddress: addr,
                             encryptedPayload: vEncrypted,
                             senderPublicKey: myKeypair.publicKey,
-                            expiresAt: expiresAtMs ? new Date(expiresAtMs).toISOString() : null,
+                            expiresAt: effectiveExpiresAtMs ? new Date(effectiveExpiresAtMs).toISOString() : null,
                             allowDelegate: false,
                         });
                     } catch (e) {
@@ -150,7 +157,16 @@ export default function DoctorDelegatableRecordsScreen() {
                 console.warn('Chain re-share enumeration failed', e);
             }
 
-            Alert.alert('Thành công', `Đã uỷ quyền cho ${addr.slice(0, 10)}…`);
+            let successMsg = `Đã uỷ quyền cho ${addr.slice(0, 10)}…`;
+            if (delegateResult.wasClamped) {
+                const actualDays = Math.max(
+                    1,
+                    Math.round((delegateResult.actualExpireAtSec * 1000 - Date.now()) / 86400000),
+                );
+                successMsg +=
+                    `\n\nLưu ý: Thời hạn đã được rút xuống ${actualDays} ngày — bạn không thể cấp quyền dài hơn quyền của chính mình.`;
+            }
+            Alert.alert('Thành công', successMsg);
             closeModal();
             queryClient.invalidateQueries({ queryKey: ['delegatableRecords'] });
         } catch (err: any) {

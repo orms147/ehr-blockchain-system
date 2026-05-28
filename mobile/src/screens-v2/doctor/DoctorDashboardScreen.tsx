@@ -98,7 +98,7 @@ type SharedRecord = {
     senderAddress?: string;
     versionCount?: number;
     allowDelegate?: boolean;
-    record?: { ownerAddress?: string; title?: string; recordType?: string };
+    record?: { ownerAddress?: string; title?: string; recordType?: string; createdAt?: string };
 };
 
 type PendingClaim = {
@@ -169,6 +169,13 @@ export default function DoctorDashboardScreen() {
             (records || []).forEach((r) => { if (r?.cidHash) uniqueMap.set(r.cidHash, r); });
             const distinct = Array.from(uniqueMap.values());
             const visible = distinct.filter((r) => r.status !== 'awaiting_claim');
+            // Pick version đại diện cho mỗi chain root = version có RECORD
+            // createdAt mới nhất (NOT KeyShare row createdAt — khi A cascade
+            // re-share cho B 3 versions sequential loop, 3 KeyShare rows được
+            // ghi gần như đồng thời → KeyShare.createdAt comparator chọn random
+            // theo thứ tự loop, không tương ứng version mới nhất).
+            const recordTs = (r: SharedRecord) =>
+                new Date(r.record?.createdAt || r.createdAt || 0).getTime();
             const byRoot = new Map<string, SharedRecord>();
             for (const r of visible) {
                 const root = (r.rootCidHash || r.cidHash || '').toLowerCase();
@@ -178,9 +185,7 @@ export default function DoctorDashboardScreen() {
                     byRoot.set(root, r);
                     continue;
                 }
-                const rTs = new Date(r.createdAt || 0).getTime();
-                const prevTs = new Date(prev.createdAt || 0).getTime();
-                if (rTs > prevTs) byRoot.set(root, r);
+                if (recordTs(r) > recordTs(prev)) byRoot.set(root, r);
             }
             const latest = Array.from(byRoot.values());
             const processed = latest.map((record) => {
@@ -191,7 +196,7 @@ export default function DoctorDashboardScreen() {
                 }).length;
                 return { ...record, versionCount: count };
             });
-            processed.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+            processed.sort((a, b) => recordTs(b) - recordTs(a));
             return processed;
         },
         enabled: !!token,
@@ -228,9 +233,10 @@ export default function DoctorDashboardScreen() {
         if (r.expiresAt && new Date(r.expiresAt).getTime() < Date.now()) return true;
         return false;
     };
-    const activeShared = allShared.filter((r) => !isInactive(r));
-    const inactiveShared = allShared.filter(isInactive);
-    const sharedRecords = [...activeShared, ...inactiveShared];
+    // Dashboard chỉ list active. Inactive (expired + revoked) chuyển sang
+    // màn "Hồ sơ hết hạn / bị thu hồi" để tránh leak title của version mới
+    // mà patient đã rút quyền — user feedback 2026-05-28.
+    const sharedRecords = allShared.filter((r) => !isInactive(r));
     const pendingClaims = pendingClaimsQuery.data ?? [];
     const isLoading =
         (sharedRecordsQuery.isLoading || pendingClaimsQuery.isLoading) &&
@@ -275,7 +281,11 @@ export default function DoctorDashboardScreen() {
         const accepted = await new Promise<boolean>((resolve) => {
             setLiabilityModal({
                 type: 'claim',
-                data: { resolve, patientLabel: truncate(claim.patientAddress) },
+                data: {
+                    resolve,
+                    patientLabel: truncate(claim.patientAddress),
+                    patientAddress: claim.patientAddress,
+                },
             });
         });
         if (!accepted) return;
@@ -362,25 +372,40 @@ export default function DoctorDashboardScreen() {
             Alert.alert('Không mở được hồ sơ', 'Thiếu mã hồ sơ (cidHash).');
             return;
         }
+        // B2.2 feedback: CCHN verify check chạy TRƯỚC LiabilityModal. Nếu
+        // doctor chưa xác minh CCHN, hỏi đi xác minh thay vì cho accept rồi
+        // mới refuse — tránh user click "Đồng ý" mà rồi vẫn không xem được.
+        if (isVerifiedDoctor === false) {
+            Alert.alert(
+                'Cần xác minh CCHN trước',
+                'Tài khoản bác sĩ của bạn chưa được tổ chức y tế xác minh.\n\n' +
+                'Bạn cần nộp chứng chỉ hành nghề (CCHN) và được duyệt trước khi nhận hồ sơ.\n\n' +
+                'Sau khi xác minh, tất cả hồ sơ đã được chia sẻ sẽ tự động mở khóa.',
+                [
+                    { text: 'Huỷ', style: 'cancel' },
+                    {
+                        text: 'Đi xác minh ngay',
+                        onPress: () => navigation.navigate('CredentialSubmit'),
+                    },
+                ],
+            );
+            return;
+        }
         if (record?.status === 'pending') {
             const patientAddr = record?.record?.ownerAddress || record?.senderAddress || '';
             const ok = await new Promise<boolean>((resolve) => {
                 setLiabilityModal({
                     type: 'view',
-                    data: { resolve, patientLabel: truncate(patientAddr) },
+                    data: {
+                        resolve,
+                        patientLabel: truncate(patientAddr),
+                        patientAddress: patientAddr,
+                        recordTitle: record?.record?.title || null,
+                        recordCreatedAt: record?.createdAt || null,
+                    },
                 });
             });
             if (!ok) return;
-        }
-        if (isVerifiedDoctor === false) {
-            Alert.alert(
-                'Bác sĩ chưa xác minh',
-                'Tài khoản bác sĩ của bạn chưa được tổ chức y tế xác minh.\n\n' +
-                'Bạn không thể xem hồ sơ được chia sẻ cho đến khi được xác minh. ' +
-                'Liên hệ tổ chức y tế của bạn để được duyệt.\n\n' +
-                'Sau khi xác minh, tất cả hồ sơ đã được chia sẻ sẽ tự động mở khóa — không cần bệnh nhân chia sẻ lại.',
-            );
-            return;
         }
         if (record?.status === 'awaiting_claim') {
             Alert.alert(
@@ -816,7 +841,7 @@ export default function DoctorDashboardScreen() {
                                             color: palette.EHR_ON_SURFACE,
                                         }}
                                     >
-                                        Hồ sơ hết hạn
+                                        Hồ sơ hết hạn / bị thu hồi
                                     </Text>
                                     <Text
                                         style={{
@@ -826,7 +851,7 @@ export default function DoctorDashboardScreen() {
                                             marginTop: 2,
                                         }}
                                     >
-                                        Xem các quyền truy cập đã hết hạn
+                                        Xem các quyền đã hết hạn hoặc bị bệnh nhân thu hồi
                                     </Text>
                                 </YStack>
                             </Pressable>
@@ -1023,9 +1048,8 @@ export default function DoctorDashboardScreen() {
                 }
                 showsVerticalScrollIndicator={false}
             />
-            <LiabilityConfirmModal
-                visible={!!liabilityModal}
-                patientLabel={liabilityModal?.data?.patientLabel || ''}
+            <LiabilityModalWithProfile
+                modalState={liabilityModal}
                 onConfirm={() => {
                     liabilityModal?.data?.resolve?.(true);
                     setLiabilityModal(null);
@@ -1036,6 +1060,33 @@ export default function DoctorDashboardScreen() {
                 }}
             />
         </SafeAreaView>
+    );
+}
+
+// ───────── LiabilityModal wrapper resolves patient name via UserChip hook ─────────
+// Wrapped vì useUserProfile hook chỉ gọi được trong component. Modal nhận
+// modalState (contains data.patientAddress) → lookup → forward props enriched
+// (patientName, recordTitle, recordCreatedAt) xuống LiabilityConfirmModal.
+function LiabilityModalWithProfile({
+    modalState,
+    onConfirm,
+    onCancel,
+}: {
+    modalState: { type: 'claim' | 'view'; data: any } | null;
+    onConfirm: () => void;
+    onCancel: () => void;
+}) {
+    const { data: profile } = useUserProfile(modalState?.data?.patientAddress);
+    return (
+        <LiabilityConfirmModal
+            visible={!!modalState}
+            patientLabel={modalState?.data?.patientLabel || ''}
+            patientName={profile?.fullName || null}
+            recordTitle={modalState?.data?.recordTitle || null}
+            recordCreatedAt={modalState?.data?.recordCreatedAt || null}
+            onConfirm={onConfirm}
+            onCancel={onCancel}
+        />
     );
 }
 

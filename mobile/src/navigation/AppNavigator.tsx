@@ -272,7 +272,7 @@ function MainStackNavigator() {
             <Stack.Screen
                 name="DoctorExpiredRecords"
                 component={DoctorExpiredRecordsScreen}
-                options={{ title: 'Hồ sơ hết hạn' }}
+                options={{ title: 'Hồ sơ hết hạn / bị thu hồi' }}
             />
             <Stack.Screen
                 name="EditProfile"

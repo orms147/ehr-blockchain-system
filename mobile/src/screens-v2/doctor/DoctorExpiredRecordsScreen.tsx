@@ -426,7 +426,7 @@ export default function DoctorExpiredRecordsScreen({ navigation }: any) {
                             >
                                 Hồ sơ{' '}
                                 <Text style={{ fontFamily: SERIF_ITALIC, fontStyle: 'italic', color: palette.EHR_PRIMARY }}>
-                                    đã hết hạn.
+                                    hết hạn truy cập / đã bị thu hồi.
                                 </Text>
                             </Text>
                             <Text
@@ -492,7 +492,7 @@ export default function DoctorExpiredRecordsScreen({ navigation }: any) {
                                 letterSpacing: -0.2,
                             }}
                         >
-                            Không có hồ sơ nào hết hạn
+                            Không có hồ sơ nào hết hạn hoặc bị thu hồi
                         </Text>
                         <Text
                             style={{

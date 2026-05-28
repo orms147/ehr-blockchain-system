@@ -44,6 +44,7 @@ type ConsentItem = {
     granteeAddress?: string;
     recipientAddress?: string;
     expiresAt?: string | null;
+    chainVersionCount?: number;
 };
 
 type GroupedConsent = {
@@ -87,7 +88,11 @@ function groupConsents(items: ConsentItem[]): GroupedConsent[] {
                 groupKey,
                 grantee,
                 rootCidHash: root,
-                versionCount: 1,
+                // True chain size từ backend (đếm RecordMetadata theo chain root).
+                // KHÔNG đếm bằng số rows KeyShare patient đã sent vì doctor có
+                // thể tạo version mới (addRecordByDoctor) → KeyShare row mới
+                // có senderAddress=doctor → không nằm trong /sent của patient.
+                versionCount: it.chainVersionCount || 1,
                 activeCount: active ? 1 : 0,
                 revokedCount: revoked ? 1 : 0,
                 latestExpiresAt: it.expiresAt || null,
@@ -97,7 +102,10 @@ function groupConsents(items: ConsentItem[]): GroupedConsent[] {
             });
             continue;
         }
-        existing.versionCount += 1;
+        // versionCount từ backend cố định theo root — chỉ update nếu chưa được set.
+        if (it.chainVersionCount && it.chainVersionCount > existing.versionCount) {
+            existing.versionCount = it.chainVersionCount;
+        }
         if (active) existing.activeCount += 1;
         if (revoked) existing.revokedCount += 1;
         if (it.expiresAt) {

@@ -365,7 +365,6 @@ function classifyDecryptError(error: any): string {
                 rootCidHash: shareCidHash,
                 aesKey: shareAesKey,
                 expiresAtMs,
-                senderConsentExpireAtSec: 0, // contract clamps internally
             });
             grantResult = {
                 txHash: delegateResult.txHash,

@@ -6,10 +6,23 @@ import { useEhrPalette } from '../constants/uiColors';
 
 type Props = {
     visible: boolean;
-    patientLabel: string; // e.g. "BN 0x8af0...bd0f"
+    patientLabel: string; // fallback "BN 0x8af0...bd0f" — dùng khi không có name
+    patientName?: string | null; // tên đầy đủ resolved từ UserChip lookup
+    recordTitle?: string | null;
+    recordCreatedAt?: string | null; // ISO date string
     onConfirm: () => void;
     onCancel: () => void;
 };
+
+function formatVnDateShort(iso?: string | null): string {
+    if (!iso) return '';
+    try {
+        const d = new Date(iso);
+        return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+    } catch {
+        return '';
+    }
+}
 
 const TERMS = [
     'Truy cập này chỉ phục vụ mục đích y tế hợp pháp.',
@@ -18,7 +31,15 @@ const TERMS = [
     'Tôi chịu trách nhiệm pháp lý nếu sử dụng sai mục đích.',
 ];
 
-export default function LiabilityConfirmModal({ visible, patientLabel, onConfirm, onCancel }: Props) {
+export default function LiabilityConfirmModal({
+    visible,
+    patientLabel,
+    patientName,
+    recordTitle,
+    recordCreatedAt,
+    onConfirm,
+    onCancel,
+}: Props) {
     const palette = useEhrPalette();
     const s = StyleSheet.create({
         overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', padding: 24 },
@@ -61,11 +82,34 @@ export default function LiabilityConfirmModal({ visible, patientLabel, onConfirm
                         </Pressable>
                     </XStack>
 
-                    {/* Patient info */}
+                    {/* Patient + record info — B2.2 enhancement: doctor cần biết
+                        rõ ai/hồ sơ gì trước khi accept liability. */}
                     <View style={s.patientBadge}>
-                        <Text fontSize={13} color={palette.EHR_ON_SURFACE_VARIANT}>
-                            Hồ sơ bệnh nhân: <Text fontWeight="700" color="$color12">{patientLabel}</Text>
+                        <Text fontSize={12} color={palette.EHR_ON_SURFACE_VARIANT}>
+                            BỆNH NHÂN
                         </Text>
+                        <Text fontSize={15} fontWeight="700" color="$color12" style={{ marginTop: 2 }}>
+                            {patientName ? `BN. ${patientName}` : patientLabel}
+                        </Text>
+                        {patientName && patientLabel ? (
+                            <Text fontSize={11} color={palette.EHR_TEXT_MUTED} style={{ fontFamily: 'monospace', marginTop: 2 }}>
+                                {patientLabel}
+                            </Text>
+                        ) : null}
+                        {recordTitle || recordCreatedAt ? (
+                            <View style={{ marginTop: 10, paddingTop: 10, borderTopWidth: 0.5, borderColor: palette.EHR_OUTLINE_VARIANT }}>
+                                {recordTitle ? (
+                                    <Text fontSize={13} color="$color12" fontWeight="600">
+                                        {recordTitle}
+                                    </Text>
+                                ) : null}
+                                {recordCreatedAt ? (
+                                    <Text fontSize={11} color={palette.EHR_ON_SURFACE_VARIANT} style={{ marginTop: 2 }}>
+                                        Ngày tạo · {formatVnDateShort(recordCreatedAt)}
+                                    </Text>
+                                ) : null}
+                            </View>
+                        ) : null}
                     </View>
 
                     {/* Terms */}
@@ -103,7 +147,7 @@ export default function LiabilityConfirmModal({ visible, patientLabel, onConfirm
                             style={[s.btn, s.btnConfirm, !checked && { opacity: 0.4 }]}
                         >
                             <Text fontSize={14} fontWeight="700" color={palette.EHR_ON_PRIMARY}>
-                                Xác nhận truy cập
+                                Đồng ý nhận hồ sơ
                             </Text>
                         </Pressable>
                     </XStack>

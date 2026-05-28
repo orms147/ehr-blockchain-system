@@ -192,8 +192,38 @@ export default function SharedRecordCard({ record, onView, onCreateUpdate }: Sha
                     ) : null}
                 </XStack>
 
-                {/* Inline "Cập nhật" link (replaces large button) */}
-                {!isInactive && onCreateUpdate ? (
+                {/* Pre-claim: CTA "Đồng ý nhận hồ sơ" → trigger onView để mở
+                    LiabilityConfirmModal (B2.1 feedback). Sau khi claim,
+                    chuyển sang "Cập nhật version" như cũ. */}
+                {!isInactive && isPending && onView ? (
+                    <Pressable
+                        onPress={(e) => {
+                            e.stopPropagation();
+                            onView(record);
+                        }}
+                        hitSlop={4}
+                        style={({ pressed }) => ({
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            gap: 5,
+                            marginTop: 8,
+                            alignSelf: 'flex-start',
+                            opacity: pressed ? 0.55 : 1,
+                        })}
+                    >
+                        <Text
+                            style={{
+                                fontFamily: SANS_SEMI,
+                                fontSize: 12,
+                                color: palette.EHR_PRIMARY,
+                                fontWeight: '700',
+                            }}
+                        >
+                            Đồng ý nhận hồ sơ →
+                        </Text>
+                    </Pressable>
+                ) : null}
+                {!isInactive && !isPending && onCreateUpdate ? (
                     <Pressable
                         onPress={(e) => {
                             e.stopPropagation();

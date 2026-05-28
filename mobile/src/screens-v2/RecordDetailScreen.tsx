@@ -329,6 +329,14 @@ export default function RecordDetailScreen({ route, navigation }: any) {
         const shareAesKey = local.aesKey;
 
         let grantResult: any;
+        // Effective expiry dùng cho backend KeyShare row. Khi owner cấp quyền
+        // → trùng expiresAtMs user chọn. Khi doctor delegate → có thể bị
+        // contract cap xuống quyền của doctor (audit #8 silent clamp) — dùng
+        // actualExpireAtSec read-back để tránh lệch UI vs on-chain.
+        let effectiveExpiresAtMs = expiresAtMs;
+        let delegateWasClamped = false;
+        let delegateActualExpireAtSec = 0;
+
         if (isRecordOwner) {
             grantResult = await consentService.grantConsentOnChain({
                 granteeAddress: address,
@@ -350,7 +358,6 @@ export default function RecordDetailScreen({ route, navigation }: any) {
                 rootCidHash: shareCidHash,
                 aesKey: shareAesKey,
                 expiresAtMs,
-                senderConsentExpireAtSec: 0,
             });
             grantResult = {
                 txHash: delegateResult.txHash,
@@ -358,6 +365,11 @@ export default function RecordDetailScreen({ route, navigation }: any) {
                 isDoctor: true,
                 isVerifiedDoctor: true,
             };
+            delegateWasClamped = delegateResult.wasClamped;
+            delegateActualExpireAtSec = delegateResult.actualExpireAtSec;
+            effectiveExpiresAtMs = delegateActualExpireAtSec
+                ? delegateActualExpireAtSec * 1000
+                : 0;
         }
 
         const payload = JSON.stringify({ cid: local.cid, aesKey: local.aesKey });
@@ -369,7 +381,7 @@ export default function RecordDetailScreen({ route, navigation }: any) {
             recipientAddress: address,
             encryptedPayload,
             senderPublicKey: myKeypair.publicKey,
-            expiresAt: expiresAtMs ? new Date(expiresAtMs).toISOString() : null,
+            expiresAt: effectiveExpiresAtMs ? new Date(effectiveExpiresAtMs).toISOString() : null,
             allowDelegate: allowDelegateFlag,
         });
 
@@ -409,7 +421,7 @@ export default function RecordDetailScreen({ route, navigation }: any) {
                         recipientAddress: address,
                         encryptedPayload: vEncrypted,
                         senderPublicKey: myKeypair.publicKey,
-                        expiresAt: expiresAtMs ? new Date(expiresAtMs).toISOString() : null,
+                        expiresAt: effectiveExpiresAtMs ? new Date(effectiveExpiresAtMs).toISOString() : null,
                         allowDelegate: allowDelegateFlag,
                     });
                 } catch (e: any) {
@@ -431,9 +443,15 @@ export default function RecordDetailScreen({ route, navigation }: any) {
         const verifyWarn = grantResult.isDoctor && !grantResult.isVerifiedDoctor
             ? '\n\n⚠️ Bác sĩ này chưa được xác minh — họ sẽ chỉ đọc được hồ sơ sau khi tổ chức y tế xác minh.'
             : '';
+        const clampWarn = delegateWasClamped
+            ? `\n\n⚠️ Thời hạn đã được rút xuống ${Math.max(
+                1,
+                Math.round((delegateActualExpireAtSec * 1000 - Date.now()) / 86400000),
+            )} ngày — bạn không thể cấp quyền dài hơn quyền của chính mình.`
+            : '';
 
         let title = 'Chia sẻ thành công';
-        let body = `Đã cấp quyền (mã: ${grantResult.txHash.slice(0, 10)}…).\nCòn ${grantResult.signaturesRemaining} chữ ký miễn phí tháng này.${verifyWarn}`;
+        let body = `Đã cấp quyền (mã: ${grantResult.txHash.slice(0, 10)}…).\nCòn ${grantResult.signaturesRemaining} chữ ký miễn phí tháng này.${verifyWarn}${clampWarn}`;
         if (cascadeFailures.length > 0 || cascadeSkipped.length > 0) {
             title = 'Chia sẻ một phần';
             const list = [
@@ -523,6 +541,9 @@ export default function RecordDetailScreen({ route, navigation }: any) {
                     const existing = Array.isArray(recipients)
                         ? recipients.find((r: any) => r?.walletAddress?.toLowerCase() === address)
                         : null;
+                    // Backend /recipients đã cross-check Consent table — `existing`
+                    // chỉ tồn tại khi consent on-chain còn active. Không tự suy
+                    // ra "active" từ status field — nếu có row tức là active.
                     if (existing) {
                         const oldDelegate = existing.allowDelegate === true;
                         const newDelegate = shareType === 'read-delegate';
