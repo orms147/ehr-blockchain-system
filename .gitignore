@@ -7,6 +7,9 @@ CLAUDE.md
 #docs
 context/
 skills-lock.json
+thesis-prep/
+TEST_CHECKLIST.md
+FEEDBACK_*.md
 
 # Dependencies
 backend/node_modules/
