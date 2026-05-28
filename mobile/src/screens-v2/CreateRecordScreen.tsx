@@ -48,7 +48,13 @@ import {
     validateDrug,
     drugSummary,
 } from '../constants/drugs';
+import {
+    type Vaccination,
+    emptyShot,
+    validateShot,
+} from '../constants/vaccines';
 import RxCard from '../components-v2/RxCard';
+import VaccCard from '../components-v2/VaccCard';
 import {
     PageHeader,
     SectionLabel,
@@ -81,6 +87,8 @@ type DraftState = {
     // trường flat. Backward compat: nếu draft cũ có medication string, migrate
     // sang 1 Drug đầu list ở loader (xem useDraft initializer).
     drugs: Drug[];
+    // C2 plan §15 (TT 13/2026) — vaccinations multi-shot, hiện khi recordType='vacc'.
+    vaccinations: Vaccination[];
     heartRate: string;
     systolic: string;
     diastolic: string;
@@ -105,6 +113,7 @@ const INITIAL_DRAFT: DraftState = {
     icd10Codes: [],
     diagnosisNote: '',
     drugs: [],
+    vaccinations: [],
     heartRate: '',
     systolic: '',
     diastolic: '',
@@ -147,7 +156,7 @@ function cleanNumber(value: string): string {
 
 function buildPayload(input: BuildPayloadInput) {
     const {
-        title, description, recordTypeLabel, icd10Codes, diagnosisNote, drugs,
+        title, description, recordTypeLabel, icd10Codes, diagnosisNote, drugs, vaccinations,
         heartRate, systolic, diastolic, temperature, respRate, spo2, weight, height,
         notes, attachment,
     } = input;
@@ -188,6 +197,22 @@ function buildPayload(input: BuildPayloadInput) {
             instruction: d.instruction?.trim() || undefined,
         }));
     const normalizedImage = attachment?.base64 ? normalizeBase64(attachment.base64) : null;
+    // C2 plan §15 — vaccinations payload (TT 13/2026). Filter shot rỗng.
+    const vaccinationsOut = (vaccinations || [])
+        .filter((s) => (s.vaccineName || '').trim())
+        .map((s) => ({
+            vaccineName: s.vaccineName.trim(),
+            antigens: s.antigens || undefined,
+            lotNumber: s.lotNumber.trim(),
+            expirationDate: s.expirationDate,
+            administeredAt: s.administeredAt,
+            site: s.site,
+            doseNumber: s.doseNumber || undefined,
+            administrator: s.administrator || undefined,
+            facility: s.facility || undefined,
+            adverseReaction: s.adverseReaction?.trim() || undefined,
+        }));
+
     return {
         meta: {
             title: title.trim(),
@@ -200,6 +225,7 @@ function buildPayload(input: BuildPayloadInput) {
         observations: Object.keys(observations).length ? observations : undefined,
         diagnoses,
         prescriptions,
+        vaccinations: vaccinationsOut.length ? vaccinationsOut : undefined,
         ...(normalizedImage
             ? {
                 imageData: normalizedImage,
@@ -223,6 +249,7 @@ function draftIsMeaningful(d: DraftState): boolean {
         d.description.trim() ||
         d.diagnosisNote.trim() ||
         (d.drugs?.some?.((dr) => (dr.medication || '').trim())) ||
+        (d.vaccinations?.some?.((v) => (v.vaccineName || '').trim())) ||
         d.notes.trim() ||
         d.icd10Codes.length > 0 ||
         d.heartRate ||
@@ -362,6 +389,18 @@ export default function CreateRecordScreen({ navigation, route: navRoute }: any)
             Alert.alert(
                 'Đơn thuốc chưa đầy đủ',
                 `Còn ${drugErrors.length} lỗi cần sửa trong đơn thuốc. Bấm "Đơn thuốc" trên section để xem.`,
+            );
+            return;
+        }
+        // Validate vaccinations (TT 13/2026) — hard errors block submit
+        const vaccErrors = (draft.vaccinations || [])
+            .filter((v) => (v.vaccineName || '').trim())
+            .flatMap(validateShot)
+            .filter((e) => e.severity === 'hard');
+        if (vaccErrors.length > 0) {
+            Alert.alert(
+                'Tiêm chủng chưa đầy đủ',
+                `Còn ${vaccErrors.length} lỗi cần sửa trong mục tiêm chủng.`,
             );
             return;
         }
@@ -1027,13 +1066,19 @@ export default function CreateRecordScreen({ navigation, route: navRoute }: any)
                 </>
             ) : null}
 
-            {/* PRESCRIPTION multi-drug (detail mode only) — C1 plan §15
-                TT 26/2025/TT-BYT cho phép 1 đơn nhiều thuốc. Design ref:
-                viehp-prescription-multi.html Phương án A (accordion). */}
-            {!draft.simpleMode ? (
+            {/* PRESCRIPTION multi-drug — hiện khi !simpleMode VÀ recordType != 'vacc' */}
+            {!draft.simpleMode && draft.recordType !== 'vacc' ? (
                 <PrescriptionSection
                     drugs={draft.drugs || []}
                     onChange={(next) => set('drugs', next)}
+                />
+            ) : null}
+
+            {/* VACCINATION multi-shot — hiện khi recordType='vacc' (C2 plan §15) */}
+            {draft.recordType === 'vacc' ? (
+                <VaccinationSection
+                    shots={draft.vaccinations || []}
+                    onChange={(next) => set('vaccinations', next)}
                 />
             ) : null}
 
@@ -1357,4 +1402,219 @@ function DeleteConfirmInline({
         );
     }, [drug.id]); // eslint-disable-line react-hooks/exhaustive-deps
     return null;
+}
+
+// ─────────── Vaccination section (C2 multi-shot, TT 13/2026/TT-BYT) ───────────
+function VaccinationSection({
+    shots,
+    onChange,
+}: {
+    shots: Vaccination[];
+    onChange: (next: Vaccination[]) => void;
+}) {
+    const palette = useEhrPalette();
+    const [expandedId, setExpandedId] = useState<string | null>(null);
+    const [deleteCandidate, setDeleteCandidate] = useState<Vaccination | null>(null);
+
+    const allErrors = shots
+        .filter((s) => (s.vaccineName || '').trim())
+        .flatMap(validateShot)
+        .filter((e) => e.severity === 'hard');
+    const totalErrors = allErrors.length;
+    const shotCount = shots.filter((s) => (s.vaccineName || '').trim()).length;
+
+    const handleAddShot = () => {
+        const next = emptyShot();
+        onChange([...shots, next]);
+        setExpandedId(next.id);
+    };
+    const handlePatch = (id: string, patch: Partial<Vaccination>) => {
+        onChange(shots.map((s) => (s.id === id ? { ...s, ...patch } : s)));
+    };
+    const handleDelete = (id: string) => {
+        onChange(shots.filter((s) => s.id !== id));
+        if (expandedId === id) setExpandedId(null);
+        setDeleteCandidate(null);
+    };
+
+    React.useEffect(() => {
+        if (deleteCandidate) {
+            Alert.alert(
+                `Xoá mũi tiêm ${deleteCandidate.vaccineName || ''}?`,
+                'Hành động này không thể hoàn tác sau khi ký hồ sơ.',
+                [
+                    { text: 'Giữ lại', style: 'cancel', onPress: () => setDeleteCandidate(null) },
+                    { text: 'Xoá mũi tiêm', style: 'destructive', onPress: () => handleDelete(deleteCandidate.id) },
+                ],
+                { cancelable: true, onDismiss: () => setDeleteCandidate(null) },
+            );
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [deleteCandidate?.id]);
+
+    const trailLabel = totalErrors > 0 ? `${totalErrors} lỗi` : `${shotCount} mũi`;
+    const trailNode = (
+        <Text
+            style={{
+                fontFamily: MONO,
+                fontSize: 11,
+                color: totalErrors > 0 ? palette.EHR_PRIMARY : palette.EHR_TEXT_MUTED,
+                letterSpacing: 0.6,
+                fontWeight: '700',
+            }}
+        >
+            {trailLabel}
+        </Text>
+    );
+
+    return (
+        <>
+            <SectionLabel trailing={trailNode}>
+                Tiêm chủng · TT 13/2026/TT-BYT
+            </SectionLabel>
+
+            {/* Lineage banner — TT 13/2026 thay thế VB cũ */}
+            <View style={{ paddingHorizontal: 22, paddingBottom: 12 }}>
+                <View
+                    style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: 8,
+                        paddingHorizontal: 12,
+                        paddingVertical: 9,
+                        borderRadius: 10,
+                        backgroundColor: `${palette.EHR_TERTIARY}10`,
+                        borderWidth: 0.5,
+                        borderColor: `${palette.EHR_TERTIARY}40`,
+                    }}
+                >
+                    <View
+                        style={{
+                            width: 6,
+                            height: 6,
+                            borderRadius: 3,
+                            backgroundColor: palette.EHR_TERTIARY,
+                        }}
+                    />
+                    <Text
+                        style={{
+                            fontFamily: MONO,
+                            fontSize: 10.5,
+                            color: palette.EHR_ON_SURFACE_VARIANT,
+                            flex: 1,
+                            lineHeight: 14,
+                        }}
+                    >
+                        TT 13/2026 thay thế TT 24/2018 + 34/2018 + 05/2020 + 52/2025. HPV vào danh sách bắt buộc.
+                    </Text>
+                </View>
+            </View>
+
+            {shots.length === 0 ? (
+                <View style={{ paddingHorizontal: 22, paddingBottom: 18 }}>
+                    <View
+                        style={{
+                            borderRadius: 14,
+                            borderWidth: 0.5,
+                            borderColor: palette.EHR_OUTLINE_SOFT,
+                            backgroundColor: palette.EHR_SURFACE_LOWEST,
+                            paddingHorizontal: 18,
+                            paddingVertical: 22,
+                            alignItems: 'center',
+                        }}
+                    >
+                        <Text
+                            style={{
+                                fontFamily: SANS_SEMI,
+                                fontSize: 13.5,
+                                color: palette.EHR_ON_SURFACE,
+                                fontWeight: '700',
+                                marginBottom: 4,
+                            }}
+                        >
+                            Chưa có mũi tiêm
+                        </Text>
+                        <Text
+                            style={{
+                                fontFamily: SANS,
+                                fontSize: 12,
+                                color: palette.EHR_TEXT_MUTED,
+                                textAlign: 'center',
+                                lineHeight: 17,
+                                marginBottom: 14,
+                            }}
+                        >
+                            1 buổi tiêm chủng có thể gồm nhiều mũi cho cùng bệnh nhân.
+                        </Text>
+                        <Pressable
+                            onPress={handleAddShot}
+                            style={({ pressed }) => ({
+                                backgroundColor: palette.EHR_PRIMARY,
+                                paddingHorizontal: 18,
+                                paddingVertical: 11,
+                                borderRadius: 999,
+                                opacity: pressed ? 0.85 : 1,
+                            })}
+                        >
+                            <Text
+                                style={{
+                                    fontFamily: SANS_SEMI,
+                                    fontSize: 13,
+                                    color: palette.EHR_SURFACE,
+                                    fontWeight: '700',
+                                }}
+                            >
+                                + Thêm mũi tiêm đầu tiên
+                            </Text>
+                        </Pressable>
+                    </View>
+                </View>
+            ) : (
+                <View style={{ paddingBottom: 18 }}>
+                    {shots.map((shot, idx) => {
+                        const shotErrors = validateShot(shot);
+                        return (
+                            <VaccCard
+                                key={shot.id}
+                                shot={shot}
+                                index={idx + 1}
+                                expanded={expandedId === shot.id}
+                                errors={shotErrors}
+                                onToggleExpand={() =>
+                                    setExpandedId(expandedId === shot.id ? null : shot.id)
+                                }
+                                onChange={(patch) => handlePatch(shot.id, patch)}
+                                onRequestDelete={() => setDeleteCandidate(shot)}
+                            />
+                        );
+                    })}
+                    <View style={{ paddingHorizontal: 22, paddingTop: 4 }}>
+                        <Pressable
+                            onPress={handleAddShot}
+                            style={({ pressed }) => ({
+                                borderRadius: 12,
+                                borderWidth: 0.5,
+                                borderStyle: 'dashed',
+                                borderColor: palette.EHR_PRIMARY,
+                                paddingVertical: 11,
+                                alignItems: 'center',
+                                opacity: pressed ? 0.7 : 1,
+                            })}
+                        >
+                            <Text
+                                style={{
+                                    fontFamily: SANS_SEMI,
+                                    fontSize: 13,
+                                    color: palette.EHR_PRIMARY,
+                                    fontWeight: '700',
+                                }}
+                            >
+                                + Thêm mũi tiêm
+                            </Text>
+                        </Pressable>
+                    </View>
+                </View>
+            )}
+        </>
+    );
 }

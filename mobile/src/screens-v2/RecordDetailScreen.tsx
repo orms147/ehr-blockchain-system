@@ -1480,6 +1480,93 @@ function DecryptedContent({
                     })}
                 </DecryptedSection>
             ) : null}
+
+            {/* Vaccinations (C2, TT 13/2026/TT-BYT) */}
+            {data?.vaccinations?.length ? (
+                <DecryptedSection
+                    title={`Tiêm chủng · TT 13/2026/TT-BYT · ${data.vaccinations.length} mũi`}
+                    accent={palette.EHR_TERTIARY}
+                >
+                    {data.vaccinations.map((v: any, i: number) => {
+                        const ix = String(i + 1).padStart(2, '0');
+                        const meta = [
+                            v.doseNumber,
+                            v.administeredAt,
+                            v.site,
+                        ].filter(Boolean).join(' · ');
+                        const lotLine = [
+                            v.lotNumber ? `Lô ${v.lotNumber}` : null,
+                            v.expirationDate ? `HSD ${v.expirationDate}` : null,
+                        ].filter(Boolean).join(' · ');
+                        return (
+                            <View
+                                key={i}
+                                style={{
+                                    paddingVertical: 12,
+                                    paddingHorizontal: 12,
+                                    marginBottom: 8,
+                                    borderRadius: 10,
+                                    backgroundColor: palette.EHR_SURFACE,
+                                    borderWidth: 0.5,
+                                    borderColor: palette.EHR_OUTLINE_SOFT,
+                                }}
+                            >
+                                <XStack style={{ alignItems: 'baseline', gap: 8 }}>
+                                    <Text style={{ fontFamily: MONO, fontSize: 11, color: palette.EHR_TEXT_MUTED, fontWeight: '700' }}>
+                                        {ix}
+                                    </Text>
+                                    <YStack style={{ flex: 1 }}>
+                                        <Text style={{ fontFamily: SANS_SEMI, fontSize: 14, color: palette.EHR_ON_SURFACE, fontWeight: '700' }}>
+                                            {v.vaccineName || 'Vaccine'}
+                                        </Text>
+                                        {meta ? (
+                                            <Text style={{ marginTop: 4, fontFamily: SANS, fontSize: 12, color: palette.EHR_ON_SURFACE_VARIANT }}>
+                                                {meta}
+                                            </Text>
+                                        ) : null}
+                                        {lotLine ? (
+                                            <Text style={{ marginTop: 4, fontFamily: MONO, fontSize: 11, color: palette.EHR_TEXT_MUTED }}>
+                                                {lotLine}
+                                            </Text>
+                                        ) : null}
+                                        {Array.isArray(v.antigens) && v.antigens.length > 0 ? (
+                                            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginTop: 6 }}>
+                                                {v.antigens.map((a: string) => (
+                                                    <View
+                                                        key={a}
+                                                        style={{
+                                                            paddingHorizontal: 7,
+                                                            paddingVertical: 2,
+                                                            borderRadius: 5,
+                                                            backgroundColor: palette.EHR_SURFACE_LOWEST,
+                                                            borderWidth: 0.5,
+                                                            borderColor: palette.EHR_OUTLINE_SOFT,
+                                                        }}
+                                                    >
+                                                        <Text style={{ fontFamily: MONO, fontSize: 10, color: palette.EHR_TEXT_MUTED }}>
+                                                            {a}
+                                                        </Text>
+                                                    </View>
+                                                ))}
+                                            </View>
+                                        ) : null}
+                                        {(v.administrator || v.facility) ? (
+                                            <Text style={{ marginTop: 6, fontFamily: SANS, fontSize: 11.5, color: palette.EHR_ON_SURFACE_VARIANT, fontStyle: 'italic' }}>
+                                                {[v.administrator, v.facility].filter(Boolean).join(' · ')}
+                                            </Text>
+                                        ) : null}
+                                        {v.adverseReaction ? (
+                                            <Text style={{ marginTop: 6, fontFamily: SANS, fontSize: 12, color: palette.EHR_DANGER, lineHeight: 18 }}>
+                                                ⚠ {v.adverseReaction}
+                                            </Text>
+                                        ) : null}
+                                    </YStack>
+                                </XStack>
+                            </View>
+                        );
+                    })}
+                </DecryptedSection>
+            ) : null}
         </View>
     );
 }

@@ -53,7 +53,13 @@ import {
     emptyDrug,
     validateDrug,
 } from '../../constants/drugs';
+import {
+    type Vaccination,
+    emptyShot,
+    validateShot,
+} from '../../constants/vaccines';
 import RxCard from '../../components-v2/RxCard';
+import VaccCard from '../../components-v2/VaccCard';
 import {
     PageHeader,
     SectionLabel,
@@ -88,6 +94,8 @@ type DraftState = {
     // C1 plan §15 (TT 26/2025) — đơn thuốc multi-drug. Drug[] thay vì 7
     // trường flat. Pattern song song với Patient CreateRecordScreen.
     drugs: Drug[];
+    // C2 plan §15 (TT 13/2026) — vaccinations multi-shot khi recordType='vacc'.
+    vaccinations: Vaccination[];
     heartRate: string;
     systolic: string;
     diastolic: string;
@@ -107,6 +115,7 @@ const INITIAL_DRAFT: DraftState = {
     icd10Codes: [],
     diagnosisNote: '',
     drugs: [],
+    vaccinations: [],
     heartRate: '',
     systolic: '',
     diastolic: '',
@@ -131,6 +140,7 @@ function draftIsMeaningful(d: DraftState): boolean {
         d.description.trim() ||
         d.diagnosisNote.trim() ||
         (d.drugs?.some?.((dr) => (dr.medication || '').trim())) ||
+        (d.vaccinations?.some?.((v) => (v.vaccineName || '').trim())) ||
         d.notes.trim() ||
         d.versionNote.trim() ||
         d.icd10Codes.length > 0 ||
@@ -277,6 +287,18 @@ export default function DoctorCreateUpdateScreen({ navigation, route }: any) {
             );
             return;
         }
+        // Validate vaccinations (TT 13/2026) — hard errors block
+        const vaccErrors = (draft.vaccinations || [])
+            .filter((v) => (v.vaccineName || '').trim())
+            .flatMap(validateShot)
+            .filter((e) => e.severity === 'hard');
+        if (vaccErrors.length > 0) {
+            Alert.alert(
+                'Tiêm chủng chưa đầy đủ',
+                `Còn ${vaccErrors.length} lỗi cần sửa trong mục tiêm chủng.`,
+            );
+            return;
+        }
 
         setIsSubmitting(true);
         setError(null);
@@ -346,6 +368,21 @@ export default function DoctorCreateUpdateScreen({ navigation, route }: any) {
                         route: d.route,
                         timing: d.timing || undefined,
                         instruction: d.instruction?.trim() || undefined,
+                    })),
+                vaccinations: (draft.vaccinations || [])
+                    .filter((v) => (v.vaccineName || '').trim())
+                    .map((v) => ({
+                        vaccineName: v.vaccineName.trim(),
+                        antigens: v.antigens || undefined,
+                        lotNumber: v.lotNumber.trim(),
+                        expirationDate: v.expirationDate,
+                        administeredAt: v.administeredAt,
+                        site: v.site,
+                        doseNumber: v.doseNumber || undefined,
+                        // Auto-fill từ doctor session để compliance TT 13/2026
+                        administrator: user?.fullName || v.administrator || undefined,
+                        facility: v.facility || undefined,
+                        adverseReaction: v.adverseReaction?.trim() || undefined,
                     })),
                 ...(normalizedImage ? {
                     imageData: normalizedImage,
@@ -977,11 +1014,22 @@ export default function DoctorCreateUpdateScreen({ navigation, route }: any) {
                 })()}
             </View>
 
-            {/* PRESCRIPTION multi-drug — C1 plan §15 (TT 26/2025/TT-BYT) */}
-            <DoctorPrescriptionSection
-                drugs={draft.drugs || []}
-                onChange={(next) => set('drugs', next)}
-            />
+            {/* PRESCRIPTION multi-drug — C1 plan §15 (TT 26/2025/TT-BYT).
+                Hidden khi recordType='vacc' (đổi sang VaccinationSection). */}
+            {draft.recordType !== 'vacc' ? (
+                <DoctorPrescriptionSection
+                    drugs={draft.drugs || []}
+                    onChange={(next) => set('drugs', next)}
+                />
+            ) : null}
+
+            {/* VACCINATION — C2 plan §15 (TT 13/2026/TT-BYT) chỉ khi recordType='vacc' */}
+            {draft.recordType === 'vacc' ? (
+                <DoctorVaccinationSection
+                    shots={draft.vaccinations || []}
+                    onChange={(next) => set('vaccinations', next)}
+                />
+            ) : null}
 
             {/* IMAGE */}
             <SectionLabel trailing="Mã hoá cùng nội dung">Ảnh đính kèm</SectionLabel>
@@ -1393,6 +1441,193 @@ function DoctorPrescriptionSection({
                                 }}
                             >
                                 + Thêm thuốc
+                            </Text>
+                        </Pressable>
+                    </View>
+                </View>
+            )}
+        </>
+    );
+}
+
+// ─────────── Vaccination section (Doctor parallel của Patient C2) ───────────
+function DoctorVaccinationSection({
+    shots,
+    onChange,
+}: {
+    shots: Vaccination[];
+    onChange: (next: Vaccination[]) => void;
+}) {
+    const palette = useEhrPalette();
+    const { user } = useAuthStore();
+    const [expandedId, setExpandedId] = useState<string | null>(null);
+    const [deleteCandidate, setDeleteCandidate] = useState<Vaccination | null>(null);
+
+    const allErrors = shots
+        .filter((s) => (s.vaccineName || '').trim())
+        .flatMap(validateShot)
+        .filter((e) => e.severity === 'hard');
+    const totalErrors = allErrors.length;
+    const shotCount = shots.filter((s) => (s.vaccineName || '').trim()).length;
+
+    const handleAddShot = () => {
+        const next = emptyShot();
+        onChange([...shots, next]);
+        setExpandedId(next.id);
+    };
+    const handlePatch = (id: string, patch: Partial<Vaccination>) => {
+        onChange(shots.map((s) => (s.id === id ? { ...s, ...patch } : s)));
+    };
+    const handleDelete = (id: string) => {
+        onChange(shots.filter((s) => s.id !== id));
+        if (expandedId === id) setExpandedId(null);
+        setDeleteCandidate(null);
+    };
+
+    React.useEffect(() => {
+        if (deleteCandidate) {
+            Alert.alert(
+                `Xoá mũi tiêm ${deleteCandidate.vaccineName || ''}?`,
+                'Hành động không thể hoàn tác sau khi ký.',
+                [
+                    { text: 'Giữ lại', style: 'cancel', onPress: () => setDeleteCandidate(null) },
+                    { text: 'Xoá', style: 'destructive', onPress: () => handleDelete(deleteCandidate.id) },
+                ],
+                { cancelable: true, onDismiss: () => setDeleteCandidate(null) },
+            );
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [deleteCandidate?.id]);
+
+    const trailLabel = totalErrors > 0 ? `${totalErrors} lỗi` : `${shotCount} mũi`;
+
+    // Auto-fill từ doctor session (visible read-only trong card)
+    const doctorName = user?.fullName || undefined;
+    const hospitalName = (user as any)?.doctorProfile?.hospitalName || undefined;
+
+    return (
+        <>
+            <SectionLabel
+                badge="TT 13/2026/TT-BYT"
+                trailing={
+                    <Text
+                        style={{
+                            fontFamily: MONO,
+                            fontSize: 11,
+                            color: totalErrors > 0 ? palette.EHR_PRIMARY : palette.EHR_TEXT_MUTED,
+                            letterSpacing: 0.6,
+                            fontWeight: '700',
+                        }}
+                    >
+                        {trailLabel}
+                    </Text>
+                }
+            >
+                Tiêm chủng
+            </SectionLabel>
+
+            {shots.length === 0 ? (
+                <View style={{ paddingHorizontal: 22, paddingBottom: 18 }}>
+                    <View
+                        style={{
+                            borderRadius: 14,
+                            borderWidth: 0.5,
+                            borderColor: palette.EHR_OUTLINE_SOFT,
+                            backgroundColor: palette.EHR_SURFACE_LOWEST,
+                            paddingHorizontal: 18,
+                            paddingVertical: 22,
+                            alignItems: 'center',
+                        }}
+                    >
+                        <Text
+                            style={{
+                                fontFamily: SANS_SEMI,
+                                fontSize: 13.5,
+                                color: palette.EHR_ON_SURFACE,
+                                fontWeight: '700',
+                                marginBottom: 4,
+                            }}
+                        >
+                            Chưa có mũi tiêm
+                        </Text>
+                        <Text
+                            style={{
+                                fontFamily: SANS,
+                                fontSize: 12,
+                                color: palette.EHR_TEXT_MUTED,
+                                textAlign: 'center',
+                                lineHeight: 17,
+                                marginBottom: 14,
+                            }}
+                        >
+                            Ghi nhận 1 buổi tiêm chủng nhiều mũi cho bệnh nhân.
+                        </Text>
+                        <Pressable
+                            onPress={handleAddShot}
+                            style={({ pressed }) => ({
+                                backgroundColor: palette.EHR_PRIMARY,
+                                paddingHorizontal: 18,
+                                paddingVertical: 11,
+                                borderRadius: 999,
+                                opacity: pressed ? 0.85 : 1,
+                            })}
+                        >
+                            <Text
+                                style={{
+                                    fontFamily: SANS_SEMI,
+                                    fontSize: 13,
+                                    color: palette.EHR_SURFACE,
+                                    fontWeight: '700',
+                                }}
+                            >
+                                + Thêm mũi tiêm đầu tiên
+                            </Text>
+                        </Pressable>
+                    </View>
+                </View>
+            ) : (
+                <View style={{ paddingBottom: 18 }}>
+                    {shots.map((shot, idx) => {
+                        const shotErrors = validateShot(shot);
+                        return (
+                            <VaccCard
+                                key={shot.id}
+                                shot={shot}
+                                index={idx + 1}
+                                expanded={expandedId === shot.id}
+                                errors={shotErrors}
+                                autoFillAdministrator={doctorName}
+                                autoFillFacility={hospitalName}
+                                onToggleExpand={() =>
+                                    setExpandedId(expandedId === shot.id ? null : shot.id)
+                                }
+                                onChange={(patch) => handlePatch(shot.id, patch)}
+                                onRequestDelete={() => setDeleteCandidate(shot)}
+                            />
+                        );
+                    })}
+                    <View style={{ paddingHorizontal: 22, paddingTop: 4 }}>
+                        <Pressable
+                            onPress={handleAddShot}
+                            style={({ pressed }) => ({
+                                borderRadius: 12,
+                                borderWidth: 0.5,
+                                borderStyle: 'dashed',
+                                borderColor: palette.EHR_PRIMARY,
+                                paddingVertical: 11,
+                                alignItems: 'center',
+                                opacity: pressed ? 0.7 : 1,
+                            })}
+                        >
+                            <Text
+                                style={{
+                                    fontFamily: SANS_SEMI,
+                                    fontSize: 13,
+                                    color: palette.EHR_PRIMARY,
+                                    fontWeight: '700',
+                                }}
+                            >
+                                + Thêm mũi tiêm
                             </Text>
                         </Pressable>
                     </View>
