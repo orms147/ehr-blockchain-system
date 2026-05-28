@@ -49,6 +49,12 @@ import { useEhrPalette } from '../../constants/uiColors';
 import { RECORD_TYPES, resolveRecordType, type RecordTypeKey } from '../../constants/recordTypes';
 import { VITAL_SPECS, flagVital, flagBp, abnormalNote, computeBmi, type VitalStatus } from '../../constants/vitals';
 import {
+    type Drug,
+    emptyDrug,
+    validateDrug,
+} from '../../constants/drugs';
+import RxCard from '../../components-v2/RxCard';
+import {
     PageHeader,
     SectionLabel,
     StickyFooter,
@@ -79,13 +85,9 @@ type DraftState = {
     recordType: RecordTypeKey;
     icd10Codes: Icd10Code[];
     diagnosisNote: string;
-    medication: string;
-    dosage: string;
-    frequency: string;
-    route: string;
-    quantity: string;
-    duration: string;
-    instruction: string;
+    // C1 plan §15 (TT 26/2025) — đơn thuốc multi-drug. Drug[] thay vì 7
+    // trường flat. Pattern song song với Patient CreateRecordScreen.
+    drugs: Drug[];
     heartRate: string;
     systolic: string;
     diastolic: string;
@@ -104,13 +106,7 @@ const INITIAL_DRAFT: DraftState = {
     recordType: 'general',
     icd10Codes: [],
     diagnosisNote: '',
-    medication: '',
-    dosage: '',
-    frequency: '',
-    route: '',
-    quantity: '',
-    duration: '',
-    instruction: '',
+    drugs: [],
     heartRate: '',
     systolic: '',
     diastolic: '',
@@ -134,7 +130,7 @@ function draftIsMeaningful(d: DraftState): boolean {
         d.title.trim() ||
         d.description.trim() ||
         d.diagnosisNote.trim() ||
-        d.medication.trim() ||
+        (d.drugs?.some?.((dr) => (dr.medication || '').trim())) ||
         d.notes.trim() ||
         d.versionNote.trim() ||
         d.icd10Codes.length > 0 ||
@@ -264,8 +260,21 @@ export default function DoctorCreateUpdateScreen({ navigation, route }: any) {
             return;
         }
         if (!draft.description.trim() && !draft.diagnosisNote.trim() && draft.icd10Codes.length === 0
-            && !draft.notes.trim() && !draft.medication.trim() && !selectedImage) {
+            && !draft.notes.trim()
+            && !(draft.drugs?.some?.((d) => (d.medication || '').trim()))
+            && !selectedImage) {
             Alert.alert('Thiếu nội dung', 'Hãy nhập nội dung hoặc đính kèm ảnh.');
+            return;
+        }
+        // Validate drugs (TT 26/2025 §17) — block submit nếu có lỗi
+        const drugErrors = (draft.drugs || [])
+            .filter((d) => (d.medication || '').trim())
+            .flatMap(validateDrug);
+        if (drugErrors.length > 0) {
+            Alert.alert(
+                'Đơn thuốc chưa đầy đủ',
+                `Còn ${drugErrors.length} lỗi cần sửa trong đơn thuốc.`,
+            );
             return;
         }
 
@@ -323,15 +332,21 @@ export default function DoctorCreateUpdateScreen({ navigation, route }: any) {
                     ...draft.icd10Codes.map((c) => `[${c.code}] ${c.name}`),
                     ...splitLines(draft.diagnosisNote),
                 ],
-                prescriptions: draft.medication ? [{
-                    medication: draft.medication.trim(),
-                    dosage: draft.dosage.trim() || 'Theo chỉ định',
-                    frequency: draft.frequency.trim() || 'Theo hướng dẫn',
-                    route: draft.route.trim() || undefined,
-                    quantity: draft.quantity.trim() || undefined,
-                    duration: draft.duration.trim() || undefined,
-                    instruction: draft.instruction.trim() || undefined,
-                }] : [],
+                prescriptions: (draft.drugs || [])
+                    .filter((d) => (d.medication || '').trim())
+                    .map((d) => ({
+                        medication: d.medication.trim(),
+                        brandName: d.brandName?.trim() || undefined,
+                        strength: d.strength.trim(),
+                        quantity: d.quantity.trim(),
+                        quantityUnit: d.quantityUnit,
+                        dosage: `${d.doseAmount.trim()} ${d.doseUnit}`,
+                        frequency: `${d.timesPerDay.trim()} lần/ngày`,
+                        durationDays: d.durationDays.trim(),
+                        route: d.route,
+                        timing: d.timing || undefined,
+                        instruction: d.instruction?.trim() || undefined,
+                    })),
                 ...(normalizedImage ? {
                     imageData: normalizedImage,
                     imageContentType: selectedImage?.mimeType || 'image/jpeg',
@@ -962,39 +977,11 @@ export default function DoctorCreateUpdateScreen({ navigation, route }: any) {
                 })()}
             </View>
 
-            {/* PRESCRIPTION */}
-            <SectionLabel badge="TT 04/2022/TT-BYT">Đơn thuốc</SectionLabel>
-            <View style={{ paddingHorizontal: 22, paddingBottom: 18 }}>
-                {renderFieldLabel('Tên thuốc / hoạt chất')}
-                {renderInput(draft.medication, (v) => set('medication', v), { placeholder: 'Amlodipine 5mg' })}
-                <XStack style={{ gap: 10 }}>
-                    <View style={{ flex: 1 }}>
-                        {renderFieldLabel('Hàm lượng / Liều')}
-                        {renderInput(draft.dosage, (v) => set('dosage', v), { placeholder: '1 viên' })}
-                    </View>
-                    <View style={{ flex: 1 }}>
-                        {renderFieldLabel('Đường dùng')}
-                        {renderInput(draft.route, (v) => set('route', v), { placeholder: 'Uống / Tiêm' })}
-                    </View>
-                </XStack>
-                <XStack style={{ gap: 10 }}>
-                    <View style={{ flex: 1 }}>
-                        {renderFieldLabel('Số lần / ngày')}
-                        {renderInput(draft.frequency, (v) => set('frequency', v), { placeholder: '1 lần/ngày' })}
-                    </View>
-                    <View style={{ flex: 1 }}>
-                        {renderFieldLabel('Số ngày dùng')}
-                        {renderInput(draft.duration, (v) => set('duration', v), { placeholder: '30 ngày' })}
-                    </View>
-                </XStack>
-                {renderFieldLabel('Số lượng kê')}
-                {renderInput(draft.quantity, (v) => set('quantity', v), { placeholder: '30 viên' })}
-                {renderFieldLabel('Lời dặn bác sĩ')}
-                {renderInput(draft.instruction, (v) => set('instruction', v), {
-                    placeholder: 'Uống sau ăn, theo dõi HA buổi sáng…',
-                    multiline: true,
-                })}
-            </View>
+            {/* PRESCRIPTION multi-drug — C1 plan §15 (TT 26/2025/TT-BYT) */}
+            <DoctorPrescriptionSection
+                drugs={draft.drugs || []}
+                onChange={(next) => set('drugs', next)}
+            />
 
             {/* IMAGE */}
             <SectionLabel trailing="Mã hoá cùng nội dung">Ảnh đính kèm</SectionLabel>
@@ -1230,5 +1217,187 @@ function VitalInput({
                 textAlign: 'center',
             }}
         />
+    );
+}
+
+// ─────────── Prescription section (C1 multi-drug, parallel với Patient) ───────────
+function DoctorPrescriptionSection({
+    drugs,
+    onChange,
+}: {
+    drugs: Drug[];
+    onChange: (next: Drug[]) => void;
+}) {
+    const palette = useEhrPalette();
+    const [expandedId, setExpandedId] = useState<string | null>(null);
+    const [deleteCandidate, setDeleteCandidate] = useState<Drug | null>(null);
+
+    const totalErrors = drugs
+        .filter((d) => (d.medication || '').trim())
+        .flatMap(validateDrug).length;
+    const drugCount = drugs.filter((d) => (d.medication || '').trim()).length;
+
+    const handleAddDrug = () => {
+        const newDrug = emptyDrug();
+        onChange([...drugs, newDrug]);
+        setExpandedId(newDrug.id);
+    };
+
+    const handlePatch = (id: string, patch: Partial<Drug>) => {
+        onChange(drugs.map((d) => (d.id === id ? { ...d, ...patch } : d)));
+    };
+
+    const handleDelete = (id: string) => {
+        onChange(drugs.filter((d) => d.id !== id));
+        if (expandedId === id) setExpandedId(null);
+        setDeleteCandidate(null);
+    };
+
+    React.useEffect(() => {
+        if (deleteCandidate) {
+            Alert.alert(
+                `Xoá ${deleteCandidate.medication || 'thuốc'}?`,
+                `${deleteCandidate.strength ? deleteCandidate.strength + ' — ' : ''}Hành động này không thể hoàn tác sau khi ký hồ sơ.`,
+                [
+                    { text: 'Giữ lại', style: 'cancel', onPress: () => setDeleteCandidate(null) },
+                    { text: 'Xoá thuốc', style: 'destructive', onPress: () => handleDelete(deleteCandidate.id) },
+                ],
+                { cancelable: true, onDismiss: () => setDeleteCandidate(null) },
+            );
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [deleteCandidate?.id]);
+
+    const trailLabel = totalErrors > 0
+        ? `${totalErrors} lỗi`
+        : `${drugCount} thuốc`;
+
+    return (
+        <>
+            <SectionLabel
+                badge="TT 26/2025/TT-BYT"
+                trailing={
+                    <Text
+                        style={{
+                            fontFamily: MONO,
+                            fontSize: 11,
+                            color: totalErrors > 0 ? palette.EHR_PRIMARY : palette.EHR_TEXT_MUTED,
+                            letterSpacing: 0.6,
+                            fontWeight: '700',
+                        }}
+                    >
+                        {trailLabel}
+                    </Text>
+                }
+            >
+                Đơn thuốc
+            </SectionLabel>
+
+            {drugs.length === 0 ? (
+                <View style={{ paddingHorizontal: 22, paddingBottom: 18 }}>
+                    <View
+                        style={{
+                            borderRadius: 14,
+                            borderWidth: 0.5,
+                            borderColor: palette.EHR_OUTLINE_SOFT,
+                            backgroundColor: palette.EHR_SURFACE_LOWEST,
+                            paddingHorizontal: 18,
+                            paddingVertical: 22,
+                            alignItems: 'center',
+                        }}
+                    >
+                        <Text
+                            style={{
+                                fontFamily: SANS_SEMI,
+                                fontSize: 13.5,
+                                color: palette.EHR_ON_SURFACE,
+                                fontWeight: '700',
+                                marginBottom: 4,
+                            }}
+                        >
+                            Chưa kê thuốc nào
+                        </Text>
+                        <Text
+                            style={{
+                                fontFamily: SANS,
+                                fontSize: 12,
+                                color: palette.EHR_TEXT_MUTED,
+                                textAlign: 'center',
+                                lineHeight: 17,
+                                marginBottom: 14,
+                            }}
+                        >
+                            Có thể kê nhiều thuốc trong cùng đơn (TT 26/2025).
+                        </Text>
+                        <Pressable
+                            onPress={handleAddDrug}
+                            style={({ pressed }) => ({
+                                backgroundColor: palette.EHR_PRIMARY,
+                                paddingHorizontal: 18,
+                                paddingVertical: 11,
+                                borderRadius: 999,
+                                opacity: pressed ? 0.85 : 1,
+                            })}
+                        >
+                            <Text
+                                style={{
+                                    fontFamily: SANS_SEMI,
+                                    fontSize: 13,
+                                    color: palette.EHR_SURFACE,
+                                    fontWeight: '700',
+                                }}
+                            >
+                                + Thêm thuốc đầu tiên
+                            </Text>
+                        </Pressable>
+                    </View>
+                </View>
+            ) : (
+                <View style={{ paddingBottom: 18 }}>
+                    {drugs.map((drug, idx) => {
+                        const drugErrors = validateDrug(drug);
+                        return (
+                            <RxCard
+                                key={drug.id}
+                                drug={drug}
+                                index={idx + 1}
+                                expanded={expandedId === drug.id}
+                                errors={drugErrors}
+                                onToggleExpand={() =>
+                                    setExpandedId(expandedId === drug.id ? null : drug.id)
+                                }
+                                onChange={(patch) => handlePatch(drug.id, patch)}
+                                onRequestDelete={() => setDeleteCandidate(drug)}
+                            />
+                        );
+                    })}
+                    <View style={{ paddingHorizontal: 22, paddingTop: 4 }}>
+                        <Pressable
+                            onPress={handleAddDrug}
+                            style={({ pressed }) => ({
+                                borderRadius: 12,
+                                borderWidth: 0.5,
+                                borderStyle: 'dashed',
+                                borderColor: palette.EHR_PRIMARY,
+                                paddingVertical: 11,
+                                alignItems: 'center',
+                                opacity: pressed ? 0.7 : 1,
+                            })}
+                        >
+                            <Text
+                                style={{
+                                    fontFamily: SANS_SEMI,
+                                    fontSize: 13,
+                                    color: palette.EHR_PRIMARY,
+                                    fontWeight: '700',
+                                }}
+                            >
+                                + Thêm thuốc
+                            </Text>
+                        </Pressable>
+                    </View>
+                </View>
+            )}
+        </>
     );
 }

@@ -1397,43 +1397,87 @@ function DecryptedContent({
             ) : null}
 
             {data?.prescriptions?.length ? (
-                <DecryptedSection title="Đơn thuốc" accent={palette.EHR_TERTIARY}>
-                    {data.prescriptions.map((p: any, i: number) => (
-                        <View
-                            key={i}
-                            style={{
-                                paddingVertical: 10,
-                                paddingHorizontal: 12,
-                                marginBottom: 6,
-                                borderRadius: 10,
-                                backgroundColor: palette.EHR_SURFACE,
-                                borderWidth: 0.5,
-                                borderColor: palette.EHR_OUTLINE_SOFT,
-                            }}
-                        >
-                            <Text style={{ fontFamily: SANS_SEMI, fontSize: 13, color: palette.EHR_ON_SURFACE, fontWeight: '700' }}>
-                                {p.medication || 'Thuốc'}
-                            </Text>
-                            <XStack style={{ gap: 12, marginTop: 4 }}>
-                                {p.dosage ? (
-                                    <Text style={{ fontFamily: SANS, fontSize: 12, color: palette.EHR_TEXT_MUTED }}>
-                                        Liều:{' '}
-                                        <Text style={{ fontFamily: SANS_SEMI, color: palette.EHR_ON_SURFACE, fontWeight: '700' }}>
-                                            {p.dosage}
-                                        </Text>
+                <DecryptedSection
+                    title={`Đơn thuốc · TT 26/2025/TT-BYT · ${data.prescriptions.length} thuốc`}
+                    accent={palette.EHR_TERTIARY}
+                >
+                    {data.prescriptions.map((p: any, i: number) => {
+                        const ix = String(i + 1).padStart(2, '0');
+                        // New schema (C1): brandName, strength, quantity+quantityUnit,
+                        // dosage, frequency, durationDays, route, timing, instruction.
+                        // Old schema (pre-C1): chỉ medication, dosage, frequency.
+                        const totalLine = [
+                            p.quantity && p.quantityUnit ? `Tổng ${p.quantity} ${p.quantityUnit}` : null,
+                            p.durationDays ? `${p.durationDays} ngày` : null,
+                            p.route ? String(p.route).toLowerCase() : null,
+                            p.timing ? String(p.timing).toLowerCase() : null,
+                        ].filter(Boolean).join(' · ');
+                        return (
+                            <View
+                                key={i}
+                                style={{
+                                    paddingVertical: 12,
+                                    paddingHorizontal: 12,
+                                    marginBottom: 8,
+                                    borderRadius: 10,
+                                    backgroundColor: palette.EHR_SURFACE,
+                                    borderWidth: 0.5,
+                                    borderColor: palette.EHR_OUTLINE_SOFT,
+                                }}
+                            >
+                                <XStack style={{ alignItems: 'baseline', gap: 8 }}>
+                                    <Text style={{ fontFamily: MONO, fontSize: 11, color: palette.EHR_TEXT_MUTED, fontWeight: '700' }}>
+                                        {ix}
                                     </Text>
-                                ) : null}
-                                {p.frequency ? (
-                                    <Text style={{ fontFamily: SANS, fontSize: 12, color: palette.EHR_TEXT_MUTED }}>
-                                        Tần suất:{' '}
-                                        <Text style={{ fontFamily: SANS_SEMI, color: palette.EHR_ON_SURFACE, fontWeight: '700' }}>
-                                            {p.frequency}
-                                        </Text>
-                                    </Text>
-                                ) : null}
-                            </XStack>
-                        </View>
-                    ))}
+                                    <YStack style={{ flex: 1 }}>
+                                        <XStack style={{ alignItems: 'baseline', gap: 6, flexWrap: 'wrap' }}>
+                                            <Text style={{ fontFamily: SANS_SEMI, fontSize: 14, color: palette.EHR_ON_SURFACE, fontWeight: '700' }}>
+                                                {p.medication || 'Thuốc'}
+                                            </Text>
+                                            {p.strength ? (
+                                                <Text style={{ fontFamily: MONO, fontSize: 11.5, color: palette.EHR_ON_SURFACE_VARIANT }}>
+                                                    {p.strength}
+                                                </Text>
+                                            ) : null}
+                                            {p.brandName ? (
+                                                <Text style={{ fontFamily: SANS, fontSize: 11, color: palette.EHR_TEXT_MUTED }}>
+                                                    · {p.brandName}
+                                                </Text>
+                                            ) : null}
+                                        </XStack>
+                                        <XStack style={{ gap: 12, marginTop: 6, flexWrap: 'wrap' }}>
+                                            {p.dosage ? (
+                                                <Text style={{ fontFamily: SANS, fontSize: 12, color: palette.EHR_TEXT_MUTED }}>
+                                                    Liều:{' '}
+                                                    <Text style={{ fontFamily: SANS_SEMI, color: palette.EHR_ON_SURFACE, fontWeight: '700' }}>
+                                                        {p.dosage}
+                                                    </Text>
+                                                </Text>
+                                            ) : null}
+                                            {p.frequency ? (
+                                                <Text style={{ fontFamily: SANS, fontSize: 12, color: palette.EHR_TEXT_MUTED }}>
+                                                    Tần suất:{' '}
+                                                    <Text style={{ fontFamily: SANS_SEMI, color: palette.EHR_ON_SURFACE, fontWeight: '700' }}>
+                                                        {p.frequency}
+                                                    </Text>
+                                                </Text>
+                                            ) : null}
+                                        </XStack>
+                                        {totalLine ? (
+                                            <Text style={{ marginTop: 6, fontFamily: MONO, fontSize: 11.5, color: palette.EHR_ON_SURFACE_VARIANT }}>
+                                                {totalLine}
+                                            </Text>
+                                        ) : null}
+                                        {p.instruction ? (
+                                            <Text style={{ marginTop: 6, fontFamily: SANS, fontSize: 12, color: palette.EHR_ON_SURFACE_VARIANT, lineHeight: 18, fontStyle: 'italic' }}>
+                                                {p.instruction}
+                                            </Text>
+                                        ) : null}
+                                    </YStack>
+                                </XStack>
+                            </View>
+                        );
+                    })}
                 </DecryptedSection>
             ) : null}
         </View>
