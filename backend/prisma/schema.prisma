@@ -88,6 +88,11 @@ model User {
   bloodType   String?   @db.VarChar(5) // A+, B-, AB+, O-
   allergies   String?   @db.Text // Free text
 
+  // Số thẻ Bảo hiểm y tế (BHYT) — TT 32/2023/TT-BYT Chương X nhóm hành chính
+  // yêu cầu. Format chuẩn: 2 chữ + 13 số (vd "SV4796543210123"). Optional vì
+  // user có thể chưa có BHYT (vd: trẻ em, người nước ngoài).
+  insuranceNumber String? @db.VarChar(20)
+
   // Quota tracking for gas sponsorship — single 100/month pool covering
   // all patient on-chain actions (upload, update, share/grant, revoke, delegate).
   // Rationale: one budget is simpler for users and matches the "patient never pays gas"

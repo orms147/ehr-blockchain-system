@@ -17,6 +17,14 @@ const updateProfileSchema = z.object({
     homeAddress: z.string().max(255).optional().nullable(),
     bloodType: z.string().max(5).optional().nullable(),
     allergies: z.string().optional().nullable(),
+    // Số BHYT — TT 32/2023 Chương X. Format chuẩn: 2 chữ cái + 13 chữ số
+    // (vd "SV4796543210123"). Cho phép null/empty để clear field. Regex
+    // chỉ apply khi value không rỗng — defer business validation cho mobile
+    // (user có thể đang nhập dở).
+    insuranceNumber: z.string().max(20).optional().nullable().refine(
+        (v) => !v || /^[A-Z]{2}\d{13}$/.test(v),
+        { message: 'Số BHYT phải gồm 2 chữ cái + 13 chữ số (vd SV4796543210123).' }
+    ),
 });
 
 const updateDoctorProfileSchema = z.object({
@@ -45,6 +53,7 @@ router.get('/me', authenticate, async (req, res, next) => {
                 avatarUrl: true,
                 bloodType: true,
                 allergies: true,
+                insuranceNumber: true,
                 createdAt: true,
                 doctorProfile: true,
             }
@@ -124,6 +133,7 @@ router.put('/me', authenticate, async (req, res, next) => {
                 avatarUrl: true,
                 bloodType: true,
                 allergies: true,
+                insuranceNumber: true,
             }
         });
 

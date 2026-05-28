@@ -47,7 +47,7 @@ import useAuthStore from '../../store/authStore';
 import useDraft from '../../hooks/useDraft';
 import { useEhrPalette } from '../../constants/uiColors';
 import { RECORD_TYPES, resolveRecordType, type RecordTypeKey } from '../../constants/recordTypes';
-import { VITAL_SPECS, flagVital, flagBp, abnormalNote, type VitalStatus } from '../../constants/vitals';
+import { VITAL_SPECS, flagVital, flagBp, abnormalNote, computeBmi, type VitalStatus } from '../../constants/vitals';
 import {
     PageHeader,
     SectionLabel,
@@ -906,6 +906,7 @@ export default function DoctorCreateUpdateScreen({ navigation, route }: any) {
                         : spec.id === 'temp' ? 'temperature'
                         : spec.id === 'rr' ? 'respRate'
                         : spec.id === 'weight' ? 'weight'
+                        : spec.id === 'height' ? 'heightCm'  // doctor draft field
                         : spec.id;
                     const value = (draft as any)[fieldKey] || '';
                     const status: VitalStatus = flagVital(spec, value);
@@ -927,11 +928,38 @@ export default function DoctorCreateUpdateScreen({ navigation, route }: any) {
                         </VitalRow>
                     );
                 })}
-                {renderFieldLabel('Chiều cao (cm)')}
-                {renderInput(draft.heightCm, (v) => set('heightCm', v), { placeholder: '165', keyboardType: 'numeric' })}
-                <Text style={{ marginTop: 8, fontFamily: SANS, fontSize: 11, color: palette.EHR_TEXT_MUTED }}>
-                    BMI tính tự động từ cân nặng và chiều cao.
-                </Text>
+                {/* BMI computed realtime (TT 32/2023 Chương X). Height đã render
+                    qua VITAL_SPECS auto-map (spec.id='height' → draft.heightCm). */}
+                {(() => {
+                    const bmi = computeBmi(draft.weight, draft.heightCm);
+                    if (bmi.value === null) return null;
+                    const color =
+                        bmi.category === 'normal' ? palette.EHR_TERTIARY
+                            : bmi.category === 'underweight' ? palette.EHR_WARNING
+                                : palette.EHR_DANGER;
+                    return (
+                        <XStack
+                            style={{
+                                marginTop: 8,
+                                paddingHorizontal: 12,
+                                paddingVertical: 10,
+                                borderRadius: 10,
+                                backgroundColor: palette.EHR_SURFACE_LOWEST,
+                                borderWidth: 0.5,
+                                borderColor: palette.EHR_OUTLINE_SOFT,
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                            }}
+                        >
+                            <Text style={{ fontFamily: SANS_SEMI, fontSize: 12.5, color: palette.EHR_ON_SURFACE, fontWeight: '600' }}>
+                                BMI · {bmi.value} kg/m²
+                            </Text>
+                            <Text style={{ fontFamily: SANS_SEMI, fontSize: 11.5, color, fontWeight: '700' }}>
+                                {bmi.label}
+                            </Text>
+                        </XStack>
+                    );
+                })()}
             </View>
 
             {/* PRESCRIPTION */}

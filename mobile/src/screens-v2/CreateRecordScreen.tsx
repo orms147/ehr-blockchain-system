@@ -41,7 +41,7 @@ import useAuthStore from '../store/authStore';
 import useDraft from '../hooks/useDraft';
 import { useEhrPalette } from '../constants/uiColors';
 import { RECORD_TYPES, resolveRecordType, type RecordTypeKey } from '../constants/recordTypes';
-import { VITAL_SPECS, flagVital, flagBp, abnormalNote, type VitalStatus } from '../constants/vitals';
+import { VITAL_SPECS, flagVital, flagBp, abnormalNote, computeBmi, type VitalStatus } from '../constants/vitals';
 import {
     PageHeader,
     SectionLabel,
@@ -970,11 +970,39 @@ export default function CreateRecordScreen({ navigation, route: navRoute }: any)
                                 </VitalRow>
                             );
                         })}
-                        {renderFieldLabel('Chiều cao (cm)')}
-                        {renderInput(draft.height, (v) => set('height', v), { placeholder: '165', keyboardType: 'numeric' })}
-                        <Text style={{ marginTop: 8, fontFamily: SANS, fontSize: 11, color: palette.EHR_TEXT_MUTED }}>
-                            BMI tính tự động từ cân nặng và chiều cao.
-                        </Text>
+                        {/* BMI computed realtime từ weight + height (TT 32/2023
+                            Chương X yêu cầu BMI cho mọi khám). Không phải input
+                            riêng — tính từ vitals đã nhập. */}
+                        {(() => {
+                            const bmi = computeBmi(draft.weight, draft.height);
+                            if (bmi.value === null) return null;
+                            const color =
+                                bmi.category === 'normal' ? palette.EHR_TERTIARY
+                                    : bmi.category === 'underweight' ? palette.EHR_WARNING
+                                        : palette.EHR_DANGER;
+                            return (
+                                <XStack
+                                    style={{
+                                        marginTop: 8,
+                                        paddingHorizontal: 12,
+                                        paddingVertical: 10,
+                                        borderRadius: 10,
+                                        backgroundColor: palette.EHR_SURFACE_LOWEST,
+                                        borderWidth: 0.5,
+                                        borderColor: palette.EHR_OUTLINE_SOFT,
+                                        alignItems: 'center',
+                                        justifyContent: 'space-between',
+                                    }}
+                                >
+                                    <Text style={{ fontFamily: SANS_SEMI, fontSize: 12.5, color: palette.EHR_ON_SURFACE, fontWeight: '600' }}>
+                                        BMI · {bmi.value} kg/m²
+                                    </Text>
+                                    <Text style={{ fontFamily: SANS_SEMI, fontSize: 11.5, color, fontWeight: '700' }}>
+                                        {bmi.label}
+                                    </Text>
+                                </XStack>
+                            );
+                        })()}
                     </View>
                 </>
             ) : null}

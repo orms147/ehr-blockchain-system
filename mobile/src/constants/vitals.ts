@@ -3,7 +3,7 @@
 // raw values only; abnormal flag recomputes on render so ranges can update without
 // data migration). Personal baseline override = Phase G.13+ (deferred).
 
-export type VitalId = 'hr' | 'bpSystolic' | 'bpDiastolic' | 'temp' | 'spo2' | 'rr' | 'weight';
+export type VitalId = 'hr' | 'bpSystolic' | 'bpDiastolic' | 'temp' | 'spo2' | 'rr' | 'weight' | 'height';
 export type VitalStatus = 'ok' | 'high' | 'low' | 'empty';
 
 export interface VitalSpec {
@@ -80,7 +80,46 @@ export const VITAL_SPECS: VitalSpec[] = [
         max: null,
         placeholder: '60',
     },
+    {
+        id: 'height',
+        label: 'Chiều cao',
+        unit: 'cm',
+        refLabel: '—',
+        min: null,
+        max: null,
+        placeholder: '170',
+    },
 ];
+
+/**
+ * BMI = weight (kg) / (height (m))² — TT 32/2023 Chương X yêu cầu Chiều cao
+ * + Cân nặng (BMI tính tự động render-time, không persist field riêng).
+ * Phân loại theo chuẩn WHO Asia-Pacific (BMI VN khác BMI Châu Âu).
+ */
+export type BmiCategory = 'underweight' | 'normal' | 'overweight' | 'obese' | 'invalid';
+
+export function computeBmi(weight: string | number | null, height: string | number | null): {
+    value: number | null;
+    category: BmiCategory;
+    label: string;
+} {
+    const w = typeof weight === 'number' ? weight : parseFloat(String(weight || '').replace(',', '.'));
+    const h = typeof height === 'number' ? height : parseFloat(String(height || '').replace(',', '.'));
+    if (!Number.isFinite(w) || !Number.isFinite(h) || w <= 0 || h <= 0) {
+        return { value: null, category: 'invalid', label: '—' };
+    }
+    const hMeters = h / 100;
+    const bmi = w / (hMeters * hMeters);
+    const rounded = Math.round(bmi * 10) / 10;
+    // WHO Asia-Pacific cutoffs (Bộ Y tế VN khuyến nghị)
+    let category: BmiCategory;
+    let label: string;
+    if (rounded < 18.5) { category = 'underweight'; label = 'Thiếu cân'; }
+    else if (rounded < 23) { category = 'normal'; label = 'Bình thường'; }
+    else if (rounded < 25) { category = 'overweight'; label = 'Thừa cân'; }
+    else { category = 'obese'; label = 'Béo phì'; }
+    return { value: rounded, category, label };
+}
 
 /**
  * Pure function — given vital spec + raw value (string from input or number),

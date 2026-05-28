@@ -68,6 +68,22 @@ const SANS_MEDIUM = 'DMSans_500Medium';
 const SANS_SEMI = 'DMSans_600SemiBold';
 const MONO = 'monospace';
 
+// Vietnamese labels cho observation keys trong DecryptedContent. Fallback hiển
+// thị raw key nếu không có map. Theo TT 32/2023 Chương X (mạch, nhiệt độ,
+// huyết áp, nhịp thở, cân nặng, chiều cao, BMI).
+const OBSERVATION_LABELS: Record<string, string> = {
+    heartRate: 'Mạch',
+    bloodPressure: 'Huyết áp',
+    bloodPressureSystolic: 'HA tâm thu',
+    bloodPressureDiastolic: 'HA tâm trương',
+    temperature: 'Nhiệt độ',
+    respiratoryRate: 'Nhịp thở',
+    spo2: 'SpO₂',
+    weight: 'Cân nặng',
+    height: 'Chiều cao',
+    bmi: 'BMI (kg/m²)',
+};
+
 type RouteRecord = {
     cidHash?: string;
     title?: string;
@@ -1347,8 +1363,8 @@ function DecryptedContent({
                                 borderColor: palette.EHR_OUTLINE_SOFT,
                             }}
                         >
-                            <Text style={{ fontFamily: SANS, fontSize: 13, color: palette.EHR_TEXT_MUTED, textTransform: 'capitalize' }}>
-                                {key}
+                            <Text style={{ fontFamily: SANS, fontSize: 13, color: palette.EHR_TEXT_MUTED }}>
+                                {OBSERVATION_LABELS[key] || key}
                             </Text>
                             <View
                                 style={{

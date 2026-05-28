@@ -51,6 +51,7 @@ export default function EditProfileScreen({ navigation }: any) {
     const [dateOfBirth, setDateOfBirth] = useState('');
     const [bloodType, setBloodType] = useState<string | null>(null);
     const [allergies, setAllergies] = useState('');
+    const [insuranceNumber, setInsuranceNumber] = useState('');
 
     useEffect(() => {
         const load = async () => {
@@ -62,6 +63,7 @@ export default function EditProfileScreen({ navigation }: any) {
                     setDateOfBirth(data.dateOfBirth ? new Date(data.dateOfBirth).toISOString().split('T')[0] : '');
                     setBloodType(data.bloodType || null);
                     setAllergies(data.allergies || '');
+                    setInsuranceNumber(data.insuranceNumber || '');
                 }
             } catch (err) {
                 console.warn('Failed to load profile:', err);
@@ -77,6 +79,15 @@ export default function EditProfileScreen({ navigation }: any) {
             Alert.alert('Thiếu thông tin', 'Vui lòng nhập họ tên.');
             return;
         }
+        // Validate BHYT format chỉ khi có nhập (cho phép để trống)
+        const trimmedBhyt = insuranceNumber.trim().toUpperCase();
+        if (trimmedBhyt && !/^[A-Z]{2}\d{13}$/.test(trimmedBhyt)) {
+            Alert.alert(
+                'Số BHYT không hợp lệ',
+                'Số BHYT phải gồm 2 chữ cái + 13 chữ số (vd SV4796543210123). Để trống nếu chưa có.',
+            );
+            return;
+        }
 
         setIsSaving(true);
         try {
@@ -85,6 +96,7 @@ export default function EditProfileScreen({ navigation }: any) {
                 gender: gender || undefined,
                 bloodType: bloodType || undefined,
                 allergies: allergies.trim() || undefined,
+                insuranceNumber: trimmedBhyt || null,
             };
 
             if (dateOfBirth) {
@@ -307,6 +319,35 @@ export default function EditProfileScreen({ navigation }: any) {
                             );
                         })}
                     </View>
+                </View>
+
+                {/* BHYT — TT 32/2023 yêu cầu, để trống nếu chưa có */}
+                <SectionLabel trailing="2 chữ + 13 số">Bảo hiểm y tế</SectionLabel>
+                <View style={{ paddingHorizontal: 22, paddingBottom: 22 }}>
+                    <FieldLabel>Số thẻ BHYT</FieldLabel>
+                    <TextInput
+                        value={insuranceNumber}
+                        onChangeText={(v) => setInsuranceNumber(v.toUpperCase())}
+                        placeholder="SV4796543210123"
+                        placeholderTextColor={palette.EHR_TEXT_MUTED}
+                        autoCapitalize="characters"
+                        autoCorrect={false}
+                        maxLength={15}
+                        style={{
+                            borderRadius: 10,
+                            borderWidth: 0.5,
+                            borderColor: palette.EHR_OUTLINE_SOFT,
+                            backgroundColor: palette.EHR_SURFACE_LOWEST,
+                            paddingHorizontal: 14,
+                            paddingVertical: 12,
+                            color: palette.EHR_ON_SURFACE,
+                            fontFamily: 'monospace',
+                            fontSize: 14,
+                        }}
+                    />
+                    <Text style={{ marginTop: 6, fontFamily: SANS, fontSize: 11, color: palette.EHR_TEXT_MUTED, lineHeight: 16 }}>
+                        Để trống nếu chưa có. Định dạng: 2 chữ cái viết hoa + 13 chữ số (vd SV4796543210123).
+                    </Text>
                 </View>
 
                 {/* Allergies */}
