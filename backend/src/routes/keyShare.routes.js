@@ -481,11 +481,16 @@ router.get('/my', authenticate, async (req, res, next) => {
     try {
         const recipientAddress = req.user.walletAddress.toLowerCase();
 
+        // Include 'revoked' rows so they surface trong mục "Hồ sơ hết hạn /
+        // bị thu hồi" của doctor (user feedback 2026-05-28: doctor cần biết
+        // hồ sơ nào đã từng có quyền mà bị thu hồi). Frontend dashboard tự
+        // ẩn inactive (active===false) ra khỏi list chính. Vẫn loại 'rejected'
+        // (request never accepted) + post-revoke versions doctor tạo (orphan
+        // synth filter dưới — chain root walk).
         const keyShares = await prisma.keyShare.findMany({
             where: {
                 recipientAddress,
-                // Exclude revoked/rejected. Show 'awaiting_claim' so doctor can claim.
-                status: { notIn: ['revoked', 'rejected'] },
+                status: { notIn: ['rejected'] },
             },
             include: {
                 record: true,
@@ -626,8 +631,9 @@ router.get('/my', authenticate, async (req, res, next) => {
             const isSelfCreated = ks.record?.createdBy?.toLowerCase() === recipientAddress;
             const senderKey = ks.senderPublicKey || ks.sender?.encryptionPublicKey || null;
 
-            // 1. Check direct expiry
-            let isExpired = ks.expiresAt && new Date(ks.expiresAt).getTime() < Date.now();
+            // 1. Check direct expiry — revoked rows always treat as inactive.
+            const isRevokedStatus = ks.status === 'revoked';
+            let isExpired = isRevokedStatus || (ks.expiresAt && new Date(ks.expiresAt).getTime() < Date.now());
             let isActive = !isExpired;
 
             // 2. Chain Inheritance Logic (bidirectional):
@@ -955,6 +961,43 @@ router.get('/sent', authenticate, async (req, res, next) => {
             rootCidHash: resolveRoot(ks),
         }));
 
+        // Compute total version count per chain root từ RecordMetadata. Lý do
+        // KHÔNG đếm bằng KeyShare rows: khi doctor làm addRecordByDoctor tạo
+        // version mới, KeyShare row mới có senderAddress=doctor (không phải
+        // patient) → patient's /sent miss those rows → count thiếu version.
+        // Walk descendants tử root để có true chain size.
+        const uniqueRoots = new Set(
+            payload.map((p) => p.rootCidHash?.toLowerCase()).filter(Boolean)
+        );
+        const chainCountByRoot = new Map();
+        for (const root of uniqueRoots) {
+            const visited = new Set([root]);
+            let frontier = [root];
+            // Hard cap 200 versions per chain (same as collectDescendantCidHashes
+            // in consentLedgerSync) — pathological deep chains stop walking.
+            while (frontier.length > 0 && visited.size < 200) {
+                const batch = frontier.splice(0);
+                const children = await prisma.recordMetadata.findMany({
+                    where: { parentCidHash: { in: batch } },
+                    select: { cidHash: true },
+                });
+                const next = [];
+                for (const c of children) {
+                    const h = c.cidHash?.toLowerCase();
+                    if (h && !visited.has(h)) {
+                        visited.add(h);
+                        next.push(h);
+                    }
+                }
+                frontier = next;
+            }
+            chainCountByRoot.set(root, visited.size);
+        }
+        for (const p of payload) {
+            const root = p.rootCidHash?.toLowerCase();
+            p.chainVersionCount = (root && chainCountByRoot.get(root)) || 1;
+        }
+
         res.json(payload);
     } catch (error) {
         next(error);
@@ -1020,13 +1063,51 @@ router.get('/recipients/:cidHash', authenticate, async (req, res, next) => {
         // Return public keys for re-encryption + flags the mobile share-modal
         // downgrade guard reads. Consent covers the whole chain (medical episode
         // model), so allowDelegate + expiresAt are the only per-share flags.
-        const team = recipients.map(share => ({
+        let team = recipients.map(share => ({
             walletAddress: share.recipient.walletAddress,
             encryptionPublicKey: share.recipient.encryptionPublicKey || share.senderPublicKey,
             allowDelegate: share.allowDelegate === true,
             expiresAt: share.expiresAt,
             role: 'member'
         }));
+
+        // Cross-check on-chain consent (mirror trong Consent table). KeyShare
+        // row chỉ filter status=revoked/rejected, KHÔNG biết về cascade revoke
+        // mà handleConsentRevoked skip vì doctor là createdBy của version
+        // (authoredCidHashes exclusion ở consentLedgerSync.service.js:511-521).
+        // Hệ quả: row 'claimed' vẫn return cho doctor đã bị revoked → mobile
+        // share-sheet pop alert "Bác sĩ đã có quyền dài hạn hơn / Vĩnh viễn"
+        // dù consent on-chain đã revoke. Fix: walk root, query Consent table,
+        // chỉ giữ recipient có Consent active.
+        if (team.length > 0 && record?.ownerAddress) {
+            // Walk parent chain → root (Consent key by root per medical episode model)
+            let rootCid = cidHashLower;
+            for (let depth = 0; depth < 50; depth++) {
+                const r = await prisma.recordMetadata.findUnique({
+                    where: { cidHash: rootCid },
+                    select: { parentCidHash: true },
+                });
+                if (!r?.parentCidHash) break;
+                rootCid = r.parentCidHash.toLowerCase();
+            }
+
+            const ownerLower = record.ownerAddress.toLowerCase();
+            const granteeAddrs = team.map(t => t.walletAddress.toLowerCase());
+            const activeConsents = await prisma.consent.findMany({
+                where: {
+                    patientAddress: ownerLower,
+                    granteeAddress: { in: granteeAddrs },
+                    cidHash: rootCid,
+                    status: 'active',
+                    expiresAt: { gt: new Date() },
+                },
+                select: { granteeAddress: true },
+            });
+            const activeSet = new Set(
+                activeConsents.map(c => c.granteeAddress.toLowerCase())
+            );
+            team = team.filter(t => activeSet.has(t.walletAddress.toLowerCase()));
+        }
 
         res.json(team);
 

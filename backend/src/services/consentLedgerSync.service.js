@@ -576,6 +576,91 @@ async function handleConsentRevoked(event) {
         });
     }
 
+    // BUG FIX (2026-05-28): cascade-by-sender ở trên CHỈ revoke rows mà revoked
+    // grantee (A) là sender. Bỏ sót case: khi downstream recipient B sau đó
+    // tạo update version mới (addRecordByDoctor), backend `/save-only` tự tạo
+    // KeyShare(v_new, B) với senderAddress=PATIENT (record.routes.js
+    // L425-438 save-only-doctor pattern) — semantic ownership cho patient.
+    // Row này KHÔNG bị cascade-by-sender bắt vì sender=patient ≠ A.
+    //
+    // Fix: dùng DelegationAccessLog (immutable on-chain event log) làm source
+    // of truth để xác định "ai là delegation-derived recipient của A trong
+    // chain này". Với mỗi recipient đó, revoke ALL KeyShare rows trong chain
+    // BẤT KỂ sender. Cũng update Consent mirror table sang revoked để
+    // /recipients + /all-grantees + downstream gates filter đúng.
+    let cascadeDelegationDerivedRevoked = 0;
+    let cascadeDelegationDerivedRecipients = 0;
+    if (revocableCidHashes.length > 0) {
+        const delegationDerived = await prisma.delegationAccessLog.findMany({
+            where: {
+                patientAddress: patient,
+                byDelegatee: grantee, // A đã delegate cho ai trong chain root này
+                rootCidHash,
+            },
+            select: { newGrantee: true },
+        });
+        const delegationDerivedRecipients = Array.from(new Set(
+            delegationDerived.map((d) => d.newGrantee?.toLowerCase()).filter(Boolean)
+        ));
+        cascadeDelegationDerivedRecipients = delegationDerivedRecipients.length;
+
+        for (const recipient of delegationDerivedRecipients) {
+            // Query ALL non-revoked KeyShare rows cho recipient trong chain,
+            // group by sender (applyRevoke yêu cầu exact senderAddress match).
+            const rows = await prisma.keyShare.findMany({
+                where: {
+                    recipientAddress: recipient,
+                    cidHash: { in: revocableCidHashes },
+                    status: { not: 'revoked' },
+                },
+                select: { senderAddress: true, cidHash: true },
+            });
+            const bySender = new Map();
+            for (const r of rows) {
+                const s = r.senderAddress?.toLowerCase();
+                if (!s) continue;
+                if (!bySender.has(s)) bySender.set(s, []);
+                bySender.get(s).push(r.cidHash);
+            }
+            for (const [sender, hashes] of bySender) {
+                const r = await applyRevoke({
+                    senderAddress: sender,
+                    recipientAddress: recipient,
+                    cidHashes: hashes,
+                    source: 'event-revoke',
+                    sourceTimestamp,
+                });
+                cascadeDelegationDerivedRevoked += r.applied;
+            }
+
+            // Flip Consent mirror cho recipient → revoked. Lý do: handler
+            // cũ chỉ update Consent cho A. Khi B nhận quyền qua A's delegation,
+            // Consent(patient, B, root) vẫn active=true trong DB → /recipients
+            // + /all-grantees vẫn cho qua → bug.
+            try {
+                await prisma.consent.updateMany({
+                    where: {
+                        patientAddress: patient,
+                        granteeAddress: recipient,
+                        cidHash: rootCidHash,
+                    },
+                    data: { status: 'revoked' },
+                });
+            } catch (err) {
+                log.warn('Cascade Consent flip failed', {
+                    patient, recipient, rootCidHash, error: err?.message,
+                });
+            }
+
+            emitToUser(recipient, 'consentUpdated', {
+                action: 'cascade_revoked',
+                patient,
+                via: grantee,
+                rootCidHash,
+            });
+        }
+    }
+
     try {
         await prisma.consent.updateMany({
             where: {
@@ -597,6 +682,8 @@ async function handleConsentRevoked(event) {
         keySharesSkipped: updateResult.skipped,
         cascadeDownstreamRevoked: cascadeRevoked,
         cascadeRecipientCount: downstreamRecipients.length,
+        cascadeDelegationDerivedRevoked,
+        cascadeDelegationDerivedRecipients,
         versionCount: cidHashes.length,
     });
 
