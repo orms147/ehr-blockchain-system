@@ -32,6 +32,7 @@ import api from '../services/api';
 import trustedContactService from '../services/trustedContact.service';
 import ViButton from '../components-v2/ViButton';
 import { useEhrPalette } from '../constants/uiColors';
+import { friendlyBackendError } from '../utils/friendlyError';
 
 const SERIF = 'Fraunces_400Regular';
 const SERIF_MEDIUM = 'Fraunces_500Medium';
@@ -153,7 +154,7 @@ export default function EmergencyProfileScreen() {
             });
             Alert.alert('Đã lưu', 'Thông tin cứu sinh đã được cập nhật.');
         } catch (err: any) {
-            Alert.alert('Lỗi', err?.data?.error || err?.message || 'Không thể lưu thông tin.');
+            Alert.alert('Lỗi', friendlyBackendError(err, 'Không thể lưu thông tin cấp cứu.'));
         } finally {
             setSaving(false);
         }

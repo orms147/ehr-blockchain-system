@@ -43,6 +43,7 @@ import authService from '../services/auth.service';
 import walletActionService from '../services/walletAction.service';
 import { getOrCreateEncryptionKeypair } from '../services/nacl-crypto';
 import { deriveRolesFromUser } from '../utils/authRoles';
+import { friendlyProviderError } from '../utils/friendlyError';
 import { Sentry } from '../lib/sentry';
 import {
     EHR_ON_PRIMARY,
@@ -336,11 +337,16 @@ export default function LoginScreen({ navigation }: any) {
                 });
                 Sentry.captureException(error);
             } catch {}
-            let message = error?.message || 'Lỗi không xác định';
+            let message: string;
             if (error?.code === 'BACKEND_UNREACHABLE') {
-                message = 'Không kết nối được backend. Hãy bật backend và kiểm tra EXPO_PUBLIC_API_URL.';
+                message = 'Không kết nối được hệ thống. Vui lòng kiểm tra mạng và thử lại.';
             } else if (raw.includes('cannot connect to expo cli') || raw.includes('could not load bundle')) {
                 message = 'Ứng dụng không kết nối được Metro. Hãy chạy expo start và thử lại.';
+            } else {
+                // friendlyProviderError map OAuth codes (access_denied,
+                // popup_closed...) sang tiếng Việt — tránh leak raw English
+                // ("Login failed, access_denied") ra UI VN. User feedback A6.
+                message = friendlyProviderError(error, providerToUse);
             }
             Alert.alert('Đăng nhập thất bại', message);
         } finally {

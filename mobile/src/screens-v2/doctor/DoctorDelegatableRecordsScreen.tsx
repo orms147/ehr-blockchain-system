@@ -35,6 +35,7 @@ import useAuthStore from '../../store/authStore';
 import ViCard from '../../components-v2/ViCard';
 import ViButton from '../../components-v2/ViButton';
 import { useEhrPalette } from '../../constants/uiColors';
+import { friendlyChainError } from '../../utils/friendlyError';
 
 const SERIF = 'Fraunces_400Regular';
 const SANS = 'DMSans_400Regular';
@@ -171,7 +172,7 @@ export default function DoctorDelegatableRecordsScreen() {
             queryClient.invalidateQueries({ queryKey: ['delegatableRecords'] });
         } catch (err: any) {
             console.error('Re-share error', err);
-            Alert.alert('Lỗi', err?.message || 'Không thể uỷ quyền hồ sơ.');
+            Alert.alert('Lỗi', friendlyChainError(err, 'Không thể uỷ quyền hồ sơ.'));
         } finally {
             setSharing(false);
         }

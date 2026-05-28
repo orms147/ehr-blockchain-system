@@ -10,6 +10,7 @@ import { Heart, Plus, Trash2, ScanLine, ShieldCheck, Info, IdCard } from 'lucide
 
 import api from '../services/api';
 import trustedContactService from '../services/trustedContact.service';
+import { friendlyBackendError } from '../utils/friendlyError';
 import QrAddressScanner from '../components/QrAddressScanner';
 import {
     EHR_PRIMARY,
@@ -78,8 +79,7 @@ export default function TrustedContactsScreen() {
             );
             resetAddModal();
         } catch (err: any) {
-            const msg = err?.data?.error || err?.message || 'Không thể thêm Người thân tin cậy.';
-            Alert.alert('Lỗi', msg);
+            Alert.alert('Lỗi', friendlyBackendError(err, 'Không thể thêm Người thân tin cậy.'));
         } finally {
             setAdding(false);
         }
@@ -103,8 +103,7 @@ export default function TrustedContactsScreen() {
                             await queryClient.invalidateQueries({ queryKey: ['trustedContacts'] });
                             Alert.alert('Đã thu hồi', 'Người thân không còn quyền truy cập hồ sơ.');
                         } catch (err: any) {
-                            const msg = err?.data?.error || err?.message || 'Không thể thu hồi.';
-                            Alert.alert('Lỗi', msg);
+                            Alert.alert('Lỗi', friendlyBackendError(err, 'Không thể thu hồi quyền.'));
                         } finally {
                             setRemovingAddr(null);
                         }
@@ -374,7 +373,7 @@ export default function TrustedContactsScreen() {
                                         setCccdOpen(false);
                                         setCccdInput('');
                                     } catch (err: any) {
-                                        Alert.alert('Lỗi', err?.data?.error || err?.message || 'Không thể huỷ.');
+                                        Alert.alert('Lỗi', friendlyBackendError(err, 'Không thể huỷ đăng ký.'));
                                     } finally {
                                         setCccdSaving(false);
                                     }
@@ -405,9 +404,10 @@ export default function TrustedContactsScreen() {
                                     } catch (err: any) {
                                         const code = err?.data?.code;
                                         if (code === 'NATIONAL_ID_TAKEN') {
-                                            Alert.alert('CCCD đã tồn tại', err?.data?.error);
+                                            // BACKEND_CODE_MAP có entry sẵn cho NATIONAL_ID_TAKEN
+                                            Alert.alert('CCCD đã tồn tại', friendlyBackendError(err));
                                         } else {
-                                            Alert.alert('Lỗi', err?.data?.error || err?.message || 'Không thể lưu.');
+                                            Alert.alert('Lỗi', friendlyBackendError(err, 'Không thể lưu CCCD.'));
                                         }
                                     } finally {
                                         setCccdSaving(false);

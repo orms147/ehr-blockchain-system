@@ -40,6 +40,7 @@ import ViCard from '../components-v2/ViCard';
 import ViButton from '../components-v2/ViButton';
 import { ViStatusChip } from '../components-v2/ViChips';
 import { useEhrPalette } from '../constants/uiColors';
+import { friendlyChainError } from '../utils/friendlyError';
 import { formatExpiry } from '../utils/dateFormatting';
 
 const SERIF = 'Fraunces_400Regular';
@@ -942,7 +943,7 @@ export default function DelegationScreen() {
                 `Bác sĩ ${truncate(data.delegateeAddress)} đã được uỷ quyền.\n\nTx: ${result.txHash.slice(0, 14)}…`,
             );
         } catch (err: any) {
-            Alert.alert('Uỷ quyền thất bại', err?.message || 'Không thể uỷ quyền.');
+            Alert.alert('Uỷ quyền thất bại', friendlyChainError(err, 'Không thể uỷ quyền.'));
         }
     };
 
@@ -967,7 +968,7 @@ export default function DelegationScreen() {
             setExtendTarget(null);
             Alert.alert('Đã gia hạn', `Thời hạn mới: ${newDays} ngày kể từ hôm nay.`);
         } catch (err: any) {
-            Alert.alert('Gia hạn thất bại', err?.message || 'Không thể gia hạn.');
+            Alert.alert('Gia hạn thất bại', friendlyChainError(err, 'Không thể gia hạn quyền.'));
         }
     };
 
@@ -986,7 +987,7 @@ export default function DelegationScreen() {
                             const result = await revokeMutation.mutateAsync(item.delegateeAddress);
                             Alert.alert('Đã thu hồi', `Tx: ${result.txHash.slice(0, 14)}…`);
                         } catch (err: any) {
-                            Alert.alert('Lỗi', err?.message || 'Không thể thu hồi.');
+                            Alert.alert('Lỗi', friendlyChainError(err, 'Không thể thu hồi quyền.'));
                         } finally {
                             setRevokingAddr(null);
                         }

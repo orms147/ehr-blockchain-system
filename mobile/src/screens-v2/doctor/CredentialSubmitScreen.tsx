@@ -33,6 +33,7 @@ import verificationService from '../../services/verification.service';
 import orgService from '../../services/org.service';
 import useAuthStore from '../../store/authStore';
 import { useEhrPalette } from '../../constants/uiColors';
+import { friendlyBackendError, friendlyPickerError } from '../../utils/friendlyError';
 
 const SERIF = 'Fraunces_400Regular';
 const SERIF_ITALIC = 'Fraunces_400Regular_Italic';
@@ -192,7 +193,8 @@ export default function CredentialSubmitScreen({ navigation }: any) {
                 },
             ]);
         } catch (err: any) {
-            Alert.alert('Lỗi chọn tệp', err?.message || 'Không thể chọn tệp.');
+            const msg = friendlyPickerError(err, 'Không thể chọn tệp.');
+            if (msg) Alert.alert('Lỗi chọn tệp', msg);
         }
     };
 
@@ -237,7 +239,7 @@ export default function CredentialSubmitScreen({ navigation }: any) {
             );
         } catch (err: any) {
             setStatus('idle');
-            Alert.alert('Lỗi', err?.message || 'Không thể gửi hồ sơ. Vui lòng thử lại.');
+            Alert.alert('Lỗi', friendlyBackendError(err, 'Không thể gửi hồ sơ xác minh. Vui lòng thử lại.'));
         }
     };
 

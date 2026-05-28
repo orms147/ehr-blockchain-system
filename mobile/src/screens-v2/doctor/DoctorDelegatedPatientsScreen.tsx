@@ -62,6 +62,7 @@ import ViButton from '../../components-v2/ViButton';
 import { ViStatusChip } from '../../components-v2/ViChips';
 import { useEhrPalette } from '../../constants/uiColors';
 import { formatDate as formatDateShared, formatExpiry } from '../../utils/dateFormatting';
+import { friendlyChainError } from '../../utils/friendlyError';
 
 const SERIF = 'Fraunces_400Regular';
 const SANS = 'DMSans_400Regular';
@@ -244,7 +245,7 @@ function ShareRecordModal({
             reset();
             onDone();
         } catch (err: any) {
-            Alert.alert('Thất bại', err?.message || 'Không thể mint consent.');
+            Alert.alert('Thất bại', friendlyChainError(err, 'Không thể cấp quyền truy cập hồ sơ.'));
         } finally {
             setSubmitting(false);
         }
@@ -458,7 +459,7 @@ function SubDelegateModal({
             reset();
             onClose();
         } catch (err: any) {
-            Alert.alert('Thất bại', err?.message || 'Không thể uỷ quyền tiếp.');
+            Alert.alert('Thất bại', friendlyChainError(err, 'Không thể uỷ quyền tiếp cho bác sĩ khác.'));
         }
     };
 

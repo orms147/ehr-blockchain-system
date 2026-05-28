@@ -12,6 +12,7 @@ import { YStack, XStack, Text, View, Button } from 'tamagui';
 import { Search, Phone, Heart, AlertTriangle, Droplet, ShieldAlert, Info } from 'lucide-react-native';
 
 import trustedContactService from '../../services/trustedContact.service';
+import { friendlyBackendError } from '../../utils/friendlyError';
 import {
     EHR_PRIMARY,
     EHR_PRIMARY_FIXED,
@@ -78,9 +79,9 @@ export default function EmergencyLookupScreen() {
             if (code === 'PATIENT_NOT_FOUND') {
                 setError('Không tìm thấy bệnh nhân với CCCD này. Bệnh nhân có thể chưa đăng ký Mã định danh khẩn cấp.');
             } else if (code === 'LOOKUP_RATE_LIMITED') {
-                setError(err?.data?.error || 'Bạn đã tra cứu quá nhiều lần. Vui lòng thử lại sau.');
+                setError('Bạn đã tra cứu quá nhiều lần. Vui lòng thử lại sau ít phút.');
             } else {
-                setError(err?.data?.error || err?.message || 'Tra cứu thất bại.');
+                setError(friendlyBackendError(err, 'Tra cứu thất bại.'));
             }
         } finally {
             setLoading(false);
