@@ -6,22 +6,17 @@ skinparam actorStyle awesome
 
 actor "Bộ Y tế" as Ministry
 
-usecase "Đăng nhập\n(Ministry wallet)" as UC_Login
-usecase "Xem dashboard\nMinistry" as UC_Dashboard
-
 usecase "Tạo tổ chức\ny tế mới" as UC_CreateOrg
 usecase "Tạm dừng /\nkích hoạt tổ chức" as UC_SetOrgActive
 usecase "Thu hồi xác minh\ntổ chức" as UC_RevokeOrg
 
 usecase "Xác minh bác sĩ\nđộc lập" as UC_VerifyDoctor
 
-Ministry --> UC_Login
-Ministry --> UC_Dashboard
 Ministry --> UC_CreateOrg
 Ministry --> UC_SetOrgActive
 Ministry --> UC_RevokeOrg
 Ministry --> UC_VerifyDoctor
 
-UC_RevokeOrg    .> UC_SetOrgActive : <<extend>>
+UC_RevokeOrg .> UC_SetOrgActive : <<extend>>
 
 @enduml

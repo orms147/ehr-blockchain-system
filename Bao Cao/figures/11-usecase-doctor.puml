@@ -6,39 +6,29 @@ skinparam actorStyle awesome
 
 actor "Bác sĩ" as Doctor
 
-usecase "Đăng ký vai trò\nBác sĩ" as UC_Register
-usecase "Đăng nhập" as UC_Login
-
-usecase "Nộp chứng chỉ\nchuyên môn" as UC_Submit
-
 usecase "Yêu cầu truy cập\nhồ sơ bệnh nhân" as UC_Request
 usecase "Yêu cầu\ntruy cập trực tiếp" as UC_RequestDirect
 usecase "Yêu cầu uỷ quyền\ntheo hồ sơ" as UC_RequestRecord
 usecase "Yêu cầu uỷ quyền\ntoàn quyền" as UC_RequestFull
 
-usecase "Xem danh sách\nhồ sơ được cấp" as UC_List
 usecase "Đọc + giải mã\nhồ sơ" as UC_Read
 
 usecase "Tạo phiên bản\ncập nhật hồ sơ" as UC_AddVersion
 
 usecase "Uỷ quyền lại cho\nbác sĩ khác" as UC_Delegate
-usecase "Xem + thu hồi hồ sơ\nđã uỷ quyền" as UC_Outgoing
+usecase "Thu hồi hồ sơ\nđã uỷ quyền" as UC_RevokeDelegate
 
 usecase "Tra cứu bệnh nhân\nkhẩn cấp qua CCCD" as UC_Emergency
 
-usecase "Cập nhật hồ sơ\nchuyên môn" as UC_EditProfile
+usecase "Nộp chứng chỉ\nxác minh chuyên môn" as UC_Submit
 
-Doctor --> UC_Register
-Doctor --> UC_Login
 Doctor --> UC_Submit
 Doctor --> UC_Request
-Doctor --> UC_List
 Doctor --> UC_Read
 Doctor --> UC_AddVersion
 Doctor --> UC_Delegate
-Doctor --> UC_Outgoing
+Doctor --> UC_RevokeDelegate
 Doctor --> UC_Emergency
-Doctor --> UC_EditProfile
 
 UC_RequestDirect .> UC_Request : <<extend>>
 UC_RequestRecord .> UC_Request : <<extend>>

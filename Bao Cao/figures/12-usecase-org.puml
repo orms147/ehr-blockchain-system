@@ -6,27 +6,18 @@ skinparam actorStyle awesome
 
 actor "Quản trị viên\nTổ chức" as OrgAdmin
 
-usecase "Đăng nhập" as UC_Login
-usecase "Xem dashboard\ntổ chức" as UC_Dashboard
+usecase "Thêm thành viên\nbác sĩ" as UC_AddMember
+usecase "Loại bỏ thành viên\nbác sĩ" as UC_RemoveMember
 
-usecase "Thêm thành viên\nBác sĩ" as UC_AddMember
-usecase "Loại bỏ thành viên\nBác sĩ" as UC_RemoveMember
-
-usecase "Xem yêu cầu xác minh\npending" as UC_Pending
 usecase "Xác minh\nbác sĩ" as UC_Verify
 usecase "Thu hồi\nxác minh bác sĩ" as UC_RevokeVerify
-usecase "Xem danh sách\nbác sĩ đã xác minh" as UC_VerifiedList
 
-OrgAdmin --> UC_Login
-OrgAdmin --> UC_Dashboard
 OrgAdmin --> UC_AddMember
 OrgAdmin --> UC_RemoveMember
-OrgAdmin --> UC_Pending
 OrgAdmin --> UC_Verify
 OrgAdmin --> UC_RevokeVerify
-OrgAdmin --> UC_VerifiedList
 
 UC_RemoveMember .> UC_AddMember : <<extend>>
-UC_RevokeVerify .> UC_Verify : <<extend>>
+UC_RevokeVerify .> UC_Verify    : <<extend>>
 
 @enduml

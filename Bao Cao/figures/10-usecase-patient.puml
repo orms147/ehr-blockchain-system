@@ -6,18 +6,12 @@ skinparam actorStyle awesome
 
 actor "Bệnh nhân" as Patient
 
-usecase "Đăng ký vai trò" as UC_Register
-usecase "Đăng nhập" as UC_Login
-usecase "Đăng nhập\nbằng Google" as UC_LoginGoogle
-usecase "Đăng nhập\nbằng Email OTP" as UC_LoginEmail
-usecase "Đăng xuất" as UC_Logout
-
 usecase "Tạo hồ sơ\ny tế" as UC_Create
 usecase "Tạo phiên bản\ncập nhật" as UC_Update
-usecase "Xem hồ sơ" as UC_View
 
-usecase "Chia sẻ hồ sơ" as UC_Share
+usecase "Cấp quyền\ntruy cập" as UC_Grant
 usecase "Thu hồi quyền\ntruy cập" as UC_Revoke
+
 usecase "Uỷ quyền\nbác sĩ" as UC_Delegate
 usecase "Thu hồi\nuỷ quyền" as UC_RevokeDelegate
 
@@ -28,16 +22,8 @@ usecase "Đăng ký\nCCCD khẩn cấp" as UC_Cccd
 usecase "Thêm người\nthân tin cậy" as UC_AddTC
 usecase "Thu hồi người\nthân tin cậy" as UC_RemoveTC
 
-usecase "Cập nhật\nthông tin cá nhân" as UC_EditProfile
-usecase "Đổi ảnh\nđại diện" as UC_Avatar
-usecase "Bật/tắt MFA\nsinh trắc học" as UC_MFA
-
-Patient --> UC_Register
-Patient --> UC_Login
-Patient --> UC_Logout
 Patient --> UC_Create
-Patient --> UC_View
-Patient --> UC_Share
+Patient --> UC_Grant
 Patient --> UC_Revoke
 Patient --> UC_Delegate
 Patient --> UC_RevokeDelegate
@@ -45,13 +31,8 @@ Patient --> UC_Approve
 Patient --> UC_Cccd
 Patient --> UC_AddTC
 Patient --> UC_RemoveTC
-Patient --> UC_EditProfile
 
-UC_LoginGoogle .> UC_Login : <<extend>>
-UC_LoginEmail .> UC_Login : <<extend>>
-UC_Update .> UC_Create : <<extend>>
+UC_Update .> UC_Create  : <<extend>>
 UC_Reject .> UC_Approve : <<extend>>
-UC_Avatar .> UC_EditProfile : <<extend>>
-UC_MFA .> UC_EditProfile : <<extend>>
 
 @enduml
