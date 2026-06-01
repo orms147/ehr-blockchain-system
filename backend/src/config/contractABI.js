@@ -1,6 +1,6 @@
-// Auto-synced from forge build artifacts (S18, 2026-05-04).
+// Auto-synced from forge build artifacts (2026-06-01 redeploy).
 // Source: contracts/out/<Contract>.sol/<Contract>.json
-// To regenerate: cd contracts && forge build, then run scripts/sync-abi.js (TODO)
+// Regen: node script that extracts .abi field from each forge artifact.
 
 export const ACCESS_CONTROL_ABI = [
   {
@@ -4145,3 +4145,4 @@ export const EHR_SYSTEM_SECURE_ABI = [
     ]
   }
 ];
+

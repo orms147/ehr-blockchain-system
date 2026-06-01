@@ -8,9 +8,9 @@ dataSources:
     name: RecordRegistry
     network: arbitrum-sepolia
     source:
-      address: "0x43bf418943442857CA73D15598520592968137da"
+      address: "0x910d3E3F6EBF7D170eF2e1CF87CEF5Ea27b982F5"
       abi: RecordRegistry
-      startBlock: 271261349
+      startBlock: 272771519
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.7
@@ -33,9 +33,9 @@ dataSources:
     name: EHRSystem
     network: arbitrum-sepolia
     source:
-      address: "0x262e7aeEe542C6d83c1Bb46fa73e24D910d9F8a3"
+      address: "0xC17c252fb5D39c605bD1bA7525AF16859EB71f43"
       abi: EHRSystem
-      startBlock: 271261351
+      startBlock: 272771526
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.7
@@ -59,9 +59,9 @@ dataSources:
     name: ConsentLedger
     network: arbitrum-sepolia
     source:
-      address: "0xa7D9Fe2120613F87922Be76Cee839A382F2c54BA"
+      address: "0xBFEb0274EAA4c7EEB7150C4bA69165653827D55a"
       abi: ConsentLedger
-      startBlock: 271261347
+      startBlock: 272771513
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.7
@@ -95,9 +95,9 @@ dataSources:
     name: AccessControl
     network: arbitrum-sepolia
     source:
-      address: "0xA2b937a88c130aD211D12Dc2BC482Cb49CDdD7Cb"
+      address: "0x5Fb8052d526235f8118566221A8ADD52EC7130f2"
       abi: AccessControl
-      startBlock: 271261343
+      startBlock: 272771506
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.7
