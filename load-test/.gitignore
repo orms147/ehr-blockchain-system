@@ -1,0 +1,5 @@
+.env
+results/*.json
+results/*.html
+results/*.png
+!results/.gitkeep
