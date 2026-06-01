@@ -112,7 +112,12 @@ export async function runEncryptionCeremony(contactAddress) {
     }
 
     // Patient's keypair — for senderPublicKey field on each KeyShare row.
-    const myKeypair = await getOrCreateEncryptionKeypair();
+    // BUG FIX 2026-05-28: trước đây gọi getOrCreateEncryptionKeypair() không
+    // args → walletClient undefined → "Cannot read property 'signMessage' of
+    // undefined". Hàm cần walletClient + walletAddress để derive keypair từ
+    // signature. Refetch context tại đây.
+    const { walletClient, address: patient } = await walletActionService.getWalletContext();
+    const myKeypair = await getOrCreateEncryptionKeypair(walletClient, patient);
     const senderPublicKey = myKeypair.publicKey;
 
     // Records of the patient. Use the existing 'my records' endpoint and
