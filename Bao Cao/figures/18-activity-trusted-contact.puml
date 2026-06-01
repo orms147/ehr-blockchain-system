@@ -1,0 +1,76 @@
+@startuml activity-trusted-contact
+!theme plain
+title Activity — Trusted Contact emergency
+
+|#LightYellow|Phase A: Patient đăng ký TC|
+start
+:Patient mở TrustedContactsScreen;
+:Bấm "Thêm người thân tin cậy";
+:Paste ví TC + label (vd "Mẹ");
+
+if (Ví hợp lệ + khác patient?) then (NO)
+  :Highlight error;
+  stop
+else (YES)
+endif
+
+:Biometric MFA;
+:Sign TrustedContactPermit(active=true);
+:POST /api/relayer/trusted-contact;
+:Contract setTrustedContactBySig:\nisTrustedContact[P][TC] = true\n+ emit TrustedContactSet;
+
+if (TC đã activate encryption key?) then (NO)
+  :Error "TC chưa đăng nhập app";
+  stop
+else (YES)
+endif
+
+:runEncryptionCeremony(TC);
+:For each current record:\n  encrypt (cid, aesKey)\n  cho TC's NaCl pubkey;
+:POST /api/key-share/bulk-trusted-contact;
+:Backend lưu KeyShare rows\nsource='trusted-contact';
+
+|#LightGray|Phase A+: Auto pre-share record mới (background)|
+:Patient tạo record mới (Activity 14);
+:autoPreShareNewRecord:\nfor each TC active\n  encrypt + bulk pre-share;
+note right
+  TC luôn có KeyShare cho
+  mọi record mới, kể cả TC offline
+end note
+
+|#LightBlue|Phase B: TC truy cập emergency|
+:TC login app;
+:Mở record của patient;
+:GET /api/key-share/record/:cidHash;
+:Backend gate canAccess(P, TC, cid);
+:Contract check isTrustedContact\n(Footgun #2 fix);
+
+if (TC active?) then (YES)
+  :Trả encryptedPayload;
+  :TC mobile decrypt NaCl box\n→ (cid, aesKey);
+  :Fetch IPFS + decrypt AES-GCM;
+  :Render record;
+else (NO)
+  :403 Forbidden;
+endif
+
+|#LightCoral|Phase C: Patient revoke TC|
+:Patient chọn TC → thu hồi;
+:Sign TrustedContactPermit(false);
+:POST /api/relayer/trusted-contact;
+:Contract: isTrustedContact[P][TC] = false\n+ emit TrustedContactRevoked;
+:Backend handleTrustedContactRevoked:\n- mark status='revoked'\n- cascade revoke KeyShare rows\n  source='trusted-contact';
+
+:TC mở record sau revoke;
+:canAccess → false → 403;
+
+note right
+  ⚠ Limitation: TC vẫn có thể
+  decrypt OFFLINE nếu local cache
+  còn — envelope encryption không
+  thể un-share data đã ra ngoài
+end note
+
+stop
+
+@enduml

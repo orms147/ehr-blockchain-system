@@ -1,0 +1,93 @@
+@startuml usecase-patient
+!theme plain
+left to right direction
+skinparam packageStyle rectangle
+skinparam actorStyle awesome
+title Use Case phân rã — Bệnh nhân (Patient)
+
+actor "Bệnh nhân" as Patient
+actor "Sponsor Relayer\n(System)" as Relayer << automated >>
+
+rectangle "Use Case Bệnh nhân" {
+
+  package "Đăng nhập + đăng ký" {
+    usecase "UC-P01\nĐăng nhập" as UCP01
+    usecase "UC-P02\nĐăng ký vai trò\nBệnh nhân" as UCP02
+    usecase "UC-P18\nĐăng xuất" as UCP18
+  }
+
+  package "Hồ sơ y tế" {
+    usecase "UC-P03\nTạo hồ sơ mới" as UCP03
+    usecase "UC-P04\nTạo phiên bản\ncập nhật" as UCP04
+    usecase "UC-P05\nXem hồ sơ" as UCP05
+  }
+
+  package "Quyền truy cập" {
+    usecase "UC-P06\nChia sẻ hồ sơ\n(Grant Consent)" as UCP06
+    usecase "UC-P07\nThu hồi quyền\n(Revoke)" as UCP07
+    usecase "UC-P10\nUỷ quyền\n(Delegation)" as UCP10
+    usecase "UC-P11\nThu hồi\nuỷ quyền" as UCP11
+  }
+
+  package "Yêu cầu truy cập" {
+    usecase "UC-P08\nPhê duyệt\nyêu cầu" as UCP08
+    usecase "UC-P09\nTừ chối\nyêu cầu" as UCP09
+  }
+
+  package "Khẩn cấp" {
+    usecase "UC-P12\nĐăng ký CCCD" as UCP12
+    usecase "UC-P13\nĐăng ký Người\nthân tin cậy" as UCP13
+    usecase "UC-P14\nThu hồi\nNgười tin cậy" as UCP14
+  }
+
+  package "Cá nhân" {
+    usecase "UC-P15\nCập nhật\nthông tin" as UCP15
+    usecase "UC-P16\nĐổi ảnh\nđại diện" as UCP16
+    usecase "UC-P17\nMFA sinh\ntrắc học" as UCP17
+  }
+}
+
+Patient --> UCP01
+Patient --> UCP02
+Patient --> UCP03
+Patient --> UCP04
+Patient --> UCP05
+Patient --> UCP06
+Patient --> UCP07
+Patient --> UCP08
+Patient --> UCP09
+Patient --> UCP10
+Patient --> UCP11
+Patient --> UCP12
+Patient --> UCP13
+Patient --> UCP14
+Patient --> UCP15
+Patient --> UCP16
+Patient --> UCP17
+Patient --> UCP18
+
+' Include — UC gọi Sponsor Relayer
+UCP03 ..> Relayer : <<include>>
+UCP06 ..> Relayer : <<include>>
+UCP07 ..> Relayer : <<include>>
+UCP08 ..> Relayer : <<include>>
+UCP09 ..> Relayer : <<include>>
+UCP10 ..> Relayer : <<include>>
+UCP11 ..> Relayer : <<include>>
+UCP13 ..> Relayer : <<include>>
+UCP14 ..> Relayer : <<include>>
+
+' Extend — MFA biometric gate
+UCP17 ..> UCP06 : <<extend>>\n(nếu bật)
+UCP17 ..> UCP07 : <<extend>>
+UCP17 ..> UCP08 : <<extend>>
+UCP17 ..> UCP10 : <<extend>>
+UCP17 ..> UCP13 : <<extend>>
+
+' Extend — reject là alt approve
+UCP09 ..> UCP08 : <<extend>>\n(alt)
+
+' Extend — version là extension của tạo mới
+UCP04 ..> UCP03 : <<extend>>\n(parent ref)
+
+@enduml

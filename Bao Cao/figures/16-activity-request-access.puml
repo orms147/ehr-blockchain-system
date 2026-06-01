@@ -1,0 +1,72 @@
+@startuml activity-request-access
+!theme plain
+title Activity — Yêu cầu truy cập 3 bước (Doctor Request Access)
+
+|#LightYellow|Phase 1: Doctor request|
+start
+:Doctor mở DoctorRequestAccess;
+:Paste cidHash + chọn RequestType;
+
+if (cidHash hợp lệ 0x64hex?) then (NO)
+  :Alert "Định dạng sai";
+  stop
+else (YES)
+endif
+
+if (Doctor isVerified?) then (NO)
+  :Revert Unauthorized;
+  stop
+else (YES)
+endif
+
+:Doctor sign + submit\nrequestAccess(...) [doctor gas];
+:Contract: _requests[reqId]\n+ emit AccessRequested\n+ deadline 7 ngày;
+:Subgraph index +\nbackend sync + Expo push;
+
+|#LightBlue|Phase 2: Patient phản hồi|
+:Patient nhận push → RequestsScreen;
+
+if (deadline expired?) then (YES)
+  :Contract revert RequestExpired;
+  stop
+else (NO)
+endif
+
+if (Patient quyết định?) then (Phê duyệt)
+  :Biometric MFA;
+  :Sign ApprovePermit EIP-712;
+  :POST /api/relayer/approve-request;
+  :Contract approveRequestBySig\n+ _completeRequest\n+ ConsentLedger.grantInternal;
+  :Emit ConsentGranted +\nRequestCompleted;
+else (Từ chối)
+  :Biometric MFA;
+  :Sign RejectPermit EIP-712;
+  :POST /api/relayer/reject-request;
+  :Contract rejectRequestBySig\n+ emit RequestRejected;
+  :Backend mirror status='rejected'\n+ rejectionReason off-chain;
+  stop
+endif
+
+|#LightGreen|Phase 3: Doctor claim + decrypt|
+:Doctor refresh dashboard\n(WebSocket push);
+:GET /api/key-share/my\n→ thấy KeyShare row mới;
+:GET /api/key-share/record/:cidHash;
+
+|Backend gate|
+:canAccess(patient, doctor, cid) on-chain;
+
+if (canAccess true?) then (NO)
+  :403 Forbidden;
+  stop
+else (YES)
+endif
+
+:Backend trả encryptedPayload;
+
+|Doctor mobile|
+:Decrypt NaCl box → AES key;
+:Fetch IPFS ciphertext → decrypt AES-GCM;
+:Render record;
+stop
+
+@enduml

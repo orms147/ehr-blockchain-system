@@ -1,0 +1,61 @@
+@startuml usecase-org
+!theme plain
+left to right direction
+skinparam packageStyle rectangle
+skinparam actorStyle awesome
+title Use Case phân rã — Quản trị viên Tổ chức (Org Admin)
+
+actor "Quản trị viên\nTổ chức" as OrgAdmin
+actor "Bác sĩ\n(unverified → verified)" as Doctor
+
+rectangle "Use Case Org Admin" {
+
+  package "Xác thực" {
+    usecase "UC-O01\nĐăng nhập" as UCO01
+    usecase "UC-O02\nDashboard\ntổ chức" as UCO02
+  }
+
+  package "Quản lý thành viên" {
+    usecase "UC-O03\nThêm thành viên\nBác sĩ" as UCO03
+    usecase "UC-O04\nLoại bỏ thành viên" as UCO04
+  }
+
+  package "Xác minh chuyên môn" {
+    usecase "UC-O05\nXem yêu cầu\nxác minh pending" as UCO05
+    usecase "UC-O06\nXác minh Bác sĩ" as UCO06
+    usecase "UC-O07\nThu hồi\nxác minh" as UCO07
+    usecase "UC-O08\nDanh sách\nBác sĩ đã xác minh" as UCO08
+  }
+}
+
+OrgAdmin --> UCO01
+OrgAdmin --> UCO02
+OrgAdmin --> UCO03
+OrgAdmin --> UCO04
+OrgAdmin --> UCO05
+OrgAdmin --> UCO06
+OrgAdmin --> UCO07
+OrgAdmin --> UCO08
+
+UCO03 --> Doctor : thêm vào org
+UCO06 --> Doctor : grant VERIFIED_DOCTOR flag
+UCO07 --> Doctor : remove flag
+
+note right of UCO03
+  Validation (audit fix):
+  - reject 0x000…000
+  - reject self-add (admin == doctor)
+end note
+
+note right of UCO06
+  PRE: doctor đã registerAsDoctor +
+  submit credential (UC-D02)
+  POST: emit DoctorVerified event
+end note
+
+note right of UCO07
+  POST: emit VerificationRevoked
+  → doctor mất canAccess
+end note
+
+@enduml

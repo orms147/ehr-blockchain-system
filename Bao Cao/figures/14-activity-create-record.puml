@@ -1,0 +1,69 @@
+@startuml activity-create-record
+!theme plain
+title Activity — Tạo hồ sơ y tế mới
+
+|Patient (UI)|
+start
+:Mở CreateRecordScreen;
+:Nhập title + description + recordType;
+:(Optional) Chọn ảnh đính kèm;
+:(Optional) Điền vitals / drugs / vaccinations;
+:Bấm "Tạo hồ sơ";
+
+if (title trống?) then (YES)
+  :Alert "Thiếu tiêu đề";
+  stop
+else (NO)
+endif
+
+|Mobile services|
+:generateAESKey() AES-256;
+:encryptData(plaintext, aesKey)\nAES-GCM;
+
+repeat
+  :ipfsService.upload(encryptedData)\n→ Pinata;
+repeat while (upload fail?) is (YES, retry x3)
+->NO;
+
+:cidHash = keccak256(CID);
+:localRecordStore.put(cidHash, {cid, aesKey})\n[cache local];
+
+:Sign EIP-712 RecordPermit\n(biometric nếu MFA bật);
+
+if (User cancel ký?) then (YES)
+  :Cleanup IPFS pin (optional);
+  stop
+else (NO)
+endif
+
+|Backend + Blockchain|
+:POST /api/relayer/register-record\n+ signature;
+:Backend verify EIP-712 signature;
+:Submit RecordRegistry.addRecord(...)\n(sponsored — patient zero-gas);
+
+if (Tx revert?) then (YES)
+  :Backend trả error\n(CID_RESERVED / PATIENT_NOT_REGISTERED);
+  :Mobile show friendlyBackendError;
+  stop
+else (NO)
+endif
+
+:Contract emit RecordAdded;
+
+|Mobile + Backend cascade|
+fork
+  :Mobile: autoPreShareNewRecord\nfor each Trusted Contact active;
+  :Encrypt (cid, aesKey) cho TC pubkey;
+  :POST /api/key-share/bulk-trusted-contact;
+  :Lưu KeyShare row source='trusted-contact';
+fork again
+  :Subgraph index RecordAdded;
+  :Backend recordRegistrySync mirror DB\nRecordMetadata row;
+end fork
+
+|Patient (UI)|
+:Show "Đã tạo hồ sơ thành công";
+:Navigate về RecordsScreen;
+stop
+
+@enduml

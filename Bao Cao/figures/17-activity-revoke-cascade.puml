@@ -1,0 +1,60 @@
+@startuml activity-revoke-cascade
+!theme plain
+title Activity — Thu hồi cascade (Revoke Cascade)
+
+|#LightYellow|Phase A: Patient revoke|
+start
+:Patient mở AccessLogScreen;
+:Tìm doctor A → bấm Thu hồi;
+:Alert xác nhận → OK;
+:Biometric MFA;
+:Sign RevokePermit EIP-712;
+
+if (User cancel?) then (YES)
+  stop
+else (NO)
+endif
+
+:POST /api/relayer/revoke-consent\n(sponsored);
+:Contract revokeBySig:\n_consents[P,A,root].active = false;
+:Emit ConsentRevoked;
+
+|#LightBlue|Phase B: Backend cascade handler|
+:Subgraph index ConsentRevoked;
+:Backend handleConsentRevoked(P, A, root);
+:Walk record chain →\ndescendant cidHashes;
+:Tầng 1: revoke KeyShare\nrows sender=A;
+:Tầng 2 (§13 fix):\nquery DelegationAccessLog\nWHERE byDelegatee=A;
+
+while (Mỗi derived recipient\nB, C, ... trong log) is (còn)
+  if (B chỉ có quyền\nqua A?) then (YES)
+    :Cascade revoke ALL\nKeyShare rows cho B\n(kể cả sender=P cascade);
+    :Update Consent table\n(P, B, root) → revoked;
+    :Emit Socket.io\nconsent:updated cho B;
+  else (NO — B có direct grant\ntừ Footgun #1 fix)
+    :SKIP — B's direct\ngrant không touch;
+  endif
+endwhile (hết)
+
+|#LightGreen|Phase C: B check access lần kế|
+:B refresh dashboard →\nGET /api/key-share/record;
+:Backend gate canAccess on-chain;
+:Contract _hasValidNormalConsent;
+
+if (recordDelegationSource[B] = A?) then (YES)
+  :Walk srcKey (P, A, root);
+  if (A revoked?) then (YES)
+    :Return false;
+    :B → 403 Forbidden;
+  else (NO)
+    :Return true (B vẫn ok);
+  endif
+else (NO — = address(0)\nFootgun #1 cleared)
+  :Check B's own consent → active;
+  :Return true;
+  :B vẫn xem được\n(direct grant survive);
+endif
+
+stop
+
+@enduml

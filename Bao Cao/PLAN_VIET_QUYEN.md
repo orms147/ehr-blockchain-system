@@ -298,23 +298,47 @@ Mỗi use case: tên / actor / pre-condition / main flow / alternate flow / post
 
 ---
 
-## 📐 SƠ ĐỒ CẦN LÀM CHO ASTAH (7 sơ đồ)
+## 📐 SƠ ĐỒ CHO ASTAH (18 sơ đồ — updated 2026-06-01)
 
-Mỗi sơ đồ tôi sẽ cung cấp:
-- **Markdown spec** — list elements + relationships (user vẽ tay trong Astah)
-- **PlantUML source** — optional, nếu user dùng Astah PlantUML plugin
+Mỗi sơ đồ có 2 file trong `figures/`:
+- **Markdown spec** — elements + relationships + code citation
+- **PlantUML source** — for Astah PlantUML plugin / online render
 
-| # | Loại | Chương | Description |
+### Use Case (5)
+| # | Loại | Chương | File |
 |---|---|---|---|
-| 1 | **Use Case** | 2.5 | 4 actor (Patient/Doctor/OrgAdmin/Ministry) + ~20 use case |
-| 2 | **Component (3-layer)** | 4.1 | Mobile / Backend / Blockchain + IPFS/Subgraph/Web3Auth/Postgres |
-| 3 | **Deployment** | 4.1 | Hardware/service deployment: mobile device, backend server, Arbitrum nodes, IPFS pinning, Graph node |
-| 4 | **Class (Smart Contracts)** | 4.2 | 5 contract: AccessControl/RecordRegistry/ConsentLedger/DoctorUpdate/EHRSystemSecure + relationships |
-| 5 | **ER (Prisma schema)** | 4.3 | User/DoctorProfile/RecordMetadata/KeyShare/Consent/TrustedContact/... |
-| 6 | **Sequence — Grant Consent** | 4.4.2 | Patient mobile → backend relayer → ConsentLedger → subgraph → backend sync → KeyShare blind mailbox |
-| 7 | **Sequence — Request Access 3-step** | 4.4.3 | Doctor request → Patient approve → Doctor claim → decrypt |
+| 01 | **Tổng quan** (high-level) | 2.5 | `01-usecase-overview` |
+| 10 | Phân rã Patient (18 UC) | 2.6.1 | `10-usecase-patient` |
+| 11 | Phân rã Doctor (10 UC) | 2.6.2 | `11-usecase-doctor` |
+| 12 | Phân rã Org Admin (8 UC) | 2.6.3 | `12-usecase-org` |
+| 13 | Phân rã Ministry (6 UC) | 2.6.4 | `13-usecase-ministry` |
 
-(Có thể thêm 2-3 sơ đồ nếu cần: Activity diagram cho Patient workflow, Sequence cho Trusted Contact emergency, Sequence cho Revoke cascade)
+### Activity (5)
+| # | Loại | Chương | File |
+|---|---|---|---|
+| 14 | Tạo hồ sơ | 4.4.1 | `14-activity-create-record` |
+| 15 | Cấp quyền | 4.4.2 | `15-activity-grant-consent` |
+| 16 | Yêu cầu truy cập 3 phase | 4.4.3 | `16-activity-request-access` |
+| 17 | Thu hồi cascade | 4.4.4 | `17-activity-revoke-cascade` |
+| 18 | Trusted Contact emergency | 4.4.5 | `18-activity-trusted-contact` |
+
+### Architecture + Data (4)
+| # | Loại | Chương | File |
+|---|---|---|---|
+| 02 | Component 3-layer | 4.1 | `02-component-3-layer` |
+| 03 | Deployment | 4.1 | `03-deployment` |
+| 04 | Class (5 contract) | 4.2 | `04-class-contracts` |
+| 05 | ER (Prisma) | 4.3 | `05-er-prisma` |
+
+### Sequence (4)
+| # | Loại | Chương | File |
+|---|---|---|---|
+| 06 | Grant Consent | 4.4.2 | `06-seq-grant-consent` |
+| 07 | Request Access 3-step | 4.4.3 | `07-seq-request-access` |
+| 08 | Trusted Contact | 4.4.5 | `08-seq-trusted-contact` |
+| 09 | Revoke Cascade | 4.4.4 | `09-seq-revoke-cascade` |
+
+**Đặc tả use case** (Phụ lục B): skeleton có sẵn ở `Chuong/Phu_luc_B.tex` — fill content sau khi vẽ xong 18 sơ đồ trên (Stage E).
 
 ---
 

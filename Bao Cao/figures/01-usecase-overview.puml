@@ -1,0 +1,76 @@
+@startuml usecase-overview
+!theme plain
+left to right direction
+skinparam packageStyle rectangle
+skinparam actorStyle awesome
+title Use Case Tổng quan — Hệ thống Hồ sơ Y tế điện tử
+
+actor "Bệnh nhân" as Patient
+actor "Bác sĩ" as Doctor
+actor "Quản trị viên\nTổ chức" as OrgAdmin
+actor "Bộ Y tế" as Ministry
+actor "Hệ thống\n(Backend + Subgraph)" as System << automated >>
+
+rectangle "Hệ thống EHR Blockchain" {
+
+  package "Nhóm Bệnh nhân" {
+    usecase "UC-G01\nQuản lý hồ sơ y tế" as UCG01
+    usecase "UC-G02\nQuản lý quyền truy cập" as UCG02
+    usecase "UC-G03\nPhản hồi yêu cầu\ntruy cập" as UCG03
+    usecase "UC-G04\nQuản lý Người thân\ntin cậy + CCCD" as UCG04
+    usecase "UC-G05\nQuản lý hồ sơ\ncá nhân + MFA" as UCG05
+  }
+
+  package "Nhóm Bác sĩ" {
+    usecase "UC-G06\nXin xác minh\nchuyên môn" as UCG06
+    usecase "UC-G07\nTruy cập + cập nhật\nhồ sơ bệnh nhân" as UCG07
+    usecase "UC-G08\nUỷ quyền lại +\ntra cứu khẩn cấp" as UCG08
+  }
+
+  package "Nhóm Tổ chức" {
+    usecase "UC-G09\nQuản lý thành viên\nBác sĩ" as UCG09
+    usecase "UC-G10\nXác minh + thu hồi\nxác minh Bác sĩ" as UCG10
+  }
+
+  package "Nhóm Bộ Y tế" {
+    usecase "UC-G11\nQuản lý Tổ chức\ny tế" as UCG11
+    usecase "UC-G12\nXác minh Bác sĩ\nđộc lập" as UCG12
+  }
+
+  package "Tự động" {
+    usecase "UC-G13\nSponsor Relayer" as UCG13
+    usecase "UC-G14\nSync Subgraph" as UCG14
+    usecase "UC-G15\nGate canAccess" as UCG15
+  }
+}
+
+Patient --> UCG01
+Patient --> UCG02
+Patient --> UCG03
+Patient --> UCG04
+Patient --> UCG05
+
+Doctor --> UCG06
+Doctor --> UCG07
+Doctor --> UCG08
+
+OrgAdmin --> UCG09
+OrgAdmin --> UCG10
+
+Ministry --> UCG11
+Ministry --> UCG12
+
+UCG13 ..> System
+UCG14 ..> System
+UCG15 ..> System
+
+' Gộp dependency
+UCG02 ..> UCG13 : <<include>>
+UCG03 ..> UCG13 : <<include>>
+UCG04 ..> UCG13 : <<include>>
+UCG07 ..> UCG15 : <<include>>
+UCG14 ..> UCG02 : observes
+UCG14 ..> UCG10 : observes
+UCG14 ..> UCG11 : observes
+
+@enduml

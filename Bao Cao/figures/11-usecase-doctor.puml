@@ -1,0 +1,81 @@
+@startuml usecase-doctor
+!theme plain
+left to right direction
+skinparam packageStyle rectangle
+skinparam actorStyle awesome
+title Use Case phân rã — Bác sĩ (Doctor)
+
+actor "Bác sĩ" as Doctor
+actor "Bệnh nhân\n(approve/reject)" as Patient
+actor "Gate canAccess\n(System)" as Gate << automated >>
+
+rectangle "Use Case Bác sĩ" {
+
+  package "Đăng ký + xác minh" {
+    usecase "UC-D01\nĐăng nhập +\nđăng ký vai trò" as UCD01
+    usecase "UC-D02\nNộp chứng chỉ\nchuyên môn" as UCD02
+    usecase "UC-D10\nCập nhật\nhồ sơ chuyên môn" as UCD10
+  }
+
+  package "Yêu cầu + truy cập" {
+    usecase "UC-D03\nYêu cầu truy cập\nhồ sơ" as UCD03
+    usecase "UC-D04\nXem danh sách\nhồ sơ được cấp" as UCD04
+    usecase "UC-D05\nĐọc + giải mã\nhồ sơ" as UCD05
+  }
+
+  package "Cập nhật hồ sơ\nbệnh nhân" {
+    usecase "UC-D06\nTạo phiên bản\ncập nhật" as UCD06
+  }
+
+  package "Uỷ quyền lại" {
+    usecase "UC-D07\nUỷ quyền lại\ncho Bác sĩ khác" as UCD07
+    usecase "UC-D08\nXem + thu hồi\nhồ sơ đã uỷ quyền" as UCD08
+  }
+
+  package "Khẩn cấp" {
+    usecase "UC-D09\nTra cứu CCCD\nkhẩn cấp" as UCD09
+  }
+
+  package "Sub: 3 RequestType" {
+    usecase "DirectAccess" as RTA
+    usecase "RecordDelegation" as RTB
+    usecase "FullDelegation" as RTC
+  }
+}
+
+Doctor --> UCD01
+Doctor --> UCD02
+Doctor --> UCD03
+Doctor --> UCD04
+Doctor --> UCD05
+Doctor --> UCD06
+Doctor --> UCD07
+Doctor --> UCD08
+Doctor --> UCD09
+Doctor --> UCD10
+
+UCD03 --> Patient : phải approve\n(UC-P08)
+UCD05 ..> Gate : <<include>>
+
+UCD03 ..> RTA : <<extend>>
+UCD03 ..> RTB : <<extend>>
+UCD03 ..> RTC : <<extend>>
+
+note right of UCD04
+  Chỉ verified doctor (flag=16)
+  mới có dữ liệu trả về
+end note
+
+note right of UCD06
+  PRE: Doctor đã có quyền truy cập
+  record gốc (consent active)
+  POST: Cascade share KeyShare cho
+  team đã được patient grant
+end note
+
+note right of UCD07
+  PRE: allowDelegate=true trên
+  consent gốc của doctor
+end note
+
+@enduml

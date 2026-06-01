@@ -1,0 +1,68 @@
+@startuml activity-grant-consent
+!theme plain
+title Activity — Cấp quyền (Grant Consent)
+
+|Patient (UI)|
+start
+:Mở RecordDetail → "Chia sẻ";
+:Nhập ví doctor + thời hạn\n+ allowDelegate;
+
+if (Ví regex hợp lệ 0x40hex?) then (NO)
+  :Highlight error;
+  stop
+else (YES)
+endif
+
+if (Ví trùng patient (self-share)?) then (YES)
+  :Alert "Không thể tự share";
+  stop
+else (NO)
+endif
+
+if (Doctor đã có consent\nactive dài hơn?) then (YES)
+  :Alert "Bác sĩ đã có quyền\ndài hạn hơn — thu hồi trước";
+  stop
+else (NO)
+endif
+
+:Bấm "Chia sẻ" + biometric MFA;
+
+|Mobile services|
+:Build EIP-712 ConsentPermit;
+:Sign typed data;
+
+if (User cancel ký?) then (YES)
+  stop
+else (NO)
+endif
+
+|Backend|
+:POST /api/relayer/grant-consent;
+:Verify EIP-712 signature;
+:Submit ConsentLedger.grantBySig\n(sponsored);
+
+|Contract|
+:_grantConsent:\n- store _consents\n- clear recordDelegationSource\n  (Footgun #1)\n- emit ConsentGranted;
+
+if (Tx revert?) then (YES)
+  :Backend error → mobile\nfriendlyChainError;
+  stop
+else (NO)
+endif
+
+|Mobile cascade|
+:For each cidHash in chain:\n  encrypt (cid, aesKey)\n  POST /api/key-share;
+
+|Backend sync|
+fork
+  :Subgraph index event;
+  :Mirror Consent table;
+fork again
+  :WebSocket push tới doctor;
+end fork
+
+|Patient (UI)|
+:"Đã cấp quyền" + refresh ShareSheet;
+stop
+
+@enduml
