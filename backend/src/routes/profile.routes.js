@@ -54,6 +54,11 @@ router.get('/me', authenticate, async (req, res, next) => {
                 bloodType: true,
                 allergies: true,
                 insuranceNumber: true,
+                // nationalIdHash bắt buộc cho mobile biết enrolled state CCCD.
+                // BUG FIX 2026-05-28: trước đây thiếu → mobile cccdEnrolled luôn
+                // false → button "Đăng ký Mã định danh khẩn cấp" không flip
+                // sang "✓ Quản lý" sau khi save thành công.
+                nationalIdHash: true,
                 createdAt: true,
                 doctorProfile: true,
             }
