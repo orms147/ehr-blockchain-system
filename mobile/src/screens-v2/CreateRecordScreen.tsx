@@ -35,6 +35,7 @@ import keyShareService from '../services/keyShare.service';
 import walletActionService from '../services/walletAction.service';
 import { getOrCreateEncryptionKeypair, encryptForRecipient } from '../services/nacl-crypto';
 import { normalizeBase64 } from '../utils/base64';
+import { friendlyPickerError } from '../utils/friendlyError';
 import localRecordStore from '../services/localRecordStore';
 import { autoPreShareNewRecord } from '../services/trustedContact.service';
 import useAuthStore from '../store/authStore';
@@ -356,7 +357,8 @@ export default function CreateRecordScreen({ navigation, route: navRoute }: any)
                 fileSize: asset.fileSize,
             });
         } catch (pickError: any) {
-            Alert.alert('Lỗi chọn ảnh', pickError?.message || 'Không thể mở thư viện ảnh.');
+            const msg = friendlyPickerError(pickError, 'Không thể mở thư viện ảnh.');
+            if (msg) Alert.alert('Lỗi chọn ảnh', msg);
         } finally {
             setIsPickingImage(false);
         }

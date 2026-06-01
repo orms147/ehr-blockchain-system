@@ -30,13 +30,16 @@ export const SLATE = '#8B8FA3'            // info chips, non-action
 // fonts so brand wins for ASCII text and only the diacritic-only glyphs
 // fall through.
 
+// A11y elderly bump 2026-06-01: $1/$2/$3 +1pt + line-height bump.
+// Pre-bump baseline: 11/12/14 (too small per WCAG AA for 50+ users).
+// Post-bump: 12/13/15 (still hits brand visual hierarchy, more readable).
 const headingFont = createFont({
   family: 'Fraunces_400Regular, NotoSerif_400Regular, Georgia, serif',
   size: {
-    1: 11, 2: 12, 3: 14, 4: 16, 5: 18, 6: 20, 7: 24, 8: 30, 9: 36, 10: 48, 11: 60, 12: 72,
+    1: 12, 2: 13, 3: 15, 4: 16, 5: 18, 6: 20, 7: 24, 8: 30, 9: 36, 10: 48, 11: 60, 12: 72,
   },
   lineHeight: {
-    1: 14, 2: 16, 3: 18, 4: 22, 5: 24, 6: 28, 7: 32, 8: 38, 9: 44, 10: 56, 11: 68, 12: 80,
+    1: 16, 2: 18, 3: 20, 4: 22, 5: 24, 6: 28, 7: 32, 8: 38, 9: 44, 10: 56, 11: 68, 12: 80,
   },
   weight: {
     4: '400', 5: '500', 6: '600', 7: '700',
@@ -52,10 +55,10 @@ const headingFont = createFont({
 const bodyFont = createFont({
   family: 'DMSans_400Regular, BeVietnamPro_400Regular, system-ui, sans-serif',
   size: {
-    1: 11, 2: 12, 3: 14, 4: 16, 5: 18, 6: 20, 7: 24, 8: 30, 9: 36, 10: 48, 11: 60, 12: 72,
+    1: 12, 2: 13, 3: 15, 4: 16, 5: 18, 6: 20, 7: 24, 8: 30, 9: 36, 10: 48, 11: 60, 12: 72,
   },
   lineHeight: {
-    1: 14, 2: 16, 3: 18, 4: 22, 5: 24, 6: 28, 7: 32, 8: 38, 9: 44, 10: 56, 11: 68, 12: 80,
+    1: 16, 2: 18, 3: 20, 4: 22, 5: 24, 6: 28, 7: 32, 8: 38, 9: 44, 10: 56, 11: 68, 12: 80,
   },
   weight: {
     4: '400', 5: '500', 6: '600', 7: '700',

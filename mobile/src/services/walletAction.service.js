@@ -107,7 +107,7 @@ function validateWeb3AuthInstance(instance) {
 
 async function getWeb3Auth() {
     if (!validateWeb3AuthInstance(cachedWeb3Auth)) {
-        throw new Error('Không khoi tao được Web3Auth context.');
+        throw new Error('Không khởi tạo được Web3Auth context.');
     }
     return cachedWeb3Auth;
 }
@@ -229,10 +229,10 @@ async function getWalletContext() {
     const rpcAccounts = await web3authInstance.provider.request({ method: 'eth_accounts' });
     const firstRpcAccount = Array.isArray(rpcAccounts) && typeof rpcAccounts[0] === 'string' ? rpcAccounts[0] : null;
     if (!firstRpcAccount) {
-        throw new Error('Web3Auth không tra ve địa chỉ vi hop le.');
+        throw new Error('Web3Auth không trả về địa chỉ ví hợp lệ.');
     }
     if (firstRpcAccount.toLowerCase() !== account.address.toLowerCase()) {
-        throw new Error('Địa chỉ ví Web3Auth không khop voi private key phiên đăng nhập.');
+        throw new Error('Địa chỉ ví Web3Auth không khớp với private key phiên đăng nhập.');
     }
 
     const ctx = {
@@ -353,7 +353,7 @@ async function loginWithWeb3Auth(loginProvider = 'google', options = {}) {
     try {
         return await getWalletContext();
     } catch (error) {
-        throw new Error(mapWalletError(error, 'Đăng nhập Web3Auth that bai.'));
+        throw new Error(mapWalletError(error, 'Đăng nhập Web3Auth thất bại.'));
     }
 }
 

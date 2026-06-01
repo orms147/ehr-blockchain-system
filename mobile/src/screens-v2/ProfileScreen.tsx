@@ -10,7 +10,7 @@
 //   - Navigation routes: EditProfile, Settings, Delegation, EmergencyProfile
 
 import React, { useCallback, useState } from 'react';
-import { Alert, Pressable, ScrollView, View } from 'react-native';
+import { Alert, Image, Pressable, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { Text, XStack, YStack } from 'tamagui';
@@ -134,18 +134,27 @@ export default function ProfileScreen() {
                             alignItems: 'center',
                             justifyContent: 'center',
                             marginBottom: 14,
+                            overflow: 'hidden',
                         }}
                     >
-                        <Text
-                            style={{
-                                fontFamily: SERIF_MEDIUM,
-                                fontSize: 36,
-                                color: palette.EHR_ON_SURFACE_VARIANT,
-                                lineHeight: 40,
-                            }}
-                        >
-                            {firstInitial(userData.fullName)}
-                        </Text>
+                        {userData.avatarUrl ? (
+                            <Image
+                                source={{ uri: userData.avatarUrl }}
+                                style={{ width: 80, height: 80 }}
+                                resizeMode="cover"
+                            />
+                        ) : (
+                            <Text
+                                style={{
+                                    fontFamily: SERIF_MEDIUM,
+                                    fontSize: 36,
+                                    color: palette.EHR_ON_SURFACE_VARIANT,
+                                    lineHeight: 40,
+                                }}
+                            >
+                                {firstInitial(userData.fullName)}
+                            </Text>
+                        )}
                     </View>
                     <Text
                         style={{

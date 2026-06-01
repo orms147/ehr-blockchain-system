@@ -35,6 +35,7 @@ import {
 
 import useAuthStore from '../store/authStore';
 import { isBiometricSigningEnabled, setBiometricSigningEnabled } from '../utils/biometricGate';
+import { friendlyBackendError } from '../utils/friendlyError';
 import { ViSectionLabel } from '../components-v2/ViChips';
 import ViCard from '../components-v2/ViCard';
 import HexRow from '../components/HexRow';
@@ -98,7 +99,7 @@ export default function SettingsScreen() {
                     try {
                         await logout();
                     } catch (err: any) {
-                        Alert.alert('Lỗi đăng xuất', err?.message || 'Không thể đăng xuất.');
+                        Alert.alert('Lỗi đăng xuất', friendlyBackendError(err, 'Không thể đăng xuất.'));
                     }
                 },
             },

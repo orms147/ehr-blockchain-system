@@ -14,17 +14,20 @@
 //   - Alert.alert success → navigation.goBack()
 
 import React, { useEffect, useState } from 'react';
-import { Alert, Pressable, ScrollView, TextInput, View } from 'react-native';
+import { ActivityIndicator, Alert, Image, Pressable, ScrollView, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Text, XStack, YStack } from 'tamagui';
 import { Save, Pencil } from 'lucide-react-native';
 import { useQueryClient } from '@tanstack/react-query';
+import * as ImagePicker from 'expo-image-picker';
 
 import LoadingSpinner from '../components/LoadingSpinner';
 import profileService from '../services/profile.service';
+import ipfsService from '../services/ipfs.service';
 import useAuthStore from '../store/authStore';
 import ViButton from '../components-v2/ViButton';
 import { useEhrPalette } from '../constants/uiColors';
+import { friendlyBackendError, friendlyPickerError } from '../utils/friendlyError';
 
 const SERIF = 'Fraunces_400Regular';
 const SERIF_ITALIC = 'Fraunces_400Regular_Italic';
@@ -52,6 +55,8 @@ export default function EditProfileScreen({ navigation }: any) {
     const [bloodType, setBloodType] = useState<string | null>(null);
     const [allergies, setAllergies] = useState('');
     const [insuranceNumber, setInsuranceNumber] = useState('');
+    const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+    const [avatarUploading, setAvatarUploading] = useState(false);
 
     useEffect(() => {
         const load = async () => {
@@ -64,6 +69,7 @@ export default function EditProfileScreen({ navigation }: any) {
                     setBloodType(data.bloodType || null);
                     setAllergies(data.allergies || '');
                     setInsuranceNumber(data.insuranceNumber || '');
+                    setAvatarUrl(data.avatarUrl || null);
                 }
             } catch (err) {
                 console.warn('Failed to load profile:', err);
@@ -126,19 +132,57 @@ export default function EditProfileScreen({ navigation }: any) {
                 { text: 'OK', onPress: () => navigation.goBack() },
             ]);
         } catch (err: any) {
-            Alert.alert('Lỗi', err?.message || 'Không thể cập nhật hồ sơ.');
+            Alert.alert('Lỗi', friendlyBackendError(err, 'Không thể cập nhật hồ sơ.'));
         } finally {
             setIsSaving(false);
         }
     };
 
-    const handleAvatarEdit = () => {
-        // Upload flow not yet wired (post-thesis). Affordance is rendered so
-        // the design is complete; tap surfaces a placeholder alert.
-        Alert.alert(
-            'Cập nhật ảnh đại diện',
-            'Chức năng đổi ảnh đại diện đang phát triển. Hiện tại hệ thống tự sinh chữ cái đầu từ tên.',
-        );
+    const handleAvatarEdit = async () => {
+        if (avatarUploading) return;
+        try {
+            const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+            if (!perm.granted) {
+                Alert.alert('Cần quyền', 'Vui lòng cấp quyền truy cập thư viện ảnh trong Cài đặt.');
+                return;
+            }
+            const result = await ImagePicker.launchImageLibraryAsync({
+                mediaTypes: ImagePicker.MediaTypeOptions.Images,
+                allowsEditing: true,
+                aspect: [1, 1],
+                quality: 0.7,
+                base64: true,
+            });
+            if (result.canceled || !result.assets?.length) return;
+            const asset = result.assets[0];
+            if (!asset.base64) {
+                Alert.alert('Lỗi', 'Không đọc được ảnh đã chọn.');
+                return;
+            }
+
+            setAvatarUploading(true);
+            const cid = await ipfsService.upload(asset.base64, { name: 'avatar', type: 'avatar' });
+            const url = ipfsService.getUrl(cid);
+
+            await profileService.updateMyProfile({ avatarUrl: url });
+            setAvatarUrl(url);
+
+            try { await refreshAuthSession?.(); } catch (e) { console.warn('refreshAuthSession failed', e); }
+            const myAddr = (user?.walletAddress || (user as any)?.address || '').toLowerCase();
+            if (myAddr) {
+                queryClient.invalidateQueries({ queryKey: ['userProfile', myAddr] });
+            }
+            queryClient.invalidateQueries({ queryKey: ['profile', 'me'] });
+        } catch (err: any) {
+            const pickMsg = friendlyPickerError(err, '');
+            if (pickMsg) {
+                Alert.alert('Lỗi', pickMsg);
+            } else {
+                Alert.alert('Lỗi', friendlyBackendError(err, 'Không thể cập nhật ảnh đại diện.'));
+            }
+        } finally {
+            setAvatarUploading(false);
+        }
     };
 
     const initial = (fullName.trim() || '?').charAt(0).toUpperCase();
@@ -192,23 +236,46 @@ export default function EditProfileScreen({ navigation }: any) {
                                     borderColor: palette.EHR_OUTLINE_SOFT,
                                     alignItems: 'center',
                                     justifyContent: 'center',
+                                    overflow: 'hidden',
                                 }}
                             >
-                                <Text
-                                    style={{
-                                        fontFamily: SERIF_ITALIC,
-                                        fontStyle: 'italic',
-                                        fontSize: 22,
-                                        fontWeight: '600',
-                                        color: palette.EHR_ON_SURFACE_VARIANT,
-                                    }}
-                                >
-                                    {initial}
-                                </Text>
+                                {avatarUrl ? (
+                                    <Image
+                                        source={{ uri: avatarUrl }}
+                                        style={{ width: 64, height: 64 }}
+                                        resizeMode="cover"
+                                    />
+                                ) : (
+                                    <Text
+                                        style={{
+                                            fontFamily: SERIF_ITALIC,
+                                            fontStyle: 'italic',
+                                            fontSize: 22,
+                                            fontWeight: '600',
+                                            color: palette.EHR_ON_SURFACE_VARIANT,
+                                        }}
+                                    >
+                                        {initial}
+                                    </Text>
+                                )}
+                                {avatarUploading ? (
+                                    <View
+                                        style={{
+                                            position: 'absolute',
+                                            top: 0, left: 0, right: 0, bottom: 0,
+                                            backgroundColor: 'rgba(0,0,0,0.45)',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                        }}
+                                    >
+                                        <ActivityIndicator color="#FAF7F1" />
+                                    </View>
+                                ) : null}
                             </View>
                             <Pressable
                                 onPress={handleAvatarEdit}
                                 hitSlop={8}
+                                disabled={avatarUploading}
                                 style={({ pressed }) => ({
                                     position: 'absolute',
                                     bottom: -2,
@@ -221,7 +288,7 @@ export default function EditProfileScreen({ navigation }: any) {
                                     borderColor: palette.EHR_SURFACE,
                                     alignItems: 'center',
                                     justifyContent: 'center',
-                                    opacity: pressed ? 0.7 : 1,
+                                    opacity: pressed || avatarUploading ? 0.7 : 1,
                                 })}
                             >
                                 <Pencil size={11} color="#FAF7F1" strokeWidth={2} />

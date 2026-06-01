@@ -7,7 +7,7 @@
 // hasn't filled in fullName yet.
 
 import React, { useState } from 'react';
-import { Modal, Pressable, View } from 'react-native';
+import { Image, Modal, Pressable, View } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import { Text, XStack, YStack } from 'tamagui';
 import { User, Stethoscope, ShieldCheck, Copy } from 'lucide-react-native';
@@ -96,6 +96,7 @@ export default function UserChip({
     const isVerifiedDoctor = profile?.isVerifiedDoctor === true;
     const specialty = profile?.doctorProfile?.specialty;
     const hospital = profile?.doctorProfile?.hospitalName;
+    const avatarUrl = profile?.avatarUrl || null;
 
     const displayName = fullName
         ? (showRolePrefix && isDoctor ? `BS. ${fullName}` : fullName)
@@ -124,9 +125,18 @@ export default function UserChip({
                         alignItems: 'center',
                         justifyContent: 'center',
                         marginRight: 10,
+                        overflow: 'hidden',
                     }}
                 >
-                    <RoleIcon size={size === 'sm' ? 14 : 18} color={palette.EHR_PRIMARY} />
+                    {avatarUrl ? (
+                        <Image
+                            source={{ uri: avatarUrl }}
+                            style={{ width: size === 'sm' ? 28 : 36, height: size === 'sm' ? 28 : 36 }}
+                            resizeMode="cover"
+                        />
+                    ) : (
+                        <RoleIcon size={size === 'sm' ? 14 : 18} color={palette.EHR_PRIMARY} />
+                    )}
                 </View>
                 <YStack style={{ flex: 1 }}>
                     <XStack style={{ alignItems: 'center', gap: 6 }}>
@@ -191,8 +201,17 @@ export default function UserChip({
                                             alignItems: 'center',
                                             justifyContent: 'center',
                                             marginRight: 14,
+                                            overflow: 'hidden',
                                         }}>
-                                            <RoleIcon size={28} color={palette.EHR_PRIMARY} />
+                                            {avatarUrl ? (
+                                                <Image
+                                                    source={{ uri: avatarUrl }}
+                                                    style={{ width: 56, height: 56 }}
+                                                    resizeMode="cover"
+                                                />
+                                            ) : (
+                                                <RoleIcon size={28} color={palette.EHR_PRIMARY} />
+                                            )}
                                         </View>
                                         <YStack style={{ flex: 1 }}>
                                             <XStack style={{ alignItems: 'center', gap: 6 }}>

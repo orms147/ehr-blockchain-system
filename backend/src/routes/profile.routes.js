@@ -17,6 +17,9 @@ const updateProfileSchema = z.object({
     homeAddress: z.string().max(255).optional().nullable(),
     bloodType: z.string().max(5).optional().nullable(),
     allergies: z.string().optional().nullable(),
+    // avatarUrl — ipfs://CID hoặc gateway URL. Mobile upload Pinata trực
+    // tiếp rồi gửi URL. Cho phép null để clear.
+    avatarUrl: z.string().max(500).optional().nullable(),
     // Số BHYT — TT 32/2023 Chương X. Format chuẩn: 2 chữ cái + 13 chữ số
     // (vd "SV4796543210123"). Cho phép null/empty để clear field. Regex
     // chỉ apply khi value không rỗng — defer business validation cho mobile
@@ -139,6 +142,7 @@ router.put('/me', authenticate, async (req, res, next) => {
                 bloodType: true,
                 allergies: true,
                 insuranceNumber: true,
+                nationalIdHash: true,
             }
         });
 

@@ -42,6 +42,7 @@ import recordService from '../../services/record.service';
 import { DOCTOR_UPDATE_ABI } from '../../abi/contractABI';
 import { formatChainError } from '../../utils/rpcRetry';
 import { normalizeBase64 } from '../../utils/base64';
+import { friendlyPickerError } from '../../utils/friendlyError';
 import localRecordStore from '../../services/localRecordStore';
 import useAuthStore from '../../store/authStore';
 import useDraft from '../../hooks/useDraft';
@@ -254,7 +255,8 @@ export default function DoctorCreateUpdateScreen({ navigation, route }: any) {
                 fileSize: asset.fileSize,
             });
         } catch (e: any) {
-            Alert.alert('Lỗi chọn ảnh', e?.message || '');
+            const msg = friendlyPickerError(e, 'Không thể chọn ảnh.');
+            if (msg) Alert.alert('Lỗi chọn ảnh', msg);
         } finally {
             setIsPickingImage(false);
         }

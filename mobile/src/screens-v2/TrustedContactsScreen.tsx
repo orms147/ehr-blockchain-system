@@ -34,6 +34,7 @@ import ViButton from '../components-v2/ViButton';
 import ViCard from '../components-v2/ViCard';
 import { ViSectionLabel } from '../components-v2/ViChips';
 import { useEhrPalette } from '../constants/uiColors';
+import { friendlyBackendError } from '../utils/friendlyError';
 
 const SERIF = 'Fraunces_400Regular';
 const SANS = 'DMSans_400Regular';
@@ -186,7 +187,7 @@ export default function TrustedContactsScreen({ route }: any) {
             if (code === 'NATIONAL_ID_TAKEN') {
                 Alert.alert('CCCD đã tồn tại', err?.data?.error);
             } else {
-                Alert.alert('Lỗi', err?.data?.error || err?.message || 'Không thể lưu.');
+                Alert.alert('Lỗi', friendlyBackendError(err, 'Không thể lưu.'));
             }
         } finally {
             setCccdSaving(false);
@@ -202,7 +203,7 @@ export default function TrustedContactsScreen({ route }: any) {
             setCccdOpen(false);
             setCccdInput('');
         } catch (err: any) {
-            Alert.alert('Lỗi', err?.data?.error || err?.message || 'Không thể huỷ.');
+            Alert.alert('Lỗi', friendlyBackendError(err, 'Không thể huỷ.'));
         } finally {
             setCccdSaving(false);
         }
