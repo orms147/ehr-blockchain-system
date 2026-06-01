@@ -1,81 +1,47 @@
-@startuml usecase-doctor
-!theme plain
+@startuml uc-bac-si
+title uc Phân rã Bác sĩ
 left to right direction
 skinparam packageStyle rectangle
 skinparam actorStyle awesome
-title Use Case phân rã — Bác sĩ (Doctor)
 
 actor "Bác sĩ" as Doctor
-actor "Bệnh nhân\n(approve/reject)" as Patient
-actor "Gate canAccess\n(System)" as Gate << automated >>
 
-rectangle "Use Case Bác sĩ" {
+usecase "Đăng ký vai trò\nBác sĩ" as UC_Register
+usecase "Đăng nhập" as UC_Login
 
-  package "Đăng ký + xác minh" {
-    usecase "UC-D01\nĐăng nhập +\nđăng ký vai trò" as UCD01
-    usecase "UC-D02\nNộp chứng chỉ\nchuyên môn" as UCD02
-    usecase "UC-D10\nCập nhật\nhồ sơ chuyên môn" as UCD10
-  }
+usecase "Nộp chứng chỉ\nchuyên môn" as UC_Submit
 
-  package "Yêu cầu + truy cập" {
-    usecase "UC-D03\nYêu cầu truy cập\nhồ sơ" as UCD03
-    usecase "UC-D04\nXem danh sách\nhồ sơ được cấp" as UCD04
-    usecase "UC-D05\nĐọc + giải mã\nhồ sơ" as UCD05
-  }
+usecase "Yêu cầu truy cập\nhồ sơ bệnh nhân" as UC_Request
+usecase "Yêu cầu\ntruy cập trực tiếp" as UC_RequestDirect
+usecase "Yêu cầu uỷ quyền\ntheo hồ sơ" as UC_RequestRecord
+usecase "Yêu cầu uỷ quyền\ntoàn quyền" as UC_RequestFull
 
-  package "Cập nhật hồ sơ\nbệnh nhân" {
-    usecase "UC-D06\nTạo phiên bản\ncập nhật" as UCD06
-  }
+usecase "Xem danh sách\nhồ sơ được cấp" as UC_List
+usecase "Đọc + giải mã\nhồ sơ" as UC_Read
 
-  package "Uỷ quyền lại" {
-    usecase "UC-D07\nUỷ quyền lại\ncho Bác sĩ khác" as UCD07
-    usecase "UC-D08\nXem + thu hồi\nhồ sơ đã uỷ quyền" as UCD08
-  }
+usecase "Tạo phiên bản\ncập nhật hồ sơ" as UC_AddVersion
 
-  package "Khẩn cấp" {
-    usecase "UC-D09\nTra cứu CCCD\nkhẩn cấp" as UCD09
-  }
+usecase "Uỷ quyền lại cho\nbác sĩ khác" as UC_Delegate
+usecase "Xem + thu hồi hồ sơ\nđã uỷ quyền" as UC_Outgoing
 
-  package "Sub: 3 RequestType" {
-    usecase "DirectAccess" as RTA
-    usecase "RecordDelegation" as RTB
-    usecase "FullDelegation" as RTC
-  }
-}
+usecase "Tra cứu bệnh nhân\nkhẩn cấp qua CCCD" as UC_Emergency
 
-Doctor --> UCD01
-Doctor --> UCD02
-Doctor --> UCD03
-Doctor --> UCD04
-Doctor --> UCD05
-Doctor --> UCD06
-Doctor --> UCD07
-Doctor --> UCD08
-Doctor --> UCD09
-Doctor --> UCD10
+usecase "Cập nhật hồ sơ\nchuyên môn" as UC_EditProfile
 
-UCD03 --> Patient : phải approve\n(UC-P08)
-UCD05 ..> Gate : <<include>>
+Doctor --> UC_Register
+Doctor --> UC_Login
+Doctor --> UC_Submit
+Doctor --> UC_Request
+Doctor --> UC_List
+Doctor --> UC_Read
+Doctor --> UC_AddVersion
+Doctor --> UC_Delegate
+Doctor --> UC_Outgoing
+Doctor --> UC_Emergency
+Doctor --> UC_EditProfile
 
-UCD03 ..> RTA : <<extend>>
-UCD03 ..> RTB : <<extend>>
-UCD03 ..> RTC : <<extend>>
-
-note right of UCD04
-  Chỉ verified doctor (flag=16)
-  mới có dữ liệu trả về
-end note
-
-note right of UCD06
-  PRE: Doctor đã có quyền truy cập
-  record gốc (consent active)
-  POST: Cascade share KeyShare cho
-  team đã được patient grant
-end note
-
-note right of UCD07
-  PRE: allowDelegate=true trên
-  consent gốc của doctor
-end note
+UC_RequestDirect .> UC_Request : <<extend>>
+UC_RequestRecord .> UC_Request : <<extend>>
+UC_RequestFull   .> UC_Request : <<extend>>
 
 @enduml

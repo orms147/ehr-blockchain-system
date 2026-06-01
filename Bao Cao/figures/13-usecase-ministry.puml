@@ -1,67 +1,27 @@
-@startuml usecase-ministry
-!theme plain
+@startuml uc-bo-y-te
+title uc Phân rã Bộ Y tế
 left to right direction
 skinparam packageStyle rectangle
 skinparam actorStyle awesome
-title Use Case phân rã — Bộ Y tế (Ministry)
 
-actor "Bộ Y tế\n(Ministry)" as Ministry
-actor "Tổ chức\n(Org)" as Org
-actor "Bác sĩ độc lập" as Doctor
+actor "Bộ Y tế" as Ministry
 
-rectangle "Use Case Ministry" {
+usecase "Đăng nhập\n(Ministry wallet)" as UC_Login
+usecase "Xem dashboard\nMinistry" as UC_Dashboard
 
-  package "Xác thực" {
-    usecase "UC-M01\nĐăng nhập\n(Ministry wallet)" as UCM01
-    usecase "UC-M06\nDashboard\nMinistry" as UCM06
-  }
+usecase "Tạo tổ chức\ny tế mới" as UC_CreateOrg
+usecase "Tạm dừng /\nkích hoạt tổ chức" as UC_SetOrgActive
+usecase "Thu hồi xác minh\ntổ chức" as UC_RevokeOrg
 
-  package "Quản lý Tổ chức" {
-    usecase "UC-M02\nTạo tổ chức\ny tế mới" as UCM02
-    usecase "UC-M04\nTạm dừng /\nkích hoạt tổ chức" as UCM04
-    usecase "UC-M05\nThu hồi xác minh\ntổ chức" as UCM05
-  }
+usecase "Xác minh bác sĩ\nđộc lập" as UC_VerifyDoctor
 
-  package "Xác minh Bác sĩ độc lập" {
-    usecase "UC-M03\nverifyDoctorByMinistry" as UCM03
-  }
-}
+Ministry --> UC_Login
+Ministry --> UC_Dashboard
+Ministry --> UC_CreateOrg
+Ministry --> UC_SetOrgActive
+Ministry --> UC_RevokeOrg
+Ministry --> UC_VerifyDoctor
 
-Ministry --> UCM01
-Ministry --> UCM02
-Ministry --> UCM03
-Ministry --> UCM04
-Ministry --> UCM05
-Ministry --> UCM06
-
-UCM02 --> Org : emit OrganizationCreated
-UCM03 --> Doctor : grant VERIFIED_DOCTOR flag
-UCM04 --> Org : pause/resume
-UCM05 --> Org : remove verified flag
-
-note right of UCM02
-  Validation (audit Fix #1):
-  - primary, backup khác 0x000
-  - primary, backup khác nhau
-  - primary khác Ministry's wallet
-end note
-
-note right of UCM04
-  Destructive guard:
-  UI typeword "THU HOI"
-end note
-
-note right of UCM05
-  Cascade: mọi doctor thuộc org
-  bị mất canAccess (qua walk
-  isVerifiedDoctor)
-end note
-
-note bottom of Ministry
-  ⚠ Constraint: User mất seed phrase
-  Ministry wallet → mọi action chạy qua
-  MetaMask browser + Arbiscan Write
-  Contract tab, KHÔNG qua mobile.
-end note
+UC_RevokeOrg    .> UC_SetOrgActive : <<extend>>
 
 @enduml

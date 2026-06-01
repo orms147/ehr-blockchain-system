@@ -1,60 +1,56 @@
-@startuml activity-revoke-cascade
-!theme plain
-title Activity — Thu hồi cascade (Revoke Cascade)
+@startuml act-thu-hoi-cascade
+title act Quy trình thu hồi cascade
 
-|#LightYellow|Phase A: Patient revoke|
+|Bệnh nhân|
 start
-:Patient mở AccessLogScreen;
-:Tìm doctor A → bấm Thu hồi;
-:Alert xác nhận → OK;
-:Biometric MFA;
-:Sign RevokePermit EIP-712;
+:Mở Nhật ký truy cập → tìm Bác sĩ A;
+:Bấm "Thu hồi" + xác nhận;
+:Ký RevokePermit + vân tay;
 
-if (User cancel?) then (YES)
-  stop
-else (NO)
-endif
+|Hệ thống|
+:Verify chữ ký + submit sponsored tx;
 
-:POST /api/relayer/revoke-consent\n(sponsored);
-:Contract revokeBySig:\n_consents[P,A,root].active = false;
-:Emit ConsentRevoked;
+|Blockchain|
+:Mark Consent(A) active=false;
+:Emit ConsentRevoked event;
 
-|#LightBlue|Phase B: Backend cascade handler|
-:Subgraph index ConsentRevoked;
-:Backend handleConsentRevoked(P, A, root);
-:Walk record chain →\ndescendant cidHashes;
-:Tầng 1: revoke KeyShare\nrows sender=A;
-:Tầng 2 (§13 fix):\nquery DelegationAccessLog\nWHERE byDelegatee=A;
+|Hệ thống|
+:Subgraph index event\n→ handleConsentRevoked;
+:Tầng 1: revoke KeyShare\nrows có sender=A;
+:Tầng 2: query DelegationAccessLog\nWHERE byDelegatee=A → danh sách B/C/...;
 
-while (Mỗi derived recipient\nB, C, ... trong log) is (còn)
-  if (B chỉ có quyền\nqua A?) then (YES)
-    :Cascade revoke ALL\nKeyShare rows cho B\n(kể cả sender=P cascade);
-    :Update Consent table\n(P, B, root) → revoked;
-    :Emit Socket.io\nconsent:updated cho B;
-  else (NO — B có direct grant\ntừ Footgun #1 fix)
-    :SKIP — B's direct\ngrant không touch;
+while (Mỗi người nhận derived\nB, C, ... trong log)
+  if (B chỉ có quyền\nqua A — không có direct grant?) then ([Có])
+    :Cascade revoke ALL KeyShare\nrows cho B;
+    :Update Consent table → revoked;
+    :Push WebSocket cho B;
+  else ([Không — B có direct grant\nFootgun #1 fix])
+    :SKIP — B's direct grant\nkhông bị touch;
   endif
-endwhile (hết)
+endwhile
 
-|#LightGreen|Phase C: B check access lần kế|
-:B refresh dashboard →\nGET /api/key-share/record;
-:Backend gate canAccess on-chain;
-:Contract _hasValidNormalConsent;
+|Bác sĩ B|
+:Refresh dashboard → mở hồ sơ;
 
-if (recordDelegationSource[B] = A?) then (YES)
-  :Walk srcKey (P, A, root);
-  if (A revoked?) then (YES)
+|Hệ thống|
+:Gate canAccess trên blockchain;
+
+|Blockchain|
+if (recordDelegationSource[B] = A?) then ([Có])
+  if (A đã revoked?) then ([Có])
     :Return false;
-    :B → 403 Forbidden;
-  else (NO)
-    :Return true (B vẫn ok);
+    |Hệ thống|
+    :Trả 403 Forbidden;
+    stop
   endif
-else (NO — = address(0)\nFootgun #1 cleared)
-  :Check B's own consent → active;
+else ([Không — = address(0) sau\nFootgun #1 clear])
+  :Check Consent của B → còn active;
   :Return true;
-  :B vẫn xem được\n(direct grant survive);
+  |Hệ thống|
+  :Trả encryptedPayload;
+  |Bác sĩ B|
+  :B vẫn xem được hồ sơ\n(direct grant survive);
+  stop
 endif
-
-stop
 
 @enduml

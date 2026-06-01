@@ -1,72 +1,74 @@
-@startuml activity-request-access
-!theme plain
-title Activity — Yêu cầu truy cập 3 bước (Doctor Request Access)
+@startuml act-yeu-cau-truy-cap
+title act Quy trình yêu cầu truy cập 3 bước
 
-|#LightYellow|Phase 1: Doctor request|
+|Bác sĩ|
 start
-:Doctor mở DoctorRequestAccess;
-:Paste cidHash + chọn RequestType;
+:Mở Yêu cầu truy cập\n→ paste cidHash + chọn loại yêu cầu;
 
-if (cidHash hợp lệ 0x64hex?) then (NO)
-  :Alert "Định dạng sai";
+|Hệ thống|
+if (cidHash hợp lệ + Bác sĩ verified?) then ([Không])
+  :Báo lỗi;
   stop
-else (YES)
+else ([Có])
 endif
 
-if (Doctor isVerified?) then (NO)
-  :Revert Unauthorized;
+|Bác sĩ|
+:Submit requestAccess tx\n(bác sĩ tự trả gas);
+
+|Blockchain|
+:Lưu request + emit AccessRequested;
+
+|Hệ thống|
+:Subgraph index + push notification\ntới Bệnh nhân;
+
+|Bệnh nhân|
+:Nhận thông báo → mở danh sách yêu cầu;
+
+if (deadline đã hết hạn?) then ([Có])
+  |Blockchain|
+  :Revert RequestExpired;
   stop
-else (YES)
+else ([Chưa])
 endif
 
-:Doctor sign + submit\nrequestAccess(...) [doctor gas];
-:Contract: _requests[reqId]\n+ emit AccessRequested\n+ deadline 7 ngày;
-:Subgraph index +\nbackend sync + Expo push;
-
-|#LightBlue|Phase 2: Patient phản hồi|
-:Patient nhận push → RequestsScreen;
-
-if (deadline expired?) then (YES)
-  :Contract revert RequestExpired;
-  stop
-else (NO)
-endif
-
-if (Patient quyết định?) then (Phê duyệt)
-  :Biometric MFA;
-  :Sign ApprovePermit EIP-712;
-  :POST /api/relayer/approve-request;
-  :Contract approveRequestBySig\n+ _completeRequest\n+ ConsentLedger.grantInternal;
-  :Emit ConsentGranted +\nRequestCompleted;
-else (Từ chối)
-  :Biometric MFA;
-  :Sign RejectPermit EIP-712;
-  :POST /api/relayer/reject-request;
-  :Contract rejectRequestBySig\n+ emit RequestRejected;
-  :Backend mirror status='rejected'\n+ rejectionReason off-chain;
+if (Quyết định?) then ([Phê duyệt])
+  |Bệnh nhân|
+  :Ký ApprovePermit + vân tay;
+  |Hệ thống|
+  :Submit sponsored tx;
+  |Blockchain|
+  :_completeRequest\n+ grantInternal Consent;
+else ([Từ chối])
+  |Bệnh nhân|
+  :Ký RejectPermit + vân tay;
+  |Hệ thống|
+  :Submit sponsored tx;
+  |Blockchain|
+  :Emit RequestRejected;
   stop
 endif
 
-|#LightGreen|Phase 3: Doctor claim + decrypt|
-:Doctor refresh dashboard\n(WebSocket push);
-:GET /api/key-share/my\n→ thấy KeyShare row mới;
-:GET /api/key-share/record/:cidHash;
+|Hệ thống|
+:Subgraph index + push WebSocket\ntới Bác sĩ;
 
-|Backend gate|
-:canAccess(patient, doctor, cid) on-chain;
+|Bác sĩ|
+:Refresh dashboard → claim KeyShare;
 
-if (canAccess true?) then (NO)
-  :403 Forbidden;
+|Hệ thống|
+:Gate canAccess trên blockchain;
+
+if (canAccess trả true?) then ([Không])
+  :Trả 403;
   stop
-else (YES)
+else ([Có])
 endif
 
-:Backend trả encryptedPayload;
+:Trả encryptedPayload;
 
-|Doctor mobile|
-:Decrypt NaCl box → AES key;
-:Fetch IPFS ciphertext → decrypt AES-GCM;
-:Render record;
+|Bác sĩ|
+:Giải mã NaCl box → AES key;
+:Tải IPFS + giải mã AES-GCM;
+:Hiển thị hồ sơ;
 stop
 
 @enduml

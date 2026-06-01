@@ -1,76 +1,54 @@
-@startuml usecase-overview
-!theme plain
+@startuml uc-tongquan
+title uc Tổng quan
 left to right direction
 skinparam packageStyle rectangle
 skinparam actorStyle awesome
-title Use Case Tổng quan — Hệ thống Hồ sơ Y tế điện tử
 
 actor "Bệnh nhân" as Patient
 actor "Bác sĩ" as Doctor
 actor "Quản trị viên\nTổ chức" as OrgAdmin
 actor "Bộ Y tế" as Ministry
-actor "Hệ thống\n(Backend + Subgraph)" as System << automated >>
 
-rectangle "Hệ thống EHR Blockchain" {
+rectangle "Hệ thống Hồ sơ Y tế điện tử" {
+    usecase "Quản lý tài khoản" as UC_Account
+    usecase "Quản lý thông tin\ncá nhân" as UC_Profile
 
-  package "Nhóm Bệnh nhân" {
-    usecase "UC-G01\nQuản lý hồ sơ y tế" as UCG01
-    usecase "UC-G02\nQuản lý quyền truy cập" as UCG02
-    usecase "UC-G03\nPhản hồi yêu cầu\ntruy cập" as UCG03
-    usecase "UC-G04\nQuản lý Người thân\ntin cậy + CCCD" as UCG04
-    usecase "UC-G05\nQuản lý hồ sơ\ncá nhân + MFA" as UCG05
-  }
+    usecase "Quản lý hồ sơ\ny tế" as UC_Records
+    usecase "Quản lý quyền\ntruy cập" as UC_Consent
+    usecase "Phản hồi yêu cầu\ntruy cập" as UC_Response
+    usecase "Quản lý người thân\ntin cậy" as UC_TC
 
-  package "Nhóm Bác sĩ" {
-    usecase "UC-G06\nXin xác minh\nchuyên môn" as UCG06
-    usecase "UC-G07\nTruy cập + cập nhật\nhồ sơ bệnh nhân" as UCG07
-    usecase "UC-G08\nUỷ quyền lại +\ntra cứu khẩn cấp" as UCG08
-  }
+    usecase "Xin xác minh\nchuyên môn" as UC_DoctorVerify
+    usecase "Yêu cầu + truy cập\nhồ sơ bệnh nhân" as UC_DoctorAccess
+    usecase "Uỷ quyền lại +\ntra cứu khẩn cấp" as UC_DoctorDelegate
 
-  package "Nhóm Tổ chức" {
-    usecase "UC-G09\nQuản lý thành viên\nBác sĩ" as UCG09
-    usecase "UC-G10\nXác minh + thu hồi\nxác minh Bác sĩ" as UCG10
-  }
+    usecase "Quản lý thành viên\nbác sĩ" as UC_OrgMembers
+    usecase "Xác minh\nbác sĩ" as UC_OrgVerify
 
-  package "Nhóm Bộ Y tế" {
-    usecase "UC-G11\nQuản lý Tổ chức\ny tế" as UCG11
-    usecase "UC-G12\nXác minh Bác sĩ\nđộc lập" as UCG12
-  }
-
-  package "Tự động" {
-    usecase "UC-G13\nSponsor Relayer" as UCG13
-    usecase "UC-G14\nSync Subgraph" as UCG14
-    usecase "UC-G15\nGate canAccess" as UCG15
-  }
+    usecase "Quản lý tổ chức\ny tế" as UC_MinistryOrg
+    usecase "Xác minh bác sĩ\nđộc lập" as UC_MinistryDoctor
 }
 
-Patient --> UCG01
-Patient --> UCG02
-Patient --> UCG03
-Patient --> UCG04
-Patient --> UCG05
+Patient --> UC_Account
+Patient --> UC_Profile
+Patient --> UC_Records
+Patient --> UC_Consent
+Patient --> UC_Response
+Patient --> UC_TC
 
-Doctor --> UCG06
-Doctor --> UCG07
-Doctor --> UCG08
+Doctor --> UC_Account
+Doctor --> UC_Profile
+Doctor --> UC_DoctorVerify
+Doctor --> UC_DoctorAccess
+Doctor --> UC_DoctorDelegate
 
-OrgAdmin --> UCG09
-OrgAdmin --> UCG10
+OrgAdmin --> UC_Account
+OrgAdmin --> UC_Profile
+OrgAdmin --> UC_OrgMembers
+OrgAdmin --> UC_OrgVerify
 
-Ministry --> UCG11
-Ministry --> UCG12
-
-UCG13 ..> System
-UCG14 ..> System
-UCG15 ..> System
-
-' Gộp dependency
-UCG02 ..> UCG13 : <<include>>
-UCG03 ..> UCG13 : <<include>>
-UCG04 ..> UCG13 : <<include>>
-UCG07 ..> UCG15 : <<include>>
-UCG14 ..> UCG02 : observes
-UCG14 ..> UCG10 : observes
-UCG14 ..> UCG11 : observes
+Ministry --> UC_Account
+Ministry --> UC_MinistryOrg
+Ministry --> UC_MinistryDoctor
 
 @enduml

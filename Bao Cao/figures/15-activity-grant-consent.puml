@@ -1,68 +1,54 @@
-@startuml activity-grant-consent
-!theme plain
-title Activity — Cấp quyền (Grant Consent)
+@startuml act-cap-quyen
+title act Quy trình cấp quyền truy cập
 
-|Patient (UI)|
+|Bệnh nhân|
 start
-:Mở RecordDetail → "Chia sẻ";
-:Nhập ví doctor + thời hạn\n+ allowDelegate;
+:Mở chi tiết hồ sơ → bấm "Chia sẻ";
+:Nhập ví bác sĩ + thời hạn\n+ cho phép uỷ quyền tiếp;
 
-if (Ví regex hợp lệ 0x40hex?) then (NO)
-  :Highlight error;
+|Hệ thống|
+if (Định dạng ví hợp lệ?) then ([Không])
+  :Highlight lỗi định dạng;
   stop
-else (YES)
+else ([Có])
 endif
 
-if (Ví trùng patient (self-share)?) then (YES)
-  :Alert "Không thể tự share";
+if (Ví trùng với Bệnh nhân?) then ([Có])
+  :Báo lỗi "Không thể tự chia sẻ";
   stop
-else (NO)
+else ([Không])
 endif
 
-if (Doctor đã có consent\nactive dài hơn?) then (YES)
-  :Alert "Bác sĩ đã có quyền\ndài hạn hơn — thu hồi trước";
+if (Bác sĩ đã có quyền\ndài hạn hơn?) then ([Có])
+  :Cảnh báo "Đã có quyền\ndài hạn hơn — thu hồi trước";
   stop
-else (NO)
+else ([Không])
 endif
 
-:Bấm "Chia sẻ" + biometric MFA;
+|Bệnh nhân|
+:Bấm "Chia sẻ" + ký bằng vân tay;
 
-|Mobile services|
-:Build EIP-712 ConsentPermit;
-:Sign typed data;
+|Hệ thống|
+:Verify chữ ký EIP-712\n+ gửi sponsored tx;
 
-if (User cancel ký?) then (YES)
+|Blockchain|
+if (Giao dịch thành công?) then ([Không])
+  |Hệ thống|
+  :Báo lỗi tx revert;
   stop
-else (NO)
+else ([Có])
 endif
 
-|Backend|
-:POST /api/relayer/grant-consent;
-:Verify EIP-712 signature;
-:Submit ConsentLedger.grantBySig\n(sponsored);
+:Lưu Consent + clear delegation source\n(Footgun #1 fix);
+:Emit ConsentGranted event;
 
-|Contract|
-:_grantConsent:\n- store _consents\n- clear recordDelegationSource\n  (Footgun #1)\n- emit ConsentGranted;
+|Hệ thống|
+:Mã hoá khoá AES cho bác sĩ\ncho mọi phiên bản trong chain;
+:Subgraph index event → mirror DB;
+:Push WebSocket tới bác sĩ;
 
-if (Tx revert?) then (YES)
-  :Backend error → mobile\nfriendlyChainError;
-  stop
-else (NO)
-endif
-
-|Mobile cascade|
-:For each cidHash in chain:\n  encrypt (cid, aesKey)\n  POST /api/key-share;
-
-|Backend sync|
-fork
-  :Subgraph index event;
-  :Mirror Consent table;
-fork again
-  :WebSocket push tới doctor;
-end fork
-
-|Patient (UI)|
-:"Đã cấp quyền" + refresh ShareSheet;
+|Bệnh nhân|
+:Hiển thị "Đã cấp quyền";
 stop
 
 @enduml

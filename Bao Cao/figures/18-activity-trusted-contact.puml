@@ -1,76 +1,86 @@
-@startuml activity-trusted-contact
-!theme plain
-title Activity — Trusted Contact emergency
+@startuml act-nguoi-than-tin-cay
+title act Quy trình Người thân tin cậy
 
-|#LightYellow|Phase A: Patient đăng ký TC|
+|Bệnh nhân|
 start
-:Patient mở TrustedContactsScreen;
-:Bấm "Thêm người thân tin cậy";
-:Paste ví TC + label (vd "Mẹ");
+:Mở Người thân tin cậy → bấm "Thêm";
+:Paste ví TC + nhập nhãn ("Mẹ", "Con trai");
 
-if (Ví hợp lệ + khác patient?) then (NO)
+|Hệ thống|
+if (Ví hợp lệ + khác Bệnh nhân?) then ([Không])
   :Highlight error;
   stop
-else (YES)
+else ([Có])
 endif
 
-:Biometric MFA;
-:Sign TrustedContactPermit(active=true);
-:POST /api/relayer/trusted-contact;
-:Contract setTrustedContactBySig:\nisTrustedContact[P][TC] = true\n+ emit TrustedContactSet;
+|Bệnh nhân|
+:Ký TrustedContactPermit + vân tay;
 
-if (TC đã activate encryption key?) then (NO)
-  :Error "TC chưa đăng nhập app";
+|Hệ thống|
+:Submit sponsored tx;
+
+|Blockchain|
+:isTrustedContact[P][TC] = true;
+:Emit TrustedContactSet event;
+
+|Hệ thống|
+if (TC đã đăng nhập app\n+ có khoá mã hoá?) then ([Chưa])
+  :Báo "TC chưa kích hoạt khoá —\nyêu cầu họ đăng nhập trước";
   stop
-else (YES)
+else ([Đã có])
 endif
 
-:runEncryptionCeremony(TC);
-:For each current record:\n  encrypt (cid, aesKey)\n  cho TC's NaCl pubkey;
-:POST /api/key-share/bulk-trusted-contact;
-:Backend lưu KeyShare rows\nsource='trusted-contact';
+:Mã hoá khoá AES của mọi hồ sơ\ncho TC's public key;
+:Lưu KeyShare rows\nsource='trusted-contact';
 
-|#LightGray|Phase A+: Auto pre-share record mới (background)|
-:Patient tạo record mới (Activity 14);
-:autoPreShareNewRecord:\nfor each TC active\n  encrypt + bulk pre-share;
-note right
-  TC luôn có KeyShare cho
-  mọi record mới, kể cả TC offline
-end note
+|Người thân tin cậy|
+:TC đăng nhập app;
+:Mở hồ sơ Bệnh nhân;
 
-|#LightBlue|Phase B: TC truy cập emergency|
-:TC login app;
-:Mở record của patient;
-:GET /api/key-share/record/:cidHash;
-:Backend gate canAccess(P, TC, cid);
-:Contract check isTrustedContact\n(Footgun #2 fix);
+|Hệ thống|
+:Gate canAccess trên blockchain;
 
-if (TC active?) then (YES)
-  :Trả encryptedPayload;
-  :TC mobile decrypt NaCl box\n→ (cid, aesKey);
-  :Fetch IPFS + decrypt AES-GCM;
-  :Render record;
-else (NO)
-  :403 Forbidden;
+|Blockchain|
+if (isTrustedContact[P][TC] = true?) then ([Có])
+  :Return true ngay\n(Footgun #2 fix);
+else ([Không])
+  :Return false;
+  |Hệ thống|
+  :Trả 403 Forbidden;
+  stop
 endif
 
-|#LightCoral|Phase C: Patient revoke TC|
-:Patient chọn TC → thu hồi;
-:Sign TrustedContactPermit(false);
-:POST /api/relayer/trusted-contact;
-:Contract: isTrustedContact[P][TC] = false\n+ emit TrustedContactRevoked;
-:Backend handleTrustedContactRevoked:\n- mark status='revoked'\n- cascade revoke KeyShare rows\n  source='trusted-contact';
+|Hệ thống|
+:Trả encryptedPayload;
 
-:TC mở record sau revoke;
-:canAccess → false → 403;
+|Người thân tin cậy|
+:Giải mã NaCl box → khoá AES;
+:Tải IPFS + giải mã AES-GCM;
+:Hiển thị hồ sơ;
 
+|Bệnh nhân|
+:(Phase C — về sau) Thu hồi TC;
+:Ký TrustedContactPermit(active=false);
+
+|Hệ thống|
+:Submit sponsored tx;
+
+|Blockchain|
+:isTrustedContact[P][TC] = false;
+:Emit TrustedContactRevoked;
+
+|Hệ thống|
+:Cascade revoke KeyShare rows\nsource='trusted-contact';
+
+|Người thân tin cậy|
+:Mở hồ sơ sau khi bị thu hồi;
+:canAccess trả false → 403;
 note right
-  ⚠ Limitation: TC vẫn có thể
-  decrypt OFFLINE nếu local cache
-  còn — envelope encryption không
-  thể un-share data đã ra ngoài
+  ⚠ Limitation: TC vẫn có thể giải mã
+  OFFLINE nếu local cache còn —
+  envelope encryption không un-share
+  được data đã đọc trước đó.
 end note
-
 stop
 
 @enduml

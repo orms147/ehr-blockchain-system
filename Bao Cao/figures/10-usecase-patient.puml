@@ -1,93 +1,57 @@
-@startuml usecase-patient
-!theme plain
+@startuml uc-benh-nhan
+title uc Phân rã Bệnh nhân
 left to right direction
 skinparam packageStyle rectangle
 skinparam actorStyle awesome
-title Use Case phân rã — Bệnh nhân (Patient)
 
 actor "Bệnh nhân" as Patient
-actor "Sponsor Relayer\n(System)" as Relayer << automated >>
 
-rectangle "Use Case Bệnh nhân" {
+usecase "Đăng ký vai trò" as UC_Register
+usecase "Đăng nhập" as UC_Login
+usecase "Đăng nhập\nbằng Google" as UC_LoginGoogle
+usecase "Đăng nhập\nbằng Email OTP" as UC_LoginEmail
+usecase "Đăng xuất" as UC_Logout
 
-  package "Đăng nhập + đăng ký" {
-    usecase "UC-P01\nĐăng nhập" as UCP01
-    usecase "UC-P02\nĐăng ký vai trò\nBệnh nhân" as UCP02
-    usecase "UC-P18\nĐăng xuất" as UCP18
-  }
+usecase "Tạo hồ sơ\ny tế" as UC_Create
+usecase "Tạo phiên bản\ncập nhật" as UC_Update
+usecase "Xem hồ sơ" as UC_View
 
-  package "Hồ sơ y tế" {
-    usecase "UC-P03\nTạo hồ sơ mới" as UCP03
-    usecase "UC-P04\nTạo phiên bản\ncập nhật" as UCP04
-    usecase "UC-P05\nXem hồ sơ" as UCP05
-  }
+usecase "Chia sẻ hồ sơ" as UC_Share
+usecase "Thu hồi quyền\ntruy cập" as UC_Revoke
+usecase "Uỷ quyền\nbác sĩ" as UC_Delegate
+usecase "Thu hồi\nuỷ quyền" as UC_RevokeDelegate
 
-  package "Quyền truy cập" {
-    usecase "UC-P06\nChia sẻ hồ sơ\n(Grant Consent)" as UCP06
-    usecase "UC-P07\nThu hồi quyền\n(Revoke)" as UCP07
-    usecase "UC-P10\nUỷ quyền\n(Delegation)" as UCP10
-    usecase "UC-P11\nThu hồi\nuỷ quyền" as UCP11
-  }
+usecase "Phê duyệt\nyêu cầu" as UC_Approve
+usecase "Từ chối\nyêu cầu" as UC_Reject
 
-  package "Yêu cầu truy cập" {
-    usecase "UC-P08\nPhê duyệt\nyêu cầu" as UCP08
-    usecase "UC-P09\nTừ chối\nyêu cầu" as UCP09
-  }
+usecase "Đăng ký\nCCCD khẩn cấp" as UC_Cccd
+usecase "Thêm người\nthân tin cậy" as UC_AddTC
+usecase "Thu hồi người\nthân tin cậy" as UC_RemoveTC
 
-  package "Khẩn cấp" {
-    usecase "UC-P12\nĐăng ký CCCD" as UCP12
-    usecase "UC-P13\nĐăng ký Người\nthân tin cậy" as UCP13
-    usecase "UC-P14\nThu hồi\nNgười tin cậy" as UCP14
-  }
+usecase "Cập nhật\nthông tin cá nhân" as UC_EditProfile
+usecase "Đổi ảnh\nđại diện" as UC_Avatar
+usecase "Bật/tắt MFA\nsinh trắc học" as UC_MFA
 
-  package "Cá nhân" {
-    usecase "UC-P15\nCập nhật\nthông tin" as UCP15
-    usecase "UC-P16\nĐổi ảnh\nđại diện" as UCP16
-    usecase "UC-P17\nMFA sinh\ntrắc học" as UCP17
-  }
-}
+Patient --> UC_Register
+Patient --> UC_Login
+Patient --> UC_Logout
+Patient --> UC_Create
+Patient --> UC_View
+Patient --> UC_Share
+Patient --> UC_Revoke
+Patient --> UC_Delegate
+Patient --> UC_RevokeDelegate
+Patient --> UC_Approve
+Patient --> UC_Cccd
+Patient --> UC_AddTC
+Patient --> UC_RemoveTC
+Patient --> UC_EditProfile
 
-Patient --> UCP01
-Patient --> UCP02
-Patient --> UCP03
-Patient --> UCP04
-Patient --> UCP05
-Patient --> UCP06
-Patient --> UCP07
-Patient --> UCP08
-Patient --> UCP09
-Patient --> UCP10
-Patient --> UCP11
-Patient --> UCP12
-Patient --> UCP13
-Patient --> UCP14
-Patient --> UCP15
-Patient --> UCP16
-Patient --> UCP17
-Patient --> UCP18
-
-' Include — UC gọi Sponsor Relayer
-UCP03 ..> Relayer : <<include>>
-UCP06 ..> Relayer : <<include>>
-UCP07 ..> Relayer : <<include>>
-UCP08 ..> Relayer : <<include>>
-UCP09 ..> Relayer : <<include>>
-UCP10 ..> Relayer : <<include>>
-UCP11 ..> Relayer : <<include>>
-UCP13 ..> Relayer : <<include>>
-UCP14 ..> Relayer : <<include>>
-
-' Extend — MFA biometric gate
-UCP17 ..> UCP06 : <<extend>>\n(nếu bật)
-UCP17 ..> UCP07 : <<extend>>
-UCP17 ..> UCP08 : <<extend>>
-UCP17 ..> UCP10 : <<extend>>
-UCP17 ..> UCP13 : <<extend>>
-
-' Extend — reject là alt approve
-UCP09 ..> UCP08 : <<extend>>\n(alt)
-
-' Extend — version là extension của tạo mới
-UCP04 ..> UCP03 : <<extend>>\n(parent ref)
+UC_LoginGoogle .> UC_Login : <<extend>>
+UC_LoginEmail .> UC_Login : <<extend>>
+UC_Update .> UC_Create : <<extend>>
+UC_Reject .> UC_Approve : <<extend>>
+UC_Avatar .> UC_EditProfile : <<extend>>
+UC_MFA .> UC_EditProfile : <<extend>>
 
 @enduml
