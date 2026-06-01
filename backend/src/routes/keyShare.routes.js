@@ -998,6 +998,88 @@ router.get('/sent', authenticate, async (req, res, next) => {
             p.chainVersionCount = (root && chainCountByRoot.get(root)) || 1;
         }
 
+        // BUG FIX (2026-05-28+) — cascade expiry / revoke từ source consent:
+        // Khi A re-share record cho B (sender=A=me, recipient=B), KeyShare(B)
+        // row có expiresAt riêng. Nếu A's consent từ patient hết hạn (time)
+        // hoặc bị revoke, on-chain canAccess(P, B, cid) sẽ refuse (qua
+        // recordDelegationSource cascade trong _hasValidNormalConsent), nhưng
+        // backend KeyShare row của B KHÔNG tự flip status. → Frontend hiển
+        // thị B vẫn "Còn ∞ ngày" mặc dù truth on-chain là expired/revoked.
+        //
+        // §13 fix chỉ cover REVOKE event (handleConsentRevoked listener).
+        // Time-based expiry KHÔNG emit event → backend phải runtime check.
+        //
+        // Fix: với mỗi unique root, lookup Consent(patient=record.owner,
+        // grantee=me=A, cidHash=root). Nếu A's consent đã expired/revoked
+        // → set effectiveActive=false + effectiveExpiresAt=A's expiry trên
+        // tất cả rows của root đó. Skip rows mà me là OWNER (direct grant,
+        // không phải delegation-derived).
+        if (payload.length > 0) {
+            // Lookup record owner + my consent cho mỗi unique root
+            const rootList = Array.from(uniqueRoots);
+            const records = await prisma.recordMetadata.findMany({
+                where: { cidHash: { in: rootList } },
+                select: { cidHash: true, ownerAddress: true },
+            });
+            const ownerByRoot = new Map(
+                records.map((r) => [r.cidHash.toLowerCase(), r.ownerAddress?.toLowerCase()])
+            );
+
+            // Batch query Consent table cho (P, me, root) các root có owner != me
+            const consentsToCheck = rootList
+                .map((root) => ({ root, owner: ownerByRoot.get(root) }))
+                .filter((x) => x.owner && x.owner !== me);
+
+            const sourceConsentByRoot = new Map();
+            if (consentsToCheck.length > 0) {
+                const consents = await prisma.consent.findMany({
+                    where: {
+                        granteeAddress: me,
+                        cidHash: { in: consentsToCheck.map((x) => x.root) },
+                        // patient = owner — filter sau khi fetch để batch tốt hơn
+                    },
+                    select: { patientAddress: true, cidHash: true, status: true, expiresAt: true },
+                });
+                for (const c of consents) {
+                    const root = c.cidHash.toLowerCase();
+                    const expectedOwner = ownerByRoot.get(root);
+                    if (c.patientAddress.toLowerCase() === expectedOwner) {
+                        sourceConsentByRoot.set(root, c);
+                    }
+                }
+            }
+
+            const now = Date.now();
+            for (const p of payload) {
+                const root = p.rootCidHash?.toLowerCase();
+                if (!root) continue;
+                const owner = ownerByRoot.get(root);
+                // Direct grant (me là owner/patient) → KHÔNG cascade
+                if (!owner || owner === me) {
+                    p.effectiveActive = undefined; // sentinel: not delegation-derived
+                    continue;
+                }
+                // Delegation-derived → check source
+                const src = sourceConsentByRoot.get(root);
+                if (!src) {
+                    // Không có Consent row cho A — có thể consent chưa sync hoặc
+                    // không tồn tại. Conservative: treat as inactive để tránh
+                    // lie. Frontend có thể cảnh báo "chưa xác định".
+                    p.effectiveActive = false;
+                    p.sourceConsentMissing = true;
+                    continue;
+                }
+                const srcExpired =
+                    src.status === 'revoked' ||
+                    (src.expiresAt && new Date(src.expiresAt).getTime() < now);
+                p.effectiveActive = !srcExpired;
+                if (srcExpired) {
+                    p.effectiveExpiresAt = src.expiresAt;
+                    p.sourceStatus = src.status; // 'active' / 'revoked'
+                }
+            }
+        }
+
         res.json(payload);
     } catch (error) {
         next(error);

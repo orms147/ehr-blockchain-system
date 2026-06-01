@@ -49,6 +49,14 @@ type SentShare = {
     rootCidHash?: string;
     record?: { cidHash?: string; parentCidHash?: string | null; title?: string; ownerAddress?: string };
     recipient?: { walletAddress?: string };
+    // Cascade fields từ backend /sent (cross-check source consent state cho
+    // delegation-derived rows). undefined = không phải delegation-derived
+    // (direct grant). false = source consent đã expired/revoked → row hiệu
+    // lực = false. effectiveExpiresAt = expiry thật của source A khi cascade.
+    effectiveActive?: boolean | undefined;
+    effectiveExpiresAt?: string | null;
+    sourceStatus?: string;
+    sourceConsentMissing?: boolean;
 };
 
 const truncate = (addr: string) => (addr ? `${addr.slice(0, 6)}…${addr.slice(-4)}` : '?');
@@ -78,7 +86,25 @@ function classify(s: SentShare): ShareStatus {
     if (status === 'revoked' || status === 'rejected') return 'revoked';
     if (status === 'expired') return 'expired';
     if (s.expiresAt && new Date(s.expiresAt).getTime() < Date.now()) return 'expired';
+    // Cascade source check (backend §13+ bug fix) — nếu A's source consent
+    // đã expired/revoked, row delegation-derived hiệu lực = false. Map sang
+    // 'revoked' nếu sourceStatus='revoked', 'expired' otherwise.
+    if (s.effectiveActive === false) {
+        return s.sourceStatus === 'revoked' ? 'revoked' : 'expired';
+    }
     return 'active';
+}
+
+/**
+ * Expiry hiển thị: ưu tiên effectiveExpiresAt (= source A's expiry khi
+ * cascade) trên expiresAt riêng của row B. Tránh hiển thị "Còn ∞ ngày"
+ * khi thực tế A đã hết hạn.
+ */
+function effectiveExpiry(s: SentShare): string | null | undefined {
+    if (s.effectiveActive === false && s.effectiveExpiresAt) {
+        return s.effectiveExpiresAt;
+    }
+    return s.expiresAt;
 }
 
 export default function DoctorOutgoingSharesScreen() {
@@ -362,7 +388,11 @@ function OutgoingShareRow({
     const isLive = status === 'active';
     const isRevoked = status === 'revoked';
 
-    const dLeft = daysLeft(item.expiresAt);
+    // Dùng effectiveExpiry: nếu cascade từ source A đã hết, ưu tiên A's
+    // expiry thay vì row's own expiresAt (= null/forever, lie).
+    const displayExpiry = effectiveExpiry(item);
+    const dLeft = daysLeft(displayExpiry);
+    const cascadedExpired = item.effectiveActive === false;
     const statusColor = isLive
         ? (dLeft !== null && dLeft < 14 ? palette.EHR_WARNING : palette.EHR_TERTIARY)
         : isRevoked
@@ -372,7 +402,9 @@ function OutgoingShareRow({
         ? (dLeft !== null && dLeft < 14 ? `Sắp hết · còn ${dLeft} ngày` : `Còn ${dLeft ?? '∞'} ngày`)
         : isRevoked
             ? `Đã thu hồi · ${formatVnDate(item.revokedAt)}`
-            : `Hết hạn · ${formatVnDate(item.expiresAt)}`;
+            : cascadedExpired
+                ? `Hết hạn theo quyền của bạn · ${formatVnDate(displayExpiry)}`
+                : `Hết hạn · ${formatVnDate(displayExpiry)}`;
 
     const title = item.record?.title || `Hồ sơ ${truncate(item.cidHash)}`;
     const patientName = patientProfile?.fullName || (patientAddress ? truncate(patientAddress) : '—');
