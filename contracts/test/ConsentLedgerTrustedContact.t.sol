@@ -211,18 +211,45 @@ contract ConsentLedgerTrustedContactTest is TestHelpers {
         assertEq(contacts[0], family2);
     }
 
-    // ========== INDEPENDENT FROM CONSENT/DELEGATION ==========
+    // ========== TRUSTED CONTACT === CAN_ACCESS (Footgun #2 fix 2026-06-01) ==========
 
-    function test_TrustedContact_DoesNotImplyConsent() public {
-        // Designating family member as Trusted Contact does NOT grant
-        // them on-chain canAccess to records. Off-chain pre-share is what
-        // delivers AES keys; canAccess still gates record reads.
+    function test_CanAccess_TrustedContact_BypassesNormalConsent() public {
+        // Footgun #2 fix (2026-06-01): TC = always-on emergency family access.
+        // Patient explicitly designates them; semantic = "I trust this person
+        // unconditionally to read my records during emergencies". canAccess
+        // must return true without any consent grant or KeyShare row.
+        //
+        // Replaces older assumption that TC implied off-chain key delivery
+        // only — that design forced backend to bypass canAccess for TC,
+        // which broke the on-chain authority invariant.
         vm.prank(patient);
         consentLedger.setTrustedContact(family1, "Vo", true);
 
         bytes32 someCid = keccak256("V1");
+        assertTrue(consentLedger.canAccess(patient, family1, someCid),
+            "Trusted Contact must auto-pass canAccess");
+    }
+
+    function test_CanAccess_TrustedContact_RevokedLosesAccess() public {
+        vm.prank(patient);
+        consentLedger.setTrustedContact(family1, "Vo", true);
+
+        bytes32 someCid = keccak256("V1");
+        assertTrue(consentLedger.canAccess(patient, family1, someCid));
+
+        // Revoke TC → access removed atomically on-chain.
+        vm.prank(patient);
+        consentLedger.setTrustedContact(family1, "Vo", false);
+
         assertFalse(consentLedger.canAccess(patient, family1, someCid),
-            "Trusted Contact alone must not pass canAccess");
+            "Revoked TC must lose canAccess");
+    }
+
+    function test_CanAccess_NonTrustedContact_StillRequiresConsent() public {
+        // Sanity: non-TC random wallet without consent still gets refused.
+        bytes32 someCid = keccak256("V1");
+        assertFalse(consentLedger.canAccess(patient, attacker, someCid),
+            "Non-TC wallet without consent must be refused");
     }
 
     // ========== HELPERS ==========

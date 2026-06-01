@@ -174,6 +174,35 @@ contract ConsentLedgerPhase1FixesTest is TestHelpers {
         assertFalse(consentLedger.canAccess(patient, doctorB, V2), "B expires with source");
     }
 
+    // =================================================================
+    // Footgun #1 fix (2026-06-01): _grantConsent must clear
+    // recordDelegationSource so direct grant doesn't get cascade-killed.
+    // =================================================================
+
+    function test_DirectGrantClearsDelegationSource() public {
+        // 1. Patient grants A with allowDelegate=true
+        consentLedger.grantInternal(patient, doctorA, V2, EK, 0, true);
+
+        // 2. A delegates B via record delegation → recordDelegationSource[B] = A
+        vm.prank(doctorA);
+        consentLedger.grantUsingRecordDelegation(patient, doctorB, V2, EK, 0);
+        assertTrue(consentLedger.canAccess(patient, doctorB, V2), "B delegated by A");
+
+        // 3. Patient DIRECT grants B (overwrite). Without Footgun #1 fix,
+        //    recordDelegationSource[B] still points to A even though B now
+        //    has independent direct grant.
+        consentLedger.grantInternal(patient, doctorB, V2, EK, 0, false);
+
+        // 4. Patient revokes A. Footgun #1: B's grant is direct now, NOT
+        //    cascade-derived → must survive A revoke.
+        vm.prank(patient);
+        consentLedger.revoke(doctorA, V2);
+
+        assertFalse(consentLedger.canAccess(patient, doctorA, V2), "A revoked");
+        assertTrue(consentLedger.canAccess(patient, doctorB, V2),
+            "B's direct grant must survive revoke of A (recordDelegationSource cleared by _grantConsent)");
+    }
+
     // BUG-D emergency tests removed 2026-05-04 — grantEmergencyInternal +
     // _emergencyConsents storage dropped along with DoctorUpdate.grantEmergencyAccess.
     // The emergency flow was architecturally broken (on-chain consent without

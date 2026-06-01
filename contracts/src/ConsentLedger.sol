@@ -312,6 +312,15 @@ contract ConsentLedger is EIP712, ReentrancyGuard, IConsentLedger {
             allowDelegate: allowDelegate
         });
 
+        // FOOTGUN FIX #1 (2026-06-01): clear any stale per-record delegation
+        // source. If a prior grantUsingRecordDelegation set
+        // recordDelegationSource[consentKey] = A, then patient DIRECT grants
+        // grantee here, the new grant is patient-direct (not delegated). Without
+        // this clear, a future revoke of A would cascade-kill grantee via
+        // _hasValidNormalConsent walk — even though grantee now has independent
+        // direct consent. Test: test_DirectGrantClearsDelegationSource.
+        recordDelegationSource[consentKey] = address(0);
+
         emit ConsentGranted(patient, grantee, root, finalExpiry, allowDelegate);
     }
 
@@ -663,6 +672,15 @@ contract ConsentLedger is EIP712, ReentrancyGuard, IConsentLedger {
         bytes32 queryCidHash
     ) external view override returns (bool) {
         if (patient == grantee) return true;
+
+        // FOOTGUN FIX #2 (2026-06-01): Trusted Contact emergency family — patient
+        // explicitly designates them via setTrustedContact/setTrustedContactBySig.
+        // Skip normal consent + role gates. Semantically: TC = always-on family
+        // access for emergencies (replaces obsolete 24h emergencyAccess flow).
+        // Before this fix, backend (keyShare.routes.js commit 3e53fcf) bypassed
+        // canAccess for TC rows — that hack is now redundant but safe to keep
+        // as defensive double-check.
+        if (isTrustedContact[patient][grantee]) return true;
 
         bytes32 root = _walkToRoot(queryCidHash);
         bytes32 key = keccak256(abi.encode(patient, grantee, root));
