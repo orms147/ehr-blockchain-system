@@ -1272,47 +1272,75 @@ router.get('/record/:cidHash', authenticate, async (req, res, next) => {
             if (ownerAddress) {
                 const hasOnChainConsent = await checkConsent(ownerAddress, requesterAddress, cidHashLower);
                 if (!hasOnChainConsent) {
-                    let notVerifiedDoctor = false;
-                    try {
-                        const [isDoc, isVerifiedDoc] = await Promise.all([
-                            publicClient.readContract({
-                                address: CONTRACT_ADDRESSES.AccessControl,
-                                abi: ACCESS_CONTROL_ABI,
-                                functionName: 'isDoctor',
-                                args: [requesterAddress],
-                            }),
-                            publicClient.readContract({
-                                address: CONTRACT_ADDRESSES.AccessControl,
-                                abi: ACCESS_CONTROL_ABI,
-                                functionName: 'isVerifiedDoctor',
-                                args: [requesterAddress],
-                            }),
-                        ]);
-                        notVerifiedDoctor = Boolean(isDoc) && !isVerifiedDoc;
-                    } catch (e) {
-                        log.warn('verify-check failed', { err: e && e.message });
-                    }
-
-                    log.warn('Access DENIED', {
-                        cidHash: cidHashLower,
-                        user: requesterAddress,
-                        reason: notVerifiedDoctor ? 'DOCTOR_NOT_VERIFIED' : 'CONSENT_REVOKED',
+                    // BUG FIX 2026-05-28: Trusted Contact bypass.
+                    // canAccess() trong ConsentLedger KHÔNG check
+                    // isTrustedContact[patient][contact] mapping → backend
+                    // refuse contact dù KeyShare đã pre-share + on-chain
+                    // setTrustedContactBySig đã thành công. Kết quả: contact
+                    // mở record thấy "Quyền truy cập đã bị thu hồi" sai.
+                    //
+                    // Fix: nếu canAccess fail, check TrustedContact table
+                    // mirror (cập nhật từ TrustedContactSet event). Nếu
+                    // requester là active TC của owner → grant access (TC
+                    // có off-chain trust, KeyShare pre-share đã có sẵn).
+                    const isTrustedContact = await prisma.trustedContact.findFirst({
+                        where: {
+                            patientAddress: ownerAddress.toLowerCase(),
+                            contactAddress: requesterAddress,
+                            status: 'active',
+                        },
+                        select: { id: true },
                     });
+                    if (isTrustedContact) {
+                        log.info('Access GRANTED via Trusted Contact bypass', {
+                            cidHash: cidHashLower,
+                            patient: ownerAddress,
+                            contact: requesterAddress,
+                        });
+                        // Fall through — trả keyShare bình thường ở dưới.
+                    } else {
+                        let notVerifiedDoctor = false;
+                        try {
+                            const [isDoc, isVerifiedDoc] = await Promise.all([
+                                publicClient.readContract({
+                                    address: CONTRACT_ADDRESSES.AccessControl,
+                                    abi: ACCESS_CONTROL_ABI,
+                                    functionName: 'isDoctor',
+                                    args: [requesterAddress],
+                                }),
+                                publicClient.readContract({
+                                    address: CONTRACT_ADDRESSES.AccessControl,
+                                    abi: ACCESS_CONTROL_ABI,
+                                    functionName: 'isVerifiedDoctor',
+                                    args: [requesterAddress],
+                                }),
+                            ]);
+                            notVerifiedDoctor = Boolean(isDoc) && !isVerifiedDoc;
+                        } catch (e) {
+                            log.warn('verify-check failed', { err: e && e.message });
+                        }
 
-                    if (notVerifiedDoctor) {
+                        log.warn('Access DENIED', {
+                            cidHash: cidHashLower,
+                            user: requesterAddress,
+                            reason: notVerifiedDoctor ? 'DOCTOR_NOT_VERIFIED' : 'CONSENT_REVOKED',
+                        });
+
+                        if (notVerifiedDoctor) {
+                            return res.status(403).json({
+                                error: 'Bác sĩ chưa được xác minh',
+                                message: 'Tài khoản bác sĩ của bạn chưa được tổ chức y tế xác minh on-chain. Vui lòng liên hệ quản trị viên tổ chức để được duyệt trước khi truy cập hồ sơ.',
+                                code: 'DOCTOR_NOT_VERIFIED',
+                            });
+                        }
+
                         return res.status(403).json({
-                            error: 'Bác sĩ chưa được xác minh',
-                            message: 'Tài khoản bác sĩ của bạn chưa được tổ chức y tế xác minh on-chain. Vui lòng liên hệ quản trị viên tổ chức để được duyệt trước khi truy cập hồ sơ.',
-                            code: 'DOCTOR_NOT_VERIFIED',
+                            error: 'Quyền truy cập đã bị thu hồi',
+                            message: 'Chủ sở hữu đã thu hồi quyền truy cập hồ sơ này.',
+                            consentRevoked: true,
+                            code: 'CONSENT_REVOKED',
                         });
                     }
-
-                    return res.status(403).json({
-                        error: 'Quyền truy cập đã bị thu hồi',
-                        message: 'Chủ sở hữu đã thu hồi quyền truy cập hồ sơ này.',
-                        consentRevoked: true,
-                        code: 'CONSENT_REVOKED',
-                    });
                 }
             }
         }
