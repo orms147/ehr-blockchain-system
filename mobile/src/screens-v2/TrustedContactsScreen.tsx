@@ -162,6 +162,10 @@ export default function TrustedContactsScreen({ route }: any) {
         try {
             setCccdSaving(true);
             await api.put('/api/profile/me/national-id', { nationalId: cccdInput });
+            // Invalidate cache để EmergencyProfileScreen + screens dùng
+            // profile query refetch ngay → enrolled flag flip true → banner
+            // "Đăng ký CCCD" thay bằng "CCCD đã đăng ký". User bug 2026-05-28.
+            queryClient.invalidateQueries({ queryKey: ['profile', 'me'] });
             Alert.alert(
                 'Đã đăng ký',
                 'Bác sĩ cấp cứu có thể tra cứu địa chỉ ví của bạn qua CCCD.',
@@ -184,6 +188,7 @@ export default function TrustedContactsScreen({ route }: any) {
         try {
             setCccdSaving(true);
             await api.put('/api/profile/me/national-id', { nationalId: null });
+            queryClient.invalidateQueries({ queryKey: ['profile', 'me'] });
             Alert.alert('Đã huỷ đăng ký Mã định danh khẩn cấp.');
             setCccdOpen(false);
             setCccdInput('');

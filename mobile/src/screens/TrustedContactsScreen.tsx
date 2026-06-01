@@ -369,6 +369,7 @@ export default function TrustedContactsScreen() {
                                     try {
                                         setCccdSaving(true);
                                         await api.put('/api/profile/me/national-id', { nationalId: null });
+                                        queryClient.invalidateQueries({ queryKey: ['profile', 'me'] });
                                         Alert.alert('Đã huỷ đăng ký Mã định danh khẩn cấp.');
                                         setCccdOpen(false);
                                         setCccdInput('');
@@ -395,6 +396,7 @@ export default function TrustedContactsScreen() {
                                     try {
                                         setCccdSaving(true);
                                         await api.put('/api/profile/me/national-id', { nationalId: cccdInput });
+                                        queryClient.invalidateQueries({ queryKey: ['profile', 'me'] });
                                         Alert.alert(
                                             'Đã đăng ký',
                                             'Bác sĩ cấp cứu có thể tra cứu địa chỉ ví của bạn qua CCCD.',
