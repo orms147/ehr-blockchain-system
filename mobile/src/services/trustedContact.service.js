@@ -166,7 +166,7 @@ export async function runEncryptionCeremony(contactAddress) {
 export async function autoPreShareNewRecord({ cidHash, cid, aesKey, patientAddress }) {
     if (!cidHash || !cid || !aesKey || !patientAddress) return { written: 0 };
 
-    const { address: caller } = await walletActionService.getWalletContext();
+    const { walletClient, address: caller } = await walletActionService.getWalletContext();
     if (caller.toLowerCase() !== patientAddress.toLowerCase()) {
         // Doctor-authored record for a patient: only the patient's own app
         // should pre-share to their Trusted Contacts (doctor doesn't have
@@ -177,7 +177,9 @@ export async function autoPreShareNewRecord({ cidHash, cid, aesKey, patientAddre
     const contacts = await api.get('/api/trusted-contacts/me');
     if (!Array.isArray(contacts) || contacts.length === 0) return { written: 0 };
 
-    const myKeypair = await getOrCreateEncryptionKeypair();
+    // BUG FIX 2026-05-28: pass walletClient + caller — getOrCreateEncryptionKeypair
+    // cần signature để derive (cùng pattern bug đã fix ở runEncryptionCeremony).
+    const myKeypair = await getOrCreateEncryptionKeypair(walletClient, caller);
     const senderPublicKey = myKeypair.publicKey;
 
     let written = 0;
