@@ -1,0 +1,91 @@
+\documentclass[../quyen]{subfiles}
+
+\begin{document}
+
+% ============================================================
+% CHƯƠNG 3 — NỀN TẢNG LÝ THUYẾT VÀ CÔNG NGHỆ SỬ DỤNG
+% Skeleton — fill theo PLAN_VIET_QUYEN.md section "CHƯƠNG 3".
+% ============================================================
+
+\section{Cơ sở mật mã học}
+
+\subsection{Mã hoá đối xứng AES-256-GCM}
+% Citation: NIST SP 800-38D
+% Code: mobile/src/services/crypto.js
+\textit{\textbf{<Block cipher + GCM mode authenticated encryption>}}
+
+\subsection{Mã hoá khoá công khai NaCl (x25519 + xsalsa20-poly1305)}
+% Citation: Bernstein 2009
+% Code: mobile/src/services/nacl-crypto.js
+\textit{\textbf{<Curve25519 ECDH + xsalsa20 stream cipher + Poly1305 MAC>}}
+
+\subsection{Hàm băm Keccak-256}
+\textit{\textbf{<Ethereum standard hash, dùng cho cidHash + EIP-712 digest>}}
+
+\subsection{Chữ ký số EIP-712 typed data}
+% Citation: EIP-712 spec
+% Code: mobile/src/utils/eip712.js + contracts/src/ConsentLedger.sol domain separator
+\textit{\textbf{<Cấu trúc typed data, domain separator, replay protection qua nonce>}}
+
+\section{Blockchain Ethereum và giải pháp Layer 2}
+
+\subsection{Ethereum Virtual Machine}
+% Citation: Wood G., "Ethereum Yellow Paper" 2014
+\textit{\textbf{<EVM stack machine, gas, state, account>}}
+
+\subsection{Arbitrum Rollup}
+\textit{\textbf{<Optimistic rollup, gas thấp, finality nhanh, security từ L1 Ethereum>}}
+
+\subsection{Lý do chọn Arbitrum Sepolia testnet}
+\textit{\textbf{<Phù hợp scope demo ĐATN, không cần mainnet, gas miễn phí qua faucet>}}
+
+\section{Smart Contract Pattern}
+
+\subsection{Solidity 0.8.24 + Foundry}
+% Code: contracts/foundry.toml + 5 contract trong contracts/src/
+\textit{\textbf{<Solidity version pragma, Foundry forge build/test/script>}}
+
+\subsection{Bitwise role flags}
+% Code: contracts/src/AccessControl.sol
+\textit{\textbf{<Patient=1, Doctor=2, Org=4, Ministry=8, +VerifiedDoctor=16, +VerifiedOrg=32 — 1 user có thể giữ nhiều role bằng OR>}}
+
+\subsection{EIP-712 meta-transaction + Sponsor Relayer}
+% Code: backend/src/services/relayer.service.js
+\textit{\textbf{<Patient ký typed data, backend submit tx + trả gas. Quota 100 sponsored sigs/tháng/patient>}}
+
+\section{The Graph — Indexing Layer}
+
+% Code: subgraph/subgraph.yaml (4 dataSources), backend/src/services/subgraphSync.service.js
+\textit{\textbf{<Vì sao subgraph thay vì RPC poll: tránh 429 storm, query GraphQL hiệu quả>}}
+
+\section{IPFS và Pinata}
+
+% Code: mobile/src/services/ipfs.service.js
+\textit{\textbf{<Content-addressed storage CID = hash content. Pinata pinning service. Decentralization argument vs Bộ TT&TT centralized>}}
+
+\section{Mobile Stack}
+
+\subsection{React Native + Expo SDK 55}
+\textit{\textbf{<Dev client (KHÔNG Expo Go cho social OAuth)>}}
+
+\subsection{Web3Auth Sapphire v8.1.0}
+\textit{\textbf{<7 providers: Google/Apple/Twitter/Facebook/Discord/Email OTP/SMS OTP>}}
+
+\subsection{Tamagui Design System}
+\textit{\textbf{<Token-based, optimized cho RN performance>}}
+
+\subsection{TanStack Query}
+\textit{\textbf{<Data fetching + caching + invalidation>}}
+
+\section{Backend Stack}
+
+\subsection{Node.js + Express + Prisma + PostgreSQL (Neon)}
+\textit{\textbf{<Serverless DB, auto-scaling, free tier 5 connection>}}
+
+\subsection{Socket.io + Expo Push}
+\textit{\textbf{<Real-time event push cho mobile: consent updated, request rejected, ...>}}
+
+\subsection{viem RPC client}
+\textit{\textbf{<Type-safe Ethereum client, parse ABI, call canAccess()>}}
+
+\end{document}

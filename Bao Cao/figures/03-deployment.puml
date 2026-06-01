@@ -1,0 +1,45 @@
+@startuml deployment
+!theme plain
+title Deployment — Hạ tầng triển khai hệ thống
+
+node "Mobile Device\n(Android/iOS)" as Mobile {
+  artifact "ViEH APK\n(Expo dev client / production)"
+}
+
+node "Backend Server\n(Node.js 20.x)" as Backend {
+  artifact "Express server\nport 3001"
+}
+
+database "Neon PostgreSQL\n(serverless cloud)" as Postgres
+
+cloud "Arbitrum Sepolia\n(L2 testnet)" as Arbitrum {
+  artifact "AccessControl\n0x5Fb8...30f2"
+  artifact "ConsentLedger\n0xBFEb...D55a"
+  artifact "RecordRegistry\n0x910d...82F5"
+  artifact "EHRSystemSecure\n0xC17c...1f43"
+  artifact "DoctorUpdate\n0x2549...D33f"
+}
+
+cloud "Alchemy RPC\n(300 CU/s free tier)" as Alchemy
+
+cloud "IPFS Pinning\n(Pinata)" as Pinata
+
+cloud "Subgraph Indexer\n(The Graph Studio)" as Subgraph {
+  artifact "ehr v0.1.5"
+}
+
+cloud "Web3Auth Sapphire\n(OAuth)" as W3A
+
+Mobile -down-> Backend : HTTPS 443/3001
+Mobile -right-> Pinata : HTTPS upload + gateway
+Mobile -right-> W3A : OAuth deep link\nerhsystem://auth
+Mobile -right-> Alchemy : viem RPC read\n(canAccess)
+
+Backend -down-> Postgres : TLS PostgreSQL
+Backend -right-> Alchemy : viem RPC write\n(sponsored tx)
+Backend -right-> Subgraph : GraphQL poll 30s
+
+Alchemy -right-> Arbitrum : JSON-RPC
+Subgraph -right-> Arbitrum : index block stream
+
+@enduml

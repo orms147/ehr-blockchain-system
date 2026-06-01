@@ -1,0 +1,85 @@
+@startuml component
+!theme plain
+title Kiến trúc 3 lớp — Mobile / Backend / Blockchain
+
+package "MOBILE (React Native + Expo SDK 55)" #LightYellow {
+  component "UI Layer" as UI {
+    [27 Screens]
+  }
+  component "Services" as MSvc {
+    [walletAction]
+    [crypto AES-GCM]
+    [nacl-crypto]
+    [ipfs]
+    [consent]
+    [keyShare]
+    [trustedContact]
+  }
+  component "State" as State {
+    [TanStack Query]
+    [authStore]
+  }
+  database "Storage" as MStore {
+    [SecureStore]
+    [AsyncStorage]
+  }
+}
+
+package "BACKEND (Node.js + Express)" #LightBlue {
+  component "REST API" as REST {
+    [15 routes]
+  }
+  component "Middleware" as MW {
+    [authenticate]
+    [onChainRole]
+    [rate-limit]
+  }
+  component "Backend Services" as BSvc {
+    [relayer]
+    [keyShareWriter]
+    [subgraphSync]
+    [consentLedgerSync]
+    [recordRegistrySync]
+    [expoPush]
+  }
+  component "Realtime" as Socket {
+    [Socket.io]
+  }
+  database "Prisma ORM" as Prisma
+}
+
+package "BLOCKCHAIN (Arbitrum Sepolia)" #LightGreen {
+  component "Smart Contracts" as Contracts {
+    [AccessControl]
+    [RecordRegistry]
+    [ConsentLedger]
+    [DoctorUpdate]
+    [EHRSystemSecure]
+  }
+}
+
+cloud "IPFS\nvia Pinata" as IPFS
+cloud "Subgraph\n(The Graph Studio)" as Subgraph
+cloud "Web3Auth\nSapphire" as W3A
+database "PostgreSQL\n(Neon)" as PG
+
+UI --> MSvc
+MSvc --> State
+MSvc --> MStore
+
+MSvc --> REST : HTTPS REST
+MSvc --> Socket : WebSocket
+MSvc --> IPFS : HTTPS upload/get
+MSvc --> W3A : OAuth deep link
+MSvc --> Contracts : viem read (canAccess)
+
+REST --> MW
+REST --> BSvc
+BSvc --> Prisma
+Prisma --> PG
+
+BSvc --> Contracts : viem write (sponsored)
+BSvc --> Subgraph : GraphQL poll 30s
+Subgraph --> Contracts : index events
+
+@enduml

@@ -1,0 +1,49 @@
+\documentclass[../quyen]{subfiles}
+
+\begin{document}
+
+% ============================================================
+% CHƯƠNG 5 — CÁC GIẢI PHÁP VÀ ĐÓNG GÓP NỔI BẬT (8-12 trang)
+% ============================================================
+
+\section{Đóng góp 1: Kiến trúc Envelope Encryption + Blind Mailbox}
+
+\textit{\textbf{<Backend chỉ là sink encrypted payload, không bao giờ thấy plaintext. canAccess gate on-chain trước khi serve. So sánh với MedRec MIT (backend giải mã được).>}}
+
+\textit{\textbf{<Cite backend/src/routes/keyShare.routes.js /record/:cidHash route + mobile/src/services/nacl-crypto.js encryptForRecipient/decryptFromSender>}}
+
+\section{Đóng góp 2: Delegation CHAIN topology với cascade revoke}
+
+\textit{\textbf{<Patient revoke ancestor → walk chain (max 8 hops) → kill mọi descendant. Epoch-based cascade tránh stale grant.>}}
+
+\textit{\textbf{<Cite contracts/src/ConsentLedger.sol \_hasValidNormalConsent. Test verify: ConsentLedgerPhase1Fixes.t.sol::test\_BugC\_*. Memory project\_consent\_ledger\_internals.md>}}
+
+\section{Đóng góp 3: Trusted Contact registry on-chain (Footgun \#2 fix 2026-06-01)}
+
+\textit{\textbf{<Emergency family access immutable, không cần backend confirm. Patient setTrustedContact qua EIP-712 → on-chain. canAccess() tự return true cho TC → backend không cần bypass, đảm bảo on-chain authority invariant.>}}
+
+\textit{\textbf{<Replace 24h emergencyAccess flow (dropped 2026-05-04). Cite contracts/src/ConsentLedger.sol setTrustedContact + canAccess Footgun \#2 patch>}}
+
+\section{Đóng góp 4: EIP-712 Sponsor Relayer (Zero-gas patient)}
+
+\textit{\textbf{<Patient zero-gas (100 signatures/tháng/patient). Doctor/Org tự trả gas (msg.sender check). Mass adoption barrier removed.>}}
+
+\textit{\textbf{<Cite backend/src/services/relayer.service.js + memory project\_relayer\_quota\_unified.md>}}
+
+\section{Đóng góp 5: Biometric MFA cho on-chain signing}
+
+\textit{\textbf{<TT 13/2025/TT-BYT compliance. 8 sign sites trong app gated bằng LocalAuthentication (vân tay/Face ID): grant, revoke, share, request, approve, reject, delegate, addContact.>}}
+
+\textit{\textbf{<Cite mobile/src/utils/biometricGate.ts + memory project\_future\_passkey\_biometric.md>}}
+
+\section{Đóng góp 6: Cơ chế Direct Grant clear Delegation Source (Footgun \#1 fix)}
+
+\textit{\textbf{<Khi patient direct grant doctor B sau khi A đã delegate cho B → contract clear recordDelegationSource[B's key]. Direct grant trở thành quyền độc lập, không bị cascade-kill khi revoke A. Đảm bảo principle of least surprise.>}}
+
+\textit{\textbf{<Cite contracts/src/ConsentLedger.sol \_grantConsent Footgun \#1 patch. Test: ConsentLedgerPhase1Fixes.t.sol::test\_DirectGrantClearsDelegationSource>}}
+
+\section{So sánh với các hệ thống quốc tế và Việt Nam}
+
+\textit{\textbf{<Lặp lại bảng so sánh từ Chương 2 với phân tích chi tiết "khác biệt rõ rệt" của app: Epic centralized closed, OpenEMR centralized open, MedRec không có Trusted Contact + không có L2 scaling, HSSKĐT VN không có patient self-sovereign>}}
+
+\end{document}

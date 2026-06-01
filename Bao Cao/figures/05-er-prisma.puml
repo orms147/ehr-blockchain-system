@@ -1,0 +1,151 @@
+@startuml er
+!theme plain
+title Lược đồ ER — Off-chain Database (Prisma Schema)
+
+entity User {
+  * walletAddress: String <<PK>>
+  --
+  fullName: String?
+  dateOfBirth: DateTime?
+  gender: Enum?
+  phone: String?
+  email: String?
+  homeAddress: String?
+  avatarUrl: String?
+  bloodType: String?
+  allergies: String?
+  insuranceNumber: String?
+  nationalIdHash: String?
+  role: Enum
+  signaturesThisMonth: Int
+  createdAt: DateTime
+}
+
+entity DoctorProfile {
+  * walletAddress: String <<PK, FK>>
+  --
+  specialty: String?
+  licenseNumber: String?
+  hospitalName: String?
+  yearsExperience: Int?
+  bio: String?
+  verificationStatus: Enum
+}
+
+entity Organization {
+  * orgId: Int <<PK>>
+  --
+  name: String
+  primaryAdmin: String
+  backupAdmin: String
+  active: Boolean
+  verified: Boolean
+}
+
+entity OrganizationMember {
+  * orgId: Int <<FK>>
+  * walletAddress: String <<FK>>
+  --
+  addedAt: DateTime
+}
+
+entity RecordMetadata {
+  * cidHash: String <<PK>>
+  --
+  ownerAddress: String <<FK>>
+  createdBy: String <<FK>>
+  parentCidHash: String <<FK self>>
+  recordType: String
+  title: String?
+  description: String?
+  versionNote: String?
+  status: Enum
+  createdAt: DateTime
+}
+
+entity KeyShare {
+  * id: Int <<PK>>
+  --
+  cidHash: String <<FK>>
+  senderAddress: String <<FK>>
+  recipientAddress: String <<FK>>
+  senderPublicKey: String
+  encryptedPayload: String
+  status: Enum
+  source: Enum
+  expiresAt: DateTime?
+  createdAt: DateTime
+}
+
+entity Consent <<cache>> {
+  * id: Int <<PK>>
+  --
+  patientAddress: String <<FK>>
+  granteeAddress: String <<FK>>
+  cidHash: String
+  expiresAt: DateTime
+  allowDelegate: Boolean
+  status: Enum
+}
+
+entity TrustedContact {
+  * id: Int <<PK>>
+  --
+  patientAddress: String <<FK>>
+  contactAddress: String <<FK>>
+  label: String
+  status: Enum
+  setAt: DateTime
+}
+
+entity AccessRequest {
+  * id: Int <<PK>>
+  --
+  onChainRequestId: String
+  patientAddress: String <<FK>>
+  doctorAddress: String <<FK>>
+  cidHash: String
+  requestType: Enum
+  reason: String?
+  deadline: DateTime
+  status: Enum
+  rejectionReason: String?
+}
+
+entity DelegationAccessLog {
+  * id: Int <<PK>>
+  --
+  patientAddress: String <<FK>>
+  newGrantee: String <<FK>>
+  byDelegatee: String <<FK>>
+  rootCidHash: String
+  createdAt: DateTime
+}
+
+entity Notification {
+  * id: Int <<PK>>
+  --
+  userAddress: String <<FK>>
+  type: Enum
+  payload: Json
+  readAt: DateTime?
+}
+
+User ||..|| DoctorProfile : "1:1 nếu role=DOCTOR"
+User ||--o{ RecordMetadata : "owns"
+User ||--o{ KeyShare : "sender"
+User ||--o{ KeyShare : "recipient"
+RecordMetadata ||--o{ KeyShare : ""
+RecordMetadata }o--|| RecordMetadata : "parent\n(chain)"
+Organization ||--o{ OrganizationMember
+User ||--o{ OrganizationMember
+User ||--o{ TrustedContact : "patient"
+User ||--o{ TrustedContact : "contact"
+User ||--o{ AccessRequest : "patient"
+User ||--o{ AccessRequest : "doctor"
+User ||--o{ Consent : "patient"
+User ||--o{ Consent : "grantee"
+User ||--o{ DelegationAccessLog
+User ||--o{ Notification
+
+@enduml

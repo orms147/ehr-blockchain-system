@@ -1,0 +1,21 @@
+\documentclass[../quyen]{subfiles}
+
+\begin{document}
+
+\begin{center}
+    \textbf{\Large ABSTRACT}
+\end{center}
+
+\vspace{0.5cm}
+
+% TODO Stage 2: dịch English from 0_3_Tom_tat_noi_dung.tex
+
+In the context of Vietnam's accelerating digital transformation in healthcare, with Decision 586/QĐ-BYT setting a deadline of December 31, 2026, for nationwide adoption of Electronic Medical Records and January 1, 2027, for the complete phase-out of paper-based records, the issues of patient privacy and self-sovereign control over access permissions have become critically urgent. Existing Electronic Health Record systems in Vietnam largely follow a centralised architecture, with hospitals acting as gatekeepers — exposing patients to risks of unauthorised modification or data breach.
+
+This thesis proposes and implements a decentralised Electronic Health Record system built on the Arbitrum Sepolia blockchain (Ethereum Layer 2), employing an \textit{envelope encryption} architecture combined with a \textit{blind mailbox} pattern: patients encrypt their records locally using AES-256-GCM, store the resulting ciphertext on IPFS, and use five Solidity smart contracts to manage roles, record registration, consent ledger, doctor updates, and two-step access requests. The backend functions as a "blind mailbox" — storing only encrypted payloads sealed for each recipient via NaCl box (x25519), gated by the on-chain \texttt{canAccess} function before serving any data.
+
+The system has been implemented end-to-end, comprising: a React Native + Expo SDK 55 mobile app (with seven Web3Auth login providers), a Node.js + Express + Prisma + PostgreSQL backend, five smart contracts deployed on the Arbitrum Sepolia testnet, a The Graph subgraph indexer, and IPFS pinning via Pinata. The system achieves 96 out of 100 smart contract tests passing, complies with the key circulars of Vietnam's Ministry of Health (Circular 13/2025 on Electronic Medical Records, Circular 26/2025 on multi-drug prescriptions, Circular 32/2023 on the 29 standard medical record templates, and Circular 13/2026 on vaccination), and supports \textbf{<X>} concurrent users with p95 latency below \textbf{<Y>} ms as measured using k6 load testing.
+
+\textbf{Keywords:} Electronic Health Record, blockchain, smart contract, EIP-712, AES-GCM, NaCl, envelope encryption, blind mailbox, Arbitrum, IPFS, patient consent, doctor delegation, trusted contact, legal compliance.
+
+\end{document}

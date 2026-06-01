@@ -1,0 +1,56 @@
+@startuml seq-request-access
+!theme plain
+title Sequence — Bác sĩ yêu cầu truy cập hồ sơ (3 bước)
+
+actor Doctor
+participant "DoctorMobile" as DM
+participant "Backend\n+ Relayer" as Backend
+participant "EHRSystemSecure" as EHR
+participant "ConsentLedger" as Consent
+participant "PatientMobile" as PM
+actor Patient
+
+== Bước 1: Doctor yêu cầu (gas tự trả) ==
+
+Doctor -> DM : Mở RequestAccess\npaste cidHash\nchọn RequestType
+DM -> EHR : requestAccess(patient, cidHash,\ntype, deadline)\n[doctor signs + pays gas]
+EHR -> EHR : _requests[reqId] = {...}
+EHR -> EHR : emit AccessRequested
+
+EHR --> Backend : event indexed by subgraph
+Backend -> Backend : sync AccessRequest table
+Backend -> PM : Expo push:\n"Bác sĩ X yêu cầu hồ sơ Y"
+
+== Bước 2: Patient phê duyệt (sponsored) ==
+
+PM -> Patient : Mở RequestsScreen\n+ biometric MFA gate
+Patient -> PM : Bấm Phê duyệt\n+ vân tay
+PM -> PM : sign ApprovePermit (EIP-712)
+PM -> Backend : POST /api/relayer/approve-request\n{reqId, signature}
+Backend -> EHR : approveRequestBySig(...)\n(sponsored)
+EHR -> Consent : grantInternal(patient,\ndoctor, cidHash, ...)
+Consent -> Consent : emit ConsentGranted
+EHR -> EHR : emit RequestCompleted
+
+== Bước 2b (alternate): Patient từ chối ==
+
+Patient -> PM : Bấm Từ chối\n+ vân tay
+PM -> PM : sign RejectPermit (EIP-712)
+PM -> Backend : POST /api/relayer/reject-request\n{reqId, signature, reason?}
+Backend -> EHR : rejectRequestBySig(...)\n(sponsored — Wave K)
+EHR -> EHR : emit RequestRejected
+Backend -> Backend : mirror status='rejected'\n+ rejectionReason off-chain
+
+== Bước 3: Doctor claim + decrypt ==
+
+Backend --> DM : Socket.io push\n"consent:updated"
+DM -> Backend : GET /api/key-share/my
+Backend --> DM : KeyShare row (encryptedPayload)
+DM -> Backend : GET /api/key-share/record/:cidHash
+Backend -> Consent : canAccess(patient,\ndoctor, cidHash)
+Consent --> Backend : true
+Backend --> DM : encryptedPayload (NaCl box)
+DM -> DM : decrypt NaCl box → AES key\nthen decrypt ciphertext (IPFS)
+DM -> Doctor : Render record
+
+@enduml

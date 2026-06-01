@@ -1,0 +1,154 @@
+@startuml usecase
+!theme plain
+left to right direction
+skinparam packageStyle rectangle
+skinparam actorStyle awesome
+title Use Case tổng quát — Hệ thống Hồ sơ Y tế điện tử
+
+actor "Bệnh nhân" as Patient
+actor "Bác sĩ" as Doctor
+actor "Quản trị viên\nTổ chức" as OrgAdmin
+actor "Bộ Y tế" as Ministry
+actor "Hệ thống\n(Backend + Subgraph)" as System << system >>
+
+rectangle "Hệ thống EHR Blockchain" {
+
+  package "Bệnh nhân" {
+    usecase "UC-P01: Đăng nhập" as UCP01
+    usecase "UC-P02: Đăng ký vai trò" as UCP02
+    usecase "UC-P03: Tạo hồ sơ mới" as UCP03
+    usecase "UC-P04: Tạo bản cập nhật" as UCP04
+    usecase "UC-P05: Xem hồ sơ" as UCP05
+    usecase "UC-P06: Chia sẻ hồ sơ" as UCP06
+    usecase "UC-P07: Thu hồi quyền" as UCP07
+    usecase "UC-P08: Phê duyệt yêu cầu" as UCP08
+    usecase "UC-P09: Từ chối yêu cầu" as UCP09
+    usecase "UC-P10: Uỷ quyền bác sĩ" as UCP10
+    usecase "UC-P11: Thu hồi uỷ quyền" as UCP11
+    usecase "UC-P12: Đăng ký CCCD\nkhẩn cấp" as UCP12
+    usecase "UC-P13: Đăng ký\nNgười thân tin cậy" as UCP13
+    usecase "UC-P14: Thu hồi\nNgười thân tin cậy" as UCP14
+    usecase "UC-P15: Cập nhật\nthông tin cá nhân" as UCP15
+    usecase "UC-P16: Đổi ảnh\nđại diện" as UCP16
+    usecase "UC-P17: MFA\nsinh trắc học" as UCP17
+    usecase "UC-P18: Đăng xuất" as UCP18
+  }
+
+  package "Bác sĩ" {
+    usecase "UC-D01: Đăng nhập +\nđăng ký vai trò" as UCD01
+    usecase "UC-D02: Nộp chứng chỉ" as UCD02
+    usecase "UC-D03: Yêu cầu\ntruy cập hồ sơ" as UCD03
+    usecase "UC-D04: Xem danh sách\nhồ sơ được cấp" as UCD04
+    usecase "UC-D05: Đọc + giải mã" as UCD05
+    usecase "UC-D06: Tạo bản\ncập nhật hồ sơ" as UCD06
+    usecase "UC-D07: Uỷ quyền lại" as UCD07
+    usecase "UC-D08: Xem + thu hồi\nhồ sơ đã uỷ quyền" as UCD08
+    usecase "UC-D09: Tra cứu\nkhẩn cấp qua CCCD" as UCD09
+    usecase "UC-D10: Cập nhật\nhồ sơ chuyên môn" as UCD10
+  }
+
+  package "Quản trị viên Tổ chức" {
+    usecase "UC-O01: Đăng nhập" as UCO01
+    usecase "UC-O02: Xem dashboard" as UCO02
+    usecase "UC-O03: Thêm thành viên" as UCO03
+    usecase "UC-O04: Loại bỏ thành viên" as UCO04
+    usecase "UC-O05: Xem yêu cầu\nxác minh pending" as UCO05
+    usecase "UC-O06: Xác minh\nbác sĩ" as UCO06
+    usecase "UC-O07: Thu hồi\nxác minh bác sĩ" as UCO07
+    usecase "UC-O08: Xem bác sĩ\nđã xác minh" as UCO08
+  }
+
+  package "Bộ Y tế" {
+    usecase "UC-M01: Đăng nhập" as UCM01
+    usecase "UC-M02: Tạo tổ chức\ny tế mới" as UCM02
+    usecase "UC-M03: Xác minh\nbác sĩ độc lập" as UCM03
+    usecase "UC-M04: Tạm dừng /\nkích hoạt tổ chức" as UCM04
+    usecase "UC-M05: Thu hồi\nxác minh tổ chức" as UCM05
+    usecase "UC-M06: Dashboard\nMinistry" as UCM06
+  }
+
+  package "Hệ thống tự động" {
+    usecase "UC-S01: Relayer\nsubmit sponsored tx" as UCS01
+    usecase "UC-S02: Subgraph\npoll + DB sync" as UCS02
+    usecase "UC-S03: Gate canAccess" as UCS03
+    usecase "UC-S04: Socket.io\npush event" as UCS04
+    usecase "UC-S05: Expo push\noffline" as UCS05
+  }
+}
+
+' Patient associations
+Patient --> UCP01
+Patient --> UCP02
+Patient --> UCP03
+Patient --> UCP04
+Patient --> UCP05
+Patient --> UCP06
+Patient --> UCP07
+Patient --> UCP08
+Patient --> UCP09
+Patient --> UCP10
+Patient --> UCP11
+Patient --> UCP12
+Patient --> UCP13
+Patient --> UCP14
+Patient --> UCP15
+Patient --> UCP16
+Patient --> UCP17
+Patient --> UCP18
+
+' Doctor associations
+Doctor --> UCD01
+Doctor --> UCD02
+Doctor --> UCD03
+Doctor --> UCD04
+Doctor --> UCD05
+Doctor --> UCD06
+Doctor --> UCD07
+Doctor --> UCD08
+Doctor --> UCD09
+Doctor --> UCD10
+
+' OrgAdmin
+OrgAdmin --> UCO01
+OrgAdmin --> UCO02
+OrgAdmin --> UCO03
+OrgAdmin --> UCO04
+OrgAdmin --> UCO05
+OrgAdmin --> UCO06
+OrgAdmin --> UCO07
+OrgAdmin --> UCO08
+
+' Ministry
+Ministry --> UCM01
+Ministry --> UCM02
+Ministry --> UCM03
+Ministry --> UCM04
+Ministry --> UCM05
+Ministry --> UCM06
+
+' System
+UCS01 --> System
+UCS02 --> System
+UCS03 --> System
+UCS04 --> System
+UCS05 --> System
+
+' Include
+UCP03 ..> UCS01 : <<include>>
+UCP06 ..> UCS01 : <<include>>
+UCP08 ..> UCS01 : <<include>>
+UCP09 ..> UCS01 : <<include>>
+UCP10 ..> UCS01 : <<include>>
+UCP13 ..> UCS01 : <<include>>
+UCD05 ..> UCS03 : <<include>>
+UCD09 ..> UCS03 : <<include>>
+
+' Extend
+UCP17 ..> UCP06 : <<extend>>
+UCP17 ..> UCP08 : <<extend>>
+UCP17 ..> UCP10 : <<extend>>
+UCP17 ..> UCP13 : <<extend>>
+UCP09 ..> UCP08 : <<extend>>
+UCD07 ..> UCD06 : <<extend>>
+
+@enduml

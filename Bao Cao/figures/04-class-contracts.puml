@@ -1,0 +1,93 @@
+@startuml class
+!theme plain
+title Sơ đồ Lớp — 5 Smart Contract của hệ thống
+
+class AccessControl {
+  - mapping(address => uint256) roles
+  - mapping(uint256 => Organization) organizations
+  - mapping(uint256 => mapping(address => bool)) orgMembers
+  - address public ministry
+  --
+  + registerAsPatient()
+  + registerAsDoctor()
+  + createOrganization(name, primary, backup)
+  + verifyDoctor(doctor, credential)
+  + revokeDoctorVerification(doctor)
+  + verifyDoctorByMinistry(doctor, credential)
+  + setOrgActive(orgId, active)
+  + revokeOrgVerification(orgId)
+  + addMember(orgId, doctor)
+  + removeMember(orgId, doctor)
+  + isPatient/isDoctor/isVerifiedDoctor/isOrg/isMinistry()
+}
+
+class RecordRegistry {
+  - mapping(bytes32 => Record) records
+  - mapping(address => bytes32[]) patientRecords
+  - address consentLedger
+  - mapping(address => bool) authorizedContracts
+  --
+  + addRecord(cidHash, parentCidHash, recordType)
+  + addRecordByDoctor(...) <<onlyAuthorized>>
+  + getRecord(cidHash)
+  + getPatientRecords(patient)
+  + walkToRoot(cidHash)
+}
+
+class ConsentLedger <<trái tim>> {
+  - mapping(bytes32 => Consent) _consents
+  - mapping(address => mapping(address => uint256)) _delegations
+  - mapping(bytes32 => address) recordDelegationSource
+  - mapping(bytes32 => address) consentDelegationSource
+  - mapping(address => mapping(address => bool)) isTrustedContact
+  - mapping(address => uint256) delegationEpoch
+  - mapping(address => uint256) nonces
+  - uint256 MAX_DELEGATION_WALK = 8
+  --
+  + grantInternal(...) / grantBySig(...) <<EIP-712>>
+  + revoke(...) / revokeBySig(...)
+  + grantUsingRecordDelegation(...)
+  + grantUsingDelegation(...)
+  + grantDelegation(...) / revokeDelegation(...)
+  + setTrustedContact(...) / setTrustedContactBySig(...)
+  + canAccess(patient, grantee, cidHash): bool
+  - _grantConsent(...) <<Footgun#1 fix>>
+  - _hasValidNormalConsent(...): bool
+}
+
+class DoctorUpdate {
+  - AccessControl accessControl
+  - RecordRegistry recordRegistry
+  - ConsentLedger consentLedger
+  --
+  + addRecordByDoctor(patient, cidHash, parent, type) <<onlyVerifiedDoctor>>
+}
+
+class EHRSystemSecure {
+  - mapping(bytes32 => Request) _requests
+  - mapping(address => uint256) nonces
+  --
+  + requestAccess(patient, cidHash, type, deadline) <<doctor gas>>
+  + approveRequestBySig(...) <<sponsored>>
+  + rejectRequestBySig(...) <<sponsored, Wave K>>
+  - _completeRequest(...)
+}
+
+enum RequestType {
+  DirectAccess
+  RecordDelegation
+  FullDelegation
+}
+
+ConsentLedger --> AccessControl : role check
+RecordRegistry --> AccessControl : role check
+DoctorUpdate --> AccessControl : role check
+EHRSystemSecure --> AccessControl : role check
+
+DoctorUpdate --> RecordRegistry : addRecordByDoctor (authorized)
+ConsentLedger --> RecordRegistry : walkToRoot
+EHRSystemSecure --> ConsentLedger : _completeRequest \n grants consent
+
+EHRSystemSecure ..> RequestType
+
+@enduml

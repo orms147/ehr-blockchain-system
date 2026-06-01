@@ -1,0 +1,93 @@
+% Glossary + acronym definitions.
+% Tham chiếu: \usepackage[nonumberlist, nopostdot, nogroupskip, acronym]{glossaries}
+% Auto-print qua \printnoidxglossaries trong quyen.tex.
+
+\makeglossaries
+
+% ============== TỪ VIẾT TẮT (acronym) ==============
+
+\newacronym{ehr}{EHR}{Electronic Health Record — Hồ sơ y tế điện tử}
+\newacronym{hsba}{HSBA}{Hồ sơ Bệnh án}
+\newacronym{kcb}{KCB}{Khám Chữa Bệnh}
+\newacronym{bhyt}{BHYT}{Bảo hiểm Y tế}
+\newacronym{cccd}{CCCD}{Căn Cước Công Dân}
+\newacronym{byt}{BYT}{Bộ Y Tế}
+\newacronym{tt}{TT}{Thông tư}
+\newacronym{vneid}{VNeID}{Ứng dụng định danh điện tử Việt Nam}
+
+\newacronym{evm}{EVM}{Ethereum Virtual Machine}
+\newacronym{eip}{EIP}{Ethereum Improvement Proposal}
+\newacronym{erc}{ERC}{Ethereum Request for Comments}
+\newacronym{cid}{CID}{Content Identifier (IPFS)}
+\newacronym{ipfs}{IPFS}{InterPlanetary File System}
+\newacronym{rpc}{RPC}{Remote Procedure Call}
+\newacronym{abi}{ABI}{Application Binary Interface}
+
+\newacronym{aes}{AES}{Advanced Encryption Standard}
+\newacronym{gcm}{GCM}{Galois/Counter Mode (AES mode)}
+\newacronym{nacl}{NaCl}{Networking and Cryptography library}
+\newacronym{e2ee}{E2EE}{End-to-End Encryption}
+\newacronym{pki}{PKI}{Public Key Infrastructure}
+\newacronym{mfa}{MFA}{Multi-Factor Authentication}
+\newacronym{otp}{OTP}{One-Time Password}
+
+\newacronym{rn}{RN}{React Native}
+\newacronym{api}{API}{Application Programming Interface}
+\newacronym{rest}{REST}{Representational State Transfer}
+\newacronym{jwt}{JWT}{JSON Web Token}
+\newacronym{sdk}{SDK}{Software Development Kit}
+\newacronym{ui}{UI}{User Interface}
+\newacronym{ux}{UX}{User Experience}
+
+\newacronym{hipaa}{HIPAA}{Health Insurance Portability and Accountability Act (Hoa Kỳ)}
+\newacronym{gdpr}{GDPR}{General Data Protection Regulation (Liên minh châu Âu)}
+\newacronym{fhir}{FHIR}{Fast Healthcare Interoperability Resources (HL7)}
+\newacronym{dicom}{DICOM}{Digital Imaging and Communications in Medicine}
+\newacronym{neac}{NEAC}{National Electronic Authentication Center — Trung tâm Chứng thực điện tử Quốc gia}
+
+% ============== THUẬT NGỮ chuyên ngành ==============
+
+\newglossaryentry{blockchain}{
+    name=Blockchain,
+    description={Sổ cái phân tán liên kết các khối dữ liệu bằng hàm băm mật mã, không thể chỉnh sửa sau khi ghi nhận.}
+}
+
+\newglossaryentry{smartcontract}{
+    name=Smart Contract,
+    description={Hợp đồng thông minh — đoạn mã chạy trên máy ảo EVM, thực thi tự động khi điều kiện đạt được.}
+}
+
+\newglossaryentry{consent}{
+    name=Consent,
+    description={Sự đồng thuận của bệnh nhân cho phép một bên thứ ba (bác sĩ, tổ chức) truy cập hồ sơ y tế.}
+}
+
+\newglossaryentry{delegation}{
+    name=Delegation,
+    description={Cơ chế cho phép bác sĩ được uỷ quyền chuyển tiếp quyền truy cập cho bác sĩ khác (nếu allowDelegate=true).}
+}
+
+\newglossaryentry{blindmailbox}{
+    name=Blind Mailbox,
+    description={Mô hình kiến trúc trong đó máy chủ chỉ lưu trữ dữ liệu đã mã hoá mà không có khoá giải mã.}
+}
+
+\newglossaryentry{trustedcontact}{
+    name=Trusted Contact,
+    description={Người thân tin cậy được bệnh nhân uỷ quyền truy cập hồ sơ y tế trong tình huống khẩn cấp.}
+}
+
+\newglossaryentry{rollup}{
+    name=Rollup,
+    description={Giải pháp Layer 2 mở rộng Ethereum, gộp nhiều giao dịch off-chain rồi commit lên L1 để giảm phí gas.}
+}
+
+\newglossaryentry{subgraph}{
+    name=Subgraph,
+    description={Cấu trúc index trên giao thức The Graph, giúp truy vấn sự kiện blockchain nhanh hơn so với poll RPC trực tiếp.}
+}
+
+\newglossaryentry{relayer}{
+    name=Relayer,
+    description={Dịch vụ trung gian thay mặt người dùng gửi giao dịch lên blockchain và thanh toán phí gas, dựa trên chữ ký EIP-712.}
+}

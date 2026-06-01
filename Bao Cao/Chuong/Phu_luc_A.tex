@@ -1,0 +1,102 @@
+\documentclass[../quyen]{subfiles}
+
+\begin{document}
+
+% ============================================================
+% PHỤ LỤC A — HƯỚNG DẪN CÀI ĐẶT VÀ SỬ DỤNG
+% ============================================================
+
+\section{Yêu cầu hệ thống}
+
+\begin{itemize}
+    \item Node.js \texttt{20.x} (LTS)
+    \item PowerShell hoặc Bash
+    \item PostgreSQL (sử dụng Neon serverless free tier hoặc local)
+    \item Foundry (\texttt{forge}, \texttt{cast}, \texttt{anvil}) cho phát triển smart contract
+    \item The Graph CLI (\texttt{graph-cli}) cho deploy subgraph
+    \item Android Studio + Android SDK cho build mobile app
+    \item Ví Ethereum có testnet ETH trên Arbitrum Sepolia (faucet alchemy.com/faucets/arbitrum-sepolia)
+\end{itemize}
+
+\section{Cấu trúc kho mã nguồn}
+
+\begin{lstlisting}[language=bash, caption={Cấu trúc thư mục dự án}]
+EHR/
+├── contracts/              # Foundry + Solidity 0.8.24 — 5 contract
+├── backend/                # Node.js + Express + Prisma + Postgres
+├── mobile/                 # React Native + Expo SDK 55 + Tamagui
+├── subgraph/               # The Graph Studio — Arbitrum Sepolia
+├── load-test/              # k6 scenarios cho đánh giá hiệu năng
+├── context/                # Tài liệu kiến trúc verified
+└── Bao Cao/                # LaTeX source của Quyển
+\end{lstlisting}
+
+\section{Cài đặt và khởi động Backend}
+
+\begin{lstlisting}[language=bash]
+cd backend
+npm install
+# Setup .env (sao chép từ .env.example, điền DATABASE_URL + RPC_URL + JWT_SECRET)
+npm run db:migrate          # KHÔNG dùng db push
+npm run dev                 # khởi động tại http://localhost:3001
+\end{lstlisting}
+
+\section{Cài đặt và khởi động Mobile}
+
+\begin{lstlisting}[language=bash]
+cd mobile
+npm install
+# Setup .env (EXPO_PUBLIC_API_URL, EXPO_PUBLIC_CONSENT_LEDGER_ADDRESS, ...)
+npm run android             # KHÔNG dùng Expo Go — phải dev build
+\end{lstlisting}
+
+\section{Build và deploy Smart Contract}
+
+\begin{lstlisting}[language=bash]
+cd contracts
+forge build                 # compile + sinh ABI artifacts
+forge test                  # chạy 100 test, kỳ vọng 96 pass
+
+# Deploy lên Arbitrum Sepolia
+forge script script/DeployAll.s.sol:DeployAll \
+    --rpc-url $ARBITRUM_SEPOLIA_RPC \
+    --private-key $MINISTRY_PRIVATE_KEY \
+    --broadcast
+\end{lstlisting}
+
+Sau khi deploy lại, cần đồng bộ địa chỉ contract vào: \texttt{backend/.env}, \texttt{mobile/.env}, \texttt{subgraph/subgraph.yaml} (4 dataSources), và 4 file ABI.
+
+\section{Deploy Subgraph}
+
+\begin{lstlisting}[language=bash]
+cd subgraph
+graph deploy ehr
+\end{lstlisting}
+
+Đợi indexer catch up ~5-10 phút trước khi backend đọc được event mới.
+
+\section{Chạy Load Test}
+
+\begin{lstlisting}[language=bash]
+cd load-test
+cp .env.example .env        # điền BASE_URL + PATIENT_JWT + CID_HASH
+k6 run scenarios/01-light.js --out json=results/01-light.json
+k6 run scenarios/02-medium.js --out json=results/02-medium.json
+k6 run scenarios/03-stress.js --out json=results/03-stress.json
+\end{lstlisting}
+
+\section{Địa chỉ contract đang deploy (Arbitrum Sepolia)}
+
+\begin{itemize}
+    \item \textbf{AccessControl}: \texttt{0x5Fb8052d526235f8118566221A8ADD52EC7130f2}
+    \item \textbf{ConsentLedger}: \texttt{0xBFEb0274EAA4c7EEB7150C4bA69165653827D55a}
+    \item \textbf{RecordRegistry}: \texttt{0x910d3E3F6EBF7D170eF2e1CF87CEF5Ea27b982F5}
+    \item \textbf{EHRSystemSecure}: \texttt{0xC17c252fb5D39c605bD1bA7525AF16859EB71f43}
+    \item \textbf{DoctorUpdate}: \texttt{0x2549092E3b53276886be1a1b38ae8D65803eD33f}
+\end{itemize}
+
+\section{Tài khoản demo}
+
+\textit{\textbf{<Liệt kê tài khoản test (patient, doctor verified, org admin, ministry) — nếu có public faucet credentials cho reviewer chạy thử>}}
+
+\end{document}

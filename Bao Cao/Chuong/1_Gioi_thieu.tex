@@ -1,0 +1,61 @@
+\documentclass[../quyen]{subfiles}
+
+\begin{document}
+
+% ============================================================
+% CHƯƠNG 1 — GIỚI THIỆU ĐỀ TÀI
+%
+% Skeleton — fill theo PLAN_VIET_QUYEN.md section "CHƯƠNG 1".
+% RULE TỐI CAO: bám sát app thực tế, cite file:line, KHÔNG bịa.
+% ============================================================
+
+\section{Bối cảnh và tính cấp thiết}
+
+% TODO Stage 2 — cite:
+% - QĐ 586/QĐ-BYT 09/03/2026 → deadline 31/12/2026 + 01/01/2027 bỏ giấy
+% - TT 13/2025/TT-BYT → HSBA điện tử
+% - Luật KCB 15/2023/QH15 → HSBA giấy ≡ điện tử pháp lý
+% - HIPAA US + GDPR EU (so sánh quốc tế)
+% - Tại sao blockchain: tamper-resistance + audit trail + self-sovereign
+\textit{\textbf{<Nội dung sẽ điền — xem PLAN\_VIET\_QUYEN.md mục 1.1>}}
+
+\section{Mục tiêu và phạm vi đề tài}
+
+\subsection{Mục tiêu}
+% TODO: 4 đối tượng + 4 vai trò bitwise role flags
+\textit{\textbf{<Bám vào contracts/src/AccessControl.sol — Patient=1, Doctor=2, Org=4, Ministry=8, +VerifiedDoctor=16, +VerifiedOrg=32>}}
+
+\subsection{Phạm vi}
+% TODO:
+% - In scope: 5 contract, mobile, backend, subgraph, IPFS
+% - Out scope (transparent): HL7 FHIR, DICOM, NEAC PKI, XML BHYT QĐ 4210
+\textit{\textbf{<Liệt kê IN/OUT scope minh bạch>}}
+
+\section{Đóng góp chính}
+
+\subsection{Kiến trúc envelope encryption + blind mailbox}
+% TODO: cite backend/src/routes/keyShare.routes.js + mobile/src/services/nacl-crypto.js
+\textit{\textbf{<Mô tả: backend chỉ là sink encrypted, gate canAccess on-chain trước khi serve>}}
+
+\subsection{Cơ chế uỷ quyền theo dây chuyền với thu hồi đồng loạt}
+% TODO: cite contracts/src/ConsentLedger.sol::_hasValidNormalConsent
+\textit{\textbf{<Mô tả delegation CHAIN topology, epoch cascade, MAX\_DELEGATION\_WALK=8>}}
+
+\subsection{Đăng ký Người thân tin cậy on-chain}
+% TODO: cite contracts/src/ConsentLedger.sol::setTrustedContact + Footgun #2 fix 2026-06-01
+\textit{\textbf{<Replace 24h emergency cũ, on-chain registry, canAccess bypass đúng spec>}}
+
+\section{Cấu trúc Quyển}
+
+Quyển được tổ chức thành 6 chương chính như sau:
+
+\begin{itemize}
+    \item \textbf{Chương 1} — \textit{Giới thiệu đề tài}: trình bày bối cảnh, mục tiêu, phạm vi và các đóng góp chính của đồ án.
+    \item \textbf{Chương 2} — \textit{Khảo sát và phân tích yêu cầu}: khảo sát các hệ thống Hồ sơ Y tế điện tử quốc tế và Việt Nam, phân tích yêu cầu pháp lý và đặc tả use case.
+    \item \textbf{Chương 3} — \textit{Nền tảng lý thuyết và công nghệ sử dụng}: trình bày các kiến thức nền về mật mã, blockchain, smart contract và các framework được sử dụng.
+    \item \textbf{Chương 4} — \textit{Phân tích thiết kế, triển khai và đánh giá hệ thống}: chương lõi, mô tả kiến trúc tổng thể, thiết kế smart contract, schema cơ sở dữ liệu, các flow nghiệp vụ chính và kết quả đo hiệu năng.
+    \item \textbf{Chương 5} — \textit{Các giải pháp và đóng góp nổi bật}: phân tích chi tiết các đóng góp khoa học và so sánh với các hệ thống hiện có.
+    \item \textbf{Chương 6} — \textit{Kết luận và hướng phát triển}: tổng kết các kết quả đạt được, hạn chế hiện tại và hướng phát triển tiếp theo.
+\end{itemize}
+
+\end{document}

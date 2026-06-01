@@ -1,0 +1,64 @@
+\documentclass[../quyen]{subfiles}
+
+\begin{document}
+
+% ============================================================
+% CHƯƠNG 6 — KẾT LUẬN VÀ HƯỚNG PHÁT TRIỂN (3-5 trang)
+% ============================================================
+
+\section{Kết luận}
+
+\textit{\textbf{<Recap kết quả đạt được>}}
+
+\begin{itemize}
+    \item 5 smart contract Solidity deploy live trên Arbitrum Sepolia testnet (cite địa chỉ contract từ backend/.env)
+    \item Mobile app React Native demo end-to-end 4 vai trò: Patient/Doctor/OrgAdmin/Ministry
+    \item Backend Node.js Express + PostgreSQL với 15+ REST endpoint
+    \item Subgraph indexer The Graph v0.1.5
+    \item 96/100 smart contract test pass (Foundry)
+    \item Tuân thủ 5 văn bản pháp luật trọng yếu của Bộ Y tế Việt Nam
+    \item Đáp ứng \textbf{<X>} người dùng đồng thời theo kết quả load test k6 (Chương 4.7)
+\end{itemize}
+
+\section{Hạn chế hiện tại}
+
+\textit{\textbf{<Transparent disclosure cho reviewer>}}
+
+\begin{itemize}
+    \item Chưa tích hợp HL7 FHIR — chưa liên thông với hệ thống y tế khác
+    \item Chưa hỗ trợ DICOM — không lưu được ảnh chẩn đoán hình ảnh thuần
+    \item 29 mẫu HSBA chuyên khoa theo TT 32/2023 — đồ án dùng generic form, chưa template hoá đầy đủ
+    \item Chưa xuất XML BHYT theo QĐ 4210 — app không thanh toán BHYT
+    \item Chưa tích hợp PKI chữ ký số NEAC — đồ án thay bằng EIP-712 + on-chain verified doctor flag (đóng góp khoa học, nhưng chưa tương đương pháp lý PKI)
+    \item 4 test contract setUp() failing (pre-existing baseline, không block code mới — cite cụ thể test file nào)
+    \item Subgraph indexer phụ thuộc The Graph Studio (centralized service)
+    \item Mobile app chưa build APK production cho mass distribution (still dev client)
+\end{itemize}
+
+\section{Hướng phát triển tiếp theo}
+
+\textit{\textbf{<Future work>}}
+
+\subsection{Tích hợp tiêu chuẩn liên thông}
+\begin{itemize}
+    \item HL7 FHIR R4 export/import
+    \item DICOM imaging server
+    \item XML BHYT theo QĐ 4210 (nếu mở rộng sang thanh toán)
+\end{itemize}
+
+\subsection{Hoàn thiện 29 mẫu HSBA chuyên khoa}
+\textit{\textbf{<Theo TT 32/2023 Phụ lục XXVIII: nội khoa, ngoại khoa, sản khoa, nhi khoa, ...>}}
+
+\subsection{Tích hợp PKI chữ ký số NEAC}
+\textit{\textbf{<Bổ sung EIP-712 (không thay), cho phép bệnh viện chấp nhận chữ ký theo Luật Giao dịch điện tử>}}
+
+\subsection{Multi-chain support}
+\textit{\textbf{<Ethereum mainnet + Polygon + zkSync — multi-bridge consent>}}
+
+\subsection{Decentralized indexer}
+\textit{\textbf{<Federated subgraph trên The Graph Network mainnet, giảm phụ thuộc Studio>}}
+
+\subsection{Tích hợp VNeID}
+\textit{\textbf{<Sử dụng VNeID identity layer cho registerAsPatient flow — mở rộng theo Chỉ thị 17/CT-TTg>}}
+
+\end{document}

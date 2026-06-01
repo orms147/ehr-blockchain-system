@@ -1,0 +1,62 @@
+@startuml seq-trusted-contact
+!theme plain
+title Sequence — Người thân tin cậy (Trusted Contact emergency)
+
+actor Patient
+participant "PatientMobile" as PM
+participant "Backend\n+ Relayer" as Backend
+participant "ConsentLedger" as Contract
+participant "TCMobile" as TM
+actor TC
+
+== Phase A: Patient đăng ký TC ==
+
+Patient -> PM : Thêm người thân tin cậy\n(paste ví TC + label "Mẹ")
+PM -> Patient : Biometric MFA
+PM -> PM : Sign TrustedContactPermit\n(EIP-712)
+PM -> Backend : POST /api/relayer/trusted-contact
+Backend -> Contract : setTrustedContactBySig(...)\n(sponsored)
+Contract -> Contract : isTrustedContact[P][TC] = true\nemit TrustedContactSet
+
+PM -> PM : runEncryptionCeremony(TC)\n(encrypt mọi record's AES key\ncho TC's NaCl pubkey)
+PM -> Backend : POST /api/key-share/bulk-trusted-contact
+Backend -> Backend : Lưu KeyShare rows\nsource='trusted-contact'
+
+== Phase A+: Auto pre-share record mới ==
+
+Patient -> PM : Tạo record mới
+PM -> Backend : registerRecord + autoPreShareNewRecord
+note right of PM : Encrypt cho mỗi TC active\nGửi /api/key-share/bulk-trusted-contact
+
+== Phase B: TC truy cập khẩn cấp ==
+
+TC -> TM : Login app + mở record của Patient
+TM -> Backend : GET /api/key-share/record/:cidHash
+Backend -> Contract : canAccess(P, TC, cidHash)
+Contract -> Contract : isTrustedContact[P][TC]?
+note right of Contract : Footgun #2 fix:\nreturn TRUE ngay
+Contract --> Backend : true
+Backend -> Backend : Defensive check\nTrustedContact table\n(commit 3e53fcf)
+Backend --> TM : encryptedPayload
+TM -> TM : decrypt NaCl box\nthen AES (IPFS ciphertext)
+TM -> TC : Render record
+
+== Phase C: Patient thu hồi TC ==
+
+Patient -> PM : Thu hồi TC
+PM -> PM : Sign TrustedContactPermit(false)
+PM -> Backend : POST /api/relayer/trusted-contact
+Backend -> Contract : setTrustedContactBySig(active=false)
+Contract -> Contract : isTrustedContact[P][TC] = false\nemit TrustedContactRevoked
+
+Backend -> Backend : handleTrustedContactRevoked:\nmark status='revoked'\ncascade revoke KeyShare rows\nsource='trusted-contact'
+
+TC -> TM : Mở record (sau khi revoke)
+TM -> Backend : GET /api/key-share/record/:cidHash
+Backend -> Contract : canAccess?
+Contract --> Backend : false (TC revoked + no consent)
+Backend --> TM : 403 Forbidden
+
+note over TC : TC vẫn có thể decrypt OFFLINE\nnếu local cache còn (limitation\nenvelope encryption — không\nthể un-share data đã decrypt)
+
+@enduml

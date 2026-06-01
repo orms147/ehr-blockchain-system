@@ -1,0 +1,108 @@
+\documentclass[../quyen]{subfiles}
+
+\begin{document}
+
+% ============================================================
+% CHƯƠNG 4 — PHÂN TÍCH THIẾT KẾ, TRIỂN KHAI VÀ ĐÁNH GIÁ HỆ THỐNG
+% Chương lõi (30-40 trang). Fill theo PLAN_VIET_QUYEN.md.
+% ============================================================
+
+\section{Kiến trúc tổng thể}
+
+\textit{\textbf{<Mô tả 3 layer: Mobile / Backend / Blockchain + 4 component bổ trợ: IPFS, Subgraph, Web3Auth, Postgres>}}
+
+\textit{\textbf{<Embed figures/02-component.png (sơ đồ Component 3-layer)>}}
+
+\textit{\textbf{<Embed figures/03-deployment.png (sơ đồ Deployment)>}}
+
+\section{Thiết kế Smart Contract}
+
+% Code: 5 file trong contracts/src/
+\textit{\textbf{<Embed figures/04-class-contracts.png — sơ đồ Class 5 contract + quan hệ>}}
+
+\subsection{AccessControl — Quản lý vai trò và xác minh}
+\textit{\textbf{<State: bitwise roles, organizations, doctorOrgs. Function: registerAsPatient, registerAsDoctor, createOrganization, verifyDoctor, addOrgMember, setOrgActive, revokeOrgVerification>}}
+
+\subsection{RecordRegistry — Đăng ký hồ sơ y tế}
+\textit{\textbf{<State: cidHash → ownerAddress + parentCidHash + recordType + timestamp. Function: addRecord, addRecordByDoctor (proxy from DoctorUpdate)>}}
+
+\subsection{ConsentLedger — Sổ cái đồng thuận (trái tim hệ thống)}
+\textit{\textbf{<State: \_consents, delegations, recordDelegationSource, consentDelegationSource, isTrustedContact. Function: grantInternal, grantBySig, revoke, grantUsingRecordDelegation, grantUsingDelegation, setTrustedContact, setTrustedContactBySig, canAccess. EIP-712 domain "EHR Consent Ledger" v2>}}
+
+\subsection{DoctorUpdate — Cập nhật phiên bản hồ sơ}
+\textit{\textbf{<Doctor tạo update version on-chain trực tiếp (không qua pending/approval — match TT 46/2018)>}}
+
+\subsection{EHRSystemSecure — Yêu cầu truy cập 2 bước}
+\textit{\textbf{<Doctor request → Patient approve qua EIP-712 sponsored → contract gọi \_completeRequest. 3 RequestType: DirectAccess, RecordDelegation, FullDelegation>}}
+
+\section{Lược đồ cơ sở dữ liệu off-chain}
+
+% Code: backend/prisma/schema.prisma
+\textit{\textbf{<Embed figures/05-er-prisma.png — sơ đồ ER>}}
+
+\textit{\textbf{<Mô tả 10+ model: User, DoctorProfile, RecordMetadata, KeyShare, Consent (cache), TrustedContact, OrganizationMember, AccessRequest, DelegationAccessLog, Notification, ...>}}
+
+\textit{\textbf{<INVARIANT QUAN TRỌNG: Consent table chỉ cache. Mọi permission check phải gọi on-chain canAccess() qua backend/src/config/blockchain.js. Cite memory project\_onchain\_offchain\_split.md>}}
+
+\section{Các nghiệp vụ chính (mobile flows)}
+
+\subsection{Flow tạo hồ sơ y tế}
+\textit{\textbf{<Embed figures/06-seq-create-record.png — sơ đồ Sequence>}}
+
+\textit{\textbf{<Step trace: generateAESKey → encryptData → upload Pinata → registerRecord on-chain (sponsored EIP-712) → subgraph index RecordAdded event → backend recordRegistrySync.service.js mirror DB>}}
+
+\subsection{Flow cấp quyền (Grant Consent)}
+\textit{\textbf{<Embed figures/07-seq-grant-consent.png — sơ đồ Sequence>}}
+
+\textit{\textbf{<Step trace: ShareSheet → signConsentPermit EIP-712 → POST /api/relayer/grant-consent → relayer.service.js submit grantBySig → ConsentGranted event → subgraph → backend mirror Consent table → cascade share KeyShare cho từng version trong chain → mobile show "Đã cấp quyền">}}
+
+\subsection{Flow yêu cầu truy cập (Doctor Request)}
+\textit{\textbf{<Embed figures/08-seq-request-access.png — sơ đồ Sequence 3 bước>}}
+
+\textit{\textbf{<Step 1 Doctor: requestAccess on-chain (tự trả gas). Step 2 Patient: approve qua RequestsScreen, EIP-712 sponsored → \_completeRequest. Step 3 Doctor: claim KeyShare backend → decrypt local>}}
+
+\subsection{Flow thu hồi cascade}
+\textit{\textbf{<Embed figures/09-seq-revoke-cascade.png — sơ đồ Sequence>}}
+
+\textit{\textbf{<Patient revoke A → ConsentRevoked event → subgraph → backend consentLedgerSync.service.js handler walks DelegationAccessLog → cascade revoke KeyShare cho B/C nếu họ chỉ có quyền via A. Direct grants survive (Footgun \#1 fix 2026-06-01)>}}
+
+\subsection{Flow Người thân tin cậy (Trusted Contact emergency)}
+\textit{\textbf{<Embed figures/10-seq-trusted-contact.png — sơ đồ Sequence>}}
+
+\textit{\textbf{<Patient setTrustedContact qua EIP-712 → on-chain mapping. autoPreShareNewRecord cascade KeyShare cho TC khi patient tạo record mới. TC mở record fresh device → backend gate canAccess on-chain (Footgun \#2 fix: contract tự return true cho TC) → trả encryptedPayload → decrypt local>}}
+
+\section{Backend Middleware và Gate}
+
+\textit{\textbf{<authenticate middleware: JWT verify. onChainRole middleware: cache role 10min, refresh subgraph DoctorVerified event. canAccess gate trong /record/:cidHash route>}}
+
+\textit{\textbf{<Cite backend/src/middleware/auth.js + onChainRole.js + routes/keyShare.routes.js>}}
+
+\section{Tuân thủ pháp luật và bảo mật}
+
+\subsection{TT 13/2025/TT-BYT — HSBA điện tử + xác thực mạnh}
+\textit{\textbf{<MFA sinh trắc học 8 sign sites. Cite mobile/src/utils/biometricGate.ts>}}
+
+\subsection{TT 26/2025/TT-BYT — Đơn thuốc đa thuốc}
+\textit{\textbf{<RxCard component, 9 trường mỗi thuốc, validation. Cite mobile/src/components-v2/RxCard.tsx>}}
+
+\subsection{TT 13/2026/TT-BYT — Tiêm chủng}
+\textit{\textbf{<VaccCard component, schema vaccination, HPV bắt buộc. Cite mobile/src/components-v2/VaccCard.tsx>}}
+
+\subsection{TT 32/2023/TT-BYT — Vitals + BHYT}
+\textit{\textbf{<Chiều cao + BMI computed. BHYT field trong User. Cite mobile/src/constants/vitals.ts + backend/prisma/schema.prisma>}}
+
+\section{Đánh giá hiệu năng}
+
+\subsection{Smart contract — kết quả Forge test}
+% TODO: chèn output forge test thật
+\textit{\textbf{<96/100 test pass (4 setUp() baseline failures pre-existing). Liệt kê nhóm test: AccessControl, ConsentLedger, ConsentLedgerPhase1Fixes, ConsentLedgerTrustedContact, ConsentLedgerDelegation, RecordRegistry, DoctorUpdate, EHRSystemSecure. Cite contracts/test/*.t.sol>}}
+
+\subsection{Backend — Load test k6}
+% TODO: USER fill từ load-test/RESULTS.md sau khi run 3 scenario
+\textit{\textbf{<Bảng số liệu 3 scenario: Light 10 VUs / Medium 50 VUs / Stress 200 VUs. Metric p50, p95, p99, throughput RPS, error rate>}}
+
+\textit{\textbf{<Bottleneck analysis: RPC quota vs DB pool vs event loop>}}
+
+\textit{\textbf{<Conclusion về scalability: app handle được X concurrent user với p95 < Y ms theo điều kiện đo>}}
+
+\end{document}

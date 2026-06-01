@@ -1,0 +1,45 @@
+@startuml seq-grant-consent
+!theme plain
+title Sequence — Patient cấp quyền (Grant Consent) cho Bác sĩ
+
+actor Patient
+participant "MobileApp\n(ShareSheet)" as Mobile
+participant "Backend\n(Relayer)" as Backend
+participant "ConsentLedger\n(SmartContract)" as Contract
+participant "Subgraph\n(Indexer)" as Subgraph
+database "PostgreSQL\n(KeyShare + Consent)" as DB
+
+Patient -> Mobile : 1. Mở RecordDetail\nbấm Chia sẻ
+activate Mobile
+Mobile -> Patient : 2. Hiển thị ShareSheet\n(nhập ví + thời hạn)
+Patient -> Mobile : 3. Paste ví doctor B,\nchọn 30 ngày
+Patient -> Mobile : 4. Bấm Chia sẻ +\nxác thực vân tay
+Mobile -> Mobile : 5. Build EIP-712\nConsentPermit
+Mobile -> Patient : 6. signTypedData\n(vân tay)
+Patient --> Mobile : signature
+
+Mobile -> Backend : 7. POST /api/relayer/grant-consent\n{patient, grantee, cidHash,\nexpireAt, allowDelegate,\ndeadline, signature}
+activate Backend
+
+Backend -> Contract : 8. Verify signature\n(read domainSeparator + nonce)
+Contract --> Backend : verified
+Backend -> Contract : 9. grantBySig(...)\n(sponsor trả gas)
+activate Contract
+Contract -> Contract : 10. _grantConsent\n+ clear recordDelegationSource\n(Footgun #1 fix)
+Contract -> Contract : 11. emit ConsentGranted
+deactivate Contract
+
+Backend --> Mobile : 12. txHash
+deactivate Backend
+
+Subgraph -> Contract : 13. poll events (30s)
+Subgraph -> Backend : 14. consentLedgerSync\nhandleConsentGranted
+Backend -> DB : 15. Mirror Consent table\n(status=active)
+
+Mobile -> Backend : 16. POST /api/key-share\n(cascade keys cho mỗi version)
+Backend -> DB : 17. KeyShareWriter.applyShare\n(status=claimed)
+
+Mobile -> Patient : 18. "Đã cấp quyền"\n+ invalidate query
+deactivate Mobile
+
+@enduml
