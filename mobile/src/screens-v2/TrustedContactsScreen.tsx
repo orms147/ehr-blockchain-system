@@ -11,7 +11,7 @@
 //   - QrAddressScanner component for QR-based address paste
 //   - All Alert.alert prompts and error mapping (NATIONAL_ID_TAKEN)
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
     Alert,
     FlatList,
@@ -65,7 +65,7 @@ function relationTone(label: string | null | undefined, palette: any): string {
     return palette.EHR_TEXT_MUTED;
 }
 
-export default function TrustedContactsScreen() {
+export default function TrustedContactsScreen({ route }: any) {
     const palette = useEhrPalette();
     const queryClient = useQueryClient();
     const { data: contacts = [], isLoading, refetch, isRefetching } = useQuery<Contact[]>({
@@ -83,6 +83,15 @@ export default function TrustedContactsScreen() {
     const [cccdOpen, setCccdOpen] = useState(false);
     const [cccdInput, setCccdInput] = useState('');
     const [cccdSaving, setCccdSaving] = useState(false);
+
+    // Auto-open CCCD modal khi nav đến từ EmergencyProfileScreen CCCD CTA.
+    // Trước: navigate('TrustedContacts') chung → user phải bấm thêm "Đăng ký
+    // Mã định danh khẩn cấp" mới thấy modal. User feedback 2026-05-28.
+    useEffect(() => {
+        if (route?.params?.openCccd) {
+            setCccdOpen(true);
+        }
+    }, [route?.params?.openCccd]);
 
     const resetAddModal = () => {
         setContactInput('');

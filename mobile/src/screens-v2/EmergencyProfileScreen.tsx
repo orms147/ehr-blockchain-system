@@ -226,7 +226,7 @@ export default function EmergencyProfileScreen() {
                 {!enrolled ? (
                     <View style={{ paddingHorizontal: 20, marginBottom: 28 }}>
                         <Pressable
-                            onPress={() => navigation.navigate('TrustedContacts')}
+                            onPress={() => navigation.navigate('TrustedContacts', { openCccd: true })}
                             style={({ pressed }) => ({
                                 flexDirection: 'row',
                                 alignItems: 'center',

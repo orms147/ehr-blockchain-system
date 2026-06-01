@@ -9,10 +9,10 @@
 //   - RoleSwitcher (multi-role tab toggle)
 //   - Navigation routes: EditProfile, Settings, Delegation, EmergencyProfile
 
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import { Alert, Pressable, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { Text, XStack, YStack } from 'tamagui';
 import {
     User,
@@ -67,23 +67,30 @@ export default function ProfileScreen() {
     const [isLoading, setIsLoading] = useState(true);
     const [addressModalOpen, setAddressModalOpen] = useState(false);
 
-    useEffect(() => {
-        const fetchProfile = async () => {
-            if (!token) {
-                setIsLoading(false);
-                return;
-            }
-            try {
-                const data = await profileService.getMyProfile();
-                setProfile(data);
-            } catch (error: any) {
-                console.warn('Failed to fetch profile', error?.message || error);
-            } finally {
-                setIsLoading(false);
-            }
-        };
-        fetchProfile();
-    }, [token]);
+    // useFocusEffect refetch mỗi lần screen focus (sau EditProfile save +
+    // pop back, useEffect [token] không trigger lại → stale data hiện trên
+    // tile "Thông tin sức khoẻ"). User báo cáo 2026-05-28.
+    useFocusEffect(
+        useCallback(() => {
+            let cancelled = false;
+            const fetchProfile = async () => {
+                if (!token) {
+                    setIsLoading(false);
+                    return;
+                }
+                try {
+                    const data = await profileService.getMyProfile();
+                    if (!cancelled) setProfile(data);
+                } catch (error: any) {
+                    console.warn('Failed to fetch profile', error?.message || error);
+                } finally {
+                    if (!cancelled) setIsLoading(false);
+                }
+            };
+            fetchProfile();
+            return () => { cancelled = true; };
+        }, [token]),
+    );
 
     const handleLogout = () => {
         Alert.alert('Đăng xuất', 'Bạn có chắc chắn muốn đăng xuất khỏi thiết bị này?', [
