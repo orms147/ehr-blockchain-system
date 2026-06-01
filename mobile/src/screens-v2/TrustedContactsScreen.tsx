@@ -73,6 +73,15 @@ export default function TrustedContactsScreen({ route }: any) {
         queryFn: () => trustedContactService.listMyContacts(),
     });
 
+    // Profile query — chỉ cần nationalIdHash để biết enrolled state.
+    // Reuse cùng queryKey với EmergencyProfileScreen để share cache + invalidate
+    // chéo. Sau save/unregister CCCD ở dưới, invalidate query này → button flip.
+    const { data: profile } = useQuery<{ nationalIdHash?: string | null }>({
+        queryKey: ['profile', 'me'],
+        queryFn: () => api.get('/api/profile/me'),
+    });
+    const cccdEnrolled = !!profile?.nationalIdHash;
+
     const [addOpen, setAddOpen] = useState(false);
     const [scannerOpen, setScannerOpen] = useState(false);
     const [contactInput, setContactInput] = useState('');
@@ -390,7 +399,7 @@ export default function TrustedContactsScreen({ route }: any) {
                 </ViButton>
                 <View style={{ height: 10 }} />
                 <ViButton variant="ghost" full onPress={() => setCccdOpen(true)}>
-                    Đăng ký Mã định danh khẩn cấp
+                    {cccdEnrolled ? '✓ Quản lý Mã định danh khẩn cấp' : 'Đăng ký Mã định danh khẩn cấp'}
                 </ViButton>
                 <Text
                     style={{
@@ -402,7 +411,9 @@ export default function TrustedContactsScreen({ route }: any) {
                         lineHeight: 16,
                     }}
                 >
-                    Mã định danh khẩn cấp giúp bác sĩ tra cứu ví của bạn qua CCCD trong tình huống cấp cứu.
+                    {cccdEnrolled
+                        ? 'Mã định danh đã đăng ký. Bấm để huỷ hoặc thay đổi.'
+                        : 'Mã định danh khẩn cấp giúp bác sĩ tra cứu ví của bạn qua CCCD trong tình huống cấp cứu.'}
                 </Text>
             </ScrollView>
 
