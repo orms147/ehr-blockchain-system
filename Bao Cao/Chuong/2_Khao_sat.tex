@@ -214,13 +214,591 @@ Giai đoạn đăng ký gồm việc bệnh nhân ký giao dịch chỉ định 
 
 \section{Đặc tả chức năng}
 
-% TODO Stage H — fill 11 UC Tier 1 đặc tả full theo style reference
-% (Mã UC / Tên / Tác nhân / Mô tả / Tiền điều kiện / Luồng chính / Luồng thay thế / Hậu điều kiện)
-% Kèm 5-6 bảng trường dữ liệu cho UC tạo entity.
+Phần này đặc tả chi tiết 11 use case Tier 1 (các use case nghiệp vụ trọng tâm gắn với các đóng góp khoa học của đề tài). Các use case còn lại (Tier 2 và Tier 3) được đặc tả trong Phụ lục~B. Mỗi đặc tả tuân theo cấu trúc chuẩn: Mã UC, Tên UC, Tác nhân, Mô tả, Tiền điều kiện, Luồng sự kiện chính, Luồng sự kiện thay thế, và Hậu điều kiện. Với các use case tạo thực thể mới (tạo hồ sơ, cấp quyền, đăng ký người thân tin cậy, uỷ quyền, tạo tổ chức), một bảng liệt kê các trường dữ liệu kèm theo sẽ được trình bày bổ sung.
 
-Phần này đặc tả chi tiết 11 use case Tier 1 (use case nghiệp vụ trọng tâm gắn với các đóng góp khoa học của đề tài). Các use case còn lại được đặc tả trong Phụ lục~B. Mỗi đặc tả tuân theo cấu trúc chuẩn: Mã UC, Tên UC, Tác nhân, Mô tả, Tiền điều kiện, Luồng sự kiện chính, Luồng sự kiện thay thế, và Hậu điều kiện.
+% =====================================================
+% UC001 Tạo hồ sơ y tế
+% =====================================================
+\subsection{Đặc tả use case Tạo hồ sơ y tế (UC001)}
 
-\textit{\textbf{<TODO Stage H — fill chi tiết 11 UC: UC001 Tạo hồ sơ y tế · UC002 Cấp quyền truy cập · UC003 Thu hồi quyền + cascade · UC004 Đăng ký Người thân tin cậy · UC005 Uỷ quyền Full Delegation · UC006 Yêu cầu truy cập · UC007 Đọc + giải mã hồ sơ · UC008 Tạo phiên bản cập nhật · UC009 Uỷ quyền lại · UC010 Tạo tổ chức · UC011 Xác minh bác sĩ>}}
+\begin{table}[H]
+\centering
+\caption{Đặc tả use case UC001 --- Tạo hồ sơ y tế}
+\label{tab:uc001}
+\renewcommand{\arraystretch}{1.25}
+\small
+\begin{tabular}{|p{3cm}|p{11cm}|}
+\hline
+\textbf{Mã Use case} & UC001 \\ \hline
+\textbf{Tên Use case} & Tạo hồ sơ y tế \\ \hline
+\textbf{Tác nhân} & Bệnh nhân \\ \hline
+\textbf{Mô tả} & Cho phép bệnh nhân tự tạo một hồ sơ y tế mới gồm thông tin chẩn đoán, vitals, đơn thuốc hoặc tiêm chủng. Nội dung được mã hoá đầu cuối tại thiết bị và metadata được đăng ký lên blockchain. \\ \hline
+\textbf{Tiền điều kiện} & Bệnh nhân đã đăng nhập, đã đăng ký vai trò Bệnh nhân on-chain, còn quota chữ ký sponsored (\texttt{signaturesThisMonth < 100}). \\ \hline
+\textbf{Luồng chính} &
+\begin{tabular}{|c|p{2.3cm}|p{6cm}|}
+\hline
+\textbf{STT} & \textbf{Thực hiện bởi} & \textbf{Hành động} \\ \hline
+1 & Bệnh nhân & Mở màn hình ``Tạo hồ sơ y tế''. \\ \hline
+2 & Bệnh nhân & Nhập tiêu đề, chọn loại hồ sơ (tổng quát / đơn thuốc / tiêm chủng / xét nghiệm / chẩn đoán hình ảnh), điền nội dung và các trường tương ứng. \\ \hline
+3 & Bệnh nhân & Bấm nút ``Tạo hồ sơ''. \\ \hline
+4 & Hệ thống & Sinh khoá AES-256 ngẫu nhiên \texttt{K}, mã hoá nội dung bằng AES-GCM. \\ \hline
+5 & Hệ thống & Upload ciphertext lên IPFS qua Pinata, nhận \texttt{CID}. \\ \hline
+6 & Hệ thống & Tính \texttt{cidHash = keccak256(CID)}; tạo EIP-712 \texttt{RecordPermit}. \\ \hline
+7 & Bệnh nhân & Xác thực bằng vân tay sinh trắc học và ký permit. \\ \hline
+8 & Hệ thống & Gửi giao dịch sponsored \texttt{RecordRegistry.addRecord} qua relayer. \\ \hline
+9 & Hệ thống & Hợp đồng lưu metadata + phát sự kiện \texttt{RecordAdded}. \\ \hline
+10 & Hệ thống & Tự động chia sẻ khoá AES cho mọi Người thân tin cậy đang hoạt động (\textit{auto pre-share}). \\ \hline
+11 & Hệ thống & Hiển thị ``Đã tạo hồ sơ thành công'', điều hướng về danh sách hồ sơ. \\ \hline
+\end{tabular} \\ \hline
+\textbf{Luồng thay thế} &
+\begin{tabular}{|c|p{2.3cm}|p{6cm}|}
+\hline
+\textbf{STT} & \textbf{Thực hiện bởi} & \textbf{Hành động} \\ \hline
+3a & Hệ thống & Tiêu đề trống → cảnh báo ``Thiếu tiêu đề'', quay lại bước 2. \\ \hline
+5a & Hệ thống & Upload IPFS thất bại → retry 3 lần với backoff. Nếu vẫn lỗi, báo lỗi kết nối. \\ \hline
+7a & Bệnh nhân & Huỷ ký giao dịch → kết thúc luồng (cleanup IPFS pin). \\ \hline
+9a & Hệ thống & Giao dịch revert (vd: \texttt{CID\_RESERVED}, \texttt{PATIENT\_NOT\_REGISTERED}) → báo lỗi tx, không lưu local. \\ \hline
+\end{tabular} \\ \hline
+\textbf{Hậu điều kiện} & Hồ sơ mới được lưu on-chain (metadata) và off-chain (ciphertext IPFS). Quota \texttt{signaturesThisMonth} của bệnh nhân tăng 1. Mọi Người thân tin cậy đã nhận KeyShare cho hồ sơ này. \\ \hline
+\end{tabular}
+\end{table}
+
+Code reference: \texttt{mobile/src/screens-v2/CreateRecordScreen.tsx} (\texttt{handleSubmit}), \texttt{contracts/src/RecordRegistry.sol} (\texttt{addRecord}), \texttt{mobile/src/services/trustedContact.service.js} (\texttt{autoPreShareNewRecord}).
+
+Bảng~\ref{tab:uc001-fields} liệt kê các trường thông tin của một Hồ sơ y tế.
+
+\begin{table}[H]
+\centering
+\caption{Các trường thông tin của Hồ sơ y tế}
+\label{tab:uc001-fields}
+\small
+\renewcommand{\arraystretch}{1.2}
+\begin{tabular}{|c|p{2.5cm}|p{3.5cm}|c|p{2.2cm}|p{3cm}|}
+\hline
+\textbf{STT} & \textbf{Trường} & \textbf{Mô tả} & \textbf{Bắt buộc} & \textbf{Điều kiện hợp lệ} & \textbf{Ví dụ} \\ \hline
+1 & title & Tiêu đề hồ sơ & Có & Không rỗng & Khám tổng quát \\ \hline
+2 & description & Mô tả nội dung & Không & & Đo huyết áp định kỳ \\ \hline
+3 & recordType & Loại hồ sơ & Có & Enum 5 giá trị & general / rx / vacc / lab / imaging \\ \hline
+4 & vitals & Chỉ số sinh tồn & Không & Số dương theo VITAL\_SPECS & HR=72, BP=120/80 \\ \hline
+5 & drugs & Danh sách thuốc & Không & Theo TT 26/2025 & Paracetamol 500mg \\ \hline
+6 & vaccinations & Danh sách vaccine & Không & Theo TT 13/2026 & HPV (lot \#L42) \\ \hline
+7 & attachments & Ảnh đính kèm & Không & Định dạng ảnh, $\le 10$MB & xray-2026-06.jpg \\ \hline
+\end{tabular}
+\end{table}
+
+% =====================================================
+% UC002 Cấp quyền truy cập
+% =====================================================
+\subsection{Đặc tả use case Cấp quyền truy cập (UC002)}
+
+\begin{table}[H]
+\centering
+\caption{Đặc tả use case UC002 --- Cấp quyền truy cập}
+\label{tab:uc002}
+\renewcommand{\arraystretch}{1.25}
+\small
+\begin{tabular}{|p{3cm}|p{11cm}|}
+\hline
+\textbf{Mã Use case} & UC002 \\ \hline
+\textbf{Tên Use case} & Cấp quyền truy cập hồ sơ cho bác sĩ \\ \hline
+\textbf{Tác nhân} & Bệnh nhân \\ \hline
+\textbf{Mô tả} & Cho phép bệnh nhân cấp quyền truy cập một hồ sơ y tế cụ thể (và toàn bộ chuỗi phiên bản của nó) cho một bác sĩ, với thời hạn và tuỳ chọn cho phép uỷ quyền tiếp. \\ \hline
+\textbf{Tiền điều kiện} & Bệnh nhân đã đăng nhập và sở hữu hồ sơ cần chia sẻ. Bác sĩ cần được chia sẻ đã đăng ký vai trò Bác sĩ on-chain và có khoá mã hoá (\texttt{encryptionPublicKey}) đã được kích hoạt. \\ \hline
+\textbf{Luồng chính} &
+\begin{tabular}{|c|p{2.3cm}|p{6cm}|}
+\hline
+\textbf{STT} & \textbf{Thực hiện bởi} & \textbf{Hành động} \\ \hline
+1 & Bệnh nhân & Mở chi tiết hồ sơ, bấm ``Chia sẻ''. \\ \hline
+2 & Bệnh nhân & Nhập địa chỉ ví bác sĩ, chọn thời hạn (mặc định 30 ngày), chọn có cho phép uỷ quyền tiếp hay không. \\ \hline
+3 & Hệ thống & Kiểm tra định dạng địa chỉ ví (regex 0x + 40 ký tự hex). \\ \hline
+4 & Hệ thống & Kiểm tra không phải tự cấp cho chính mình; kiểm tra không thu hẹp thời hạn của quyền đang còn hiệu lực dài hơn. \\ \hline
+5 & Bệnh nhân & Xác thực bằng vân tay sinh trắc học. \\ \hline
+6 & Hệ thống & Build EIP-712 \texttt{ConsentPermit} typed data với \texttt{nonce} mới. \\ \hline
+7 & Bệnh nhân & Ký permit. \\ \hline
+8 & Hệ thống & Gửi sponsored tx \texttt{ConsentLedger.grantBySig} qua relayer. \\ \hline
+9 & Hệ thống & Hợp đồng \texttt{\_grantConsent}: lưu \texttt{\_consents[key]}, \textit{clear \texttt{recordDelegationSource}} (Footgun~\#1 fix), emit \texttt{ConsentGranted}. \\ \hline
+10 & Hệ thống & Mã hoá khoá AES + CID cho khoá công khai của bác sĩ (NaCl box) cho mọi phiên bản trong chuỗi; lưu KeyShare row vào backend. \\ \hline
+11 & Hệ thống & Push WebSocket \texttt{consent:updated} tới bác sĩ; hiển thị ``Đã cấp quyền'' cho bệnh nhân. \\ \hline
+\end{tabular} \\ \hline
+\textbf{Luồng thay thế} &
+\begin{tabular}{|c|p{2.3cm}|p{6cm}|}
+\hline
+\textbf{STT} & \textbf{Thực hiện bởi} & \textbf{Hành động} \\ \hline
+3a & Hệ thống & Định dạng ví sai → highlight lỗi, không cho submit. \\ \hline
+4a & Hệ thống & Tự cấp cho chính mình → báo lỗi ``Không thể tự chia sẻ''. \\ \hline
+4b & Hệ thống & Bác sĩ đã có quyền dài hơn → cảnh báo ``Đã có quyền dài hạn hơn, thu hồi trước nếu muốn rút ngắn''. \\ \hline
+7a & Bệnh nhân & Huỷ ký → kết thúc luồng. \\ \hline
+9a & Hệ thống & Tx revert (vd: \texttt{DOCTOR\_NOT\_VERIFIED}) → báo lỗi chain, không tạo KeyShare. \\ \hline
+\end{tabular} \\ \hline
+\textbf{Hậu điều kiện} & Consent được ghi nhận on-chain. Bác sĩ có thể đọc hồ sơ qua hàm \texttt{canAccess} trả \texttt{true}, có KeyShare để giải mã. Bảng \texttt{Consent} ở backend mirror trạng thái \texttt{active}. \\ \hline
+\end{tabular}
+\end{table}
+
+Code reference: \texttt{mobile/src/screens-v2/RecordDetailScreen.tsx} (\texttt{handleShare}), \texttt{mobile/src/utils/eip712.js} (\texttt{signConsentPermit}), \texttt{contracts/src/ConsentLedger.sol} (\texttt{grantBySig}, \texttt{\_grantConsent}).
+
+\begin{table}[H]
+\centering
+\caption{Các trường thông tin của Consent}
+\label{tab:uc002-fields}
+\small
+\renewcommand{\arraystretch}{1.2}
+\begin{tabular}{|c|p{2.8cm}|p{4cm}|c|p{2.3cm}|p{2.2cm}|}
+\hline
+\textbf{STT} & \textbf{Trường} & \textbf{Mô tả} & \textbf{Bắt buộc} & \textbf{Điều kiện} & \textbf{Ví dụ} \\ \hline
+1 & granteeAddress & Địa chỉ ví bác sĩ & Có & Regex 0x40hex & 0x5Fb8...30f2 \\ \hline
+2 & cidHash & Mã hồ sơ (keccak256(CID)) & Có & 32 byte hex & 0xabcd...ef01 \\ \hline
+3 & expiresAt & Thời điểm hết hạn & Không & Unix timestamp & 1735689600 \\ \hline
+4 & allowDelegate & Cho phép uỷ quyền tiếp & Không & Bool & true / false \\ \hline
+5 & nonce & Số chống replay & Có & Số nguyên dương & 5 \\ \hline
+6 & deadline & Hạn chót submit chữ ký & Có & $\ge$ now + 1h & now + 1h \\ \hline
+\end{tabular}
+\end{table}
+
+% =====================================================
+% UC003 Thu hồi quyền + cascade
+% =====================================================
+\subsection{Đặc tả use case Thu hồi quyền truy cập (UC003)}
+
+\begin{table}[H]
+\centering
+\caption{Đặc tả use case UC003 --- Thu hồi quyền truy cập (kèm cascade)}
+\label{tab:uc003}
+\renewcommand{\arraystretch}{1.25}
+\small
+\begin{tabular}{|p{3cm}|p{11cm}|}
+\hline
+\textbf{Mã Use case} & UC003 \\ \hline
+\textbf{Tên Use case} & Thu hồi quyền truy cập hồ sơ \\ \hline
+\textbf{Tác nhân} & Bệnh nhân \\ \hline
+\textbf{Mô tả} & Cho phép bệnh nhân thu hồi quyền truy cập của một bác sĩ đối với một hồ sơ. Thao tác cũng kích hoạt thu hồi cascade với mọi quyền phái sinh (delegation-derived) do bác sĩ đó đã uỷ quyền tiếp. \\ \hline
+\textbf{Tiền điều kiện} & Bệnh nhân đang có ít nhất một consent đang hoạt động với bác sĩ cần thu hồi. \\ \hline
+\textbf{Luồng chính} &
+\begin{tabular}{|c|p{2.3cm}|p{6cm}|}
+\hline
+\textbf{STT} & \textbf{Thực hiện bởi} & \textbf{Hành động} \\ \hline
+1 & Bệnh nhân & Mở Nhật ký truy cập, chọn bác sĩ cần thu hồi. \\ \hline
+2 & Bệnh nhân & Bấm ``Thu hồi'' và xác nhận trong Alert. \\ \hline
+3 & Bệnh nhân & Xác thực bằng vân tay sinh trắc học. \\ \hline
+4 & Hệ thống & Build và ký EIP-712 \texttt{RevokePermit}. \\ \hline
+5 & Hệ thống & Gửi sponsored tx \texttt{ConsentLedger.revokeBySig}. \\ \hline
+6 & Hệ thống & Hợp đồng đánh dấu \texttt{\_consents[key].active = false}, emit \texttt{ConsentRevoked}. \\ \hline
+7 & Hệ thống & Subgraph index sự kiện, gọi handler \texttt{handleConsentRevoked} ở backend. \\ \hline
+8 & Hệ thống & Cascade tầng~1: thu hồi mọi KeyShare có \texttt{sender = A} cho hồ sơ liên quan. \\ \hline
+9 & Hệ thống & Cascade tầng~2: truy vấn \texttt{DelegationAccessLog} (\texttt{byDelegatee = A}); với mỗi grantee phái sinh, thu hồi toàn bộ KeyShare. \\ \hline
+10 & Hệ thống & Cập nhật bảng \texttt{Consent} ở backend, push WebSocket cho các grantee bị ảnh hưởng. \\ \hline
+\end{tabular} \\ \hline
+\textbf{Luồng thay thế} &
+\begin{tabular}{|c|p{2.3cm}|p{6cm}|}
+\hline
+\textbf{STT} & \textbf{Thực hiện bởi} & \textbf{Hành động} \\ \hline
+2a & Bệnh nhân & Bấm ``Huỷ'' trên Alert → kết thúc luồng. \\ \hline
+3a & Bệnh nhân & Huỷ xác thực sinh trắc → kết thúc luồng. \\ \hline
+9a & Hệ thống & Bác sĩ B có direct grant từ bệnh nhân (\textit{Footgun \#1 fix}) → bỏ qua, B vẫn giữ quyền. \\ \hline
+\end{tabular} \\ \hline
+\textbf{Hậu điều kiện} & Consent của bác sĩ A bị đánh dấu \texttt{revoked} on-chain. Mọi quyền phái sinh qua A cũng bị thu hồi. Hàm \texttt{canAccess} trả \texttt{false} cho A và các delegation-derived grantee. \\ \hline
+\end{tabular}
+\end{table}
+
+Code reference: \texttt{mobile/src/screens-v2/AccessLogScreen.tsx} (\texttt{handleRevoke}), \texttt{contracts/src/ConsentLedger.sol} (\texttt{revokeBySig}, \texttt{\_hasValidNormalConsent}), \texttt{backend/src/services/consentLedgerSync.service.js} (\texttt{handleConsentRevoked}).
+
+% =====================================================
+% UC004 Đăng ký Người thân tin cậy
+% =====================================================
+\subsection{Đặc tả use case Đăng ký Người thân tin cậy (UC004)}
+
+\begin{table}[H]
+\centering
+\caption{Đặc tả use case UC004 --- Đăng ký Người thân tin cậy}
+\label{tab:uc004}
+\renewcommand{\arraystretch}{1.25}
+\small
+\begin{tabular}{|p{3cm}|p{11cm}|}
+\hline
+\textbf{Mã Use case} & UC004 \\ \hline
+\textbf{Tên Use case} & Đăng ký Người thân tin cậy (Trusted Contact) \\ \hline
+\textbf{Tác nhân} & Bệnh nhân \\ \hline
+\textbf{Mô tả} & Cho phép bệnh nhân chỉ định một địa chỉ ví làm Người thân tin cậy. Sau khi đăng ký, người này được phép truy cập mọi hồ sơ của bệnh nhân trong tình huống khẩn cấp mà không cần bệnh nhân cấp quyền lần lượt cho từng hồ sơ. \\ \hline
+\textbf{Tiền điều kiện} & Bệnh nhân đã đăng nhập. Người thân (\textit{TC}) đã đăng nhập app ít nhất 1 lần và có khoá mã hoá hoạt động trên backend. \\ \hline
+\textbf{Luồng chính} &
+\begin{tabular}{|c|p{2.3cm}|p{6cm}|}
+\hline
+\textbf{STT} & \textbf{Thực hiện bởi} & \textbf{Hành động} \\ \hline
+1 & Bệnh nhân & Mở màn hình ``Người thân tin cậy'', bấm ``Thêm''. \\ \hline
+2 & Bệnh nhân & Nhập địa chỉ ví TC và nhãn quan hệ (vd: ``Mẹ'', ``Con trai''). \\ \hline
+3 & Hệ thống & Kiểm tra định dạng ví và đảm bảo ví không trùng bệnh nhân. \\ \hline
+4 & Bệnh nhân & Xác thực bằng vân tay sinh trắc học. \\ \hline
+5 & Hệ thống & Build và ký EIP-712 \texttt{TrustedContactPermit(active=true)}. \\ \hline
+6 & Hệ thống & Gửi sponsored tx \texttt{setTrustedContactBySig}; hợp đồng đặt \texttt{isTrustedContact[P][TC] = true}, emit \texttt{TrustedContactSet}. \\ \hline
+7 & Hệ thống & \textit{Encryption ceremony}: với mỗi hồ sơ của bệnh nhân, mã hoá khoá AES cho khoá công khai TC; bulk POST tới backend, lưu KeyShare row \texttt{source='trusted-contact'}. \\ \hline
+8 & Hệ thống & Hiển thị ``Đã thêm Người thân tin cậy''. \\ \hline
+\end{tabular} \\ \hline
+\textbf{Luồng thay thế} &
+\begin{tabular}{|c|p{2.3cm}|p{6cm}|}
+\hline
+\textbf{STT} & \textbf{Thực hiện bởi} & \textbf{Hành động} \\ \hline
+3a & Hệ thống & Ví không hợp lệ hoặc trùng bệnh nhân → báo lỗi, không cho submit. \\ \hline
+6a & Hệ thống & Tx revert → báo lỗi, không thực hiện encryption ceremony. \\ \hline
+7a & Hệ thống & TC chưa kích hoạt khoá mã hoá → báo ``TC chưa đăng nhập app, yêu cầu họ login trước'', không lưu KeyShare. \\ \hline
+\end{tabular} \\ \hline
+\textbf{Hậu điều kiện} & TC được ghi nhận trên blockchain. TC có sẵn KeyShare cho mọi hồ sơ hiện có của bệnh nhân. Mỗi hồ sơ mới sau này sẽ tự động chia sẻ khoá cho TC (auto pre-share). Hàm \texttt{canAccess} trả \texttt{true} cho TC bất kể có consent thông thường hay không (Footgun~\#2 fix). \\ \hline
+\end{tabular}
+\end{table}
+
+Code reference: \texttt{mobile/src/services/trustedContact.service.js} (\texttt{addContact}, \texttt{runEncryptionCeremony}), \texttt{contracts/src/ConsentLedger.sol} (\texttt{setTrustedContactBySig}, \texttt{canAccess} với Footgun \#2 check).
+
+\begin{table}[H]
+\centering
+\caption{Các trường thông tin của Người thân tin cậy}
+\label{tab:uc004-fields}
+\small
+\renewcommand{\arraystretch}{1.2}
+\begin{tabular}{|c|p{2.8cm}|p{4cm}|c|p{2.3cm}|p{2.2cm}|}
+\hline
+\textbf{STT} & \textbf{Trường} & \textbf{Mô tả} & \textbf{Bắt buộc} & \textbf{Điều kiện} & \textbf{Ví dụ} \\ \hline
+1 & contactAddress & Địa chỉ ví TC & Có & Regex 0x40hex, khác bệnh nhân & 0xA1b2...c3d4 \\ \hline
+2 & label & Nhãn quan hệ & Không & $\le$ 120 ký tự & Mẹ \\ \hline
+3 & active & Trạng thái hoạt động & Có & Bool & true \\ \hline
+\end{tabular}
+\end{table}
+
+% =====================================================
+% UC005 Uỷ quyền bác sĩ (Full Delegation)
+% =====================================================
+\subsection{Đặc tả use case Uỷ quyền bác sĩ Full Delegation (UC005)}
+
+\begin{table}[H]
+\centering
+\caption{Đặc tả use case UC005 --- Uỷ quyền bác sĩ (Full Delegation)}
+\label{tab:uc005}
+\renewcommand{\arraystretch}{1.25}
+\small
+\begin{tabular}{|p{3cm}|p{11cm}|}
+\hline
+\textbf{Mã Use case} & UC005 \\ \hline
+\textbf{Tên Use case} & Uỷ quyền toàn bộ cho bác sĩ (Full Delegation) \\ \hline
+\textbf{Tác nhân} & Bệnh nhân \\ \hline
+\textbf{Mô tả} & Cho phép bệnh nhân uỷ quyền cho một bác sĩ thay mặt cấp/thu hồi quyền truy cập cho các bác sĩ khác trong thời hạn xác định. Phù hợp với mô hình bác sĩ điều phối (\textit{primary care physician}). \\ \hline
+\textbf{Tiền điều kiện} & Bệnh nhân đã đăng nhập. Bác sĩ được uỷ quyền đã được xác minh chuyên môn (\texttt{VERIFIED\_DOCTOR}). \\ \hline
+\textbf{Luồng chính} &
+\begin{tabular}{|c|p{2.3cm}|p{6cm}|}
+\hline
+\textbf{STT} & \textbf{Thực hiện bởi} & \textbf{Hành động} \\ \hline
+1 & Bệnh nhân & Mở màn hình ``Uỷ quyền bác sĩ'', bấm ``Thêm uỷ quyền mới''. \\ \hline
+2 & Bệnh nhân & Nhập địa chỉ ví bác sĩ và chọn thời hạn (1 ngày đến 5 năm, mặc định 30 ngày). \\ \hline
+3 & Hệ thống & Kiểm tra ví hợp lệ và bác sĩ đã verified. \\ \hline
+4 & Bệnh nhân & Xác thực bằng vân tay sinh trắc học. \\ \hline
+5 & Hệ thống & Build và ký EIP-712 \texttt{DelegationPermit}. \\ \hline
+6 & Hệ thống & Gửi sponsored tx \texttt{ConsentLedger.grantDelegationBySig}. \\ \hline
+7 & Hệ thống & Hợp đồng lưu \texttt{\_delegations[patient][grantee]}, emit \texttt{DelegationGranted}. \\ \hline
+8 & Hệ thống & Hiển thị ``Đã uỷ quyền'', refresh danh sách uỷ quyền. \\ \hline
+\end{tabular} \\ \hline
+\textbf{Luồng thay thế} &
+\begin{tabular}{|c|p{2.3cm}|p{6cm}|}
+\hline
+\textbf{STT} & \textbf{Thực hiện bởi} & \textbf{Hành động} \\ \hline
+3a & Hệ thống & Bác sĩ chưa verified → cảnh báo, không cho submit. \\ \hline
+4a & Bệnh nhân & Huỷ xác thực → kết thúc luồng. \\ \hline
+6a & Hệ thống & Tx revert → báo lỗi chain. \\ \hline
+\end{tabular} \\ \hline
+\textbf{Hậu điều kiện} & Uỷ quyền được ghi on-chain. Bác sĩ có thể gọi \texttt{grantUsingDelegation} để cấp quyền cho bác sĩ khác trong giới hạn thời hạn. Khi bệnh nhân thu hồi uỷ quyền, tất cả quyền phái sinh tự động bị huỷ qua cơ chế \textit{epoch bump} (UC016 ở Phụ lục B). \\ \hline
+\end{tabular}
+\end{table}
+
+Code reference: \texttt{mobile/src/screens-v2/DelegationScreen.tsx} (\texttt{handleGrant}), \texttt{contracts/src/ConsentLedger.sol} (\texttt{grantDelegationBySig}, \texttt{grantUsingDelegation}).
+
+\begin{table}[H]
+\centering
+\caption{Các trường thông tin của Delegation}
+\label{tab:uc005-fields}
+\small
+\renewcommand{\arraystretch}{1.2}
+\begin{tabular}{|c|p{2.8cm}|p{4cm}|c|p{2.3cm}|p{2.2cm}|}
+\hline
+\textbf{STT} & \textbf{Trường} & \textbf{Mô tả} & \textbf{Bắt buộc} & \textbf{Điều kiện} & \textbf{Ví dụ} \\ \hline
+1 & granteeAddress & Địa chỉ ví bác sĩ được uỷ quyền & Có & VERIFIED\_DOCTOR & 0xC17c...1f43 \\ \hline
+2 & expireAt & Thời điểm hết hạn & Có & 1 ngày -- 5 năm & now + 30 ngày \\ \hline
+3 & allowDelegate & Cho phép sub-delegate & Không & Bool & true \\ \hline
+\end{tabular}
+\end{table}
+
+% =====================================================
+% UC006 Yêu cầu truy cập hồ sơ
+% =====================================================
+\subsection{Đặc tả use case Yêu cầu truy cập hồ sơ (UC006)}
+
+\begin{table}[H]
+\centering
+\caption{Đặc tả use case UC006 --- Yêu cầu truy cập hồ sơ bệnh nhân}
+\label{tab:uc006}
+\renewcommand{\arraystretch}{1.25}
+\small
+\begin{tabular}{|p{3cm}|p{11cm}|}
+\hline
+\textbf{Mã Use case} & UC006 \\ \hline
+\textbf{Tên Use case} & Yêu cầu truy cập hồ sơ bệnh nhân \\ \hline
+\textbf{Tác nhân} & Bác sĩ \\ \hline
+\textbf{Mô tả} & Cho phép bác sĩ chủ động gửi yêu cầu truy cập một hồ sơ cụ thể tới bệnh nhân. Có 3 loại yêu cầu: truy cập trực tiếp (\textit{DirectAccess}), xin uỷ quyền theo hồ sơ (\textit{RecordDelegation}), xin uỷ quyền toàn quyền (\textit{FullDelegation}). \\ \hline
+\textbf{Tiền điều kiện} & Bác sĩ đã đăng ký vai trò và đã được xác minh chuyên môn. Bác sĩ biết \texttt{cidHash} của hồ sơ cần xin truy cập (qua chia sẻ ngoài hoặc tra cứu CCCD khẩn cấp). \\ \hline
+\textbf{Luồng chính} &
+\begin{tabular}{|c|p{2.3cm}|p{6cm}|}
+\hline
+\textbf{STT} & \textbf{Thực hiện bởi} & \textbf{Hành động} \\ \hline
+1 & Bác sĩ & Mở màn hình ``Yêu cầu truy cập'', nhập \texttt{cidHash} hồ sơ. \\ \hline
+2 & Bác sĩ & Chọn loại yêu cầu (Direct / RecordDelegation / FullDelegation), nhập lý do. \\ \hline
+3 & Bác sĩ & Bấm ``Gửi yêu cầu''; ký giao dịch (bác sĩ tự trả phí gas). \\ \hline
+4 & Hệ thống & Gửi tx \texttt{EHRSystemSecure.requestAccess} với deadline mặc định 7 ngày. \\ \hline
+5 & Hệ thống & Hợp đồng lưu \texttt{\_requests[reqId]}, emit \texttt{AccessRequested}. \\ \hline
+6 & Hệ thống & Subgraph index, backend mirror \texttt{AccessRequest} row, gửi Expo push notification tới bệnh nhân. \\ \hline
+7 & Bệnh nhân & (Bước ngoài, xem UC012/UC013) Phê duyệt hoặc từ chối yêu cầu. \\ \hline
+8 & Hệ thống & Nếu được phê duyệt, hợp đồng \texttt{\_completeRequest} gọi \texttt{ConsentLedger.grantInternal}. Bác sĩ nhận WebSocket \texttt{consent:updated}. \\ \hline
+\end{tabular} \\ \hline
+\textbf{Luồng thay thế} &
+\begin{tabular}{|c|p{2.3cm}|p{6cm}|}
+\hline
+\textbf{STT} & \textbf{Thực hiện bởi} & \textbf{Hành động} \\ \hline
+1a & Hệ thống & cidHash không hợp lệ → báo lỗi định dạng. \\ \hline
+3a & Hệ thống & Bác sĩ chưa verified → contract revert \texttt{Unauthorized}. \\ \hline
+8a & Bệnh nhân & Để quá deadline 7 ngày → request hết hạn, hợp đồng revert nếu cố approve. \\ \hline
+\end{tabular} \\ \hline
+\textbf{Hậu điều kiện} & Yêu cầu được ghi on-chain với trạng thái \texttt{pending}. Sau khi bệnh nhân phản hồi, trạng thái chuyển thành \texttt{approved}/\texttt{rejected}/\texttt{expired}. \\ \hline
+\end{tabular}
+\end{table}
+
+Code reference: \texttt{mobile/src/screens-v2/doctor/DoctorRequestAccessScreen.tsx}, \texttt{contracts/src/EHRSystemSecure.sol} (\texttt{requestAccess}, \texttt{approveRequestBySig}, \texttt{rejectRequestBySig}, \texttt{\_completeRequest}).
+
+% =====================================================
+% UC007 Đọc + giải mã hồ sơ
+% =====================================================
+\subsection{Đặc tả use case Đọc và giải mã hồ sơ (UC007)}
+
+\begin{table}[H]
+\centering
+\caption{Đặc tả use case UC007 --- Đọc và giải mã hồ sơ}
+\label{tab:uc007}
+\renewcommand{\arraystretch}{1.25}
+\small
+\begin{tabular}{|p{3cm}|p{11cm}|}
+\hline
+\textbf{Mã Use case} & UC007 \\ \hline
+\textbf{Tên Use case} & Đọc và giải mã hồ sơ y tế \\ \hline
+\textbf{Tác nhân} & Bác sĩ (hoặc Người thân tin cậy trong tình huống khẩn cấp) \\ \hline
+\textbf{Mô tả} & Cho phép bác sĩ đã được cấp quyền (hoặc TC đã được đăng ký) đọc nội dung đã giải mã của một hồ sơ y tế. Hệ thống kiểm tra quyền on-chain trước khi trả khoá. \\ \hline
+\textbf{Tiền điều kiện} & Bác sĩ có Consent đang \texttt{active} với hồ sơ cần đọc (hoặc TC có \texttt{isTrustedContact = true}). Bác sĩ đã có KeyShare cho \texttt{cidHash} đó. \\ \hline
+\textbf{Luồng chính} &
+\begin{tabular}{|c|p{2.3cm}|p{6cm}|}
+\hline
+\textbf{STT} & \textbf{Thực hiện bởi} & \textbf{Hành động} \\ \hline
+1 & Bác sĩ & Chọn hồ sơ trong dashboard ``Hồ sơ được cấp quyền''. \\ \hline
+2 & Hệ thống & Gọi \texttt{GET /api/key-share/record/:cidHash} kèm JWT của bác sĩ. \\ \hline
+3 & Hệ thống & Backend gọi \texttt{ConsentLedger.canAccess(patient, doctor, cidHash)} qua viem RPC. \\ \hline
+4 & Hệ thống & Nếu canAccess \texttt{true}, backend trả \texttt{encryptedPayload} (NaCl box). Nếu \texttt{false}, trả 403 Forbidden. \\ \hline
+5 & Hệ thống & Mobile giải mã NaCl box bằng \texttt{recipientPrivKey} + \texttt{senderPubKey} để thu \texttt{(K, CID)}. \\ \hline
+6 & Hệ thống & Mobile fetch ciphertext từ IPFS gateway theo CID. \\ \hline
+7 & Hệ thống & Mobile giải mã ciphertext bằng AES-GCM với khoá K. \\ \hline
+8 & Hệ thống & Hiển thị nội dung hồ sơ trên giao diện. \\ \hline
+\end{tabular} \\ \hline
+\textbf{Luồng thay thế} &
+\begin{tabular}{|c|p{2.3cm}|p{6cm}|}
+\hline
+\textbf{STT} & \textbf{Thực hiện bởi} & \textbf{Hành động} \\ \hline
+3a & Hệ thống & canAccess trả \texttt{false} (consent hết hạn/bị thu hồi) → backend trả 403, mobile hiển thị ``Không có quyền''. \\ \hline
+6a & Hệ thống & IPFS gateway timeout → retry với Pinata gateway dự phòng. \\ \hline
+7a & Hệ thống & Giải mã AES thất bại (tag không khớp) → báo lỗi tính toàn vẹn, không hiển thị nội dung. \\ \hline
+\end{tabular} \\ \hline
+\textbf{Hậu điều kiện} & Nội dung hồ sơ được hiển thị trên mobile của bác sĩ. Không có dữ liệu nhạy cảm được lưu lại trên backend; toàn bộ thao tác giải mã xảy ra tại thiết bị bác sĩ. \\ \hline
+\end{tabular}
+\end{table}
+
+Code reference: \texttt{mobile/src/screens-v2/doctor/DoctorRecordDetailScreen.tsx}, \texttt{mobile/src/services/keyShare.service.js}, \texttt{backend/src/routes/keyShare.routes.js} (\texttt{/record/:cidHash}), \texttt{backend/src/config/blockchain.js} (\texttt{checkConsent}).
+
+% =====================================================
+% UC008 Tạo phiên bản cập nhật hồ sơ
+% =====================================================
+\subsection{Đặc tả use case Tạo phiên bản cập nhật hồ sơ (UC008)}
+
+\begin{table}[H]
+\centering
+\caption{Đặc tả use case UC008 --- Tạo phiên bản cập nhật hồ sơ}
+\label{tab:uc008}
+\renewcommand{\arraystretch}{1.25}
+\small
+\begin{tabular}{|p{3cm}|p{11cm}|}
+\hline
+\textbf{Mã Use case} & UC008 \\ \hline
+\textbf{Tên Use case} & Bác sĩ tạo phiên bản cập nhật hồ sơ \\ \hline
+\textbf{Tác nhân} & Bác sĩ \\ \hline
+\textbf{Mô tả} & Cho phép bác sĩ tạo một phiên bản mới của hồ sơ bệnh nhân với liên kết \texttt{parentCidHash} trỏ về phiên bản trước. Phù hợp với Luật KCB Việt Nam: bác sĩ là người ghi chép hồ sơ, bệnh nhân có quyền xem nhưng không phê duyệt từng cập nhật. \\ \hline
+\textbf{Tiền điều kiện} & Bác sĩ đã có Consent đang hoạt động với hồ sơ gốc. Bác sĩ đã được xác minh chuyên môn. \\ \hline
+\textbf{Luồng chính} &
+\begin{tabular}{|c|p{2.3cm}|p{6cm}|}
+\hline
+\textbf{STT} & \textbf{Thực hiện bởi} & \textbf{Hành động} \\ \hline
+1 & Bác sĩ & Mở hồ sơ cần cập nhật, bấm ``Tạo phiên bản mới''. \\ \hline
+2 & Bác sĩ & Nhập nội dung cập nhật (chẩn đoán mới, kết quả xét nghiệm, ghi chú điều trị, ...). \\ \hline
+3 & Hệ thống & Sinh khoá AES mới, mã hoá nội dung, upload IPFS, tính \texttt{cidHash}. \\ \hline
+4 & Bác sĩ & Ký giao dịch \texttt{DoctorUpdate.addRecordByDoctor(patient, cidHash, parentCidHash, recordType)} (bác sĩ tự trả gas). \\ \hline
+5 & Hệ thống & Hợp đồng kiểm tra: bác sĩ verified + có canAccess hồ sơ parent; lưu metadata, emit \texttt{RecordAdded}. \\ \hline
+6 & Hệ thống & Cascade share KeyShare cho team đã được bệnh nhân cấp quyền hồ sơ gốc (patient, các doctor khác trong consent). \\ \hline
+7 & Hệ thống & Hiển thị ``Đã cập nhật hồ sơ thành công''. Bệnh nhân nhận push notification. \\ \hline
+\end{tabular} \\ \hline
+\textbf{Luồng thay thế} &
+\begin{tabular}{|c|p{2.3cm}|p{6cm}|}
+\hline
+\textbf{STT} & \textbf{Thực hiện bởi} & \textbf{Hành động} \\ \hline
+4a & Hệ thống & Bác sĩ không có canAccess hồ sơ parent → revert \texttt{Unauthorized}. \\ \hline
+5a & Hệ thống & Hồ sơ parent đã bị xoá (không tồn tại) → revert. \\ \hline
+\end{tabular} \\ \hline
+\textbf{Hậu điều kiện} & Phiên bản mới của hồ sơ được lưu trên blockchain với liên kết parent. Mọi grantee active của hồ sơ gốc có thể đọc phiên bản mới (qua chuỗi cùng \texttt{rootCidHash}). \\ \hline
+\end{tabular}
+\end{table}
+
+Code reference: \texttt{mobile/src/screens-v2/doctor/DoctorCreateUpdateScreen.tsx}, \texttt{contracts/src/DoctorUpdate.sol} (\texttt{addRecordByDoctor}).
+
+% =====================================================
+% UC009 Uỷ quyền lại cho bác sĩ khác
+% =====================================================
+\subsection{Đặc tả use case Uỷ quyền lại cho bác sĩ khác (UC009)}
+
+\begin{table}[H]
+\centering
+\caption{Đặc tả use case UC009 --- Uỷ quyền lại cho bác sĩ khác (Record Delegation)}
+\label{tab:uc009}
+\renewcommand{\arraystretch}{1.25}
+\small
+\begin{tabular}{|p{3cm}|p{11cm}|}
+\hline
+\textbf{Mã Use case} & UC009 \\ \hline
+\textbf{Tên Use case} & Bác sĩ uỷ quyền lại cho bác sĩ khác \\ \hline
+\textbf{Tác nhân} & Bác sĩ A (đã được bệnh nhân cấp quyền với \texttt{allowDelegate = true}) \\ \hline
+\textbf{Mô tả} & Trong nghiệp vụ hội chẩn, bác sĩ A cần mời bác sĩ B (chuyên khoa khác) cùng xem hồ sơ. Use case này cho phép A cấp quyền cho B mà không cần bệnh nhân ký lại. \\ \hline
+\textbf{Tiền điều kiện} & A có Consent đang \texttt{active} với hồ sơ cần share, và Consent đó có cờ \texttt{allowDelegate = true}. B đã verified và có khoá mã hoá active. \\ \hline
+\textbf{Luồng chính} &
+\begin{tabular}{|c|p{2.3cm}|p{6cm}|}
+\hline
+\textbf{STT} & \textbf{Thực hiện bởi} & \textbf{Hành động} \\ \hline
+1 & Bác sĩ A & Mở màn hình ``Hồ sơ uỷ quyền lại''. \\ \hline
+2 & Bác sĩ A & Chọn hồ sơ và nhập địa chỉ ví bác sĩ B + thời hạn. \\ \hline
+3 & Bác sĩ A & Ký giao dịch \texttt{grantUsingRecordDelegation} (A tự trả gas). \\ \hline
+4 & Hệ thống & Hợp đồng kiểm tra A có \texttt{allowDelegate=true}; lưu \texttt{recordDelegationSource[B's key] = A}; emit \texttt{AccessGrantedViaDelegation}. \\ \hline
+5 & Hệ thống & Backend lưu \texttt{DelegationAccessLog} row (patient, A, B, root). \\ \hline
+6 & Hệ thống & A mã hoá khoá AES cho B, gửi KeyShare. \\ \hline
+\end{tabular} \\ \hline
+\textbf{Luồng thay thế} &
+\begin{tabular}{|c|p{2.3cm}|p{6cm}|}
+\hline
+\textbf{STT} & \textbf{Thực hiện bởi} & \textbf{Hành động} \\ \hline
+3a & Hệ thống & A không có \texttt{allowDelegate=true} → revert \texttt{Unauthorized}. \\ \hline
+4a & Hệ thống & Thời hạn dài hơn của A → revert (B không thể được uỷ quyền dài hơn A). \\ \hline
+\end{tabular} \\ \hline
+\textbf{Hậu điều kiện} & B có quyền truy cập hồ sơ với cờ \texttt{allowDelegate = false} (ngăn chuỗi uỷ quyền vô hạn). Khi bệnh nhân hoặc A bị thu hồi, B bị cascade revoke tự động (Tầng~2). \\ \hline
+\end{tabular}
+\end{table}
+
+Code reference: \texttt{mobile/src/screens-v2/doctor/DoctorDelegatableRecordsScreen.tsx}, \texttt{contracts/src/ConsentLedger.sol} (\texttt{grantUsingRecordDelegation}, \texttt{\_hasValidNormalConsent}).
+
+% =====================================================
+% UC010 Tạo tổ chức y tế mới
+% =====================================================
+\subsection{Đặc tả use case Tạo tổ chức y tế mới (UC010)}
+
+\begin{table}[H]
+\centering
+\caption{Đặc tả use case UC010 --- Bộ Y tế tạo tổ chức y tế mới}
+\label{tab:uc010}
+\renewcommand{\arraystretch}{1.25}
+\small
+\begin{tabular}{|p{3cm}|p{11cm}|}
+\hline
+\textbf{Mã Use case} & UC010 \\ \hline
+\textbf{Tên Use case} & Bộ Y tế tạo tổ chức y tế mới \\ \hline
+\textbf{Tác nhân} & Bộ Y tế (Ministry) \\ \hline
+\textbf{Mô tả} & Cho phép Bộ Y tế đăng ký một tổ chức y tế mới (bệnh viện, phòng khám, trung tâm y tế) vào hệ thống, chỉ định 1 quản trị viên chính và 1 dự phòng để quản lý bác sĩ thành viên. \\ \hline
+\textbf{Tiền điều kiện} & Ministry đang đăng nhập bằng wallet Ministry hợp lệ. \\ \hline
+\textbf{Luồng chính} &
+\begin{tabular}{|c|p{2.3cm}|p{6cm}|}
+\hline
+\textbf{STT} & \textbf{Thực hiện bởi} & \textbf{Hành động} \\ \hline
+1 & Bộ Y tế & Mở màn hình ``Tạo tổ chức y tế mới''. \\ \hline
+2 & Bộ Y tế & Nhập tên tổ chức, địa chỉ ví admin chính, địa chỉ ví admin dự phòng. \\ \hline
+3 & Hệ thống & Validate: 2 ví khác nhau, khác \texttt{address(0)}, khác ví Ministry. \\ \hline
+4 & Bộ Y tế & Xác thực bằng vân tay sinh trắc học. \\ \hline
+5 & Bộ Y tế & Ký giao dịch \texttt{AccessControl.createOrganization} (Ministry tự trả gas). \\ \hline
+6 & Hệ thống & Hợp đồng tạo \texttt{organizations[orgId]}, set 2 admin, emit \texttt{OrganizationCreated}. \\ \hline
+7 & Hệ thống & Subgraph index, backend mirror \texttt{Organization} row. \\ \hline
+8 & Hệ thống & Hiển thị ``Tổ chức đã được tạo'' với \texttt{orgId}. \\ \hline
+\end{tabular} \\ \hline
+\textbf{Luồng thay thế} &
+\begin{tabular}{|c|p{2.3cm}|p{6cm}|}
+\hline
+\textbf{STT} & \textbf{Thực hiện bởi} & \textbf{Hành động} \\ \hline
+3a & Hệ thống & Vi phạm validate → highlight lỗi (zero address, trùng nhau, hoặc trùng Ministry). \\ \hline
+4a & Bộ Y tế & Huỷ xác thực → kết thúc luồng. \\ \hline
+5a & Hệ thống & Tx revert (vd ví Ministry hết gas) → báo lỗi. \\ \hline
+\end{tabular} \\ \hline
+\textbf{Hậu điều kiện} & Tổ chức mới với \texttt{orgId} duy nhất tồn tại trên blockchain. Hai admin có thể đăng nhập app và quản lý thành viên (UC011). \\ \hline
+\end{tabular}
+\end{table}
+
+Code reference: \texttt{mobile/src/screens-v2/ministry/MinistryCreateOrgScreen.tsx}, \texttt{contracts/src/AccessControl.sol} (\texttt{createOrganization}).
+
+\begin{table}[H]
+\centering
+\caption{Các trường thông tin của Tổ chức y tế}
+\label{tab:uc010-fields}
+\small
+\renewcommand{\arraystretch}{1.2}
+\begin{tabular}{|c|p{2.8cm}|p{4cm}|c|p{2.3cm}|p{2.2cm}|}
+\hline
+\textbf{STT} & \textbf{Trường} & \textbf{Mô tả} & \textbf{Bắt buộc} & \textbf{Điều kiện} & \textbf{Ví dụ} \\ \hline
+1 & name & Tên tổ chức & Có & $\le$ 200 ký tự & Bệnh viện Bạch Mai \\ \hline
+2 & primaryAdmin & Ví admin chính & Có & Regex 0x40hex, khác Ministry & 0x...a1 \\ \hline
+3 & backupAdmin & Ví admin dự phòng & Có & Khác primaryAdmin & 0x...b2 \\ \hline
+\end{tabular}
+\end{table}
+
+% =====================================================
+% UC011 Xác minh bác sĩ
+% =====================================================
+\subsection{Đặc tả use case Xác minh bác sĩ (UC011)}
+
+\begin{table}[H]
+\centering
+\caption{Đặc tả use case UC011 --- Quản trị viên Tổ chức xác minh bác sĩ}
+\label{tab:uc011}
+\renewcommand{\arraystretch}{1.25}
+\small
+\begin{tabular}{|p{3cm}|p{11cm}|}
+\hline
+\textbf{Mã Use case} & UC011 \\ \hline
+\textbf{Tên Use case} & Quản trị viên Tổ chức xác minh chuyên môn bác sĩ \\ \hline
+\textbf{Tác nhân} & Quản trị viên Tổ chức y tế \\ \hline
+\textbf{Mô tả} & Cho phép admin tổ chức duyệt yêu cầu xác minh chuyên môn của bác sĩ thuộc tổ chức. Bác sĩ sau khi xác minh nhận \texttt{VERIFIED\_DOCTOR} flag và có thể thực hiện yêu cầu truy cập hồ sơ. \\ \hline
+\textbf{Tiền điều kiện} & Admin đăng nhập, tổ chức đang \texttt{active} (Ministry chưa pause). Bác sĩ đã đăng ký vai trò và nộp chứng chỉ (UC018). \\ \hline
+\textbf{Luồng chính} &
+\begin{tabular}{|c|p{2.3cm}|p{6cm}|}
+\hline
+\textbf{STT} & \textbf{Thực hiện bởi} & \textbf{Hành động} \\ \hline
+1 & Admin tổ chức & Mở danh sách yêu cầu xác minh pending. \\ \hline
+2 & Admin tổ chức & Xem chi tiết chứng chỉ + ảnh giấy phép hành nghề của bác sĩ. \\ \hline
+3 & Admin tổ chức & Bấm ``Xác minh'' + xác nhận. \\ \hline
+4 & Admin tổ chức & Ký giao dịch \texttt{AccessControl.verifyDoctor(doctor, credential)} (admin tự trả gas). \\ \hline
+5 & Hệ thống & Hợp đồng set \texttt{roles[doctor] |= VERIFIED\_DOCTOR}; emit \texttt{DoctorVerified}. \\ \hline
+6 & Hệ thống & Subgraph index, backend invalidate role cache 10 phút, cập nhật \texttt{DoctorProfile.verificationStatus = 'verified'}. \\ \hline
+7 & Hệ thống & Bác sĩ nhận push notification ``Đã được xác minh''. \\ \hline
+\end{tabular} \\ \hline
+\textbf{Luồng thay thế} &
+\begin{tabular}{|c|p{2.3cm}|p{6cm}|}
+\hline
+\textbf{STT} & \textbf{Thực hiện bởi} & \textbf{Hành động} \\ \hline
+2a & Admin tổ chức & Chứng chỉ không hợp lệ → từ chối thay vì xác minh (UC riêng \texttt{rejectVerification}, không trong scope thesis demo). \\ \hline
+4a & Hệ thống & Bác sĩ chưa đăng ký vai trò → revert. \\ \hline
+4b & Hệ thống & Tổ chức bị Ministry pause → revert \texttt{Unauthorized}. \\ \hline
+\end{tabular} \\ \hline
+\textbf{Hậu điều kiện} & Bác sĩ có flag \texttt{VERIFIED\_DOCTOR} on-chain. Hàm \texttt{canAccess} không refuse bác sĩ này nữa. Bác sĩ có thể gọi \texttt{requestAccess} (UC006). \\ \hline
+\end{tabular}
+\end{table}
+
+Code reference: \texttt{mobile/src/screens-v2/org/OrgPendingVerificationsScreen.tsx}, \texttt{contracts/src/AccessControl.sol} (\texttt{verifyDoctor}).
 
 \section{Yêu cầu phi chức năng}
 

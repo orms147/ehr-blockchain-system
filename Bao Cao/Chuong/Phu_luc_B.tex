@@ -10,42 +10,373 @@
 
 \section*{Đặc tả các Use case bổ sung}
 
-Phụ lục này trình bày đặc tả của các use case Tier~2 (9 use case không quá phức tạp về mặt nghiệp vụ nhưng vẫn cần đặc tả chi tiết để phục vụ phát triển), và liệt kê ngắn gọn các use case Tier~3 (4 use case đơn giản --- mô tả 1 dòng cho đầy đủ).
+Phụ lục này trình bày đặc tả của các use case Tier~2 (9 use case không quá phức tạp về mặt nghiệp vụ nhưng vẫn cần đặc tả chi tiết để phục vụ phát triển), và liệt kê ngắn gọn các use case Tier~3 (4 use case đơn giản --- mô tả 1 dòng cho đầy đủ). Các use case Tier~1 (11 use case trọng tâm gắn với các đóng góp khoa học của đề tài) đã được trình bày ở Chương~2.3.
 
-\subsection*{B.1 Đặc tả UC Phê duyệt yêu cầu truy cập (UC012)}
-\textit{\textbf{<TODO Stage H — bảng đặc tả UC012. Cite mobile/src/screens-v2/RequestsScreen.tsx handleApprove + EHRSystemSecure.sol approveRequestBySig>}}
+% =====================================================
+% UC012 Phê duyệt yêu cầu truy cập
+% =====================================================
+\subsection*{B.1 Đặc tả use case Phê duyệt yêu cầu truy cập (UC012)}
 
-\subsection*{B.2 Đặc tả UC Từ chối yêu cầu truy cập (UC013)}
-\textit{\textbf{<TODO — bảng UC013 (Wave K sponsored). Cite RequestsScreen handleReject + rejectRequestBySig>}}
+\begin{table}[H]
+\centering
+\caption{Đặc tả use case UC012 --- Phê duyệt yêu cầu truy cập}
+\label{tab:uc012}
+\renewcommand{\arraystretch}{1.25}
+\small
+\begin{tabular}{|p{3cm}|p{11cm}|}
+\hline
+\textbf{Mã Use case} & UC012 \\ \hline
+\textbf{Tên Use case} & Phê duyệt yêu cầu truy cập hồ sơ \\ \hline
+\textbf{Tác nhân} & Bệnh nhân \\ \hline
+\textbf{Mô tả} & Cho phép bệnh nhân phê duyệt yêu cầu truy cập do bác sĩ gửi (UC006). Sau khi phê duyệt, hợp đồng tự động tạo Consent cho bác sĩ. \\ \hline
+\textbf{Tiền điều kiện} & Bệnh nhân đã nhận notification và mở RequestsScreen. Yêu cầu còn trong thời hạn (deadline 7 ngày). \\ \hline
+\textbf{Luồng chính} &
+\begin{tabular}{|c|p{2.3cm}|p{6cm}|}
+\hline
+\textbf{STT} & \textbf{Thực hiện bởi} & \textbf{Hành động} \\ \hline
+1 & Bệnh nhân & Mở RequestsScreen, xem yêu cầu pending. \\ \hline
+2 & Bệnh nhân & Bấm ``Phê duyệt'', xác thực vân tay. \\ \hline
+3 & Hệ thống & Ký EIP-712 \texttt{ApprovePermit}, gửi sponsored tx \texttt{approveRequestBySig}. \\ \hline
+4 & Hệ thống & Hợp đồng gọi \texttt{\_completeRequest} → \texttt{ConsentLedger.grantInternal}; emit \texttt{ConsentGranted} + \texttt{RequestCompleted}. \\ \hline
+5 & Hệ thống & Backend mã hoá KeyShare cho bác sĩ và push WebSocket. \\ \hline
+\end{tabular} \\ \hline
+\textbf{Luồng thay thế} &
+\begin{tabular}{|c|p{2.3cm}|p{6cm}|}
+\hline
+2a & Bệnh nhân & Huỷ xác thực → kết thúc luồng. \\ \hline
+3a & Hệ thống & Tx revert do deadline đã qua → báo lỗi ``Yêu cầu đã hết hạn''. \\ \hline
+\end{tabular} \\ \hline
+\textbf{Hậu điều kiện} & Bác sĩ có Consent active, có thể đọc hồ sơ (UC007). Trạng thái request: \texttt{approved}. \\ \hline
+\end{tabular}
+\end{table}
 
-\subsection*{B.3 Đặc tả UC Đăng ký CCCD khẩn cấp (UC014)}
-\textit{\textbf{<TODO — bảng UC014 + giải thích national ID hash. Cite backend/src/routes/profile.routes.js nationalIdSchema>}}
+Code reference: \texttt{mobile/src/screens-v2/RequestsScreen.tsx} (\texttt{handleApprove}), \texttt{contracts/src/EHRSystemSecure.sol} (\texttt{approveRequestBySig}).
 
-\subsection*{B.4 Đặc tả UC Thu hồi Người thân tin cậy (UC015)}
-\textit{\textbf{<TODO — bảng UC015 + cascade revoke KeyShare source='trusted-contact'. Cite trustedContact.service.js removeContact>}}
+% =====================================================
+% UC013 Từ chối yêu cầu truy cập
+% =====================================================
+\subsection*{B.2 Đặc tả use case Từ chối yêu cầu truy cập (UC013)}
 
-\subsection*{B.5 Đặc tả UC Thu hồi uỷ quyền bác sĩ (UC016)}
-\textit{\textbf{<TODO — bảng UC016 + epoch bump cascade. Cite DelegationScreen handleRevoke + ConsentLedger.sol revokeDelegation>}}
+\begin{table}[H]
+\centering
+\caption{Đặc tả use case UC013 --- Từ chối yêu cầu truy cập (sponsored)}
+\label{tab:uc013}
+\renewcommand{\arraystretch}{1.25}
+\small
+\begin{tabular}{|p{3cm}|p{11cm}|}
+\hline
+\textbf{Mã Use case} & UC013 \\ \hline
+\textbf{Tên Use case} & Từ chối yêu cầu truy cập hồ sơ \\ \hline
+\textbf{Tác nhân} & Bệnh nhân \\ \hline
+\textbf{Mô tả} & Cho phép bệnh nhân từ chối yêu cầu truy cập do bác sĩ gửi mà không cần trả phí gas. Lý do từ chối được lưu off-chain. \\ \hline
+\textbf{Tiền điều kiện} & Có yêu cầu pending từ bác sĩ trong thời hạn. \\ \hline
+\textbf{Luồng chính} &
+\begin{tabular}{|c|p{2.3cm}|p{6cm}|}
+\hline
+\textbf{STT} & \textbf{Thực hiện bởi} & \textbf{Hành động} \\ \hline
+1 & Bệnh nhân & Mở RequestsScreen, bấm ``Từ chối'', nhập lý do (không bắt buộc). \\ \hline
+2 & Bệnh nhân & Xác thực vân tay, ký EIP-712 \texttt{RejectPermit}. \\ \hline
+3 & Hệ thống & Gửi sponsored tx \texttt{rejectRequestBySig}, hợp đồng emit \texttt{RequestRejected}. \\ \hline
+4 & Hệ thống & Backend mirror \texttt{status='rejected'} + lưu \texttt{rejectionReason} off-chain. \\ \hline
+\end{tabular} \\ \hline
+\textbf{Luồng thay thế} &
+\begin{tabular}{|c|p{2.3cm}|p{6cm}|}
+\hline
+2a & Bệnh nhân & Huỷ xác thực → kết thúc. \\ \hline
+\end{tabular} \\ \hline
+\textbf{Hậu điều kiện} & Yêu cầu chuyển trạng thái \texttt{rejected} on-chain và off-chain. Bác sĩ không có Consent. \\ \hline
+\end{tabular}
+\end{table}
 
-\subsection*{B.6 Đặc tả UC Tra cứu bệnh nhân khẩn cấp qua CCCD (UC017)}
-\textit{\textbf{<TODO — bảng UC017. Cite mobile/src/screens-v2/doctor/EmergencyLookupScreen.tsx + backend/src/routes/emergency.routes.js>}}
+Code reference: \texttt{mobile/src/screens-v2/RequestsScreen.tsx} (\texttt{handleReject}), \texttt{contracts/src/EHRSystemSecure.sol} (\texttt{rejectRequestBySig}), \texttt{backend/src/routes/request.routes.js} (mirror reason).
 
-\subsection*{B.7 Đặc tả UC Nộp chứng chỉ xác minh chuyên môn (UC018)}
-\textit{\textbf{<TODO — bảng UC018. Cite mobile/src/screens-v2/doctor/CredentialSubmitScreen.tsx>}}
+% =====================================================
+% UC014 Đăng ký CCCD khẩn cấp
+% =====================================================
+\subsection*{B.3 Đặc tả use case Đăng ký CCCD khẩn cấp (UC014)}
 
-\subsection*{B.8 Đặc tả UC Xác minh bác sĩ độc lập (UC019)}
-\textit{\textbf{<TODO — bảng UC019 (Wave E Ministry). Cite mobile/src/screens-v2/ministry/MinistryVerifyDoctorScreen.tsx + AccessControl.sol verifyDoctorByMinistry>}}
+\begin{table}[H]
+\centering
+\caption{Đặc tả use case UC014 --- Đăng ký CCCD cho tra cứu khẩn cấp}
+\label{tab:uc014}
+\renewcommand{\arraystretch}{1.25}
+\small
+\begin{tabular}{|p{3cm}|p{11cm}|}
+\hline
+\textbf{Mã Use case} & UC014 \\ \hline
+\textbf{Tên Use case} & Đăng ký CCCD cho tra cứu khẩn cấp \\ \hline
+\textbf{Tác nhân} & Bệnh nhân \\ \hline
+\textbf{Mô tả} & Cho phép bệnh nhân đăng ký số CCCD/CMND của mình vào hệ thống để bác sĩ cấp cứu có thể tra cứu địa chỉ ví trong tình huống bệnh nhân bất tỉnh. Hệ thống chỉ lưu hash \texttt{keccak256(CCCD)}, không lưu plaintext. \\ \hline
+\textbf{Tiền điều kiện} & Bệnh nhân đã đăng nhập. \\ \hline
+\textbf{Luồng chính} &
+\begin{tabular}{|c|p{2.3cm}|p{6cm}|}
+\hline
+\textbf{STT} & \textbf{Thực hiện bởi} & \textbf{Hành động} \\ \hline
+1 & Bệnh nhân & Mở màn hình ``Hồ sơ khẩn cấp'', bấm ``Đăng ký CCCD''. \\ \hline
+2 & Bệnh nhân & Nhập số CCCD (9--12 chữ số). \\ \hline
+3 & Hệ thống & Validate regex, tính \texttt{nationalIdHash = keccak256(CCCD)}. \\ \hline
+4 & Hệ thống & Gửi \texttt{PUT /api/profile/me/national-id} với hash. \\ \hline
+5 & Hệ thống & Backend lưu vào \texttt{User.nationalIdHash}. Plaintext CCCD không bao giờ rời thiết bị. \\ \hline
+\end{tabular} \\ \hline
+\textbf{Luồng thay thế} &
+\begin{tabular}{|c|p{2.3cm}|p{6cm}|}
+\hline
+4a & Hệ thống & \texttt{NATIONAL\_ID\_TAKEN} (CCCD đã đăng ký bởi user khác) → báo lỗi, không lưu. \\ \hline
+\end{tabular} \\ \hline
+\textbf{Hậu điều kiện} & Backend có \texttt{nationalIdHash}, có thể lookup bệnh nhân khi bác sĩ gửi \texttt{cccdHash}. \\ \hline
+\end{tabular}
+\end{table}
 
-\subsection*{B.9 Đặc tả UC Tạm dừng / kích hoạt tổ chức (UC020)}
-\textit{\textbf{<TODO — bảng UC020 (Wave F Ministry, typeword "THU HOI"). Cite MinistryDashboardScreen + setOrgActive>}}
+Code reference: \texttt{backend/src/routes/profile.routes.js} (\texttt{nationalIdSchema}), \texttt{mobile/src/screens-v2/TrustedContactsScreen.tsx} (\texttt{handleCccdSave}).
 
-\section*{Các Use case còn lại (Tier 3)}
+% =====================================================
+% UC015 Thu hồi Người thân tin cậy
+% =====================================================
+\subsection*{B.4 Đặc tả use case Thu hồi Người thân tin cậy (UC015)}
+
+\begin{table}[H]
+\centering
+\caption{Đặc tả use case UC015 --- Thu hồi Người thân tin cậy}
+\label{tab:uc015}
+\renewcommand{\arraystretch}{1.25}
+\small
+\begin{tabular}{|p{3cm}|p{11cm}|}
+\hline
+\textbf{Mã Use case} & UC015 \\ \hline
+\textbf{Tên Use case} & Thu hồi Người thân tin cậy \\ \hline
+\textbf{Tác nhân} & Bệnh nhân \\ \hline
+\textbf{Mô tả} & Cho phép bệnh nhân thu hồi quyền của một Người thân tin cậy đã đăng ký trước đó. \\ \hline
+\textbf{Tiền điều kiện} & Đã có ít nhất 1 TC \texttt{active}. \\ \hline
+\textbf{Luồng chính} &
+\begin{tabular}{|c|p{2.3cm}|p{6cm}|}
+\hline
+\textbf{STT} & \textbf{Thực hiện bởi} & \textbf{Hành động} \\ \hline
+1 & Bệnh nhân & Mở danh sách Người thân tin cậy, chọn TC cần thu hồi. \\ \hline
+2 & Bệnh nhân & Bấm ``Thu hồi'' + xác thực vân tay. \\ \hline
+3 & Hệ thống & Ký EIP-712 \texttt{TrustedContactPermit(active=false)}; gửi sponsored tx \texttt{setTrustedContactBySig}. \\ \hline
+4 & Hệ thống & Hợp đồng đặt \texttt{isTrustedContact = false}; emit \texttt{TrustedContactRevoked}. \\ \hline
+5 & Hệ thống & Backend cascade revoke mọi KeyShare \texttt{source='trusted-contact'} cho TC này. \\ \hline
+\end{tabular} \\ \hline
+\textbf{Luồng thay thế} &
+\begin{tabular}{|c|p{2.3cm}|p{6cm}|}
+\hline
+2a & Bệnh nhân & Huỷ xác thực → kết thúc. \\ \hline
+\end{tabular} \\ \hline
+\textbf{Hậu điều kiện} & TC mất quyền truy cập on-chain (hàm \texttt{canAccess} trả false). KeyShare đã cấp bị thu hồi. Tuy nhiên, nếu TC đã cache khoá AES offline trước đó, vẫn có thể giải mã các hồ sơ đã từng đọc --- hạn chế kiến trúc của envelope encryption. \\ \hline
+\end{tabular}
+\end{table}
+
+Code reference: \texttt{mobile/src/services/trustedContact.service.js} (\texttt{removeContact}), \texttt{contracts/src/ConsentLedger.sol} (\texttt{setTrustedContactBySig}).
+
+% =====================================================
+% UC016 Thu hồi uỷ quyền bác sĩ
+% =====================================================
+\subsection*{B.5 Đặc tả use case Thu hồi uỷ quyền bác sĩ (UC016)}
+
+\begin{table}[H]
+\centering
+\caption{Đặc tả use case UC016 --- Thu hồi uỷ quyền bác sĩ (epoch bump cascade)}
+\label{tab:uc016}
+\renewcommand{\arraystretch}{1.25}
+\small
+\begin{tabular}{|p{3cm}|p{11cm}|}
+\hline
+\textbf{Mã Use case} & UC016 \\ \hline
+\textbf{Tên Use case} & Thu hồi uỷ quyền bác sĩ (Full Delegation) \\ \hline
+\textbf{Tác nhân} & Bệnh nhân \\ \hline
+\textbf{Mô tả} & Thu hồi uỷ quyền Full Delegation đã cấp cho bác sĩ (UC005). Cơ chế \textit{epoch bump} đảm bảo cascade tự động: mọi Consent phái sinh do bác sĩ này đã cấp bằng \texttt{grantUsingDelegation} đều bị vô hiệu hoá. \\ \hline
+\textbf{Tiền điều kiện} & Đã có ít nhất 1 Delegation \texttt{active}. \\ \hline
+\textbf{Luồng chính} &
+\begin{tabular}{|c|p{2.3cm}|p{6cm}|}
+\hline
+\textbf{STT} & \textbf{Thực hiện bởi} & \textbf{Hành động} \\ \hline
+1 & Bệnh nhân & Mở DelegationScreen, chọn bác sĩ cần thu hồi. \\ \hline
+2 & Bệnh nhân & Xác thực vân tay, ký EIP-712 \texttt{RevokeDelegationPermit}. \\ \hline
+3 & Hệ thống & Gửi sponsored tx \texttt{revokeDelegationBySig}. \\ \hline
+4 & Hệ thống & Hợp đồng tăng \texttt{delegationEpoch[patient]} (epoch bump); xoá \texttt{\_delegations[patient][grantee]}; emit \texttt{DelegationRevoked}. \\ \hline
+5 & Hệ thống & Cascade tự động: mọi Consent có \texttt{consentDelegatorEpochAtGrant} không khớp epoch hiện tại sẽ bị \texttt{\_hasValidNormalConsent} trả \texttt{false}. \\ \hline
+\end{tabular} \\ \hline
+\textbf{Luồng thay thế} &
+\begin{tabular}{|c|p{2.3cm}|p{6cm}|}
+\hline
+2a & Bệnh nhân & Huỷ xác thực → kết thúc. \\ \hline
+\end{tabular} \\ \hline
+\textbf{Hậu điều kiện} & Bác sĩ và mọi người được cấp quyền qua delegation của bác sĩ này đều mất quyền truy cập. \\ \hline
+\end{tabular}
+\end{table}
+
+Code reference: \texttt{mobile/src/screens-v2/DelegationScreen.tsx} (\texttt{handleRevoke}), \texttt{contracts/src/ConsentLedger.sol} (\texttt{revokeDelegationBySig}, \texttt{\_hasValidNormalConsent}).
+
+% =====================================================
+% UC017 Tra cứu bệnh nhân khẩn cấp qua CCCD
+% =====================================================
+\subsection*{B.6 Đặc tả use case Tra cứu bệnh nhân khẩn cấp qua CCCD (UC017)}
+
+\begin{table}[H]
+\centering
+\caption{Đặc tả use case UC017 --- Bác sĩ tra cứu bệnh nhân khẩn cấp qua CCCD}
+\label{tab:uc017}
+\renewcommand{\arraystretch}{1.25}
+\small
+\begin{tabular}{|p{3cm}|p{11cm}|}
+\hline
+\textbf{Mã Use case} & UC017 \\ \hline
+\textbf{Tên Use case} & Bác sĩ tra cứu bệnh nhân khẩn cấp qua CCCD \\ \hline
+\textbf{Tác nhân} & Bác sĩ \\ \hline
+\textbf{Mô tả} & Trong tình huống cấp cứu, bác sĩ scan/nhập CCCD trên thẻ căn cước vật lý của bệnh nhân để tra cứu địa chỉ ví, từ đó gửi yêu cầu truy cập hồ sơ (UC006). \\ \hline
+\textbf{Tiền điều kiện} & Bác sĩ đã verified. Bệnh nhân đã đăng ký CCCD trước đó (UC014). \\ \hline
+\textbf{Luồng chính} &
+\begin{tabular}{|c|p{2.3cm}|p{6cm}|}
+\hline
+\textbf{STT} & \textbf{Thực hiện bởi} & \textbf{Hành động} \\ \hline
+1 & Bác sĩ & Mở EmergencyLookupScreen, nhập số CCCD. \\ \hline
+2 & Hệ thống & Tính \texttt{cccdHash = keccak256(CCCD)} tại thiết bị. \\ \hline
+3 & Hệ thống & Gửi \texttt{GET /api/emergency/lookup-by-cccd?cccdHash=...}. \\ \hline
+4 & Hệ thống & Backend so sánh hash với \texttt{User.nationalIdHash} và trả về địa chỉ ví bệnh nhân. \\ \hline
+5 & Bác sĩ & Chuyển sang DoctorRequestAccessScreen để gửi yêu cầu (UC006). \\ \hline
+\end{tabular} \\ \hline
+\textbf{Luồng thay thế} &
+\begin{tabular}{|c|p{2.3cm}|p{6cm}|}
+\hline
+4a & Hệ thống & Không tìm thấy CCCD → trả 404, hiển thị ``Bệnh nhân chưa đăng ký CCCD trên hệ thống''. \\ \hline
+\end{tabular} \\ \hline
+\textbf{Hậu điều kiện} & Bác sĩ biết địa chỉ ví bệnh nhân, có thể tiến hành UC006 để xin truy cập hồ sơ. \\ \hline
+\end{tabular}
+\end{table}
+
+Code reference: \texttt{mobile/src/screens-v2/doctor/EmergencyLookupScreen.tsx}, \texttt{backend/src/routes/emergency.routes.js} (\texttt{lookup-by-cccd}).
+
+% =====================================================
+% UC018 Nộp chứng chỉ xác minh chuyên môn
+% =====================================================
+\subsection*{B.7 Đặc tả use case Nộp chứng chỉ xác minh chuyên môn (UC018)}
+
+\begin{table}[H]
+\centering
+\caption{Đặc tả use case UC018 --- Bác sĩ nộp chứng chỉ xác minh chuyên môn}
+\label{tab:uc018}
+\renewcommand{\arraystretch}{1.25}
+\small
+\begin{tabular}{|p{3cm}|p{11cm}|}
+\hline
+\textbf{Mã Use case} & UC018 \\ \hline
+\textbf{Tên Use case} & Bác sĩ nộp chứng chỉ xác minh chuyên môn \\ \hline
+\textbf{Tác nhân} & Bác sĩ \\ \hline
+\textbf{Mô tả} & Cho phép bác sĩ submit thông tin chứng chỉ + ảnh giấy phép hành nghề để chờ admin tổ chức (hoặc Ministry) xác minh (UC011, UC019). \\ \hline
+\textbf{Tiền điều kiện} & Bác sĩ đã đăng ký vai trò \texttt{DOCTOR} on-chain. \\ \hline
+\textbf{Luồng chính} &
+\begin{tabular}{|c|p{2.3cm}|p{6cm}|}
+\hline
+\textbf{STT} & \textbf{Thực hiện bởi} & \textbf{Hành động} \\ \hline
+1 & Bác sĩ & Mở CredentialSubmitScreen. \\ \hline
+2 & Bác sĩ & Điền thông tin: chuyên khoa, số giấy phép, tên bệnh viện, năm kinh nghiệm, mô tả. \\ \hline
+3 & Bác sĩ & Đính kèm ảnh giấy phép (qua expo-image-picker). \\ \hline
+4 & Hệ thống & Upload ảnh lên Pinata, gửi POST \texttt{/api/verification/submit}. \\ \hline
+5 & Hệ thống & Backend lưu trạng thái \texttt{pending} trong \texttt{DoctorProfile}; gửi notification tới admin tổ chức. \\ \hline
+\end{tabular} \\ \hline
+\textbf{Luồng thay thế} &
+\begin{tabular}{|c|p{2.3cm}|p{6cm}|}
+\hline
+3a & Bác sĩ & Huỷ image picker → kết thúc luồng. \\ \hline
+4a & Hệ thống & Upload Pinata fail → retry 3 lần, fail thì báo lỗi mạng. \\ \hline
+\end{tabular} \\ \hline
+\textbf{Hậu điều kiện} & Yêu cầu xác minh ở trạng thái \texttt{pending}, admin tổ chức/Ministry có thể xem và quyết định (UC011/UC019). \\ \hline
+\end{tabular}
+\end{table}
+
+Code reference: \texttt{mobile/src/screens-v2/doctor/CredentialSubmitScreen.tsx}, \texttt{backend/src/routes/verification.routes.js}.
+
+% =====================================================
+% UC019 Xác minh bác sĩ độc lập
+% =====================================================
+\subsection*{B.8 Đặc tả use case Xác minh bác sĩ độc lập (UC019)}
+
+\begin{table}[H]
+\centering
+\caption{Đặc tả use case UC019 --- Ministry xác minh bác sĩ độc lập}
+\label{tab:uc019}
+\renewcommand{\arraystretch}{1.25}
+\small
+\begin{tabular}{|p{3cm}|p{11cm}|}
+\hline
+\textbf{Mã Use case} & UC019 \\ \hline
+\textbf{Tên Use case} & Bộ Y tế xác minh bác sĩ độc lập \\ \hline
+\textbf{Tác nhân} & Bộ Y tế (Ministry) \\ \hline
+\textbf{Mô tả} & Trong trường hợp bác sĩ không thuộc tổ chức cụ thể nào (vd: bác sĩ tư nhân, bác sĩ về hưu hành nghề độc lập), Bộ Y tế trực tiếp xác minh chuyên môn thay vì qua admin tổ chức (UC011). \\ \hline
+\textbf{Tiền điều kiện} & Ministry đăng nhập. Bác sĩ đã đăng ký vai trò và nộp chứng chỉ (UC018). \\ \hline
+\textbf{Luồng chính} &
+\begin{tabular}{|c|p{2.3cm}|p{6cm}|}
+\hline
+\textbf{STT} & \textbf{Thực hiện bởi} & \textbf{Hành động} \\ \hline
+1 & Bộ Y tế & Mở MinistryVerifyDoctorScreen, xem danh sách bác sĩ pending. \\ \hline
+2 & Bộ Y tế & Xem chi tiết chứng chỉ + ảnh giấy phép. \\ \hline
+3 & Bộ Y tế & Bấm ``Xác minh'' + xác nhận. \\ \hline
+4 & Bộ Y tế & Ký giao dịch \texttt{AccessControl.verifyDoctorByMinistry} (Ministry tự trả gas). \\ \hline
+5 & Hệ thống & Hợp đồng set \texttt{VERIFIED\_DOCTOR} flag, emit \texttt{DoctorVerified}. \\ \hline
+\end{tabular} \\ \hline
+\textbf{Luồng thay thế} &
+\begin{tabular}{|c|p{2.3cm}|p{6cm}|}
+\hline
+4a & Hệ thống & Tx revert (vd: bác sĩ chưa đăng ký) → báo lỗi. \\ \hline
+\end{tabular} \\ \hline
+\textbf{Hậu điều kiện} & Bác sĩ độc lập có flag \texttt{VERIFIED\_DOCTOR} và có thể thực hiện UC006. \\ \hline
+\end{tabular}
+\end{table}
+
+Code reference: \texttt{mobile/src/screens-v2/ministry/MinistryVerifyDoctorScreen.tsx}, \texttt{contracts/src/AccessControl.sol} (\texttt{verifyDoctorByMinistry}).
+
+% =====================================================
+% UC020 Tạm dừng / kích hoạt tổ chức
+% =====================================================
+\subsection*{B.9 Đặc tả use case Tạm dừng / Kích hoạt tổ chức (UC020)}
+
+\begin{table}[H]
+\centering
+\caption{Đặc tả use case UC020 --- Ministry tạm dừng/kích hoạt tổ chức y tế}
+\label{tab:uc020}
+\renewcommand{\arraystretch}{1.25}
+\small
+\begin{tabular}{|p{3cm}|p{11cm}|}
+\hline
+\textbf{Mã Use case} & UC020 \\ \hline
+\textbf{Tên Use case} & Bộ Y tế tạm dừng / kích hoạt tổ chức y tế \\ \hline
+\textbf{Tác nhân} & Bộ Y tế (Ministry) \\ \hline
+\textbf{Mô tả} & Cho phép Bộ Y tế tạm thời vô hiệu hoá một tổ chức y tế (vd: vi phạm quy định, đang điều tra) hoặc kích hoạt lại tổ chức sau khi xử lý. Khi tổ chức bị pause, admin tổ chức không thể thêm thành viên hoặc xác minh bác sĩ. \\ \hline
+\textbf{Tiền điều kiện} & Tổ chức đã tồn tại (đã tạo qua UC010). \\ \hline
+\textbf{Luồng chính} &
+\begin{tabular}{|c|p{2.3cm}|p{6cm}|}
+\hline
+\textbf{STT} & \textbf{Thực hiện bởi} & \textbf{Hành động} \\ \hline
+1 & Bộ Y tế & Mở MinistryDashboardScreen, chọn tổ chức. \\ \hline
+2 & Bộ Y tế & Bấm ``Tạm dừng'' (hoặc ``Kích hoạt''). \\ \hline
+3 & Hệ thống & Yêu cầu nhập từ khoá xác nhận \texttt{THU HOI} (typeword guard cho thao tác phá hủy). \\ \hline
+4 & Bộ Y tế & Ký giao dịch \texttt{AccessControl.setOrgActive(orgId, false/true)}. \\ \hline
+5 & Hệ thống & Hợp đồng cập nhật \texttt{organizations[orgId].active}, emit \texttt{OrganizationStatusChanged}. \\ \hline
+\end{tabular} \\ \hline
+\textbf{Luồng thay thế} &
+\begin{tabular}{|c|p{2.3cm}|p{6cm}|}
+\hline
+3a & Bộ Y tế & Nhập sai từ khoá → không cho submit. \\ \hline
+4a & Hệ thống & Tx revert (vd: orgId không tồn tại) → báo lỗi. \\ \hline
+\end{tabular} \\ \hline
+\textbf{Hậu điều kiện} & Tổ chức ở trạng thái mới (active/inactive). Khi inactive, mọi thao tác của admin tổ chức (UC011) bị revert. \\ \hline
+\end{tabular}
+\end{table}
+
+Code reference: \texttt{mobile/src/screens-v2/ministry/MinistryDashboardScreen.tsx}, \texttt{contracts/src/AccessControl.sol} (\texttt{setOrgActive}).
+
+% =====================================================
+% Tier 3 — UC021-UC024 mention only
+% =====================================================
+\section*{Các Use case còn lại (Tier 3 --- mô tả ngắn)}
+
+Các use case sau là thao tác đơn giản hoặc đối xứng với các use case đã đặc tả ở trên, được liệt kê ngắn gọn để bảo đảm tính đầy đủ của tài liệu:
 
 \begin{itemize}
-    \item \textbf{UC021 --- Loại bỏ thành viên bác sĩ khỏi tổ chức}: Quản trị viên Tổ chức thực hiện qua hàm \texttt{AccessControl.removeMember(orgId, doctor)}. Cite [mobile/src/screens-v2/org/OrgMembersScreen.tsx].
-    \item \textbf{UC022 --- Thu hồi xác minh bác sĩ (Wave C)}: Quản trị viên Tổ chức gọi \texttt{revokeDoctorVerification(doctor)} → bác sĩ mất \texttt{VERIFIED\_DOCTOR} flag → \texttt{canAccess} refuse.
-    \item \textbf{UC023 --- Thu hồi xác minh tổ chức (Wave F)}: Bộ Y tế gọi \texttt{revokeOrgVerification(orgId)} → org \texttt{verified} flag = false → mọi bác sĩ thuộc org mất \texttt{canAccess}.
-    \item \textbf{UC024 --- Tạo phiên bản cập nhật hồ sơ của bệnh nhân (self)}: Bệnh nhân tự cập nhật, gọi \texttt{RecordRegistry.addRecord} với \texttt{parentCidHash} trỏ đến phiên bản trước. Tương đương UC001 nhưng có liên kết parent.
+    \item \textbf{UC021 --- Loại bỏ thành viên bác sĩ khỏi tổ chức}: Quản trị viên Tổ chức gọi hàm \texttt{AccessControl.removeMember(orgId, doctor)} để gỡ bác sĩ khỏi tổ chức. Bác sĩ không mất \texttt{VERIFIED\_DOCTOR} flag (chỉ có UC022 mới làm điều đó), chỉ mất quyền thành viên của tổ chức cụ thể. Code: \texttt{mobile/src/screens-v2/org/OrgMembersScreen.tsx}.
+    \item \textbf{UC022 --- Thu hồi xác minh bác sĩ}: Quản trị viên Tổ chức gọi \texttt{revokeDoctorVerification(doctor)} → bác sĩ mất \texttt{VERIFIED\_DOCTOR} flag → hàm \texttt{canAccess} refuse mọi yêu cầu mới của bác sĩ này. Đối xứng với UC011.
+    \item \textbf{UC023 --- Thu hồi xác minh tổ chức}: Bộ Y tế gọi \texttt{revokeOrgVerification(orgId)} → cờ \texttt{verified} của tổ chức = false → mọi bác sĩ thuộc tổ chức này bị mất quyền (do walk verified flag trong canAccess). Đối xứng với UC010 + UC020 nhưng có hậu quả pháp lý nặng hơn.
+    \item \textbf{UC024 --- Tạo phiên bản cập nhật hồ sơ (bệnh nhân tự)}: Bệnh nhân tự cập nhật hồ sơ bằng cách gọi \texttt{RecordRegistry.addRecord} với \texttt{parentCidHash} trỏ đến phiên bản trước. Tương đương UC001 nhưng có liên kết parent. Khác với UC008 (bác sĩ cập nhật) ở chỗ tác nhân là bệnh nhân và không cần kiểm tra \texttt{canAccess}.
 \end{itemize}
 
 \end{document}
