@@ -1,4 +1,4 @@
-\documentclass[../quyen]{subfiles}
+\documentclass[../DoAn]{subfiles}
 
 \begin{document}
 
@@ -14,7 +14,7 @@
 \textit{\textbf{<TODO Stage G — Lý do chọn kiến trúc 3-layer + blockchain Layer 2: trade-off centralized vs decentralized, lý do KHÔNG dùng Ethereum mainnet (gas đắt), lý do KHÔNG dùng private chain (mất tính phi tập trung), Arbitrum Sepolia là sweet spot cho thesis demo>}}
 
 \subsection{Thiết kế tổng quan}
-\textit{\textbf{<TODO — Embed figures/02-component-3-layer.png (Hình 4.1) + figures/03-deployment.png (Hình 4.2). Mô tả 3-layer Mobile / Backend / Blockchain + 4 service bổ trợ: IPFS, Subgraph, Web3Auth, Postgres>}}
+\textit{\textbf{<TODO — Embed Hinhve/02-component-3-layer.png (Hình 4.1) + Hinhve/03-deployment.png (Hình 4.2). Mô tả 3-layer Mobile / Backend / Blockchain + 4 service bổ trợ: IPFS, Subgraph, Web3Auth, Postgres>}}
 
 \subsection{Thiết kế chi tiết gói}
 \textit{\textbf{<TODO — Mô tả các package: mobile/src/{screens-v2, services, components-v2, utils, store} + backend/src/{routes, services, middleware, config} + contracts/src/{5 contract files}. Bảng package + mô tả mỗi cái 1 dòng>}}
@@ -25,10 +25,10 @@
 \textit{\textbf{<TODO — Embed screenshots key screens: LoginScreen / DashboardScreen / RecordsScreen / ShareSheet / RecordDetailScreen / RequestsScreen / DelegationScreen / EditProfileScreen / TrustedContactsScreen. 8-10 figure}}
 
 \subsection{Thiết kế lớp Smart Contract}
-\textit{\textbf{<TODO — Embed figures/04-class-contracts.png (Hình 4.X). Mô tả 5 contract: AccessControl / RecordRegistry / ConsentLedger / DoctorUpdate / EHRSystemSecure. Mỗi contract: 1 paragraph state vars chính + function public + events emit. Cite source Solidity>}}
+\textit{\textbf{<TODO — Embed Hinhve/04-class-contracts.png (Hình 4.X). Mô tả 5 contract: AccessControl / RecordRegistry / ConsentLedger / DoctorUpdate / EHRSystemSecure. Mỗi contract: 1 paragraph state vars chính + function public + events emit. Cite source Solidity>}}
 
 \subsection{Thiết kế cơ sở dữ liệu}
-\textit{\textbf{<TODO — Embed figures/05-er-prisma.png (Hình 4.X). Liệt kê 10+ model Prisma: User / DoctorProfile / RecordMetadata / KeyShare / Consent (cache) / TrustedContact / OrganizationMember / AccessRequest / DelegationAccessLog / Notification. Invariant note: Consent table chỉ cache — luôn check on-chain canAccess. Cite backend/prisma/schema.prisma>}}
+\textit{\textbf{<TODO — Embed Hinhve/05-er-prisma.png (Hình 4.X). Liệt kê 10+ model Prisma: User / DoctorProfile / RecordMetadata / KeyShare / Consent (cache) / TrustedContact / OrganizationMember / AccessRequest / DelegationAccessLog / Notification. Invariant note: Consent table chỉ cache — luôn check on-chain canAccess. Cite backend/prisma/schema.prisma>}}
 
 \section{Xây dựng ứng dụng}
 
@@ -40,10 +40,10 @@
 
 \subsection{Minh hoạ các chức năng chính}
 \textit{\textbf{<TODO — 4-5 sequence diagram + screenshots:
-- figures/06-seq-grant-consent.png (Cấp quyền)
-- figures/07-seq-request-access.png (Yêu cầu truy cập 3 bước)
-- figures/08-seq-trusted-contact.png (Trusted Contact)
-- figures/09-seq-revoke-cascade.png (Thu hồi cascade)
+- Hinhve/06-seq-grant-consent.png (Cấp quyền)
+- Hinhve/07-seq-request-access.png (Yêu cầu truy cập 3 bước)
+- Hinhve/08-seq-trusted-contact.png (Trusted Contact)
+- Hinhve/09-seq-revoke-cascade.png (Thu hồi cascade)
 Mỗi flow: 1 paragraph mô tả + sequence diagram + 1-2 screenshot mobile thực tế>}}
 
 \section{Kiểm thử}
