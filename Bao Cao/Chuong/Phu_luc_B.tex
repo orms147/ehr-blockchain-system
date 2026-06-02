@@ -3,170 +3,49 @@
 \begin{document}
 
 % ============================================================
-% PHỤ LỤC B — ĐẶC TẢ USE CASE CHI TIẾT
-%
-% Bố cục mỗi UC:
-% - Tên + ID
-% - Actor chính
-% - Pre-condition
-% - Main flow
-% - Alternate flow
-% - Post-condition
-% - Liên quan code: file:line
+% PHỤ LỤC B — ĐẶC TẢ USE CASE BỔ SUNG
+% Tier 2 (9 UC compact spec) + Tier 3 (4 UC mention only)
+% Tier 1 (11 UC full spec) đã ở Chương 2.3
 % ============================================================
 
-% TODO Stage 5 — fill chi tiết theo PLAN_VIET_QUYEN.md mục "PHỤ LỤC B".
-% Tổng cộng 35-40 use case quan trọng cho 4 actor.
+\section*{Đặc tả các Use case bổ sung}
 
-\section{Các Use Case của Bệnh nhân}
+Phụ lục này trình bày đặc tả của các use case Tier~2 (9 use case không quá phức tạp về mặt nghiệp vụ nhưng vẫn cần đặc tả chi tiết để phục vụ phát triển), và liệt kê ngắn gọn các use case Tier~3 (4 use case đơn giản --- mô tả 1 dòng cho đầy đủ).
 
-\subsection{UC-P01: Đăng nhập hệ thống}
-\textit{\textbf{<Actor / Pre-condition / Main flow Web3Auth login / Alternate flow OAuth cancel / Post-condition. Cite mobile/src/screens-v2/LoginScreen.tsx + walletAction.service.js>}}
+\subsection*{B.1 Đặc tả UC Phê duyệt yêu cầu truy cập (UC012)}
+\textit{\textbf{<TODO Stage H — bảng đặc tả UC012. Cite mobile/src/screens-v2/RequestsScreen.tsx handleApprove + EHRSystemSecure.sol approveRequestBySig>}}
 
-\subsection{UC-P02: Đăng ký vai trò Bệnh nhân}
-\textit{\textbf{<registerAsPatient on-chain. Sponsored gas qua relayer. Cite contracts/src/AccessControl.sol::registerAsPatient>}}
+\subsection*{B.2 Đặc tả UC Từ chối yêu cầu truy cập (UC013)}
+\textit{\textbf{<TODO — bảng UC013 (Wave K sponsored). Cite RequestsScreen handleReject + rejectRequestBySig>}}
 
-\subsection{UC-P03: Tạo hồ sơ y tế mới}
-\textit{\textbf{<Encrypt AES → upload Pinata → registerRecord. Cite mobile/src/screens-v2/CreateRecordScreen.tsx>}}
+\subsection*{B.3 Đặc tả UC Đăng ký CCCD khẩn cấp (UC014)}
+\textit{\textbf{<TODO — bảng UC014 + giải thích national ID hash. Cite backend/src/routes/profile.routes.js nationalIdSchema>}}
 
-\subsection{UC-P04: Tạo phiên bản cập nhật hồ sơ}
-\textit{\textbf{<parent/child chain. Cite contracts/src/RecordRegistry.sol::addRecord with parentCidHash>}}
+\subsection*{B.4 Đặc tả UC Thu hồi Người thân tin cậy (UC015)}
+\textit{\textbf{<TODO — bảng UC015 + cascade revoke KeyShare source='trusted-contact'. Cite trustedContact.service.js removeContact>}}
 
-\subsection{UC-P05: Xem chi tiết hồ sơ}
-\textit{\textbf{<Fetch ciphertext IPFS → decrypt local AES key. Cite mobile/src/screens-v2/RecordDetailScreen.tsx>}}
+\subsection*{B.5 Đặc tả UC Thu hồi uỷ quyền bác sĩ (UC016)}
+\textit{\textbf{<TODO — bảng UC016 + epoch bump cascade. Cite DelegationScreen handleRevoke + ConsentLedger.sol revokeDelegation>}}
 
-\subsection{UC-P06: Chia sẻ hồ sơ với Bác sĩ (Grant Consent)}
-\textit{\textbf{<ShareSheet → signConsentPermit EIP-712 → sponsor → KeyShare cascade. Cite mobile/src/services/consent.service.js + backend/src/routes/relayer.routes.js>}}
+\subsection*{B.6 Đặc tả UC Tra cứu bệnh nhân khẩn cấp qua CCCD (UC017)}
+\textit{\textbf{<TODO — bảng UC017. Cite mobile/src/screens-v2/doctor/EmergencyLookupScreen.tsx + backend/src/routes/emergency.routes.js>}}
 
-\subsection{UC-P07: Thu hồi quyền truy cập}
-\textit{\textbf{<revokeConsent → cascade KeyShare. Cite contracts/src/ConsentLedger.sol::revoke>}}
+\subsection*{B.7 Đặc tả UC Nộp chứng chỉ xác minh chuyên môn (UC018)}
+\textit{\textbf{<TODO — bảng UC018. Cite mobile/src/screens-v2/doctor/CredentialSubmitScreen.tsx>}}
 
-\subsection{UC-P08: Phê duyệt yêu cầu truy cập của Bác sĩ}
-\textit{\textbf{<RequestsScreen → biometric → EIP-712 → \_completeRequest. Cite mobile/src/screens-v2/RequestsScreen.tsx>}}
+\subsection*{B.8 Đặc tả UC Xác minh bác sĩ độc lập (UC019)}
+\textit{\textbf{<TODO — bảng UC019 (Wave E Ministry). Cite mobile/src/screens-v2/ministry/MinistryVerifyDoctorScreen.tsx + AccessControl.sol verifyDoctorByMinistry>}}
 
-\subsection{UC-P09: Từ chối yêu cầu truy cập (sponsored)}
-\textit{\textbf{<rejectRequestBySig — Wave K. Cite backend/src/routes/request.routes.js::reject + mobile/src/screens-v2/RequestsScreen.tsx handleReject>}}
+\subsection*{B.9 Đặc tả UC Tạm dừng / kích hoạt tổ chức (UC020)}
+\textit{\textbf{<TODO — bảng UC020 (Wave F Ministry, typeword "THU HOI"). Cite MinistryDashboardScreen + setOrgActive>}}
 
-\subsection{UC-P10: Uỷ quyền cho Bác sĩ (Full Delegation)}
-\textit{\textbf{<DelegationScreen → delegateBySig → contract \_grantDelegation. Cite contracts/src/ConsentLedger.sol::grantDelegation>}}
+\section*{Các Use case còn lại (Tier 3)}
 
-\subsection{UC-P11: Thu hồi uỷ quyền (cascade epoch bump)}
-\textit{\textbf{<revokeDelegation → epoch bump → mọi consent derived invalidate. Cite \_hasValidNormalConsent walk>}}
-
-\subsection{UC-P12: Đăng ký CCCD cho tra cứu khẩn cấp}
-\textit{\textbf{<PUT /api/profile/me/national-id → hash CCCD. Cite backend/src/routes/profile.routes.js::nationalIdSchema>}}
-
-\subsection{UC-P13: Đăng ký Người thân tin cậy (Trusted Contact)}
-\textit{\textbf{<TrustedContactsScreen → setTrustedContactBySig EIP-712 → contract mapping isTrustedContact + auto pre-share KeyShare. Cite mobile/src/services/trustedContact.service.js::addContact + Footgun \#2>}}
-
-\subsection{UC-P14: Thu hồi Người thân tin cậy}
-\textit{\textbf{<setTrustedContact(false) → TC mất quyền tự động on-chain (Footgun \#2)>}}
-
-\subsection{UC-P15: Cập nhật thông tin cá nhân}
-\textit{\textbf{<EditProfile: tên / giới tính / ngày sinh / nhóm máu / dị ứng / BHYT (TT 32/2023). Cite mobile/src/screens-v2/EditProfileScreen.tsx>}}
-
-\subsection{UC-P16: Đổi ảnh đại diện}
-\textit{\textbf{<ImagePicker → Pinata upload → PUT /api/profile/me avatarUrl. Cite EditProfileScreen handleAvatarEdit (Phase A.2 — commit 3effc02)>}}
-
-\subsection{UC-P17: Bật/tắt MFA sinh trắc học}
-\textit{\textbf{<BiometricSettings → LocalAuthentication toggle. Cite mobile/src/utils/biometricGate.ts + screens-v2/BiometricSettingsScreen.tsx>}}
-
-\subsection{UC-P18: Đăng xuất}
-\textit{\textbf{<authStore.logout → clear SecureStore JWT + reset Web3Auth session. Cite mobile/src/store/authStore.js>}}
-
-\section{Các Use Case của Bác sĩ}
-
-\subsection{UC-D01: Đăng nhập + đăng ký vai trò Bác sĩ}
-\textit{\textbf{<Web3Auth login → registerAsDoctor. Cite contracts/src/AccessControl.sol::registerAsDoctor>}}
-
-\subsection{UC-D02: Nộp chứng chỉ chuyên môn để xin xác minh}
-\textit{\textbf{<CredentialSubmitScreen → POST /api/verification/submit → org/ministry duyệt. Cite mobile/src/screens-v2/doctor/CredentialSubmitScreen.tsx>}}
-
-\subsection{UC-D03: Yêu cầu truy cập hồ sơ bệnh nhân}
-\textit{\textbf{<DoctorRequestAccess → requestAccess on-chain (3 RequestType: DirectAccess/RecordDelegation/FullDelegation). Cite contracts/src/EHRSystemSecure.sol::requestAccess>}}
-
-\subsection{UC-D04: Xem danh sách hồ sơ được cấp quyền}
-\textit{\textbf{<GET /api/key-share/my → filter status. Cite mobile/src/screens-v2/doctor/DoctorDashboardScreen.tsx>}}
-
-\subsection{UC-D05: Đọc và giải mã hồ sơ}
-\textit{\textbf{<Claim KeyShare → backend gate canAccess → trả encryptedPayload → decrypt NaCl box + AES. Cite mobile/src/services/keyShare.service.js>}}
-
-\subsection{UC-D06: Tạo phiên bản cập nhật cho hồ sơ bệnh nhân}
-\textit{\textbf{<addRecordByDoctor on-chain DIRECT (không qua pending — Luật KCB 15/2023 + TT 46/2018). Cascade share KeyShare cho team. Cite contracts/src/DoctorUpdate.sol + mobile/src/screens-v2/doctor/DoctorCreateUpdateScreen.tsx>}}
-
-\subsection{UC-D07: Uỷ quyền lại cho Bác sĩ khác}
-\textit{\textbf{<grantUsingRecordDelegation — nếu allowDelegate=true. Cite ConsentLedger.sol + DoctorDelegatableRecordsScreen.tsx>}}
-
-\subsection{UC-D08: Xem danh sách hồ sơ đã uỷ quyền + thu hồi}
-\textit{\textbf{<DoctorOutgoingSharesScreen. Hết hạn theo quyền của doctor cha nếu là delegation-derived. Cite mobile/src/screens-v2/doctor/DoctorOutgoingSharesScreen.tsx>}}
-
-\subsection{UC-D09: Tra cứu bệnh nhân khẩn cấp qua CCCD}
-\textit{\textbf{<EmergencyLookupScreen → POST /api/emergency/lookup-by-cccd → hash CCCD match → trả wallet address. Cite mobile/src/screens-v2/doctor/EmergencyLookupScreen.tsx>}}
-
-\subsection{UC-D10: Cập nhật hồ sơ chuyên môn của Bác sĩ}
-\textit{\textbf{<DoctorProfile: specialty, licenseNumber, hospitalName, yearsExperience, bio. PUT /api/profile/doctor>}}
-
-\section{Các Use Case của Quản trị viên Tổ chức (Org Admin)}
-
-\subsection{UC-O01: Đăng nhập (Web3Auth wallet org admin)}
-\textit{\textbf{<Web3Auth → isActiveOrgAdmin check on-chain>}}
-
-\subsection{UC-O02: Xem dashboard tổ chức}
-\textit{\textbf{<OrgDashboard → GET /api/org/:orgId/members + verifications pending>}}
-
-\subsection{UC-O03: Thêm thành viên Bác sĩ vào tổ chức}
-\textit{\textbf{<OrgMembers AddMemberModal → addOrgMember on-chain (Wave G). Cite contracts/src/AccessControl.sol::addOrgMember + mobile/src/screens-v2/org/OrgMembersScreen.tsx>}}
-
-\subsection{UC-O04: Loại bỏ thành viên Bác sĩ}
-\textit{\textbf{<removeOrgMember on-chain>}}
-
-\subsection{UC-O05: Xem các yêu cầu xác minh Bác sĩ pending}
-\textit{\textbf{<OrgPendingVerificationsScreen → GET /api/verification/pending>}}
-
-\subsection{UC-O06: Xác minh Bác sĩ (verifyDoctor)}
-\textit{\textbf{<verifyDoctor on-chain → grant VERIFIED\_DOCTOR flag. Cite contracts/src/AccessControl.sol::verifyDoctor>}}
-
-\subsection{UC-O07: Thu hồi xác minh Bác sĩ (revokeDoctorVerification)}
-\textit{\textbf{<Wave C: revokeDoctorVerification on-chain → emit VerificationRevoked → canAccess refuse>}}
-
-\subsection{UC-O08: Xem danh sách Bác sĩ đã xác minh}
-\textit{\textbf{<OrgMembers tab "Doctors đã xác minh">}}
-
-\section{Các Use Case của Bộ Y tế (Ministry)}
-
-\subsection{UC-M01: Đăng nhập (Web3Auth wallet Ministry)}
-\textit{\textbf{<Ministry single wallet — gotcha: user mất seed, dùng MetaMask browser. Cite memory project\_ministry\_wallet\_constraint.md>}}
-
-\subsection{UC-M02: Tạo tổ chức y tế mới (createOrganization)}
-\textit{\textbf{<MinistryCreateOrgScreen → form 2 admin wallet (primary + backup) → biometric → createOrganization on-chain. Cite contracts/src/AccessControl.sol::createOrganization>}}
-
-\subsection{UC-M03: Xác minh Bác sĩ độc lập (verifyDoctorByMinistry)}
-\textit{\textbf{<Wave E: doctor không thuộc org nào → Ministry verify trực tiếp. Cite contracts/src/AccessControl.sol::verifyDoctorByMinistry>}}
-
-\subsection{UC-M04: Tạm dừng / kích hoạt tổ chức (setOrgActive)}
-\textit{\textbf{<Wave F: typeword "THU HOI" cho destructive. Cite contracts/src/AccessControl.sol::setOrgActive>}}
-
-\subsection{UC-M05: Thu hồi xác minh tổ chức (revokeOrgVerification)}
-\textit{\textbf{<Wave F: org verified flag removed → doctor thuộc org không request access được>}}
-
-\subsection{UC-M06: Xem dashboard tổng quan Ministry}
-\textit{\textbf{<MinistryDashboardScreen → orgs list + alerts strip (Wave H placeholder)>}}
-
-\section{Các Use Case hệ thống (automated)}
-
-\subsection{UC-S01: Backend relayer submit sponsored tx}
-\textit{\textbf{<relayer.service.js: verify EIP-712 signature → estimateGas → sendTransaction → confirm. Cite backend/src/services/relayer.service.js>}}
-
-\subsection{UC-S02: Subgraph indexer poll events → DB sync}
-\textit{\textbf{<subgraphSync.service.js poll loop 30s → handlers ghi DB cho ConsentGranted, RecordAdded, DoctorVerified, OrganizationCreated, TrustedContactSet, ... Cite backend/src/services/subgraphSync.service.js + consentLedgerSync.service.js>}}
-
-\subsection{UC-S03: Backend canAccess gate trước khi serve KeyShare}
-\textit{\textbf{<keyShare.routes.js /record/:cidHash route: check on-chain canAccess + TC bypass defensive. Cite backend/src/routes/keyShare.routes.js + backend/src/config/blockchain.js>}}
-
-\subsection{UC-S04: Socket.io push real-time event}
-\textit{\textbf{<consent:updated, request:rejected, ... emit từ event handlers → mobile receive WS push → invalidate TanStack Query>}}
-
-\subsection{UC-S05: Expo push notification offline}
-\textit{\textbf{<Backend expoPush.service.js gửi push qua Expo server cho user offline. Cite backend/src/services/expoPush.service.js>}}
+\begin{itemize}
+    \item \textbf{UC021 --- Loại bỏ thành viên bác sĩ khỏi tổ chức}: Quản trị viên Tổ chức thực hiện qua hàm \texttt{AccessControl.removeMember(orgId, doctor)}. Cite [mobile/src/screens-v2/org/OrgMembersScreen.tsx].
+    \item \textbf{UC022 --- Thu hồi xác minh bác sĩ (Wave C)}: Quản trị viên Tổ chức gọi \texttt{revokeDoctorVerification(doctor)} → bác sĩ mất \texttt{VERIFIED\_DOCTOR} flag → \texttt{canAccess} refuse.
+    \item \textbf{UC023 --- Thu hồi xác minh tổ chức (Wave F)}: Bộ Y tế gọi \texttt{revokeOrgVerification(orgId)} → org \texttt{verified} flag = false → mọi bác sĩ thuộc org mất \texttt{canAccess}.
+    \item \textbf{UC024 --- Tạo phiên bản cập nhật hồ sơ của bệnh nhân (self)}: Bệnh nhân tự cập nhật, gọi \texttt{RecordRegistry.addRecord} với \texttt{parentCidHash} trỏ đến phiên bản trước. Tương đương UC001 nhưng có liên kết parent.
+\end{itemize}
 
 \end{document}

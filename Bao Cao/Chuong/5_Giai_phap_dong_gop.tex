@@ -3,47 +3,83 @@
 \begin{document}
 
 % ============================================================
-% CHƯƠNG 5 — CÁC GIẢI PHÁP VÀ ĐÓNG GÓP NỔI BẬT (8-12 trang)
+% CHƯƠNG 5 — CÁC GIẢI PHÁP VÀ ĐÓNG GÓP NỔI BẬT
+% 4 contributions × {Vấn đề / Giải pháp / Kết quả} pattern
 % ============================================================
 
-\section{Đóng góp 1: Kiến trúc Envelope Encryption + Blind Mailbox}
+\section{Kiến trúc Envelope Encryption và Blind Mailbox}
 
-\textit{\textbf{<Backend chỉ là sink encrypted payload, không bao giờ thấy plaintext. canAccess gate on-chain trước khi serve. So sánh với MedRec MIT (backend giải mã được).>}}
+\subsection{Vấn đề}
+\textit{\textbf{<TODO Stage G — Trong mô hình EHR tập trung truyền thống, backend có toàn quyền đọc dữ liệu y tế của bệnh nhân, dẫn tới rủi ro xâm phạm khi backend bị tấn công hoặc admin có ý đồ xấu. Cần kiến trúc đảm bảo backend KHÔNG bao giờ có khả năng giải mã, đồng thời vẫn cho phép phân phối dữ liệu tới đúng người nhận đã được uỷ quyền>}}
 
-\textit{\textbf{<Cite backend/src/routes/keyShare.routes.js /record/:cidHash route + mobile/src/services/nacl-crypto.js encryptForRecipient/decryptFromSender>}}
+\subsection{Giải pháp}
+\textit{\textbf{<TODO — Mô hình \textit{envelope encryption} kết hợp \textit{blind mailbox}:
+1. Mobile mã hoá nội dung hồ sơ bằng AES-256-GCM với khoá ngẫu nhiên K
+2. Ciphertext upload lên IPFS qua Pinata (content-addressed CID)
+3. Khoá K được niêm phong (encrypt) bằng NaCl box (x25519) cho từng người nhận
+4. Backend chỉ lưu encryptedPayload, không có khả năng decrypt
+5. Gate canAccess on-chain trước khi serve KeyShare cho recipient
+Cite mobile/src/services/{crypto.js, nacl-crypto.js, ipfs.service.js} + backend/src/routes/keyShare.routes.js>}}
 
-\section{Đóng góp 2: Delegation CHAIN topology với cascade revoke}
+\subsection{Kết quả đạt được}
+\textit{\textbf{<TODO — Backend không bao giờ thấy plaintext. Forge test verify canAccess gate. So sánh với MedRec MIT (backend giải mã được, có thể leak)>}}
 
-\textit{\textbf{<Patient revoke ancestor → walk chain (max 8 hops) → kill mọi descendant. Epoch-based cascade tránh stale grant.>}}
+\section{Cơ chế Uỷ quyền dây chuyền và Thu hồi cascade}
 
-\textit{\textbf{<Cite contracts/src/ConsentLedger.sol \_hasValidNormalConsent. Test verify: ConsentLedgerPhase1Fixes.t.sol::test\_BugC\_*. Memory project\_consent\_ledger\_internals.md>}}
+\subsection{Vấn đề}
+\textit{\textbf{<TODO — Trong tình huống y tế thực tế, bệnh nhân cần uỷ quyền cho bác sĩ chính (BS A), bác sĩ này có thể uỷ quyền lại cho bác sĩ hội chẩn (BS B), tạo thành chuỗi uỷ quyền. Khi bệnh nhân thu hồi BS A, toàn bộ quyền truy cập phái sinh (BS B nhận qua BS A) cũng phải bị thu hồi tự động — KHÔNG được leak. Đồng thời, các quyền độc lập mà bệnh nhân direct grant cho BS B (không qua A) phải tồn tại độc lập, không bị cascade-kill nhầm.>}}
 
-\section{Đóng góp 3: Trusted Contact registry on-chain (Footgun \#2 fix 2026-06-01)}
+\subsection{Giải pháp}
+\textit{\textbf{<TODO — Cấu trúc \textit{delegation CHAIN topology}:
+1. Mapping recordDelegationSource[consentKey] track ai cấp quyền cho recipient
+2. canAccess walk lên chain (MAX_DELEGATION_WALK=8) kiểm tra mọi ancestor còn active
+3. Bất kỳ ancestor bị revoke → mọi descendant bị invalidate ngay lập tức
+4. \textbf{Footgun #1 fix (2026-06-01)}: \_grantConsent clear recordDelegationSource khi patient direct grant overwrite. Đảm bảo direct grant tồn tại độc lập với delegation history cũ.
+Cite contracts/src/ConsentLedger.sol \_hasValidNormalConsent + \_grantConsent + backend/src/services/consentLedgerSync.service.js handleConsentRevoked (cascade qua DelegationAccessLog)>}}
 
-\textit{\textbf{<Emergency family access immutable, không cần backend confirm. Patient setTrustedContact qua EIP-712 → on-chain. canAccess() tự return true cho TC → backend không cần bypass, đảm bảo on-chain authority invariant.>}}
+\subsection{Kết quả đạt được}
+\textit{\textbf{<TODO — 6 test pass trong ConsentLedgerPhase1Fixes.t.sol:
+- test\_BugC\_RevokeA\_CascadesToB (cascade revoke chuẩn)
+- test\_DirectGrantClearsDelegationSource (Footgun #1 verify)
+- test\_BugC\_A\_ExpiresNaturally\_BLosesAccess (time-based cascade)
+Backend cascade revoke § 13 fix verify qua emulator scenario>}}
 
-\textit{\textbf{<Replace 24h emergencyAccess flow (dropped 2026-05-04). Cite contracts/src/ConsentLedger.sol setTrustedContact + canAccess Footgun \#2 patch>}}
+\section{Người thân tin cậy On-chain}
 
-\section{Đóng góp 4: EIP-712 Sponsor Relayer (Zero-gas patient)}
+\subsection{Vấn đề}
+\textit{\textbf{<TODO — Trong tình huống cấp cứu, bệnh nhân bất tỉnh không thể tự ký cấp quyền cho bác sĩ. Hệ thống cũ dùng \textit{emergency access 24h} (cấp tạm thời cho bất kỳ doctor verified) — kiến trúc broken: on-chain consent mà off-chain không có key delivery, doctor không decrypt được dù có canAccess=true. Cần thiết kế lại flow emergency để (i) bệnh nhân chủ động chỉ định trước người thân được uỷ quyền, (ii) người thân luôn có sẵn khoá giải mã cho mọi hồ sơ.>}}
 
-\textit{\textbf{<Patient zero-gas (100 signatures/tháng/patient). Doctor/Org tự trả gas (msg.sender check). Mass adoption barrier removed.>}}
+\subsection{Giải pháp}
+\textit{\textbf{<TODO — \textit{Trusted Contact registry on-chain}:
+1. Patient đăng ký trước người thân (vợ/con) qua setTrustedContact EIP-712 → contract lưu isTrustedContact mapping
+2. \textbf{auto pre-share KeyShare}: mỗi khi patient tạo record mới, mobile tự động cascade KeyShare cho mọi TC active
+3. TC luôn có sẵn khoá giải mã, không cần patient online
+4. \textbf{Footgun #2 fix}: canAccess() check isTrustedContact ngay đầu function, bypass normal consent walk — đảm bảo on-chain authority, backend không cần bypass
+5. Patient revoke TC → cascade revoke KeyShare cho TC source='trusted-contact'
+Cite contracts/src/ConsentLedger.sol setTrustedContact + canAccess Footgun #2 + mobile/src/services/trustedContact.service.js autoPreShareNewRecord>}}
 
-\textit{\textbf{<Cite backend/src/services/relayer.service.js + memory project\_relayer\_quota\_unified.md>}}
+\subsection{Kết quả đạt được}
+\textit{\textbf{<TODO — 4 test pass trong ConsentLedgerTrustedContact.t.sol:
+- test\_CanAccess\_TrustedContact\_BypassesNormalConsent (Footgun #2 verify)
+- test\_CanAccess\_TrustedContact\_RevokedLosesAccess
+- test\_CanAccess\_NonTrustedContact\_StillRequiresConsent (regression)
++ 15 test khác cho setTrustedContact / setTrustedContactBySig / EIP-712 replay protection>}}
 
-\section{Đóng góp 5: Biometric MFA cho on-chain signing}
+\section{Patient zero-gas qua EIP-712 Sponsor Relayer + Biometric MFA}
 
-\textit{\textbf{<TT 13/2025/TT-BYT compliance. 8 sign sites trong app gated bằng LocalAuthentication (vân tay/Face ID): grant, revoke, share, request, approve, reject, delegate, addContact.>}}
+\subsection{Vấn đề}
+\textit{\textbf{<TODO — Mass adoption barrier: nếu bệnh nhân phải tự trả phí gas mỗi lần grant consent (mua testnet ETH, hiểu khái niệm gas/wei), sẽ KHÔNG có ai dùng. Đồng thời Thông tư 13/2025 yêu cầu xác thực mạnh (MFA) cho mọi hành vi truy cập + ghi nhận HSBA điện tử. Cần (i) ẩn hoàn toàn khái niệm gas khỏi UX bệnh nhân, (ii) gate mỗi tx bằng biometric (vân tay/Face ID).>}}
 
-\textit{\textbf{<Cite mobile/src/utils/biometricGate.ts + memory project\_future\_passkey\_biometric.md>}}
+\subsection{Giải pháp}
+\textit{\textbf{<TODO — \textit{Patient zero-gas} qua EIP-712 Sponsor Relayer:
+1. Patient ký EIP-712 typed data tại thiết bị (signTypedData), KHÔNG submit tx
+2. Backend relayer verify signature → submit tx + trả gas (từ ví Ministry sponsor)
+3. Quota 100 sponsored sigs/tháng/patient — đủ dùng cho user thường
+4. Doctor/Org/Ministry tự trả gas (msg.sender check on-chain) — không bị abuse
+5. \textit{Biometric MFA gate} qua expo-local-authentication trước mọi sign (8 sign sites): grant, revoke, share, request, approve, reject, delegate, addContact — đáp ứng TT 13/2025
+Cite backend/src/services/relayer.service.js + mobile/src/utils/biometricGate.ts>}}
 
-\section{Đóng góp 6: Cơ chế Direct Grant clear Delegation Source (Footgun \#1 fix)}
-
-\textit{\textbf{<Khi patient direct grant doctor B sau khi A đã delegate cho B → contract clear recordDelegationSource[B's key]. Direct grant trở thành quyền độc lập, không bị cascade-kill khi revoke A. Đảm bảo principle of least surprise.>}}
-
-\textit{\textbf{<Cite contracts/src/ConsentLedger.sol \_grantConsent Footgun \#1 patch. Test: ConsentLedgerPhase1Fixes.t.sol::test\_DirectGrantClearsDelegationSource>}}
-
-\section{So sánh với các hệ thống quốc tế và Việt Nam}
-
-\textit{\textbf{<Lặp lại bảng so sánh từ Chương 2 với phân tích chi tiết "khác biệt rõ rệt" của app: Epic centralized closed, OpenEMR centralized open, MedRec không có Trusted Contact + không có L2 scaling, HSSKĐT VN không có patient self-sovereign>}}
+\subsection{Kết quả đạt được}
+\textit{\textbf{<TODO — Patient zero-gas verify qua load test k6 (Chương 4.4.2). Biometric MFA enable theo Setting. 8 sign sites đều gated. Compliance với TT 13/2025 documented>}}
 
 \end{document}

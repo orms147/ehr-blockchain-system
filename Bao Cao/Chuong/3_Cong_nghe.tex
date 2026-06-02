@@ -3,89 +3,28 @@
 \begin{document}
 
 % ============================================================
-% CHƯƠNG 3 — NỀN TẢNG LÝ THUYẾT VÀ CÔNG NGHỆ SỬ DỤNG
-% Skeleton — fill theo PLAN_VIET_QUYEN.md section "CHƯƠNG 3".
+% CHƯƠNG 3 — CÔNG NGHỆ SỬ DỤNG (7 mục flat theo reference style)
 % ============================================================
 
-\section{Cơ sở mật mã học}
+\section{Mật mã đối xứng AES-GCM và bất đối xứng NaCl}
+\textit{\textbf{<TODO Stage G — AES-256-GCM (NIST SP 800-38D) cho mã hoá nội dung hồ sơ + NaCl box x25519/xsalsa20-poly1305 (Bernstein 2009) cho niêm phong khoá AES cho từng người nhận. Keccak-256 cho cidHash + EIP-712 digest. Cite \cite{nist2007aesgcm}, \cite{bernstein2009nacl}>}}
 
-\subsection{Mã hoá đối xứng AES-256-GCM}
-% Citation: NIST SP 800-38D
-% Code: mobile/src/services/crypto.js
-\textit{\textbf{<Block cipher + GCM mode authenticated encryption>}}
+\section{Blockchain Ethereum và Layer 2 Arbitrum}
+\textit{\textbf{<TODO — EVM cơ bản (Wood Yellow Paper 2014). Optimistic Rollup Arbitrum (Kalra 2022). Tại sao Arbitrum Sepolia testnet cho demo. Cite \cite{wood2014ethereum}, \cite{arbitrum2022nitro}>}}
 
-\subsection{Mã hoá khoá công khai NaCl (x25519 + xsalsa20-poly1305)}
-% Citation: Bernstein 2009
-% Code: mobile/src/services/nacl-crypto.js
-\textit{\textbf{<Curve25519 ECDH + xsalsa20 stream cipher + Poly1305 MAC>}}
+\section{Smart Contract Solidity 0.8 và Foundry}
+\textit{\textbf{<TODO — Solidity 0.8.24 + Foundry toolchain (forge build/test/script). Bitwise role flags pattern (gas efficient). 5 contract trong dự án. Cite contracts/foundry.toml>}}
 
-\subsection{Hàm băm Keccak-256}
-\textit{\textbf{<Ethereum standard hash, dùng cho cidHash + EIP-712 digest>}}
+\section{EIP-712 typed data và Sponsor Relayer}
+\textit{\textbf{<TODO — EIP-712 spec + domain separator + replay protection qua nonce. Meta-transaction pattern: patient ký typed data, backend submit tx + trả gas. Quota 100 sponsored sigs/tháng/patient. Cite \cite{eip712} + backend/src/services/relayer.service.js>}}
 
-\subsection{Chữ ký số EIP-712 typed data}
-% Citation: EIP-712 spec
-% Code: mobile/src/utils/eip712.js + contracts/src/ConsentLedger.sol domain separator
-\textit{\textbf{<Cấu trúc typed data, domain separator, replay protection qua nonce>}}
+\section{The Graph indexer và IPFS Pinata}
+\textit{\textbf{<TODO — The Graph subgraph thay vì RPC poll (tránh 429 storm). 4 dataSources × handler. IPFS content-addressed storage CID = hash content. Pinata pinning service. Cite \cite{thegraph}, \cite{pinata}>}}
 
-\section{Blockchain Ethereum và giải pháp Layer 2}
+\section{Mobile React Native + Expo + Web3Auth}
+\textit{\textbf{<TODO — RN + Expo SDK 55 dev client (KHÔNG Expo Go). Web3Auth Sapphire v8.1.0 với 7 providers. Tamagui design system. TanStack Query. Cite \cite{reactnative}, \cite{expo}, \cite{tamagui}, \cite{web3auth}>}}
 
-\subsection{Ethereum Virtual Machine}
-% Citation: Wood G., "Ethereum Yellow Paper" 2014
-\textit{\textbf{<EVM stack machine, gas, state, account>}}
-
-\subsection{Arbitrum Rollup}
-\textit{\textbf{<Optimistic rollup, gas thấp, finality nhanh, security từ L1 Ethereum>}}
-
-\subsection{Lý do chọn Arbitrum Sepolia testnet}
-\textit{\textbf{<Phù hợp scope demo ĐATN, không cần mainnet, gas miễn phí qua faucet>}}
-
-\section{Smart Contract Pattern}
-
-\subsection{Solidity 0.8.24 + Foundry}
-% Code: contracts/foundry.toml + 5 contract trong contracts/src/
-\textit{\textbf{<Solidity version pragma, Foundry forge build/test/script>}}
-
-\subsection{Bitwise role flags}
-% Code: contracts/src/AccessControl.sol
-\textit{\textbf{<Patient=1, Doctor=2, Org=4, Ministry=8, +VerifiedDoctor=16, +VerifiedOrg=32 — 1 user có thể giữ nhiều role bằng OR>}}
-
-\subsection{EIP-712 meta-transaction + Sponsor Relayer}
-% Code: backend/src/services/relayer.service.js
-\textit{\textbf{<Patient ký typed data, backend submit tx + trả gas. Quota 100 sponsored sigs/tháng/patient>}}
-
-\section{The Graph — Indexing Layer}
-
-% Code: subgraph/subgraph.yaml (4 dataSources), backend/src/services/subgraphSync.service.js
-\textit{\textbf{<Vì sao subgraph thay vì RPC poll: tránh 429 storm, query GraphQL hiệu quả>}}
-
-\section{IPFS và Pinata}
-
-% Code: mobile/src/services/ipfs.service.js
-\textit{\textbf{<Content-addressed storage CID = hash content. Pinata pinning service. Decentralization argument vs Bộ TT&TT centralized>}}
-
-\section{Mobile Stack}
-
-\subsection{React Native + Expo SDK 55}
-\textit{\textbf{<Dev client (KHÔNG Expo Go cho social OAuth)>}}
-
-\subsection{Web3Auth Sapphire v8.1.0}
-\textit{\textbf{<7 providers: Google/Apple/Twitter/Facebook/Discord/Email OTP/SMS OTP>}}
-
-\subsection{Tamagui Design System}
-\textit{\textbf{<Token-based, optimized cho RN performance>}}
-
-\subsection{TanStack Query}
-\textit{\textbf{<Data fetching + caching + invalidation>}}
-
-\section{Backend Stack}
-
-\subsection{Node.js + Express + Prisma + PostgreSQL (Neon)}
-\textit{\textbf{<Serverless DB, auto-scaling, free tier 5 connection>}}
-
-\subsection{Socket.io + Expo Push}
-\textit{\textbf{<Real-time event push cho mobile: consent updated, request rejected, ...>}}
-
-\subsection{viem RPC client}
-\textit{\textbf{<Type-safe Ethereum client, parse ABI, call canAccess()>}}
+\section{Backend Node.js + Express + Prisma + PostgreSQL}
+\textit{\textbf{<TODO — Node.js + Express middleware pattern. Prisma ORM + PostgreSQL (Neon serverless free tier 5 conn). Socket.io real-time + Expo push. viem RPC client. Cite backend/src/app.js, backend/prisma/schema.prisma>}}
 
 \end{document}

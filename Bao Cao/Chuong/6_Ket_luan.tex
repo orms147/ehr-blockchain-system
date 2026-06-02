@@ -3,62 +3,57 @@
 \begin{document}
 
 % ============================================================
-% CHƯƠNG 6 — KẾT LUẬN VÀ HƯỚNG PHÁT TRIỂN (3-5 trang)
+% CHƯƠNG 6 — KẾT LUẬN VÀ HƯỚNG PHÁT TRIỂN
+% Theo reference: 6.1 Kết luận + 6.2 Hướng phát triển
 % ============================================================
 
 \section{Kết luận}
 
-\textit{\textbf{<Recap kết quả đạt được>}}
+\textit{\textbf{<TODO Stage G — Recap kết quả đạt được + transparent về hạn chế:
 
-\begin{itemize}
-    \item 5 smart contract Solidity deploy live trên Arbitrum Sepolia testnet (cite địa chỉ contract từ backend/.env)
-    \item Mobile app React Native demo end-to-end 4 vai trò: Patient/Doctor/OrgAdmin/Ministry
-    \item Backend Node.js Express + PostgreSQL với 15+ REST endpoint
-    \item Subgraph indexer The Graph v0.1.5
-    \item 96/100 smart contract test pass (Foundry)
-    \item Tuân thủ 5 văn bản pháp luật trọng yếu của Bộ Y tế Việt Nam
-    \item Đáp ứng \textbf{<X>} người dùng đồng thời theo kết quả load test k6 (Chương 4.7)
-\end{itemize}
+Kết quả đạt được:
+- 5 smart contract Solidity 0.8.24 deploy live trên Arbitrum Sepolia (cite địa chỉ contract Chương 4.5.1)
+- Ứng dụng mobile React Native demo end-to-end 4 vai trò: Patient/Doctor/OrgAdmin/Ministry
+- Backend Node.js Express + PostgreSQL với 15 REST endpoint + Socket.io real-time
+- Subgraph indexer The Graph Studio v0.1.5
+- 96/100 smart contract test pass (Foundry)
+- Tuân thủ 5 văn bản pháp luật trọng yếu của Bộ Y tế Việt Nam (Luật KCB 15/2023, TT 13/2025, TT 32/2023, TT 26/2025, TT 13/2026, QĐ 586/QĐ-BYT)
+- Đáp ứng <X> người dùng đồng thời theo kết quả load test k6 (Chương 4.4.2)
 
-\section{Hạn chế hiện tại}
+Đóng góp khoa học (4 contributions chi tiết ở Chương 5):
+1. Kiến trúc Envelope Encryption + Blind Mailbox
+2. Cơ chế Uỷ quyền dây chuyền + Thu hồi cascade (Footgun #1 fix)
+3. Người thân tin cậy On-chain (Footgun #2 fix)
+4. Patient zero-gas qua Sponsor Relayer + Biometric MFA
 
-\textit{\textbf{<Transparent disclosure cho reviewer>}}
+Hạn chế hiện tại:
+- Chưa tích hợp HL7 FHIR (liên thông quốc tế)
+- Chưa hỗ trợ DICOM (ảnh chẩn đoán hình ảnh thuần)
+- 29 mẫu HSBA chuyên khoa TT 32/2023 chưa template hoá đầy đủ (đồ án dùng generic form)
+- Chưa xuất XML BHYT QĐ 4210 (out of scope — không thanh toán BHYT)
+- Chưa tích hợp PKI chữ ký số NEAC (thay bằng EIP-712 — đóng góp khoa học, nhưng chưa tương đương pháp lý)
+- 4 test contract setUp() failing (pre-existing baseline, không block code mới)
+- Subgraph indexer phụ thuộc The Graph Studio (centralized service)
+- Mobile app chưa build APK production (dev client)>}}
 
-\begin{itemize}
-    \item Chưa tích hợp HL7 FHIR — chưa liên thông với hệ thống y tế khác
-    \item Chưa hỗ trợ DICOM — không lưu được ảnh chẩn đoán hình ảnh thuần
-    \item 29 mẫu HSBA chuyên khoa theo TT 32/2023 — đồ án dùng generic form, chưa template hoá đầy đủ
-    \item Chưa xuất XML BHYT theo QĐ 4210 — app không thanh toán BHYT
-    \item Chưa tích hợp PKI chữ ký số NEAC — đồ án thay bằng EIP-712 + on-chain verified doctor flag (đóng góp khoa học, nhưng chưa tương đương pháp lý PKI)
-    \item 4 test contract setUp() failing (pre-existing baseline, không block code mới — cite cụ thể test file nào)
-    \item Subgraph indexer phụ thuộc The Graph Studio (centralized service)
-    \item Mobile app chưa build APK production cho mass distribution (still dev client)
-\end{itemize}
+\section{Hướng phát triển}
 
-\section{Hướng phát triển tiếp theo}
-
-\textit{\textbf{<Future work>}}
-
-\subsection{Tích hợp tiêu chuẩn liên thông}
-\begin{itemize}
-    \item HL7 FHIR R4 export/import
-    \item DICOM imaging server
-    \item XML BHYT theo QĐ 4210 (nếu mở rộng sang thanh toán)
-\end{itemize}
+\subsection{Tích hợp tiêu chuẩn liên thông y tế}
+\textit{\textbf{<TODO — HL7 FHIR R4 export/import + DICOM imaging server + XML BHYT QĐ 4210 (nếu mở rộng sang thanh toán)>}}
 
 \subsection{Hoàn thiện 29 mẫu HSBA chuyên khoa}
-\textit{\textbf{<Theo TT 32/2023 Phụ lục XXVIII: nội khoa, ngoại khoa, sản khoa, nhi khoa, ...>}}
+\textit{\textbf{<TODO — Theo TT 32/2023 Phụ lục XXVIII: nội khoa / ngoại khoa / sản khoa / nhi khoa / RHM / TMH / mắt / da liễu / tâm thần / ...>}}
 
 \subsection{Tích hợp PKI chữ ký số NEAC}
-\textit{\textbf{<Bổ sung EIP-712 (không thay), cho phép bệnh viện chấp nhận chữ ký theo Luật Giao dịch điện tử>}}
-
-\subsection{Multi-chain support}
-\textit{\textbf{<Ethereum mainnet + Polygon + zkSync — multi-bridge consent>}}
-
-\subsection{Decentralized indexer}
-\textit{\textbf{<Federated subgraph trên The Graph Network mainnet, giảm phụ thuộc Studio>}}
+\textit{\textbf{<TODO — Bổ sung EIP-712 (không thay), cho phép bệnh viện chấp nhận chữ ký theo Luật Giao dịch điện tử>}}
 
 \subsection{Tích hợp VNeID}
-\textit{\textbf{<Sử dụng VNeID identity layer cho registerAsPatient flow — mở rộng theo Chỉ thị 17/CT-TTg>}}
+\textit{\textbf{<TODO — Sử dụng VNeID identity layer cho registerAsPatient flow — mở rộng theo Chỉ thị 17/CT-TTg>}}
+
+\subsection{Multi-chain support}
+\textit{\textbf{<TODO — Ethereum mainnet + Polygon + zkSync — multi-bridge consent>}}
+
+\subsection{Decentralized indexer}
+\textit{\textbf{<TODO — Federated subgraph trên The Graph Network mainnet, giảm phụ thuộc Studio centralized>}}
 
 \end{document}

@@ -3,106 +3,74 @@
 \begin{document}
 
 % ============================================================
-% CHƯƠNG 4 — PHÂN TÍCH THIẾT KẾ, TRIỂN KHAI VÀ ĐÁNH GIÁ HỆ THỐNG
-% Chương lõi (30-40 trang). Fill theo PLAN_VIET_QUYEN.md.
+% CHƯƠNG 4 — THIẾT KẾ, TRIỂN KHAI VÀ ĐÁNH GIÁ HỆ THỐNG
+% Structure theo reference TOC: 4.1 / 4.2 / 4.3 / 4.4 / 4.5
+% Chương lõi (30-35 trang)
 % ============================================================
 
-\section{Kiến trúc tổng thể}
+\section{Thiết kế kiến trúc}
 
-\textit{\textbf{<Mô tả 3 layer: Mobile / Backend / Blockchain + 4 component bổ trợ: IPFS, Subgraph, Web3Auth, Postgres>}}
+\subsection{Lựa chọn kiến trúc phần mềm}
+\textit{\textbf{<TODO Stage G — Lý do chọn kiến trúc 3-layer + blockchain Layer 2: trade-off centralized vs decentralized, lý do KHÔNG dùng Ethereum mainnet (gas đắt), lý do KHÔNG dùng private chain (mất tính phi tập trung), Arbitrum Sepolia là sweet spot cho thesis demo>}}
 
-\textit{\textbf{<Embed figures/02-component.png (sơ đồ Component 3-layer)>}}
+\subsection{Thiết kế tổng quan}
+\textit{\textbf{<TODO — Embed figures/02-component-3-layer.png (Hình 4.1) + figures/03-deployment.png (Hình 4.2). Mô tả 3-layer Mobile / Backend / Blockchain + 4 service bổ trợ: IPFS, Subgraph, Web3Auth, Postgres>}}
 
-\textit{\textbf{<Embed figures/03-deployment.png (sơ đồ Deployment)>}}
+\subsection{Thiết kế chi tiết gói}
+\textit{\textbf{<TODO — Mô tả các package: mobile/src/{screens-v2, services, components-v2, utils, store} + backend/src/{routes, services, middleware, config} + contracts/src/{5 contract files}. Bảng package + mô tả mỗi cái 1 dòng>}}
 
-\section{Thiết kế Smart Contract}
+\section{Thiết kế chi tiết}
 
-% Code: 5 file trong contracts/src/
-\textit{\textbf{<Embed figures/04-class-contracts.png — sơ đồ Class 5 contract + quan hệ>}}
+\subsection{Thiết kế giao diện}
+\textit{\textbf{<TODO — Embed screenshots key screens: LoginScreen / DashboardScreen / RecordsScreen / ShareSheet / RecordDetailScreen / RequestsScreen / DelegationScreen / EditProfileScreen / TrustedContactsScreen. 8-10 figure}}
 
-\subsection{AccessControl — Quản lý vai trò và xác minh}
-\textit{\textbf{<State: bitwise roles, organizations, doctorOrgs. Function: registerAsPatient, registerAsDoctor, createOrganization, verifyDoctor, addOrgMember, setOrgActive, revokeOrgVerification>}}
+\subsection{Thiết kế lớp Smart Contract}
+\textit{\textbf{<TODO — Embed figures/04-class-contracts.png (Hình 4.X). Mô tả 5 contract: AccessControl / RecordRegistry / ConsentLedger / DoctorUpdate / EHRSystemSecure. Mỗi contract: 1 paragraph state vars chính + function public + events emit. Cite source Solidity>}}
 
-\subsection{RecordRegistry — Đăng ký hồ sơ y tế}
-\textit{\textbf{<State: cidHash → ownerAddress + parentCidHash + recordType + timestamp. Function: addRecord, addRecordByDoctor (proxy from DoctorUpdate)>}}
+\subsection{Thiết kế cơ sở dữ liệu}
+\textit{\textbf{<TODO — Embed figures/05-er-prisma.png (Hình 4.X). Liệt kê 10+ model Prisma: User / DoctorProfile / RecordMetadata / KeyShare / Consent (cache) / TrustedContact / OrganizationMember / AccessRequest / DelegationAccessLog / Notification. Invariant note: Consent table chỉ cache — luôn check on-chain canAccess. Cite backend/prisma/schema.prisma>}}
 
-\subsection{ConsentLedger — Sổ cái đồng thuận (trái tim hệ thống)}
-\textit{\textbf{<State: \_consents, delegations, recordDelegationSource, consentDelegationSource, isTrustedContact. Function: grantInternal, grantBySig, revoke, grantUsingRecordDelegation, grantUsingDelegation, setTrustedContact, setTrustedContactBySig, canAccess. EIP-712 domain "EHR Consent Ledger" v2>}}
+\section{Xây dựng ứng dụng}
 
-\subsection{DoctorUpdate — Cập nhật phiên bản hồ sơ}
-\textit{\textbf{<Doctor tạo update version on-chain trực tiếp (không qua pending/approval — match TT 46/2018)>}}
+\subsection{Thư viện và công cụ sử dụng}
+\textit{\textbf{<TODO — Bảng libraries used: cột [Layer | Library | Version | Mục đích]. Cover mobile (RN, Expo, Tamagui, Web3Auth, viem, expo-image-picker, nacl-tweetnacl, AsyncStorage, SecureStore) + backend (Express, Prisma, viem, socket.io, expo-server-sdk, zod) + contracts (Foundry, OpenZeppelin)>}}
 
-\subsection{EHRSystemSecure — Yêu cầu truy cập 2 bước}
-\textit{\textbf{<Doctor request → Patient approve qua EIP-712 sponsored → contract gọi \_completeRequest. 3 RequestType: DirectAccess, RecordDelegation, FullDelegation>}}
+\subsection{Kết quả đạt được}
+\textit{\textbf{<TODO — Bảng kết quả: 5 contract deploy live Arbitrum Sepolia + địa chỉ + block deploy / Mobile app 27 screens / Backend 15 REST routes / Subgraph v0.1.5 với 4 dataSources / 100 forge test (96 pass). Số liệu code: lines of code + commit count>}}
 
-\section{Lược đồ cơ sở dữ liệu off-chain}
+\subsection{Minh hoạ các chức năng chính}
+\textit{\textbf{<TODO — 4-5 sequence diagram + screenshots:
+- figures/06-seq-grant-consent.png (Cấp quyền)
+- figures/07-seq-request-access.png (Yêu cầu truy cập 3 bước)
+- figures/08-seq-trusted-contact.png (Trusted Contact)
+- figures/09-seq-revoke-cascade.png (Thu hồi cascade)
+Mỗi flow: 1 paragraph mô tả + sequence diagram + 1-2 screenshot mobile thực tế>}}
 
-% Code: backend/prisma/schema.prisma
-\textit{\textbf{<Embed figures/05-er-prisma.png — sơ đồ ER>}}
+\section{Kiểm thử}
 
-\textit{\textbf{<Mô tả 10+ model: User, DoctorProfile, RecordMetadata, KeyShare, Consent (cache), TrustedContact, OrganizationMember, AccessRequest, DelegationAccessLog, Notification, ...>}}
+\subsection{Forge test smart contract}
+\textit{\textbf{<TODO — Liệt kê 9 test file (contracts/test/*.t.sol). Bảng kết quả: 96/100 pass (4 fail là setUp() baseline trong test files outdated, không block code mới). Liệt kê critical test groups: AccessControl / ConsentLedger / ConsentLedgerPhase1Fixes (Footgun #1) / ConsentLedgerTrustedContact (Footgun #2) / ConsentLedgerDelegation / RecordRegistry / DoctorUpdate / EHRSystemSecure. Cite test_DirectGrantClearsDelegationSource, test_CanAccess_TrustedContact_BypassesNormalConsent>}}
 
-\textit{\textbf{<INVARIANT QUAN TRỌNG: Consent table chỉ cache. Mọi permission check phải gọi on-chain canAccess() qua backend/src/config/blockchain.js. Cite memory project\_onchain\_offchain\_split.md>}}
+\subsection{Load test backend với k6}
+\textit{\textbf{<TODO — USER FILL từ load-test/RESULTS.md sau khi chạy 3 scenario:
+Scenario 1 Light (10 VUs × 10min): bảng metric p50/p95/p99/throughput/error
+Scenario 2 Medium (50 VUs × 10min): bảng metric
+Scenario 3 Stress (200 VUs × 5min): bảng metric + verify rate limit kick in 429
+Bottleneck analysis: RPC quota / DB pool / event loop
+Conclusion: app handle X concurrent users với p95 < Y ms>}}
 
-\section{Các nghiệp vụ chính (mobile flows)}
+\subsection{Kiểm thử thủ công golden path}
+\textit{\textbf{<TODO — Bảng test case manual: 6 critical flow đã test (Patient grant + Doctor claim + Ministry create org + ...). Reference memory project_test_checklist.md. Result: PASS/FAIL/PENDING với note>}}
 
-\subsection{Flow tạo hồ sơ y tế}
-\textit{\textbf{<Embed figures/06-seq-create-record.png — sơ đồ Sequence>}}
+\section{Triển khai}
 
-\textit{\textbf{<Step trace: generateAESKey → encryptData → upload Pinata → registerRecord on-chain (sponsored EIP-712) → subgraph index RecordAdded event → backend recordRegistrySync.service.js mirror DB>}}
+\subsection{Deploy smart contract Arbitrum Sepolia}
+\textit{\textbf{<TODO — Lệnh forge script + 5 contract address mới (2026-06-01 redeploy với Footgun fix): AccessControl 0x5Fb8...30f2 / ConsentLedger 0xBFEb...D55a / RecordRegistry 0x910d...82F5 / EHRSystemSecure 0xC17c...1f43 / DoctorUpdate 0x2549...D33f. Block 272771506-272771532. Lệnh sync ABI + .env post-deploy>}}
 
-\subsection{Flow cấp quyền (Grant Consent)}
-\textit{\textbf{<Embed figures/07-seq-grant-consent.png — sơ đồ Sequence>}}
+\subsection{Deploy subgraph The Graph Studio}
+\textit{\textbf{<TODO — Lệnh graph deploy ehr. Endpoint: https://api.studio.thegraph.com/query/120096/ehr/v0.1.5. 4 dataSources × address+startBlock. Reindex time ~5-10 phút>}}
 
-\textit{\textbf{<Step trace: ShareSheet → signConsentPermit EIP-712 → POST /api/relayer/grant-consent → relayer.service.js submit grantBySig → ConsentGranted event → subgraph → backend mirror Consent table → cascade share KeyShare cho từng version trong chain → mobile show "Đã cấp quyền">}}
-
-\subsection{Flow yêu cầu truy cập (Doctor Request)}
-\textit{\textbf{<Embed figures/08-seq-request-access.png — sơ đồ Sequence 3 bước>}}
-
-\textit{\textbf{<Step 1 Doctor: requestAccess on-chain (tự trả gas). Step 2 Patient: approve qua RequestsScreen, EIP-712 sponsored → \_completeRequest. Step 3 Doctor: claim KeyShare backend → decrypt local>}}
-
-\subsection{Flow thu hồi cascade}
-\textit{\textbf{<Embed figures/09-seq-revoke-cascade.png — sơ đồ Sequence>}}
-
-\textit{\textbf{<Patient revoke A → ConsentRevoked event → subgraph → backend consentLedgerSync.service.js handler walks DelegationAccessLog → cascade revoke KeyShare cho B/C nếu họ chỉ có quyền via A. Direct grants survive (Footgun \#1 fix 2026-06-01)>}}
-
-\subsection{Flow Người thân tin cậy (Trusted Contact emergency)}
-\textit{\textbf{<Embed figures/10-seq-trusted-contact.png — sơ đồ Sequence>}}
-
-\textit{\textbf{<Patient setTrustedContact qua EIP-712 → on-chain mapping. autoPreShareNewRecord cascade KeyShare cho TC khi patient tạo record mới. TC mở record fresh device → backend gate canAccess on-chain (Footgun \#2 fix: contract tự return true cho TC) → trả encryptedPayload → decrypt local>}}
-
-\section{Backend Middleware và Gate}
-
-\textit{\textbf{<authenticate middleware: JWT verify. onChainRole middleware: cache role 10min, refresh subgraph DoctorVerified event. canAccess gate trong /record/:cidHash route>}}
-
-\textit{\textbf{<Cite backend/src/middleware/auth.js + onChainRole.js + routes/keyShare.routes.js>}}
-
-\section{Tuân thủ pháp luật và bảo mật}
-
-\subsection{TT 13/2025/TT-BYT — HSBA điện tử + xác thực mạnh}
-\textit{\textbf{<MFA sinh trắc học 8 sign sites. Cite mobile/src/utils/biometricGate.ts>}}
-
-\subsection{TT 26/2025/TT-BYT — Đơn thuốc đa thuốc}
-\textit{\textbf{<RxCard component, 9 trường mỗi thuốc, validation. Cite mobile/src/components-v2/RxCard.tsx>}}
-
-\subsection{TT 13/2026/TT-BYT — Tiêm chủng}
-\textit{\textbf{<VaccCard component, schema vaccination, HPV bắt buộc. Cite mobile/src/components-v2/VaccCard.tsx>}}
-
-\subsection{TT 32/2023/TT-BYT — Vitals + BHYT}
-\textit{\textbf{<Chiều cao + BMI computed. BHYT field trong User. Cite mobile/src/constants/vitals.ts + backend/prisma/schema.prisma>}}
-
-\section{Đánh giá hiệu năng}
-
-\subsection{Smart contract — kết quả Forge test}
-% TODO: chèn output forge test thật
-\textit{\textbf{<96/100 test pass (4 setUp() baseline failures pre-existing). Liệt kê nhóm test: AccessControl, ConsentLedger, ConsentLedgerPhase1Fixes, ConsentLedgerTrustedContact, ConsentLedgerDelegation, RecordRegistry, DoctorUpdate, EHRSystemSecure. Cite contracts/test/*.t.sol>}}
-
-\subsection{Backend — Load test k6}
-% TODO: USER fill từ load-test/RESULTS.md sau khi run 3 scenario
-\textit{\textbf{<Bảng số liệu 3 scenario: Light 10 VUs / Medium 50 VUs / Stress 200 VUs. Metric p50, p95, p99, throughput RPS, error rate>}}
-
-\textit{\textbf{<Bottleneck analysis: RPC quota vs DB pool vs event loop>}}
-
-\textit{\textbf{<Conclusion về scalability: app handle được X concurrent user với p95 < Y ms theo điều kiện đo>}}
+\subsection{Deploy backend và mobile}
+\textit{\textbf{<TODO — Backend hiện local dev. Production target: VPS/Docker container. Mobile dev build qua Expo dev client; APK production qua eas build --platform android. Cite Phụ lục A>}}
 
 \end{document}

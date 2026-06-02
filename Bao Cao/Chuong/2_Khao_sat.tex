@@ -4,65 +4,108 @@
 
 % ============================================================
 % CHƯƠNG 2 — KHẢO SÁT VÀ PHÂN TÍCH YÊU CẦU
-% Skeleton — fill theo PLAN_VIET_QUYEN.md section "CHƯƠNG 2".
+% Structure theo reference TOC: 2.1 / 2.2 / 2.3 / 2.4
 % ============================================================
 
-\section{Khảo sát các hệ thống Hồ sơ Y tế điện tử quốc tế}
+\section{Khảo sát hiện trạng}
 
-\subsection{Epic Systems (Hoa Kỳ)}
-\textit{\textbf{<Mô tả Epic: market leader, closed-source, centralized>}}
+\subsection{Các hệ thống Hồ sơ Y tế điện tử quốc tế}
+\textit{\textbf{<TODO Stage G — 3 hệ thống: Epic (Hoa Kỳ, market leader, closed-source centralized) / OpenEMR (open-source PHP+MySQL, centralized) / MedRec MIT 2016 (academic prototype blockchain-based, predecessor reference)>}}
 
-\subsection{OpenEMR}
-\textit{\textbf{<Open-source PHP/MySQL, centralized>}}
+\subsection{Các hệ thống Hồ sơ Sức khoẻ điện tử Việt Nam}
+\textit{\textbf{<TODO — sotaykcb.vn HSSKĐT Quốc gia (centralized) / VNeID Y tế Chỉ thị 17/CT-TTg (identity layer, không phải EHR thuần) / Hệ thống nội bộ bệnh viện lớn (Bạch Mai, Chợ Rẫy: closed, không liên thông)>}}
 
-\subsection{MedRec (MIT, 2016)}
-% Citation: Azaria A. et al., "MedRec: Using Blockchain for Medical Data Access" (cite IEEE 2016)
-\textit{\textbf{<Academic prototype blockchain-based — predecessor reference>}}
+\subsection{Khung pháp lý Việt Nam liên quan}
+\textit{\textbf{<TODO — 5 VBPL load-bearing: Luật KCB 15/2023, TT 13/2025 HSBA điện tử, TT 32/2023 + 29 mẫu, TT 26/2025 đơn thuốc, TT 13/2026 vaccination, QĐ 586/QĐ-BYT lộ trình + deadline 31/12/2026, Chỉ thị 17/CT-TTg VNeID>}}
 
-\section{Khảo sát các hệ thống Hồ sơ Sức khoẻ điện tử Việt Nam}
+\subsection{Bảng so sánh các hệ thống}
+\textit{\textbf{<TODO — Feature matrix: Epic / OpenEMR / MedRec / VN HSSKĐT / App này × 6-8 tiêu chí (decentralized / patient-control / E2E encryption / audit trail / tuân thủ VN / open-source / mass adoption / mobile)>}}
 
-\subsection{Hồ sơ Sức khoẻ điện tử quốc gia (sotaykcb.vn)}
-\textit{\textbf{<Centralized VietPharma, KHÔNG mở data cho patient>}}
+\section{Tổng quan chức năng}
 
-\subsection{VNeID Y tế (Chỉ thị 17/CT-TTg)}
-\textit{\textbf{<Identity layer, không phải EHR thực thụ>}}
+\subsection{Biểu đồ use case tổng quan}
+\textit{\textbf{<Embed figures/01-usecase-overview.png — 4 actor (Bệnh nhân / Bác sĩ / Org Admin / Ministry) + 9 nhóm UC trọng tâm. Caption "Hình 2.1 Biểu đồ use case tổng quan của hệ thống">}}
 
-\subsection{Hệ thống nội bộ bệnh viện lớn}
-\textit{\textbf{<Bạch Mai, Chợ Rẫy: closed, không liên thông>}}
+\subsection{Biểu đồ use case phân rã Bệnh nhân}
+\textit{\textbf{<Embed figures/10-usecase-patient.png — 9 UC business + 2 extend (Update extends Create, Reject extends Approve). Caption "Hình 2.2">}}
 
-\section{So sánh chi tiết}
+\subsection{Biểu đồ use case phân rã Bác sĩ}
+\textit{\textbf{<Embed figures/11-usecase-doctor.png — 7 UC + 3 extend (3 RequestType). Caption "Hình 2.3">}}
 
-% TODO: bảng feature matrix theo template PLAN section 2.3
-\textit{\textbf{<Bảng so sánh: Epic / OpenEMR / MedRec / VN HSSKĐT / App này × 5-7 tiêu chí>}}
+\subsection{Biểu đồ use case phân rã Quản trị viên Tổ chức}
+\textit{\textbf{<Embed figures/12-usecase-org.png — 4 UC + 2 extend. Caption "Hình 2.4">}}
 
-\section{Khung pháp lý Việt Nam liên quan}
+\subsection{Biểu đồ use case phân rã Bộ Y tế}
+\textit{\textbf{<Embed figures/13-usecase-ministry.png — 4 UC + 1 extend. Caption "Hình 2.5">}}
 
-% TODO: cite 5 VBPL load-bearing từ memory project_thesis_supervisor_guidance.md
-\subsection{Luật Khám chữa bệnh 15/2023/QH15}
-\subsection{Thông tư 13/2025/TT-BYT — HSBA điện tử}
-\subsection{Thông tư 32/2023/TT-BYT — 29 mẫu HSBA}
-\subsection{Thông tư 26/2025/TT-BYT — Đơn thuốc ngoại trú}
-\subsection{Thông tư 13/2026/TT-BYT — Tiêm chủng}
-\subsection{Quyết định 586/QĐ-BYT — Lộ trình triển khai}
+\subsection{Quy trình nghiệp vụ Tạo hồ sơ y tế}
+\textit{\textbf{<Embed figures/14-activity-create-record.png — Swimlane 3 lane (Bệnh nhân / Hệ thống / Blockchain). Caption "Hình 2.6">}}
 
-\textit{\textbf{<Mỗi mục: tóm tắt + cite điều khoản liên quan + chỉ ra app đáp ứng ở chỗ nào>}}
+\subsection{Quy trình nghiệp vụ Cấp quyền truy cập}
+\textit{\textbf{<Embed figures/15-activity-grant-consent.png — 5 decision nodes. Caption "Hình 2.7">}}
 
-\section{Đặc tả Use Case tổng quát}
+\subsection{Quy trình nghiệp vụ Yêu cầu truy cập 3 bước}
+\textit{\textbf{<Embed figures/16-activity-request-access.png — 3 phase + approve/reject alt. Caption "Hình 2.8">}}
 
-\textit{\textbf{<Sơ đồ Use Case — xem figures/01-use-case.png. Chi tiết đặc tả ở Phụ lục B>}}
+\subsection{Quy trình nghiệp vụ Thu hồi cascade}
+\textit{\textbf{<Embed figures/17-activity-revoke-cascade.png — Footgun #1 decision branch. Caption "Hình 2.9">}}
 
-% Placeholder cho figure
-% \begin{figure}[h]
-%     \centering
-%     \includegraphics[width=0.9\textwidth]{figures/01-use-case.png}
-%     \caption{Sơ đồ Use Case tổng quát của hệ thống}
-%     \label{fig:usecase}
-% \end{figure}
+\subsection{Quy trình nghiệp vụ Người thân tin cậy}
+\textit{\textbf{<Embed figures/18-activity-trusted-contact.png — 3 phase + auto pre-share. Caption "Hình 2.10">}}
 
-\section{Yêu cầu chức năng}
-\textit{\textbf{<Liệt kê chức năng cho 4 đối tượng: Patient/Doctor/Org/Ministry>}}
+\section{Đặc tả chức năng}
+
+% 11 UC Tier 1 — full spec với bảng theo style reference (Mã UC / Tên / Tác nhân / Mô tả / Tiền điều kiện / Luồng chính / Luồng thay thế / Hậu điều kiện)
+% Đề xuất kèm 5-6 bảng trường dữ liệu cho UC create entity.
+
+\subsection{Đặc tả use case Tạo hồ sơ y tế (UC001)}
+\textit{\textbf{<TODO Stage G — bảng UC001 full + bảng trường dữ liệu Hồ sơ y tế (title, description, recordType, vitals, drugs, vaccinations, attachments). Cite mobile/src/screens-v2/CreateRecordScreen.tsx>}}
+
+\subsection{Đặc tả use case Cấp quyền truy cập (UC002)}
+\textit{\textbf{<TODO — bảng UC002 + bảng trường dữ liệu Consent (granteeAddress, expiresAt, allowDelegate). Cite ShareSheet + grantConsent EIP-712>}}
+
+\subsection{Đặc tả use case Thu hồi quyền + cascade (UC003)}
+\textit{\textbf{<TODO — bảng UC003 + nhấn mạnh cascade walk + Footgun #1 (direct grant survive). Cite AccessLogScreen handleRevoke>}}
+
+\subsection{Đặc tả use case Đăng ký Người thân tin cậy (UC004)}
+\textit{\textbf{<TODO — bảng UC004 + bảng trường dữ liệu TrustedContact (contactAddress, label). Cite trustedContact.service.js addContact>}}
+
+\subsection{Đặc tả use case Uỷ quyền bác sĩ Full Delegation (UC005)}
+\textit{\textbf{<TODO — bảng UC005 + giải thích delegation CHAIN topology. Cite DelegationScreen + grantDelegation>}}
+
+\subsection{Đặc tả use case Yêu cầu truy cập hồ sơ (UC006)}
+\textit{\textbf{<TODO — bảng UC006 + đề cập 3 RequestType (DirectAccess/RecordDelegation/FullDelegation). Cite DoctorRequestAccessScreen>}}
+
+\subsection{Đặc tả use case Đọc + giải mã hồ sơ (UC007)}
+\textit{\textbf{<TODO — bảng UC007 + nhấn mạnh canAccess gate + decrypt local. Cite DoctorRecordDetailScreen + keyShare.service.js>}}
+
+\subsection{Đặc tả use case Tạo phiên bản cập nhật hồ sơ (UC008)}
+\textit{\textbf{<TODO — bảng UC008 + giải thích DoctorUpdate direct on-chain (không qua pending). Cite DoctorCreateUpdateScreen + DoctorUpdate.sol>}}
+
+\subsection{Đặc tả use case Uỷ quyền lại cho bác sĩ khác (UC009)}
+\textit{\textbf{<TODO — bảng UC009 + đề cập grantUsingRecordDelegation precondition allowDelegate=true. Cite DoctorDelegatableRecordsScreen>}}
+
+\subsection{Đặc tả use case Tạo tổ chức y tế mới (UC010)}
+\textit{\textbf{<TODO — bảng UC010 + bảng trường dữ liệu Organization (name, primaryAdmin, backupAdmin). Cite MinistryCreateOrgScreen + createOrganization>}}
+
+\subsection{Đặc tả use case Xác minh bác sĩ (UC011)}
+\textit{\textbf{<TODO — bảng UC011. Cite OrgPendingVerificationsScreen + verifyDoctor>}}
 
 \section{Yêu cầu phi chức năng}
-\textit{\textbf{<Bảo mật / hiệu năng / khả mở rộng / tuân thủ pháp luật VN / khả năng sử dụng cho người cao tuổi>}}
+
+\subsection{Bảo mật và Privacy}
+\textit{\textbf{<TODO — E2E encryption (AES + NaCl) / Blind mailbox / canAccess on-chain gate / replay protection EIP-712 nonce / quota abuse prevention>}}
+
+\subsection{Tuân thủ pháp luật Việt Nam}
+\textit{\textbf{<TODO — Mapping với 5 VBPL load-bearing: TT 13/2025 → MFA biometric / TT 26/2025 → multi-drug RxCard / TT 32/2023 → BHYT field + 29 mẫu generic / TT 13/2026 → vaccination VaccCard / QĐ 586 → ứng dụng demo đáp ứng deadline pháp lý>}}
+
+\subsection{Hiệu năng và Khả năng mở rộng}
+\textit{\textbf{<TODO — Reference Chương 4.4.2 load test k6 results. Bottleneck: RPC Alchemy free tier 300 CU/s, Neon DB 5 conn, Express rate limit 1000/15min. Future scale: paid tier infra>}}
+
+\subsection{Độ tin cậy và Tính toàn vẹn}
+\textit{\textbf{<TODO — Audit trail bất biến (blockchain immutability) / cidHash = keccak256(CID) chống giả mạo / EIP-712 chống replay / cascade revoke đảm bảo consistency>}}
+
+\subsection{Yêu cầu kỹ thuật}
+\textit{\textbf{<TODO — Node.js 20.x / Android SDK / Foundry / Graph CLI / Pinata account / Alchemy account / Neon free tier. Cite Phụ lục A để chi tiết>}}
 
 \end{document}
