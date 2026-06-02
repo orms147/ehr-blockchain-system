@@ -1,61 +1,69 @@
-﻿{
-    "expo":  {
-                 "name":  "mobile",
-                 "slug":  "mobile",
-                 "scheme":  "erhsystem",
-                 "version":  "1.0.0",
-                 "orientation":  "portrait",
-                 "icon":  "./assets/icon.png",
-                 "userInterfaceStyle":  "light",
-                 "splash":  {
-                                "image":  "./assets/splash-icon.png",
-                                "resizeMode":  "contain",
-                                "backgroundColor":  "#ffffff"
-                            },
-                 "ios":  {
-                             "supportsTablet":  true,
-                             "bundleIdentifier":  "com.ehrchain.mobile"
-                         },
-                 "android":  {
-                                 "package":  "com.ehrchain.mobile",
-                                 "versionCode":  1,
-                                 "adaptiveIcon":  {
-                                                      "backgroundColor":  "#E6F4FE",
-                                                      "foregroundImage":  "./assets/android-icon-foreground.png",
-                                                      "backgroundImage":  "./assets/android-icon-background.png",
-                                                      "monochromeImage":  "./assets/android-icon-monochrome.png"
-                                                  },
-                                 "predictiveBackGestureEnabled":  false,
-                                 "permissions":  [
-                                                     "android.permission.USE_BIOMETRIC",
-                                                     "android.permission.USE_FINGERPRINT",
-                                                     "android.permission.CAMERA",
-                                                     "android.permission.INTERNET",
-                                                     "android.permission.ACCESS_NETWORK_STATE"
-                                                 ]
-                             },
-                 "web":  {
-                             "favicon":  "./assets/favicon.png"
-                         },
-                 "plugins":  [
-                                 "expo-secure-store",
-                                 "expo-font",
-                                 "expo-web-browser",
-                                 "expo-router",
-                                 [
-                                     "expo-camera",
-                                     {
-                                         "cameraPermission": "Cho phép $(PRODUCT_NAME) dùng camera để quét mã QR địa chỉ."
-                                     }
-                                 ],
-                                 [
-                                     "@sentry/react-native/expo",
-                                     {
-                                         "url": "https://sentry.io/",
-                                         "organization": "hanoi-university-of-science-1o",
-                                         "project": "react-native"
-                                     }
-                                 ]
-                             ]
-             }
+{
+  "expo": {
+    "name": "ViEH",
+    "slug": "ehr-blockchain-mobile",
+    "scheme": "erhsystem",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.ehrchain.mobile"
+    },
+    "android": {
+      "package": "com.ehrchain.mobile",
+      "versionCode": 2,
+      "adaptiveIcon": {
+        "backgroundColor": "#E6F4FE",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.USE_BIOMETRIC",
+        "android.permission.USE_FINGERPRINT",
+        "android.permission.CAMERA",
+        "android.permission.INTERNET",
+        "android.permission.ACCESS_NETWORK_STATE",
+        "android.permission.RECORD_AUDIO"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-secure-store",
+      "expo-font",
+      "expo-web-browser",
+      "expo-router",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Cho phép $(PRODUCT_NAME) dùng camera để quét mã QR địa chỉ."
+        }
+      ],
+      [
+        "@sentry/react-native/expo",
+        {
+          "url": "https://sentry.io/",
+          "organization": "hanoi-university-of-science-1o",
+          "project": "react-native"
+        }
+      ]
+    ],
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "f165f761-6e5b-4fd3-8455-5d48a58e0be1"
+      }
+    },
+    "owner": "bachnh"
+  }
 }
