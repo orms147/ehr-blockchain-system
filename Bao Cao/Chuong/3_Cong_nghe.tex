@@ -3,28 +3,89 @@
 \begin{document}
 
 % ============================================================
-% CHƯƠNG 3 — CÔNG NGHỆ SỬ DỤNG (7 mục flat theo reference style)
+% CHƯƠNG 3 — CÔNG NGHỆ SỬ DỤNG
 % ============================================================
 
 \section{Mật mã đối xứng AES-GCM và bất đối xứng NaCl}
-\textit{\textbf{<TODO Stage G — AES-256-GCM (NIST SP 800-38D) cho mã hoá nội dung hồ sơ + NaCl box x25519/xsalsa20-poly1305 (Bernstein 2009) cho niêm phong khoá AES cho từng người nhận. Keccak-256 cho cidHash + EIP-712 digest. Cite \cite{nist2007aesgcm}, \cite{bernstein2009nacl}>}}
+
+Toàn bộ kiến trúc bảo mật của hệ thống dựa trên việc kết hợp \textbf{mật mã đối xứng} (cho mã hoá nội dung hồ sơ) và \textbf{mật mã bất đối xứng} (cho niêm phong khoá đối xứng giữa các bên).
+
+\textbf{AES-256-GCM} (Advanced Encryption Standard --- Galois/Counter Mode) \cite{nist2007aesgcm} được dùng để mã hoá nội dung hồ sơ y tế thực sự trước khi upload lên IPFS. Galois/Counter Mode là chế độ \textit{authenticated encryption} (AEAD), kết hợp tính bảo mật (\textit{confidentiality}) với tính toàn vẹn (\textit{integrity}) trong cùng một thao tác: bất kỳ thay đổi nào của ciphertext đều bị phát hiện khi giải mã thông qua thẻ xác thực (\textit{authentication tag}) 128 bit gắn kèm. Khoá AES-256 được sinh ngẫu nhiên cho mỗi hồ sơ bằng \texttt{crypto.getRandomValues()} ở phía mobile.
+
+\textbf{NaCl box} (theo công bố của Bernstein \cite{bernstein2009nacl}) là một abstraction mã hoá bất đối xứng kết hợp \textit{Curve25519} cho thoả thuận khoá Diffie--Hellman, \textit{xsalsa20} làm stream cipher và \textit{poly1305} làm hàm xác thực MAC. NaCl box được dùng để \textit{niêm phong} khoá AES (32 byte) cho từng người nhận: khoá AES được mã hoá bằng khoá bí mật của người gửi và khoá công khai của người nhận, chỉ người nhận sở hữu khoá bí mật tương ứng mới giải mã được. Đây là cốt lõi của \textit{envelope encryption pattern}.
+
+\textbf{Keccak-256} là hàm băm chuẩn của Ethereum, được dùng cho hai mục đích trong hệ thống: (i) tính \texttt{cidHash = keccak256(CID)} làm khoá định danh hồ sơ on-chain (không thể derive ngược về CID gốc nếu chưa biết CID), và (ii) tính digest cho EIP-712 typed data signature.
+
+Tất cả các thao tác mã hoá đều được thực hiện tại thiết bị bệnh nhân (mobile-side), backend không bao giờ tiếp xúc với plaintext --- đây là tiền đề kỹ thuật của kiến trúc \textit{blind mailbox}.
 
 \section{Blockchain Ethereum và Layer 2 Arbitrum}
-\textit{\textbf{<TODO — EVM cơ bản (Wood Yellow Paper 2014). Optimistic Rollup Arbitrum (Kalra 2022). Tại sao Arbitrum Sepolia testnet cho demo. Cite \cite{wood2014ethereum}, \cite{arbitrum2022nitro}>}}
+
+\textbf{Ethereum} \cite{buterin2013ethereum}, \cite{wood2014ethereum} là blockchain phân tán hỗ trợ thực thi hợp đồng thông minh (\textit{smart contract}) Turing-complete trên máy ảo Ethereum Virtual Machine (EVM). Mỗi giao dịch trên Ethereum mainnet cần trả phí \textit{gas} (được mua bằng đồng ETH), gas tăng theo độ phức tạp tính toán và độ lớn dữ liệu lưu trữ. Mặc dù Ethereum mainnet có tính bảo mật và độ phi tập trung cao, phí gas mainnet hiện tại khá đắt (vài USD đến vài chục USD mỗi giao dịch trung bình) --- không phù hợp cho ứng dụng EHR nơi mỗi bệnh nhân có thể thực hiện hàng chục giao dịch mỗi tháng.
+
+\textbf{Arbitrum} \cite{arbitrum2022nitro} là giải pháp Layer 2 (L2) \textit{Optimistic Rollup} mở rộng Ethereum: các giao dịch được thực thi off-chain trên Arbitrum nodes, sau đó gộp lại (\textit{batch}) và commit về Ethereum Layer 1 (L1) định kỳ. Kết quả là phí gas giảm hàng trăm lần so với mainnet (thường dưới 0.01 USD mỗi giao dịch), trong khi vẫn kế thừa được tính bảo mật và phi tập trung của Ethereum L1 (vì L2 final state phải đồng thuận với L1).
+
+Đề tài lựa chọn \textbf{Arbitrum Sepolia testnet} (chain ID 421614) làm môi trường triển khai. Lý do: (i) phù hợp với scope demo của đồ án --- không cần phát hành token thật hay xử lý tiền thật; (ii) Sepolia có \textit{faucet} miễn phí cho phép lấy testnet ETH dễ dàng; (iii) hạ tầng RPC ổn định qua các nhà cung cấp như Alchemy và Infura; (iv) các smart contract đã viết có thể migrate sang mainnet trong tương lai mà không cần thay đổi mã.
 
 \section{Smart Contract Solidity 0.8 và Foundry}
-\textit{\textbf{<TODO — Solidity 0.8.24 + Foundry toolchain (forge build/test/script). Bitwise role flags pattern (gas efficient). 5 contract trong dự án. Cite contracts/foundry.toml>}}
+
+\textbf{Solidity} là ngôn ngữ lập trình cấp cao chuyên biệt cho smart contract trên EVM. Đề tài sử dụng phiên bản \textbf{Solidity 0.8.24} --- phiên bản có sẵn các tính năng tự động kiểm tra tràn số nguyên (\textit{overflow check by default}) và hỗ trợ \texttt{custom errors} (tiết kiệm gas so với \texttt{require} + string).
+
+5 smart contract của đề tài được tổ chức theo nguyên tắc \textit{separation of concerns}:
+
+\begin{itemize}
+    \item \texttt{AccessControl}: quản lý vai trò người dùng bằng \textbf{bitwise role flags} (Patient = 1, Doctor = 2, Org = 4, Ministry = 8, VerifiedDoctor = +16, VerifiedOrg = +32). Một người dùng có thể giữ nhiều vai trò đồng thời bằng phép OR bit (vd: VerifiedDoctor + Patient = 2 + 16 + 1 = 19). Bitwise flags hiệu quả hơn nhiều so với mỗi role 1 mapping riêng (gas thấp + truy vấn 1 storage slot duy nhất).
+    \item \texttt{RecordRegistry}: lưu metadata hồ sơ với liên kết phụ huynh--con (\texttt{parentCidHash}) tạo thành chuỗi phiên bản (\textit{version chain}).
+    \item \texttt{ConsentLedger}: trái tim của hệ thống --- quản lý sổ cái đồng thuận, sổ cái uỷ quyền và registry Người thân tin cậy. Hợp đồng này phức tạp nhất, hỗ trợ delegation chain depth tối đa 8 hops.
+    \item \texttt{DoctorUpdate}: cho phép bác sĩ tạo phiên bản cập nhật hồ sơ trực tiếp on-chain (không qua bước phê duyệt) --- phù hợp với Luật Khám chữa bệnh Việt Nam.
+    \item \texttt{EHRSystemSecure}: xử lý quy trình yêu cầu truy cập 2 bước với 3 RequestType.
+\end{itemize}
+
+\textbf{Foundry} \cite{foundry} là toolchain phát triển smart contract viết bằng Rust với 3 công cụ chính: \texttt{forge} (build, test, format), \texttt{cast} (gọi contract, query chain), và \texttt{anvil} (local devnet). So với Hardhat (TypeScript-based), Foundry có ưu điểm: test viết trực tiếp bằng Solidity (cùng ngôn ngữ với contract --- không phải context-switch sang JavaScript), tốc độ test cực nhanh (Rust runtime + parallel execution), và hỗ trợ fuzz testing built-in.
 
 \section{EIP-712 typed data và Sponsor Relayer}
-\textit{\textbf{<TODO — EIP-712 spec + domain separator + replay protection qua nonce. Meta-transaction pattern: patient ký typed data, backend submit tx + trả gas. Quota 100 sponsored sigs/tháng/patient. Cite \cite{eip712} + backend/src/services/relayer.service.js>}}
+
+\textbf{EIP-712} (Ethereum Improvement Proposal 712) \cite{eip712} là tiêu chuẩn ký dữ liệu có cấu trúc (\textit{typed structured data}) trên Ethereum. Khác với \texttt{eth\_sign} (ký một chuỗi byte tuỳ ý --- không an toàn), EIP-712 quy định mỗi chữ ký phải có:
+
+\begin{itemize}
+    \item \textbf{Domain separator}: chứa \texttt{name}, \texttt{version}, \texttt{chainId} và địa chỉ contract --- đảm bảo chữ ký không thể replay sang chain khác hoặc contract khác.
+    \item \textbf{Type definition}: schema rõ ràng của data được ký --- giúp ví (Web3Auth, MetaMask) hiển thị nội dung dễ đọc cho người dùng thay vì hex string khó hiểu.
+    \item \textbf{Nonce}: số tăng đơn điệu cho mỗi địa chỉ --- chống replay attack trong cùng contract.
+\end{itemize}
+
+\textbf{Sponsor Relayer pattern} (còn gọi là \textit{meta-transaction}) cho phép tách bạch giữa \textit{người ký} (signer) và \textit{người trả gas} (sender). Cụ thể, bệnh nhân ký EIP-712 typed data tại thiết bị mobile bằng vân tay sinh trắc học --- chữ ký này bao gồm đầy đủ thông tin về thao tác cần thực hiện (vd: cấp quyền cho bác sĩ X, thời hạn 30 ngày). Bệnh nhân \textbf{KHÔNG} submit giao dịch lên blockchain. Backend relayer nhận chữ ký, xác minh tính hợp lệ (kiểm tra \texttt{domainSeparator}, recover address, so sánh với patient), sau đó submit giao dịch \texttt{grantBySig(...)} và tự trả phí gas bằng ví Ministry sponsor.
+
+Cơ chế sponsor có hạn mức \textbf{100 chữ ký miễn phí mỗi tháng cho mỗi bệnh nhân} (kiểm tra ở backend qua field \texttt{User.signaturesThisMonth}), tránh abuse. Vai trò Bác sĩ, Quản trị viên Tổ chức và Bộ Y tế đều tự trả gas (vì có \texttt{msg.sender} check trên hợp đồng).
 
 \section{The Graph indexer và IPFS Pinata}
-\textit{\textbf{<TODO — The Graph subgraph thay vì RPC poll (tránh 429 storm). 4 dataSources × handler. IPFS content-addressed storage CID = hash content. Pinata pinning service. Cite \cite{thegraph}, \cite{pinata}>}}
+
+\textbf{The Graph} \cite{thegraph} là giao thức indexing phi tập trung cho blockchain. Trong kiến trúc EHR, backend cần liên tục theo dõi các sự kiện (event) phát ra từ smart contract --- ví dụ \texttt{ConsentGranted}, \texttt{ConsentRevoked}, \texttt{TrustedContactSet}. Nếu dùng cách truyền thống là gọi \texttt{eth\_getLogs} hoặc \texttt{eth\_call} liên tục lên RPC node, sẽ gặp các vấn đề: (i) chi phí RPC cao, dễ vượt quota free tier; (ii) latency cao do mỗi lần phải scan nhiều block; (iii) backend sập sẽ mất sự kiện trong khoảng thời gian sập.
+
+The Graph giải quyết bằng cách: index sự kiện vào cơ sở dữ liệu PostgreSQL của \textit{indexer node}, sau đó cho phép truy vấn qua GraphQL HTTP API. Đề tài sử dụng \textbf{The Graph Studio} (dịch vụ hosted của The Graph), với subgraph có 4 dataSources tương ứng 4 smart contract chính (\texttt{RecordRegistry}, \texttt{EHRSystem}, \texttt{ConsentLedger}, \texttt{AccessControl}). Backend poll subgraph mỗi 30 giây để mirror state vào database PostgreSQL của riêng mình.
+
+\textbf{IPFS} (InterPlanetary File System) là hệ thống lưu trữ phân tán \textit{content-addressed}: mỗi tệp được định danh bằng CID (Content Identifier) tính bằng hàm băm của nội dung. Khác với URL truyền thống (định danh theo \textit{location}), CID đảm bảo: (i) tính toàn vẹn --- nếu nội dung thay đổi, CID thay đổi theo, không có cách nào sửa ngầm; (ii) khả năng deduplication --- 2 nội dung giống nhau có cùng CID; (iii) khả năng pinning bởi nhiều nodes.
+
+\textbf{Pinata} \cite{pinata} là dịch vụ pinning IPFS được sử dụng trong đề tài, cung cấp REST API đơn giản để upload file (qua endpoint \texttt{pinFileToIPFS}) và HTTP gateway để download. Mobile upload ciphertext của hồ sơ (đã mã hoá AES-GCM) lên Pinata, lưu CID. Backend chỉ giữ \texttt{cidHash = keccak256(CID)} on-chain --- CID gốc (plaintext) chỉ chia sẻ qua KeyShare cho người nhận đã được uỷ quyền.
 
 \section{Mobile React Native + Expo + Web3Auth}
-\textit{\textbf{<TODO — RN + Expo SDK 55 dev client (KHÔNG Expo Go). Web3Auth Sapphire v8.1.0 với 7 providers. Tamagui design system. TanStack Query. Cite \cite{reactnative}, \cite{expo}, \cite{tamagui}, \cite{web3auth}>}}
+
+\textbf{React Native} \cite{reactnative} là framework cross-platform cho phép viết ứng dụng mobile bằng JavaScript/TypeScript, biên dịch ra native UI cho cả Android và iOS. So với phát triển native riêng cho từng nền tảng (Kotlin + Swift), React Native cho phép tái sử dụng phần lớn mã nguồn (\textit{shared business logic}), tăng tốc độ phát triển đáng kể.
+
+\textbf{Expo SDK 55} \cite{expo} là bộ công cụ phát triển bao quanh React Native, cung cấp các API native phổ biến (camera, image picker, local authentication, secure store) qua các package được duy trì sẵn. Đề tài sử dụng \textbf{Expo dev client} (\textit{KHÔNG} dùng Expo Go) --- vì Web3Auth Social OAuth (Google, Apple, ...) cần custom URL scheme (\texttt{erhsystem://auth}) mà Expo Go không hỗ trợ.
+
+\textbf{Web3Auth Sapphire v8.1.0} \cite{web3auth} là SDK xác thực không quản lý seed phrase (\textit{seedless wallet}), cho phép người dùng login bằng tài khoản mạng xã hội quen thuộc và tự động được cấp một ví Ethereum tương ứng. Khoá bí mật của ví được phân tán qua mạng các \textit{key shares} (theo cơ chế Shamir's Secret Sharing), không node nào sở hữu khoá đầy đủ. Đề tài tích hợp 7 phương thức đăng nhập: Google, Apple, Twitter, Facebook, Discord, Email OTP và SMS OTP --- xoá bỏ rào cản về việc quản lý seed phrase truyền thống mà người dùng thông thường không quen.
+
+\textbf{Tamagui} \cite{tamagui} là hệ thống thiết kế giao diện được tối ưu hoá cho hiệu năng React Native (compile-time CSS extraction, không runtime style computation). Đề tài sử dụng Tamagui với hệ token tùy biến (palette ``ViEH'' với 3 màu accent: cinnabar cho thao tác pháp lý, jade cho trạng thái xác minh, clay cho dữ liệu nóng).
+
+\textbf{TanStack Query} (formerly React Query) được dùng cho quản lý data fetching và cache. Mỗi truy vấn backend có \texttt{queryKey} duy nhất, hỗ trợ \texttt{invalidate} chính xác sau khi mutation (vd: sau khi cấp quyền, invalidate \texttt{['consent', 'sent']} để Share Sheet refresh).
 
 \section{Backend Node.js + Express + Prisma + PostgreSQL}
-\textit{\textbf{<TODO — Node.js + Express middleware pattern. Prisma ORM + PostgreSQL (Neon serverless free tier 5 conn). Socket.io real-time + Expo push. viem RPC client. Cite backend/src/app.js, backend/prisma/schema.prisma>}}
+
+\textbf{Node.js 20.x LTS} với framework \textbf{Express} làm nền tảng cho backend RESTful. Express là framework minimalist, không áp đặt cấu trúc folder, phù hợp với scope demo và dễ tuỳ biến middleware. Đề tài có 15 route file, mỗi file tương ứng một nhóm chức năng (\texttt{auth.routes.js}, \texttt{profile.routes.js}, \texttt{records.routes.js}, \texttt{keyShare.routes.js}, \texttt{relayer.routes.js}, ...).
+
+\textbf{Prisma ORM} là object-relational mapper cho TypeScript/JavaScript với schema file đặc tả (\texttt{schema.prisma}). Prisma generate ra client type-safe và quản lý migration tự động qua \texttt{prisma migrate dev}. Đề tài sử dụng \textbf{PostgreSQL trên Neon} --- dịch vụ Postgres serverless cloud với gói free tier hỗ trợ 3--5 kết nối đồng thời, đủ cho demo. Khi triển khai production có thể nâng cấp gói trả phí hỗ trợ 100+ kết nối.
+
+\textbf{Socket.io} được dùng cho push event real-time tới mobile (vd: khi bệnh nhân phê duyệt yêu cầu, doctor's dashboard refresh ngay lập tức qua sự kiện \texttt{consent:updated}). Khi mobile offline, hệ thống fallback sang \textbf{Expo Push Notification} để gửi thông báo tới thiết bị.
+
+\textbf{viem} \cite{viem} là thư viện Ethereum client viết bằng TypeScript với type-safety đầy đủ. So với \texttt{ethers.js} (legacy), \texttt{viem} có ưu điểm: gọi contract tự sinh type từ ABI, tách biệt rõ \texttt{publicClient} (read) và \texttt{walletClient} (write), và performance tốt hơn. Backend sử dụng viem cho cả gọi \texttt{canAccess} (read on-chain để gate KeyShare) và submit giao dịch sponsored (\texttt{grantBySig}, \texttt{approveRequestBySig}, ...).
 
 \end{document}

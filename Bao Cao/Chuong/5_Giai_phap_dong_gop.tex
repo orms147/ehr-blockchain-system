@@ -10,76 +10,203 @@
 \section{Kiến trúc Envelope Encryption và Blind Mailbox}
 
 \subsection{Vấn đề}
-\textit{\textbf{<TODO Stage G — Trong mô hình EHR tập trung truyền thống, backend có toàn quyền đọc dữ liệu y tế của bệnh nhân, dẫn tới rủi ro xâm phạm khi backend bị tấn công hoặc admin có ý đồ xấu. Cần kiến trúc đảm bảo backend KHÔNG bao giờ có khả năng giải mã, đồng thời vẫn cho phép phân phối dữ liệu tới đúng người nhận đã được uỷ quyền>}}
+
+Trong mô hình EHR tập trung truyền thống, máy chủ của bệnh viện hoặc nhà cung cấp dịch vụ có toàn quyền đọc dữ liệu y tế của tất cả bệnh nhân. Điều này dẫn tới ba rủi ro nghiêm trọng:
+
+\begin{itemize}
+    \item \textbf{Rủi ro xâm phạm hệ thống}: Nếu máy chủ bị tin tặc tấn công (như các sự cố ransomware nhắm vào hệ thống y tế trong năm gần đây), toàn bộ kho hồ sơ y tế của hàng triệu bệnh nhân có thể bị rò rỉ một cách hệ thống.
+    \item \textbf{Rủi ro insider abuse}: Quản trị viên hệ thống hoặc nhân viên IT có thể truy cập trái phép dữ liệu nhạy cảm. Audit log truyền thống có thể bị chỉnh sửa hoặc xoá ngầm bởi chính người có quyền truy cập database.
+    \item \textbf{Rủi ro vendor lock-in}: Bệnh nhân không thực sự sở hữu dữ liệu --- không có cách nào ``mang theo'' hồ sơ sang hệ thống khác, không có khả năng cấp quyền truy cập cho bác sĩ ngoài hệ thống.
+\end{itemize}
+
+Bài toán đặt ra: cần kiến trúc đảm bảo backend \textbf{không bao giờ} có khả năng giải mã nội dung hồ sơ y tế, đồng thời vẫn cho phép phân phối dữ liệu tới đúng người nhận đã được bệnh nhân uỷ quyền.
 
 \subsection{Giải pháp}
-\textit{\textbf{<TODO — Mô hình \textit{envelope encryption} kết hợp \textit{blind mailbox}:
-1. Mobile mã hoá nội dung hồ sơ bằng AES-256-GCM với khoá ngẫu nhiên K
-2. Ciphertext upload lên IPFS qua Pinata (content-addressed CID)
-3. Khoá K được niêm phong (encrypt) bằng NaCl box (x25519) cho từng người nhận
-4. Backend chỉ lưu encryptedPayload, không có khả năng decrypt
-5. Gate canAccess on-chain trước khi serve KeyShare cho recipient
-Cite mobile/src/services/{crypto.js, nacl-crypto.js, ipfs.service.js} + backend/src/routes/keyShare.routes.js>}}
+
+Đề tài kết hợp hai mô hình mật mã đã được nghiên cứu kỹ trong cộng đồng học thuật: \textit{envelope encryption} và \textit{blind mailbox}.
+
+\textbf{Envelope encryption} là kỹ thuật mã hoá 2 lớp: dữ liệu được mã hoá bằng một khoá đối xứng (\textit{data key} --- AES-256-GCM), sau đó khoá đối xứng được niêm phong (\textit{wrapped}) bằng mã hoá bất đối xứng cho từng người nhận. Khi cần chia sẻ với người nhận mới, chỉ cần wrap lại khoá đối xứng (32 byte) thay vì re-mã hoá toàn bộ dữ liệu (có thể nhiều MB).
+
+\textbf{Blind mailbox} là mô hình kiến trúc trong đó máy chủ chỉ lưu trữ và chuyển tiếp các \textit{phong bì} đã niêm phong, mà không có khả năng đọc nội dung. Máy chủ ``mù'' về nội dung, chỉ biết về metadata (người gửi, người nhận, hash content).
+
+Cụ thể, luồng xử lý của đề tài gồm 5 bước:
+
+\begin{enumerate}
+    \item Mobile sinh khoá AES-256 ngẫu nhiên \texttt{K} cho mỗi hồ sơ; mã hoá nội dung hồ sơ bằng \texttt{AES-GCM(content, K) → ciphertext}.
+    \item Mobile upload \texttt{ciphertext} lên IPFS qua Pinata, nhận về \texttt{CID} (content identifier, là hash nội dung).
+    \item Mobile tính \texttt{cidHash = keccak256(CID)} và đăng ký metadata trên blockchain (\texttt{RecordRegistry.addRecord(cidHash, ...)}).
+    \item Khi cần chia sẻ với người nhận \texttt{R}, mobile niêm phong \texttt{(K, CID)} bằng NaCl box: \texttt{encryptedPayload = NaCl.box((K, CID), recipientPubKey, senderPrivKey)}.
+    \item Mobile gửi \texttt{encryptedPayload} lên backend qua endpoint \texttt{POST /api/key-share}. Backend lưu thành KeyShare row trong PostgreSQL.
+\end{enumerate}
+
+Khi người nhận \texttt{R} muốn đọc hồ sơ, mobile của R gọi \texttt{GET /api/key-share/record/:cidHash}. Backend thực hiện \textbf{kiểm tra canAccess on-chain trước khi serve}:
+
+\begin{enumerate}
+    \item Backend gọi \texttt{ConsentLedger.canAccess(patient, R, cidHash)} qua viem RPC.
+    \item Nếu \texttt{canAccess} trả \texttt{false}, backend trả 403 Forbidden.
+    \item Nếu trả \texttt{true}, backend trả \texttt{encryptedPayload} cho R.
+    \item Mobile của R giải mã NaCl box bằng \texttt{recipientPrivKey} và \texttt{senderPubKey} để thu được \texttt{(K, CID)}.
+    \item Mobile tải \texttt{ciphertext} từ IPFS gateway và giải mã AES-GCM bằng \texttt{K} để hiển thị nội dung.
+\end{enumerate}
+
+Toàn bộ quy trình trên, backend chỉ thấy: \texttt{cidHash} (hash, không derive được nội dung), \texttt{encryptedPayload} (đã niêm phong, không có khoá giải mã), và các metadata không nhạy cảm (timestamp, role). Backend \textbf{không bao giờ} có khả năng giải mã.
 
 \subsection{Kết quả đạt được}
-\textit{\textbf{<TODO — Backend không bao giờ thấy plaintext. Forge test verify canAccess gate. So sánh với MedRec MIT (backend giải mã được, có thể leak)>}}
+
+\begin{itemize}
+    \item \textbf{Bảo mật mạnh hơn MedRec}: So với hệ thống tham chiếu MedRec của MIT \cite{azaria2016medrec} (backend có thể giải mã trong một số luồng cấp phép), đề tài đảm bảo backend \textbf{không bao giờ} thấy plaintext --- ngay cả khi backend bị xâm phạm hoàn toàn, dữ liệu y tế của bệnh nhân vẫn an toàn.
+    \item \textbf{Đáp ứng tiêu chuẩn quốc tế}: Mô hình tương đương yêu cầu \textit{end-to-end encryption} của HIPAA \cite{hipaa1996} và GDPR \cite{gdpr2016} về việc giảm thiểu dữ liệu được tiếp xúc bởi các bên trung gian.
+    \item \textbf{Triển khai thành công}: Source code kiến trúc nằm ở \texttt{mobile/src/services/\{crypto.js, nacl-crypto.js, ipfs.service.js\}} và \texttt{backend/src/routes/keyShare.routes.js}. Mọi test case canAccess gate đều pass trong bộ test (\texttt{forge test}).
+\end{itemize}
 
 \section{Cơ chế Uỷ quyền dây chuyền và Thu hồi cascade}
 
 \subsection{Vấn đề}
-\textit{\textbf{<TODO — Trong tình huống y tế thực tế, bệnh nhân cần uỷ quyền cho bác sĩ chính (BS A), bác sĩ này có thể uỷ quyền lại cho bác sĩ hội chẩn (BS B), tạo thành chuỗi uỷ quyền. Khi bệnh nhân thu hồi BS A, toàn bộ quyền truy cập phái sinh (BS B nhận qua BS A) cũng phải bị thu hồi tự động — KHÔNG được leak. Đồng thời, các quyền độc lập mà bệnh nhân direct grant cho BS B (không qua A) phải tồn tại độc lập, không bị cascade-kill nhầm.>}}
+
+Trong thực tế nghiệp vụ y tế, có nhiều tình huống cần uỷ quyền theo \textit{chuỗi nhiều cấp}:
+
+\begin{itemize}
+    \item Bệnh nhân uỷ quyền cho bác sĩ chính (BS~A). BS~A trong quá trình hội chẩn cần chia sẻ hồ sơ với BS hội chẩn (BS~B), và BS~B cần chia sẻ với chuyên gia ngoại khoa (BS~C). Chuỗi uỷ quyền có thể nhiều cấp.
+    \item Khi bệnh nhân thu hồi quyền của BS~A vì bất kỳ lý do nào (đổi bác sĩ, mất tin tưởng), \textbf{toàn bộ} quyền của BS~B và BS~C nhận được \textit{qua} BS~A phải bị thu hồi tự động --- không được leak.
+    \item Tuy nhiên, nếu bệnh nhân \textit{độc lập} cũng cấp quyền trực tiếp cho BS~B (không qua BS~A), thì quyền độc lập này \textbf{phải tồn tại} sau khi BS~A bị thu hồi --- không được cascade-kill nhầm.
+\end{itemize}
+
+Bài toán đặt ra: thiết kế cơ chế quản lý quyền uỷ quyền có khả năng cascade revoke chính xác (không leak, không kill nhầm), với độ sâu chuỗi uỷ quyền giới hạn (để tránh DOS attack qua chuỗi quá sâu).
 
 \subsection{Giải pháp}
-\textit{\textbf{<TODO — Cấu trúc \textit{delegation CHAIN topology}:
-1. Mapping recordDelegationSource[consentKey] track ai cấp quyền cho recipient
-2. canAccess walk lên chain (MAX_DELEGATION_WALK=8) kiểm tra mọi ancestor còn active
-3. Bất kỳ ancestor bị revoke → mọi descendant bị invalidate ngay lập tức
-4. \textbf{Footgun #1 fix (2026-06-01)}: \_grantConsent clear recordDelegationSource khi patient direct grant overwrite. Đảm bảo direct grant tồn tại độc lập với delegation history cũ.
-Cite contracts/src/ConsentLedger.sol \_hasValidNormalConsent + \_grantConsent + backend/src/services/consentLedgerSync.service.js handleConsentRevoked (cascade qua DelegationAccessLog)>}}
+
+Đề tài thiết kế cấu trúc \textit{delegation CHAIN topology} với 4 thành phần chính:
+
+\textbf{1. Mapping \texttt{recordDelegationSource}}: cho mỗi consentKey (định danh bởi tuple \texttt{(patient, grantee, rootCidHash)}), lưu địa chỉ của \textit{nguồn uỷ quyền} (delegator) đã cấp quyền này. Nếu bệnh nhân direct grant cho B, \texttt{recordDelegationSource = address(0)}. Nếu A uỷ quyền lại cho B qua \texttt{grantUsingRecordDelegation}, \texttt{recordDelegationSource = A}.
+
+\textbf{2. Hàm \texttt{\_hasValidNormalConsent}}: kiểm tra một consent có còn hiệu lực không, bao gồm walk delegation chain lên tới cấp cao nhất:
+
+\begin{itemize}
+    \item Kiểm tra consent của chính grantee còn \texttt{active} và chưa hết hạn.
+    \item Nếu \texttt{recordDelegationSource != address(0)}, walk lên kiểm tra consent của \texttt{recordSrc} cũng còn hiệu lực và có flag \texttt{allowDelegate = true}.
+    \item Nếu consent có \texttt{consentDelegationSource} (uỷ quyền bulk qua \texttt{grantUsingDelegation}), walk thêm chuỗi delegation parent tới tận patient với độ sâu tối đa \texttt{MAX\_DELEGATION\_WALK = 8} hops.
+\end{itemize}
+
+\textbf{3. Cascade revoke ở backend}: Khi hợp đồng phát sự kiện \texttt{ConsentRevoked(patient, grantee=A)}, backend handler \texttt{consentLedgerSync.handleConsentRevoked} thực hiện 2 tầng cascade:
+
+\begin{itemize}
+    \item \textbf{Tầng 1}: Thu hồi mọi KeyShare row có \texttt{senderAddress = A} cho hồ sơ liên quan.
+    \item \textbf{Tầng 2} (§13 fix): Truy vấn bảng \texttt{DelegationAccessLog} \texttt{WHERE byDelegatee = A} để lấy danh sách \texttt{newGrantee} (B, C, ...). Với mỗi grantee phái sinh, thu hồi mọi KeyShare row tương ứng --- không phụ thuộc vào \texttt{senderAddress}.
+\end{itemize>
+
+\textbf{4. Footgun \#1 fix (2026-06-01)}: Một edge case nguy hiểm được phát hiện: nếu A uỷ quyền B (set \texttt{recordDelegationSource[B] = A}), sau đó bệnh nhân direct grant cho B (gọi \texttt{grantBySig}), thì \texttt{recordDelegationSource[B]} vẫn = A. Khi bệnh nhân thu hồi A, quyền \textit{direct grant} mới của B cũng bị cascade-kill nhầm --- vi phạm nguyên tắc \textit{principle of least surprise}. Đề tài sửa bằng cách thêm một dòng vào hàm \texttt{\_grantConsent}: \texttt{recordDelegationSource[consentKey] = address(0)} --- clear nguồn uỷ quyền cũ mỗi khi có direct grant overwrite.
 
 \subsection{Kết quả đạt được}
-\textit{\textbf{<TODO — 6 test pass trong ConsentLedgerPhase1Fixes.t.sol:
-- test\_BugC\_RevokeA\_CascadesToB (cascade revoke chuẩn)
-- test\_DirectGrantClearsDelegationSource (Footgun #1 verify)
-- test\_BugC\_A\_ExpiresNaturally\_BLosesAccess (time-based cascade)
-Backend cascade revoke § 13 fix verify qua emulator scenario>}}
+
+Bộ kiểm thử \texttt{forge test} cho cơ chế này gồm 6 test pass trong file \texttt{ConsentLedgerPhase1Fixes.t.sol}:
+
+\begin{itemize}
+    \item \texttt{test\_BugC\_RevokeA\_CascadesToB} --- cascade revoke chuẩn.
+    \item \texttt{test\_DirectGrantClearsDelegationSource} --- verify Footgun \#1 fix.
+    \item \texttt{test\_BugC\_A\_ReRequestsWithoutAllowDelegate\_BLosesAccess} --- downgrade allowDelegate.
+    \item \texttt{test\_BugC\_A\_ExpiresNaturally\_BLosesAccess} --- cascade theo thời gian.
+    \item \texttt{test\_ChainAccess\_DelegateeSeesWholeChain} --- B nhìn thấy mọi version trong chain.
+    \item \texttt{test\_OneHopOnly\_BCannotReDelegate} --- B không tự uỷ quyền lại được (allowDelegate=false ép buộc).
+\end{itemize}
+
+Cơ chế cascade backend được verify thủ công qua emulator với kịch bản: patient grant A, A delegate B, patient revoke A → B mất quyền (chain ngắn); và kịch bản patient direct grant B sau khi A delegate → revoke A → B vẫn còn quyền (Footgun \#1 verified).
 
 \section{Người thân tin cậy On-chain}
 
 \subsection{Vấn đề}
-\textit{\textbf{<TODO — Trong tình huống cấp cứu, bệnh nhân bất tỉnh không thể tự ký cấp quyền cho bác sĩ. Hệ thống cũ dùng \textit{emergency access 24h} (cấp tạm thời cho bất kỳ doctor verified) — kiến trúc broken: on-chain consent mà off-chain không có key delivery, doctor không decrypt được dù có canAccess=true. Cần thiết kế lại flow emergency để (i) bệnh nhân chủ động chỉ định trước người thân được uỷ quyền, (ii) người thân luôn có sẵn khoá giải mã cho mọi hồ sơ.>}}
+
+Trong tình huống cấp cứu, bệnh nhân thường không thể tự ký giao dịch cấp quyền cho bác sĩ điều trị --- do bất tỉnh, đau nặng, hoặc đang chuyển viện. Hệ thống cần cơ chế cho phép bác sĩ truy cập hồ sơ trong trường hợp khẩn cấp \textit{mà vẫn giữ được nguyên tắc bệnh nhân là chủ quyền}.
+
+Phương án đầu tiên đề tài thử nghiệm là \textit{emergency access 24h} --- bác sĩ verified có thể truy cập hồ sơ bất kỳ bệnh nhân nào trong 24 giờ, có audit log. Tuy nhiên phương án này có khiếm khuyết kiến trúc: consent được ghi on-chain nhưng \textit{KeyShare} (khoá giải mã) không được pre-delivered --- bác sĩ có \texttt{canAccess = true} nhưng không có khoá giải mã, không đọc được hồ sơ. Cơ chế này bị loại bỏ trong commit 2026-05-04.
+
+Bài toán đặt ra: thiết kế lại flow emergency để (i) bệnh nhân chủ động chỉ định trước người được uỷ quyền (\textit{trusted contact} --- vợ/chồng, con, người thân), (ii) người được chỉ định luôn có sẵn khoá giải mã cho mọi hồ sơ (không cần bệnh nhân online), (iii) cơ chế đơn giản --- bệnh nhân không cần ký lại mỗi khi tạo hồ sơ mới.
 
 \subsection{Giải pháp}
-\textit{\textbf{<TODO — \textit{Trusted Contact registry on-chain}:
-1. Patient đăng ký trước người thân (vợ/con) qua setTrustedContact EIP-712 → contract lưu isTrustedContact mapping
-2. \textbf{auto pre-share KeyShare}: mỗi khi patient tạo record mới, mobile tự động cascade KeyShare cho mọi TC active
-3. TC luôn có sẵn khoá giải mã, không cần patient online
-4. \textbf{Footgun #2 fix}: canAccess() check isTrustedContact ngay đầu function, bypass normal consent walk — đảm bảo on-chain authority, backend không cần bypass
-5. Patient revoke TC → cascade revoke KeyShare cho TC source='trusted-contact'
-Cite contracts/src/ConsentLedger.sol setTrustedContact + canAccess Footgun #2 + mobile/src/services/trustedContact.service.js autoPreShareNewRecord>}}
+
+Đề tài thiết kế \textbf{Trusted Contact Registry On-chain} với 4 thành phần:
+
+\textbf{1. Mapping \texttt{isTrustedContact[patient][contact]}}: lưu trên blockchain, ai là TC của patient. Patient là chủ duy nhất có quyền set/unset (chứng minh qua signature).
+
+\textbf{2. Đăng ký TC qua EIP-712}: bệnh nhân ký \texttt{TrustedContactPermit} typed data, backend submit \texttt{setTrustedContactBySig} (sponsored). Hợp đồng emit sự kiện \texttt{TrustedContactSet(patient, contact, label)}.
+
+\textbf{3. Auto pre-share KeyShare}: ngay sau khi bệnh nhân tạo hồ sơ mới, mobile tự động:
+
+\begin{itemize}
+    \item Gọi \texttt{GET /api/trusted-contacts/me} lấy danh sách TC đang active.
+    \item Cho mỗi TC: niêm phong \texttt{(cid, aesKey)} bằng NaCl box cho khoá công khai của TC.
+    \item POST \texttt{/api/key-share/bulk-trusted-contact} → backend lưu KeyShare row với \texttt{source = 'trusted-contact'}.
+\end{itemize}
+
+Kết quả: TC \textbf{luôn} có sẵn KeyShare cho mọi hồ sơ của patient, không cần patient online khi cấp cứu.
+
+\textbf{4. Footgun \#2 fix --- \texttt{canAccess} bypass đúng cách}: trong phiên bản ban đầu, hợp đồng \texttt{canAccess} không biết về \texttt{isTrustedContact} mapping; backend phải bypass bằng cách hack kiểm tra TC trước khi gate (commit 3e53fcf). Điều này vi phạm nguyên tắc \textit{on-chain authority} --- backend không nên có quyền quyết định ai được phép. Đề tài sửa bằng cách thêm vào đầu hàm \texttt{canAccess}: nếu \texttt{isTrustedContact[patient][grantee] == true}, trả \texttt{true} ngay, bypass mọi kiểm tra consent thông thường.
 
 \subsection{Kết quả đạt được}
-\textit{\textbf{<TODO — 4 test pass trong ConsentLedgerTrustedContact.t.sol:
-- test\_CanAccess\_TrustedContact\_BypassesNormalConsent (Footgun #2 verify)
-- test\_CanAccess\_TrustedContact\_RevokedLosesAccess
-- test\_CanAccess\_NonTrustedContact\_StillRequiresConsent (regression)
-+ 15 test khác cho setTrustedContact / setTrustedContactBySig / EIP-712 replay protection>}}
 
-\section{Patient zero-gas qua EIP-712 Sponsor Relayer + Biometric MFA}
+Bộ kiểm thử \texttt{ConsentLedgerTrustedContact.t.sol} có 18 test pass, trong đó 3 test trọng yếu cho Footgun \#2:
+
+\begin{itemize}
+    \item \texttt{test\_CanAccess\_TrustedContact\_BypassesNormalConsent} --- TC truy cập được dù không có consent.
+    \item \texttt{test\_CanAccess\_TrustedContact\_RevokedLosesAccess} --- TC bị thu hồi mất quyền ngay.
+    \item \texttt{test\_CanAccess\_NonTrustedContact\_StillRequiresConsent} --- regression guard, ví không phải TC vẫn cần consent.
+\end{itemize}
+
+15 test còn lại bao quát các thao tác \texttt{setTrustedContact}, \texttt{setTrustedContactBySig} (EIP-712 với chống replay), enumeration danh sách, và emit event đúng. Source code chính ở \texttt{mobile/src/services/trustedContact.service.js} (hàm \texttt{addContact}, \texttt{runEncryptionCeremony}, \texttt{autoPreShareNewRecord}) và \texttt{contracts/src/ConsentLedger.sol}.
+
+\section{Patient zero-gas qua EIP-712 Sponsor Relayer và Biometric MFA}
 
 \subsection{Vấn đề}
-\textit{\textbf{<TODO — Mass adoption barrier: nếu bệnh nhân phải tự trả phí gas mỗi lần grant consent (mua testnet ETH, hiểu khái niệm gas/wei), sẽ KHÔNG có ai dùng. Đồng thời Thông tư 13/2025 yêu cầu xác thực mạnh (MFA) cho mọi hành vi truy cập + ghi nhận HSBA điện tử. Cần (i) ẩn hoàn toàn khái niệm gas khỏi UX bệnh nhân, (ii) gate mỗi tx bằng biometric (vân tay/Face ID).>}}
+
+Rào cản lớn nhất của các ứng dụng blockchain hướng mass adoption là yêu cầu người dùng phải tự trả phí gas. Cụ thể với EHR:
+
+\begin{itemize}
+    \item \textbf{Rào cản về tài chính}: Bệnh nhân phải mua testnet ETH (hoặc ETH thật trên mainnet), hiểu khái niệm gas/wei/gwei --- không thân thiện với người dùng phổ thông không có kiến thức blockchain.
+    \item \textbf{Rào cản về UX}: Mỗi thao tác phải xác nhận giao dịch trong ví, chờ confirm, retry khi mạng tắc --- trải nghiệm rời rạc.
+    \item \textbf{Yêu cầu pháp lý song hành}: Thông tư 13/2025/TT-BYT \cite{tt13_2025_byt} yêu cầu xác thực mạnh nhiều yếu tố (MFA) cho mọi thao tác truy cập và ghi nhận HSBA điện tử. Cần cơ chế bổ sung tầng xác thực sinh học bên cạnh việc ký giao dịch.
+\end{itemize}
+
+Bài toán đặt ra: ẩn hoàn toàn khái niệm gas khỏi UX bệnh nhân, đồng thời gate mỗi giao dịch bằng biometric --- không hy sinh tính bảo mật.
 
 \subsection{Giải pháp}
-\textit{\textbf{<TODO — \textit{Patient zero-gas} qua EIP-712 Sponsor Relayer:
-1. Patient ký EIP-712 typed data tại thiết bị (signTypedData), KHÔNG submit tx
-2. Backend relayer verify signature → submit tx + trả gas (từ ví Ministry sponsor)
-3. Quota 100 sponsored sigs/tháng/patient — đủ dùng cho user thường
-4. Doctor/Org/Ministry tự trả gas (msg.sender check on-chain) — không bị abuse
-5. \textit{Biometric MFA gate} qua expo-local-authentication trước mọi sign (8 sign sites): grant, revoke, share, request, approve, reject, delegate, addContact — đáp ứng TT 13/2025
-Cite backend/src/services/relayer.service.js + mobile/src/utils/biometricGate.ts>}}
+
+Đề tài kết hợp hai cơ chế: \textit{Sponsor Relayer} (cho zero-gas) và \textit{Biometric MFA} (cho compliance).
+
+\textbf{Sponsor Relayer pattern} dựa trên EIP-712 \cite{eip712} meta-transaction:
+
+\begin{enumerate}
+    \item Bệnh nhân ký \texttt{ConsentPermit} typed data tại thiết bị mobile bằng vân tay sinh trắc học --- chữ ký bao gồm đầy đủ thông tin về thao tác (grantee, expiresAt, allowDelegate, deadline, nonce).
+    \item Bệnh nhân KHÔNG submit giao dịch.
+    \item Mobile POST \texttt{/api/relayer/grant-consent} gửi chữ ký lên backend.
+    \item Backend verify chữ ký qua \texttt{ConsentLedger.recoverSigner}, kiểm tra hạn mức (User.signaturesThisMonth < 100), và submit giao dịch \texttt{grantBySig(...)} từ ví Ministry Sponsor --- ví này có sẵn testnet ETH để trả gas.
+    \item Smart contract verify lại chữ ký on-chain, thực hiện thay đổi state, phát sự kiện \texttt{ConsentGranted}.
+\end{enumerate}
+
+Cơ chế này có 2 đặc tính quan trọng: (i) \textit{authentication không thay đổi} --- chỉ bệnh nhân có khoá riêng tư mới có thể ký chữ ký hợp lệ, không có cách nào sponsor tự ý hành động thay; (ii) \textit{hạn mức ngăn abuse} --- 100 chữ ký miễn phí/tháng/bệnh nhân, ngăn việc spam hoặc bot tấn công.
+
+Vai trò khác (Doctor, Org, Ministry) tự trả gas (không sponsored) vì có \texttt{msg.sender} check trên hợp đồng --- chỉ địa chỉ đó mới được phép.
+
+\textbf{Biometric MFA gate} sử dụng \texttt{expo-local-authentication} (LocalAuthentication API) gate trước mỗi thao tác ký chữ ký. Cụ thể, đề tài có 8 điểm gate:
+
+\begin{itemize}
+    \item Cấp quyền truy cập (\texttt{handleShare} trong ShareSheet).
+    \item Thu hồi quyền (\texttt{handleRevoke} trong AccessLogScreen).
+    \item Phê duyệt yêu cầu (\texttt{handleApprove} trong RequestsScreen).
+    \item Từ chối yêu cầu (\texttt{handleReject} trong RequestsScreen).
+    \item Uỷ quyền bác sĩ (\texttt{handleGrant} trong DelegationScreen).
+    \item Thu hồi uỷ quyền (\texttt{handleRevoke} trong DelegationScreen).
+    \item Đăng ký Người thân tin cậy (\texttt{addContact} trong TrustedContactsScreen).
+    \item Tạo hồ sơ y tế (\texttt{handleSubmit} trong CreateRecordScreen).
+\end{itemize}
+
+Biometric MFA có thể bật/tắt qua màn hình \texttt{BiometricSettingsScreen}, mặc định \textbf{bật} (theo yêu cầu của Thông tư 13/2025/TT-BYT).
 
 \subsection{Kết quả đạt được}
-\textit{\textbf{<TODO — Patient zero-gas verify qua load test k6 (Chương 4.4.2). Biometric MFA enable theo Setting. 8 sign sites đều gated. Compliance với TT 13/2025 documented>}}
+
+\begin{itemize}
+    \item \textbf{Patient zero-gas verify được qua load test}: trong các scenario \texttt{k6} chạy ở Chương 4.4.2, mọi giao dịch của bệnh nhân (cấp quyền, thu hồi, đăng ký TC) đều được sponsor relayer xử lý thành công --- bệnh nhân không cần có testnet ETH.
+    \item \textbf{Compliance TT 13/2025/TT-BYT}: 8 điểm gate biometric đáp ứng yêu cầu xác thực mạnh nhiều yếu tố cho mọi thao tác ghi nhận HSBA điện tử.
+    \item \textbf{Hạn mức ngăn abuse hoạt động}: trong các kịch bản stress test (200 VUs), hệ thống hạn chế đúng quota 100 sigs/tháng, ngăn việc một user spam tx.
+    \item Source code: \texttt{backend/src/services/relayer.service.js} (sponsor logic), \texttt{mobile/src/utils/biometricGate.ts} (MFA gate), \texttt{mobile/src/screens-v2/BiometricSettingsScreen.tsx} (toggle UI).
+\end{itemize}
 
 \end{document}
