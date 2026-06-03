@@ -23,6 +23,8 @@ import * as LocalAuthentication from 'expo-local-authentication';
 import { useNavigation } from '@react-navigation/native';
 
 import { isBiometricSigningEnabled, setBiometricSigningEnabled, requireBiometric } from '../utils/biometricGate';
+import { hasPin, clearPin } from '../services/pinService';
+import SetupPinModal from '../components/SetupPinModal';
 import ViButton from '../components-v2/ViButton';
 import { useEhrPalette } from '../constants/uiColors';
 
@@ -52,9 +54,14 @@ export default function BiometricSettingsScreen() {
     const [enabled, setEnabled] = useState(true);
     const [pinFallback, setPinFallback] = useState(true);
     const [support, setSupport] = useState<Support | null>(null);
+    const [pinSet, setPinSet] = useState(false);
+    const [pinModalOpen, setPinModalOpen] = useState(false);
+
+    const refreshPin = () => { hasPin().then(setPinSet).catch(() => setPinSet(false)); };
 
     useEffect(() => {
         isBiometricSigningEnabled().then(setEnabled).catch(() => setEnabled(true));
+        refreshPin();
         (async () => {
             try {
                 const [hasHardware, isEnrolled, types] = await Promise.all([
@@ -260,6 +267,71 @@ export default function BiometricSettingsScreen() {
                     </Text>
                 </View>
 
+                {/* ───────── PIN dự phòng ───────── */}
+                <View style={{ paddingHorizontal: 20, marginTop: 26 }}>
+                    <Text style={{
+                        fontFamily: SANS_SEMI, fontSize: 11,
+                        color: palette.EHR_TEXT_MUTED,
+                        letterSpacing: 1.2, textTransform: 'uppercase',
+                        marginBottom: 10,
+                    }}>
+                        PIN dự phòng
+                    </Text>
+                    <View style={{
+                        borderRadius: 12,
+                        borderWidth: 0.5,
+                        borderColor: palette.EHR_OUTLINE_SOFT,
+                        backgroundColor: palette.EHR_SURFACE_LOWEST,
+                        padding: 14,
+                    }}>
+                        <Text style={{
+                            fontFamily: SANS, fontSize: 13,
+                            color: palette.EHR_ON_SURFACE, lineHeight: 19,
+                            marginBottom: 12,
+                        }}>
+                            PIN 6 chữ số dùng khi sinh trắc học không khả dụng (thiết bị không có cảm biến, hoặc chưa thiết lập vân tay).
+                        </Text>
+                        <ViButton
+                            variant={pinSet ? 'ghost' : 'primary'}
+                            full
+                            size="md"
+                            onPress={() => setPinModalOpen(true)}
+                        >
+                            {pinSet ? 'Đặt lại PIN' : 'Đặt PIN 6 số'}
+                        </ViButton>
+                        {pinSet ? (
+                            <Pressable
+                                onPress={() => {
+                                    Alert.alert(
+                                        'Xoá PIN',
+                                        'Bạn có chắc muốn xoá PIN dự phòng?',
+                                        [
+                                            { text: 'Huỷ', style: 'cancel' },
+                                            {
+                                                text: 'Xoá',
+                                                style: 'destructive',
+                                                onPress: async () => {
+                                                    await clearPin();
+                                                    refreshPin();
+                                                    Alert.alert('Đã xoá', 'PIN dự phòng đã được xoá khỏi thiết bị.');
+                                                },
+                                            },
+                                        ],
+                                    );
+                                }}
+                                style={{ paddingVertical: 10, alignItems: 'center', marginTop: 4 }}
+                            >
+                                <Text style={{
+                                    fontFamily: SANS_SEMI, fontSize: 12,
+                                    color: palette.EHR_PRIMARY,
+                                }}>
+                                    Xoá PIN
+                                </Text>
+                            </Pressable>
+                        ) : null}
+                    </View>
+                </View>
+
                 {/* Footer note */}
                 <Text
                     style={{
@@ -274,6 +346,12 @@ export default function BiometricSettingsScreen() {
                     expo-local-authentication · Web3Auth ECDSA underneath
                 </Text>
             </ScrollView>
+
+            <SetupPinModal
+                visible={pinModalOpen}
+                onDismiss={() => setPinModalOpen(false)}
+                onSuccess={() => { setPinModalOpen(false); refreshPin(); }}
+            />
         </SafeAreaView>
     );
 }

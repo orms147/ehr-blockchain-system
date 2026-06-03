@@ -22,21 +22,53 @@ import * as LocalAuthentication from 'expo-local-authentication';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const SETTINGS_KEY = 'biometric_signing_enabled';
+const ONBOARDING_KEY = 'mfa_onboarded_v1';
 
-let cachedSupport: { hasHardware: boolean; isEnrolled: boolean } | null = null;
+let cachedSupport: BiometricStatus | null = null;
 
-async function probeSupport(): Promise<{ hasHardware: boolean; isEnrolled: boolean }> {
+export type BiometricStatus = {
+    hasHardware: boolean;
+    isEnrolled: boolean;
+    supportedTypes: LocalAuthentication.AuthenticationType[];
+};
+
+export async function getBiometricStatus(): Promise<BiometricStatus> {
     if (cachedSupport) return cachedSupport;
     try {
-        const [hasHardware, isEnrolled] = await Promise.all([
+        const [hasHardware, isEnrolled, supportedTypes] = await Promise.all([
             LocalAuthentication.hasHardwareAsync(),
             LocalAuthentication.isEnrolledAsync(),
+            LocalAuthentication.supportedAuthenticationTypesAsync(),
         ]);
-        cachedSupport = { hasHardware, isEnrolled };
+        cachedSupport = { hasHardware, isEnrolled, supportedTypes };
     } catch {
-        cachedSupport = { hasHardware: false, isEnrolled: false };
+        cachedSupport = { hasHardware: false, isEnrolled: false, supportedTypes: [] };
     }
     return cachedSupport;
+}
+
+// Backward-compat wrapper (internal callers expecting {hasHardware, isEnrolled}).
+async function probeSupport(): Promise<{ hasHardware: boolean; isEnrolled: boolean }> {
+    const s = await getBiometricStatus();
+    return { hasHardware: s.hasHardware, isEnrolled: s.isEnrolled };
+}
+
+/**
+ * §19 R4 (2026-06-03): track xem user đã qua MFA onboarding lần đầu chưa.
+ * Onboarding screen hiển thị 1 lần sau login đầu tiên, kèm disclosure NĐ 13/2023
+ * Điều 11.8 cho dữ liệu sinh trắc học nhạy cảm.
+ */
+export async function isMfaOnboarded(): Promise<boolean> {
+    try {
+        const v = await AsyncStorage.getItem(ONBOARDING_KEY);
+        return v === 'true';
+    } catch {
+        return false;
+    }
+}
+
+export async function setMfaOnboarded(done: boolean): Promise<void> {
+    await AsyncStorage.setItem(ONBOARDING_KEY, done ? 'true' : 'false');
 }
 
 /**
@@ -109,4 +141,7 @@ export default {
     gateOrThrow,
     isBiometricSigningEnabled,
     setBiometricSigningEnabled,
+    getBiometricStatus,
+    isMfaOnboarded,
+    setMfaOnboarded,
 };

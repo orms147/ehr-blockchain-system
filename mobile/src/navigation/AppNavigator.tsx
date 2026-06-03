@@ -20,6 +20,7 @@ import {
 
 import LoginScreen from '../screens-v2/LoginScreen';
 import LandingScreen from '../screens-v2/LandingScreen';
+import MfaOnboardingModal from '../components/MfaOnboardingModal';
 import DashboardScreen from '../screens-v2/DashboardScreen';
 import RecordsScreen from '../screens-v2/RecordsScreen';
 import RequestsScreen from '../screens-v2/RequestsScreen';
@@ -353,6 +354,10 @@ export default function AppNavigator() {
                     <Stack.Screen name="MainRoot" component={MainStackNavigator} />
                 )}
             </Stack.Navigator>
+            {/* §19 R4: MFA onboarding 1 lần sau login + disclosure NĐ 13/2023. */}
+            {isAuthenticated && !needsRoleSelection && !needsRoleRegistration && (
+                <MfaOnboardingModal />
+            )}
         </NavigationContainer>
     );
 }

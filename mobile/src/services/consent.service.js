@@ -220,6 +220,12 @@ export async function revokeConsent(consentOrAddress, cidHash) {
         throw new Error('Thiếu thông tin grantee hoặc cidHash để thu hồi.');
     }
 
+    // R2 §19 (2026-06-03): biometric MFA gate cho destructive action.
+    // Backend revoke on-chain sponsored, user không ký EIP-712 nào — nhưng
+    // hành vi thu hồi quyền truy cập hồ sơ y tế là destructive (mất quyền
+    // bác sĩ) nên phải gate biometric để xác nhận chủ ý theo TT 13/2025.
+    await gateOrThrow('Xác thực để thu hồi quyền truy cập hồ sơ y tế');
+
     // Use the record DELETE endpoint — it walks parent chain to find the true
     // root cidHash before calling sponsorRevoke. Hitting /api/relayer/revoke
     // directly with a child cidHash makes the contract revert with
