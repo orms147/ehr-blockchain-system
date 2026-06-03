@@ -30,7 +30,7 @@ export default function LandingScreen({ navigation }: any) {
             >
                 {/* Wordmark + serif tagline take vertical center */}
                 <YStack style={{ flex: 1, justifyContent: 'center' }}>
-                    <ViWordmark size={56} color={palette.EHR_ON_SURFACE} />
+                    <ViWordmark size={56} color={palette.EHR_ON_SURFACE} withSeal />
 
                     <Text
                         style={{

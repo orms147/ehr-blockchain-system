@@ -190,7 +190,7 @@ export default function ReceiptStandaloneScreen() {
                         </View>
 
                         <View style={{ paddingRight: 80 }}>
-                            <ViWordmark size={18} color={palette.EHR_ON_SURFACE} />
+                            <ViWordmark size={18} color={palette.EHR_ON_SURFACE} withSeal />
                             <Text
                                 style={{
                                     marginTop: 4,

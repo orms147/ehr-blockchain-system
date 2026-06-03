@@ -126,7 +126,7 @@ export default function SignReceipt({ visible, data, onDone }: SignReceiptProps)
                                 justifyContent: 'space-between',
                             }}
                         >
-                            <ViWordmark size={18} color={palette.EHR_ON_SURFACE} />
+                            <ViWordmark size={18} color={palette.EHR_ON_SURFACE} withSeal />
                             <Text style={{ fontFamily: MONO, fontSize: 11, color: palette.EHR_TEXT_MUTED, letterSpacing: 0.4 }}>
                                 {formatReceiptId()}
                             </Text>

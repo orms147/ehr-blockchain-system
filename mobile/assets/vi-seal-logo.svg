@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  ViEH App Logo — Hướng C "Dấu son + nhịp tim"
+  Master SVG. Export PNG cho tất cả assets app yêu cầu (xem assets/README.md).
+
+  Cấu trúc:
+    1. Squircle background — linear gradient cinnabar (#DB6346 → #D45A3F → #B84628)
+    2. Glow overlay — radial top-left, paper white 28% → transparent
+    3. Inner frame — border paper 30% alpha, radius 17%, inset 8.5%
+    4. Glyph V — Fraunces 600 paper #FAF7F1 (text path; cần convert font → path
+       khi xuất PNG; xem README)
+    5. ECG pulse — jade #CFE3D6 stroke
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <!-- Cinnabar diagonal gradient (157deg ≈ start 0.15,0 end 1,1) -->
+    <linearGradient id="cinnabar" x1="15.4%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%"  stop-color="#DB6346"/>
+      <stop offset="42%" stop-color="#D45A3F"/>
+      <stop offset="100%" stop-color="#B84628"/>
+    </linearGradient>
+
+    <!-- Glow radial top-left -->
+    <radialGradient id="glow" cx="28%" cy="8%" r="60%" fx="28%" fy="8%">
+      <stop offset="0%"  stop-color="#FFFFFF" stop-opacity="0.28"/>
+      <stop offset="55%" stop-color="#FFFFFF" stop-opacity="0"/>
+    </radialGradient>
+
+    <!-- Squircle clip (iOS-style superellipse, approximated as 22.5% rounded rect) -->
+    <clipPath id="squircle">
+      <rect x="0" y="0" width="1024" height="1024" rx="230" ry="230"/>
+    </clipPath>
+  </defs>
+
+  <g clip-path="url(#squircle)">
+    <!-- Base cinnabar gradient -->
+    <rect x="0" y="0" width="1024" height="1024" fill="url(#cinnabar)"/>
+
+    <!-- Glow overlay -->
+    <rect x="0" y="0" width="1024" height="1024" fill="url(#glow)"/>
+
+    <!-- Inner frame border (paper 30% alpha, inset 8.5% = 87px, radius 17% = 174px) -->
+    <rect x="87" y="87" width="850" height="850"
+          rx="174" ry="174"
+          fill="none"
+          stroke="#FFFFFF"
+          stroke-opacity="0.30"
+          stroke-width="11"/>
+
+    <!-- Chữ V serif Fraunces 600 -->
+    <!--
+      Note: nếu render bằng tool không có Fraunces font local sẽ fallback Times.
+      Để chính xác:
+        a) Inkscape: cài Fraunces từ Google Fonts, mở SVG → Edit > Select All →
+           Path > Object to Path → Save As PNG.
+        b) Hoặc thay <text> bằng <path> vector của Fraunces V (xem README).
+    -->
+    <text
+      x="512" y="640"
+      font-family="Fraunces, 'Noto Serif', Georgia, serif"
+      font-weight="600"
+      font-size="624"
+      text-anchor="middle"
+      fill="#FAF7F1">V</text>
+
+    <!-- ECG pulse line ngọc bích (chiếm 80% chiều rộng, ở 19% từ đáy) -->
+    <!-- Original viewBox 128x20, ở đây scale lên 1024: 1 unit = 8px -->
+    <!-- bottom offset 19% = 195px, height ~125px -->
+    <g transform="translate(0, 700)">
+      <path d="M80 96 H352 L416 32 L496 128 L560 96 H944"
+            stroke="#CFE3D6"
+            stroke-width="19"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            fill="none"
+            opacity="0.92"/>
+    </g>
+  </g>
+</svg>

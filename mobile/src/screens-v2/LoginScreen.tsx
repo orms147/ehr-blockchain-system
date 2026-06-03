@@ -1,22 +1,22 @@
-// LoginScreen v2 — port of screens/LoginScreen.tsx with the editorial
-// .design-bundle/project/screens-auth.jsx LandingScreen visual treatment.
-// THIS IS THE FIRST IMPRESSION — keep it clean, ink-paper, cinnabar reserved
-// for the primary CTA only.
+// LoginScreen v2 — port từ "ViEH Login Redesign.html" (Claude Design 2026-06-03).
 //
-// ALL Web3Auth wiring preserved bit-for-bit:
-//   - 7 providers (google / apple / twitter / facebook / discord +
-//     email_passwordless + sms_passwordless)
-//   - promptForLoginHint cross-platform modal (sms REQUIRES login_hint;
-//     auto-converts 0xxx → +84xxx for VN)
-//   - runAuthStepWithRetry around ping/getNonce/login (handles transient
-//     network errors)
-//   - Sentry breadcrumb on Web3Auth failure with provider + errorCode
-//   - getOrCreateEncryptionKeypair + registerEncryptionKey post-login
-//   - Biometric quick-login (LocalAuthentication.hasHardwareAsync probe)
-//   - Expo Go OAuth limitation alert with email fallback
-//   - deriveRolesFromUser → useAuthStore.login
+// Khác biệt chính vs phiên bản trước:
+//   - Bỏ "Sinh trắc học (đăng nhập nhanh)" — Web3Auth không cho restore session
+//     cold-start (gotcha CLAUDE.md #10), button cũ chỉ pick provider mặc định.
+//   - Passwordless promoted lên TOP (Email Khuyên dùng + SMS) — UX nghiên cứu
+//     của Claude Design ưu tiên không-mật-khẩu cho người dùng Việt.
+//   - Social grid 3-cột: 6 primary (Google/Apple/Facebook/X/Discord/LINE) +
+//     8 expandable "Xem thêm" (Reddit/Twitch/GitHub/Kakao/LinkedIn/Weibo/
+//     WeChat/Farcaster). Tổng 14 providers Web3Auth Sapphire v8.1.0 hỗ trợ.
+//   - Brand-accurate SVG icons (BrandIcons.tsx) thay FontAwesome6 generic.
+//   - Disclosure card jade-tinted cuối màn — cite Nghị định 13/2023/NĐ-CP về
+//     dữ liệu cá nhân nhạy cảm (yêu cầu compliance pre-OAuth).
+//   - Top bar dùng ViSealLogo (hướng C — dấu son + nhịp tim) + wordmark.
+//
+// Web3Auth wiring giữ nguyên: ping/getNonce/login retry, hint modal, Sentry,
+// encryption keypair register, deriveRolesFromUser.
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
     ActivityIndicator,
     Alert,
@@ -25,16 +25,13 @@ import {
     Platform,
     Pressable,
     ScrollView,
-    StyleSheet,
     TextInput,
     View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Text } from 'tamagui';
-import * as LocalAuthentication from 'expo-local-authentication';
 import Constants from 'expo-constants';
-import { FontAwesome6 } from '@expo/vector-icons';
-import { ArrowLeft, ChevronRight, Fingerprint, Mail, MessageSquareText } from 'lucide-react-native';
+import { ArrowLeft, ChevronDown, ChevronRight, Mail, MessageSquareText, ShieldCheck } from 'lucide-react-native';
 
 import useAuthStore from '../store/authStore';
 import authService from '../services/auth.service';
@@ -43,56 +40,69 @@ import { getOrCreateEncryptionKeypair } from '../services/nacl-crypto';
 import { deriveRolesFromUser } from '../utils/authRoles';
 import { friendlyProviderError } from '../utils/friendlyError';
 import { Sentry } from '../lib/sentry';
-import ViWordmark from '../components-v2/ViWordmark';
+import ViSealLogo from '../components-v2/ViSealLogo';
 import { useEhrPalette } from '../constants/uiColors';
+import {
+    GoogleIcon, AppleIcon, FacebookIcon, XIcon, DiscordIcon, LineIcon,
+    RedditIcon, TwitchIcon, GithubIcon, KakaoIcon, LinkedinIcon, WeiboIcon,
+    WechatIcon, FarcasterIcon,
+} from '../components-v2/BrandIcons';
 
 const SERIF = 'Fraunces_400Regular';
 const SERIF_ITALIC = 'Fraunces_400Regular_Italic';
+const SERIF_MED = 'Fraunces_500Medium';
 const SANS = 'DMSans_400Regular';
 const SANS_MEDIUM = 'DMSans_500Medium';
 const SANS_SEMI = 'DMSans_600SemiBold';
+const SANS_BOLD = 'DMSans_700Bold';
 
 const isExpoGo = Constants.appOwnership === 'expo';
-const OAUTH_SOCIAL_PROVIDERS = new Set(['google', 'apple', 'twitter', 'facebook', 'discord']);
+const OAUTH_SOCIAL_PROVIDERS = new Set([
+    'google', 'apple', 'twitter', 'facebook', 'discord',
+    'line', 'reddit', 'twitch', 'github', 'kakao',
+    'linkedin', 'weibo', 'wechat', 'farcaster',
+]);
 
 type ProviderKey =
-    | 'google'
-    | 'apple'
-    | 'twitter'
-    | 'facebook'
-    | 'discord'
-    | 'email_passwordless'
-    | 'sms_passwordless';
+    | 'google' | 'apple' | 'twitter' | 'facebook' | 'discord' | 'line'
+    | 'reddit' | 'twitch' | 'github' | 'kakao' | 'linkedin'
+    | 'weibo' | 'wechat' | 'farcaster'
+    | 'email_passwordless' | 'sms_passwordless';
 
-const TOP_SOCIAL: Array<{ key: ProviderKey; icon: string; label: string }> = [
-    { key: 'google', icon: 'google', label: 'Google' },
-    { key: 'twitter', icon: 'x-twitter', label: 'X' },
-    { key: 'facebook', icon: 'facebook-f', label: 'Facebook' },
-    { key: 'apple', icon: 'apple', label: 'Apple' },
+type SocialTile = {
+    key: ProviderKey;
+    label: string;
+    Icon: React.ComponentType<{ size?: number }>;
+};
+
+// 6 providers ưu tiên hiển thị mặc định (theo mockup).
+const PRIMARY_SOCIAL: SocialTile[] = [
+    { key: 'google', label: 'Google', Icon: GoogleIcon },
+    { key: 'apple', label: 'Apple', Icon: AppleIcon },
+    { key: 'facebook', label: 'Facebook', Icon: FacebookIcon },
+    { key: 'twitter', label: 'X', Icon: XIcon },
+    { key: 'discord', label: 'Discord', Icon: DiscordIcon },
+    { key: 'line', label: 'LINE', Icon: LineIcon },
 ];
 
-const MORE_SOCIAL: Array<{ key: ProviderKey; icon: string; label: string }> = [
-    { key: 'discord', icon: 'discord', label: 'Discord' },
+// 8 providers hiển thị khi user bấm "Xem thêm".
+const MORE_SOCIAL: SocialTile[] = [
+    { key: 'reddit', label: 'Reddit', Icon: RedditIcon },
+    { key: 'twitch', label: 'Twitch', Icon: TwitchIcon },
+    { key: 'github', label: 'GitHub', Icon: GithubIcon },
+    { key: 'kakao', label: 'Kakao', Icon: KakaoIcon },
+    { key: 'linkedin', label: 'LinkedIn', Icon: LinkedinIcon },
+    { key: 'weibo', label: 'Weibo', Icon: WeiboIcon },
+    { key: 'wechat', label: 'WeChat', Icon: WechatIcon },
+    { key: 'farcaster', label: 'Farcaster', Icon: FarcasterIcon },
 ];
 
 export default function LoginScreen({ navigation }: any) {
     const palette = useEhrPalette();
-    const [selectedProvider, setSelectedProvider] = useState<ProviderKey>('google');
+    const [selectedProvider, setSelectedProvider] = useState<ProviderKey>('email_passwordless');
     const [loading, setLoading] = useState(false);
-    const [isBiometricSupported, setIsBiometricSupported] = useState(false);
     const [showMore, setShowMore] = useState(false);
     const { login } = useAuthStore();
-
-    useEffect(() => {
-        (async () => {
-            try {
-                const compatible = await LocalAuthentication.hasHardwareAsync();
-                setIsBiometricSupported(compatible);
-            } catch {
-                setIsBiometricSupported(false);
-            }
-        })();
-    }, []);
 
     const shouldRetryAuthStep = (error: any) => {
         if (!error) return false;
@@ -168,13 +178,11 @@ export default function LoginScreen({ navigation }: any) {
         }
     };
 
-    const handleWeb3Login = async (providerKey?: ProviderKey) => {
-        const providerToUse = providerKey || selectedProvider;
-
-        if (isExpoGo && OAUTH_SOCIAL_PROVIDERS.has(providerToUse)) {
+    const handleWeb3Login = async (providerKey: ProviderKey) => {
+        if (isExpoGo && OAUTH_SOCIAL_PROVIDERS.has(providerKey)) {
             Alert.alert(
-                'Expo Go limitation',
-                `"${providerToUse}" OAuth không hoạt động trong Expo Go vì Google/Apple chặn URL exp://\n\nHãy thử:\n- Email OTP (hoạt động trong Expo Go)\n- Build dev client: npx expo run:android`,
+                'Expo Go không hỗ trợ',
+                `"${providerKey}" không hoạt động trong Expo Go vì Google/Apple chặn URL exp://\n\nHãy dùng Email OTP hoặc build dev client: npx expo run:android`,
                 [
                     { text: 'Dùng Email OTP', onPress: () => handleWeb3Login('email_passwordless') },
                     { text: 'Đóng', style: 'cancel' },
@@ -184,26 +192,26 @@ export default function LoginScreen({ navigation }: any) {
         }
 
         let loginHint: string | undefined;
-        if (providerToUse === 'sms_passwordless' || providerToUse === 'email_passwordless') {
-            const hint = await promptForLoginHint(providerToUse);
+        if (providerKey === 'sms_passwordless' || providerKey === 'email_passwordless') {
+            const hint = await promptForLoginHint(providerKey);
             if (!hint) return;
             loginHint = hint;
         }
 
         try {
             setLoading(true);
-            setSelectedProvider(providerToUse);
+            setSelectedProvider(providerKey);
 
             await walletActionService.ensureWeb3AuthReady();
             const { walletClient, address } = await walletActionService.loginWithWeb3Auth(
-                providerToUse,
+                providerKey,
                 loginHint ? { loginHint } : undefined,
             );
 
             await runAuthStepWithRetry(() => authService.ping(), 1);
             const nonceRes = await runAuthStepWithRetry(() => authService.getNonce(address), 1);
             const message = nonceRes?.message;
-            if (!message) throw new Error('Không lấy được nonce từ backend.');
+            if (!message) throw new Error('Không lấy được nonce từ hệ thống.');
 
             const signature = await walletActionService.signMessage(walletClient, message);
             const loginResult = await runAuthStepWithRetry(
@@ -212,7 +220,7 @@ export default function LoginScreen({ navigation }: any) {
             );
 
             if (!loginResult?.token) {
-                throw new Error('Backend không trả về token đăng nhập hợp lệ.');
+                throw new Error('Hệ thống không trả về token đăng nhập hợp lệ.');
             }
 
             const availableRoles = deriveRolesFromUser(loginResult.user);
@@ -241,7 +249,6 @@ export default function LoginScreen({ navigation }: any) {
             if (isAbandoned) {
                 const isTimeout = raw.includes('quá thời gian') || raw.includes('timeout') || raw.includes('timed out');
                 if (isTimeout) {
-                    console.warn('[Login] Abandoned (timeout):', error?.message || error);
                     Alert.alert(
                         'Hết phiên đăng nhập',
                         'Bạn chưa hoàn thành xác nhận trên trình duyệt. Hãy thử đăng nhập lại khi sẵn sàng.',
@@ -252,25 +259,20 @@ export default function LoginScreen({ navigation }: any) {
             console.error('Web3Auth Login error:', error);
             try {
                 Sentry.addBreadcrumb({
-                    category: 'auth',
-                    level: 'error',
+                    category: 'auth', level: 'error',
                     message: 'Web3Auth login failed',
-                    data: {
-                        provider: providerToUse,
-                        errorCode: error?.code,
-                        message: String(error?.message || '').slice(0, 200),
-                    },
+                    data: { provider: providerKey, errorCode: error?.code, message: String(error?.message || '').slice(0, 200) },
                 });
                 Sentry.captureException(error);
             } catch {}
+
             let message: string;
             if (error?.code === 'BACKEND_UNREACHABLE') {
                 message = 'Không kết nối được hệ thống. Vui lòng kiểm tra mạng và thử lại.';
             } else if (raw.includes('cannot connect to expo cli') || raw.includes('could not load bundle')) {
                 message = 'Ứng dụng không kết nối được Metro. Hãy chạy expo start và thử lại.';
             } else {
-                // friendlyProviderError map OAuth codes sang VN (user feedback A6).
-                message = friendlyProviderError(error, providerToUse);
+                message = friendlyProviderError(error, providerKey);
             }
             Alert.alert('Đăng nhập thất bại', message);
         } finally {
@@ -278,43 +280,66 @@ export default function LoginScreen({ navigation }: any) {
         }
     };
 
-    const handleBiometricAuth = async () => {
-        try {
-            const biometricAuth = await LocalAuthentication.authenticateAsync({
-                promptMessage: 'Xác thực sinh trắc học',
-                fallbackLabel: 'Sử dụng mật khẩu',
-            });
-            if (biometricAuth.success) await handleWeb3Login();
-        } catch (error) {
-            console.error(error);
-        }
-    };
-
-    const renderSocialIcon = (item: { key: ProviderKey; icon: string; label: string }) => {
-        const isLoading = loading && selectedProvider === item.key;
+    const renderSocialTile = (tile: SocialTile) => {
+        const isLoading = loading && selectedProvider === tile.key;
+        const Icon = tile.Icon;
         return (
             <Pressable
-                key={item.key}
-                onPress={() => handleWeb3Login(item.key)}
+                key={tile.key}
+                onPress={() => handleWeb3Login(tile.key)}
                 disabled={loading}
+                accessibilityLabel={`Đăng nhập bằng ${tile.label}`}
                 style={({ pressed }) => ({
-                    width: 52,
-                    height: 52,
-                    borderRadius: 14,
+                    flex: 1,
+                    minHeight: 60,
+                    paddingVertical: 8,
+                    paddingHorizontal: 4,
+                    borderRadius: 13,
                     borderWidth: 0.75,
-                    borderColor: palette.EHR_OUTLINE_SOFT,
-                    backgroundColor: palette.EHR_SURFACE_LOWEST,
+                    borderColor: pressed ? '#34404c' : palette.EHR_OUTLINE_VARIANT,
+                    backgroundColor: pressed ? '#0c0e13' : palette.EHR_SURFACE_LOWEST,
                     alignItems: 'center',
                     justifyContent: 'center',
-                    opacity: pressed ? 0.7 : 1,
+                    gap: 6,
+                    opacity: loading && !isLoading ? 0.55 : 1,
                 })}
             >
                 {isLoading ? (
                     <ActivityIndicator size="small" color={palette.EHR_PRIMARY} />
                 ) : (
-                    <FontAwesome6 name={item.icon as any} size={20} color={palette.EHR_ON_SURFACE} />
+                    <Icon size={23} />
                 )}
+                <Text style={{
+                    fontFamily: SANS_SEMI, fontSize: 10.5,
+                    color: palette.EHR_ON_SURFACE_VARIANT,
+                    fontWeight: '600',
+                }}>
+                    {tile.label}
+                </Text>
             </Pressable>
+        );
+    };
+
+    const renderTileGrid = (tiles: SocialTile[]) => {
+        // 3 cột — group thành rows of 3, render mỗi row trong View row gap 8.
+        const rows: SocialTile[][] = [];
+        for (let i = 0; i < tiles.length; i += 3) {
+            rows.push(tiles.slice(i, i + 3));
+        }
+        return (
+            <View style={{ gap: 8 }}>
+                {rows.map((row, idx) => (
+                    <View key={idx} style={{ flexDirection: 'row', gap: 8 }}>
+                        {row.map(renderSocialTile)}
+                        {/* Pad row cuối nếu thiếu để giữ width đều */}
+                        {row.length < 3
+                            ? Array.from({ length: 3 - row.length }).map((_, i) => (
+                                  <View key={`pad-${i}`} style={{ flex: 1 }} />
+                              ))
+                            : null}
+                    </View>
+                ))}
+            </View>
         );
     };
 
@@ -322,217 +347,228 @@ export default function LoginScreen({ navigation }: any) {
         <View style={{ flex: 1, backgroundColor: palette.EHR_SURFACE }}>
             <SafeAreaView style={{ flex: 1 }}>
                 <ScrollView
-                    contentContainerStyle={{ flexGrow: 1, paddingHorizontal: 22, paddingBottom: 30 }}
+                    contentContainerStyle={{ flexGrow: 1, paddingHorizontal: 24, paddingBottom: 24 }}
                     keyboardShouldPersistTaps="handled"
                     showsVerticalScrollIndicator={false}
                 >
-                    {/* TopBar */}
+                    {/* Top bar — back + wordmark+seal + spacer */}
                     <View
                         style={{
                             flexDirection: 'row',
                             alignItems: 'center',
                             justifyContent: 'space-between',
-                            paddingTop: 8,
-                            paddingBottom: 14,
+                            paddingTop: 2,
+                            paddingBottom: 6,
                         }}
                     >
                         <Pressable
                             onPress={() => navigation.goBack()}
                             disabled={loading}
+                            hitSlop={8}
+                            accessibilityLabel="Quay lại"
                             style={({ pressed }) => ({
-                                width: 40,
-                                height: 40,
-                                borderRadius: 20,
-                                alignItems: 'center',
-                                justifyContent: 'center',
+                                width: 44, height: 44, borderRadius: 22,
+                                alignItems: 'center', justifyContent: 'center',
                                 opacity: pressed ? 0.5 : 1,
                             })}
-                            hitSlop={8}
                         >
-                            <ArrowLeft size={18} color={palette.EHR_ON_SURFACE_VARIANT} />
+                            <ArrowLeft size={20} color={palette.EHR_ON_SURFACE_VARIANT} />
                         </Pressable>
-                        <ViWordmark size={16} color={palette.EHR_ON_SURFACE_VARIANT} />
-                        <View style={{ width: 40 }} />
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7 }}>
+                            <ViSealLogo size={22} />
+                            <Text style={{
+                                fontFamily: SANS_SEMI, fontSize: 13,
+                                letterSpacing: 1.5, textTransform: 'uppercase',
+                                color: palette.EHR_ON_SURFACE_VARIANT,
+                                fontWeight: '600',
+                            }}>
+                                ViEH
+                            </Text>
+                        </View>
+                        <View style={{ width: 44 }} />
                     </View>
 
                     {/* Hero serif greeting */}
-                    <View style={{ marginTop: 20, marginBottom: 28 }}>
-                        <Text
-                            style={{
-                                fontFamily: SERIF,
-                                fontSize: 34,
+                    <View style={{ marginTop: 6, marginBottom: 16 }}>
+                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'baseline' }}>
+                            <Text style={{
+                                fontFamily: SERIF, fontSize: 33,
                                 color: palette.EHR_ON_SURFACE,
-                                letterSpacing: -0.8,
-                                lineHeight: 38,
-                            }}
-                        >
-                            Đăng nhập
-                        </Text>
-                        <Text
-                            style={{
-                                marginTop: 4,
-                                fontFamily: SERIF_ITALIC,
-                                fontStyle: 'italic',
-                                fontSize: 34,
-                                color: palette.EHR_PRIMARY,
-                                letterSpacing: -0.8,
-                                lineHeight: 38,
-                            }}
-                        >
-                            an toàn.
-                        </Text>
-                        <Text
-                            style={{
-                                marginTop: 10,
-                                fontFamily: SANS,
-                                fontSize: 14,
-                                color: palette.EHR_ON_SURFACE_VARIANT,
-                                lineHeight: 21,
-                                maxWidth: 320,
-                            }}
-                        >
-                            Hệ thống không lưu mật khẩu. Dữ liệu của bạn được bảo mật bằng mã hoá đầu-cuối.
-                        </Text>
-                    </View>
-
-                    {/* Social row */}
-                    <FieldLabel>Đăng nhập bằng tài khoản</FieldLabel>
-                    <View style={{ flexDirection: 'row', gap: 10, marginTop: 10, marginBottom: 10 }}>
-                        {TOP_SOCIAL.map(renderSocialIcon)}
-                        <Pressable
-                            onPress={() => setShowMore((s) => !s)}
-                            disabled={loading}
-                            style={({ pressed }) => ({
-                                width: 52,
-                                height: 52,
-                                borderRadius: 14,
-                                borderWidth: 0.75,
-                                borderColor: palette.EHR_OUTLINE_SOFT,
-                                backgroundColor: palette.EHR_SURFACE_LOWEST,
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                opacity: pressed ? 0.7 : 1,
-                            })}
-                        >
-                            <Text
-                                style={{
-                                    fontFamily: SANS_SEMI,
-                                    fontSize: 18,
-                                    color: palette.EHR_ON_SURFACE_VARIANT,
-                                    fontWeight: '700',
-                                }}
-                            >
-                                •••
+                                letterSpacing: -0.9, lineHeight: 34,
+                            }}>
+                                Đăng nhập{' '}
                             </Text>
-                        </Pressable>
-                    </View>
-
-                    {showMore ? (
-                        <View style={{ flexDirection: 'row', gap: 10, marginBottom: 10 }}>
-                            {MORE_SOCIAL.map(renderSocialIcon)}
+                            <Text style={{
+                                fontFamily: SERIF_ITALIC, fontStyle: 'italic',
+                                fontSize: 33,
+                                color: palette.EHR_PRIMARY,
+                                letterSpacing: -0.9, lineHeight: 34,
+                                fontWeight: '500',
+                            }}>
+                                an toàn.
+                            </Text>
                         </View>
-                    ) : null}
-
-                    {/* Divider */}
-                    <View
-                        style={{
-                            flexDirection: 'row',
-                            alignItems: 'center',
-                            marginVertical: 22,
-                            gap: 10,
-                        }}
-                    >
-                        <View style={{ flex: 1, height: 0.5, backgroundColor: palette.EHR_OUTLINE_SOFT }} />
-                        <Text
-                            style={{
-                                fontFamily: SANS_SEMI,
-                                fontSize: 10,
-                                color: palette.EHR_TEXT_MUTED,
-                                letterSpacing: 1.2,
-                                fontWeight: '700',
-                            }}
-                        >
-                            HOẶC
+                        <Text style={{
+                            marginTop: 9,
+                            fontFamily: SANS,
+                            fontSize: 13.5,
+                            color: palette.EHR_ON_SURFACE_VARIANT,
+                            lineHeight: 20,
+                            maxWidth: 320,
+                        }}>
+                            Hệ thống không lưu mật khẩu. Mọi truy cập đều được mã hoá đầu-cuối.
                         </Text>
-                        <View style={{ flex: 1, height: 0.5, backgroundColor: palette.EHR_OUTLINE_SOFT }} />
                     </View>
 
-                    {/* Email + Phone passwordless */}
-                    <FieldLabel>Mã xác thực một lần</FieldLabel>
-                    <View style={{ marginTop: 10, gap: 8 }}>
+                    {/* Section label */}
+                    <SectionLabel icon={<ShieldCheck size={13} color={palette.EHR_TEXT_MUTED} />}>
+                        Đăng nhập không mật khẩu
+                    </SectionLabel>
+
+                    {/* Passwordless rows — promoted to primary */}
+                    <View style={{ gap: 8 }}>
                         <PasswordlessRow
-                            icon={<Mail size={18} color={palette.EHR_PRIMARY} />}
-                            title="Dùng Email"
-                            subtitle="Nhận mã OTP qua email"
+                            recommended
+                            icon={<Mail size={22} color={palette.EHR_PRIMARY} />}
+                            title="Đăng nhập bằng Email"
+                            subtitle="Mã xác thực gửi qua email"
                             badge="Khuyên dùng"
                             loading={loading && selectedProvider === 'email_passwordless'}
                             disabled={loading}
                             onPress={() => handleWeb3Login('email_passwordless')}
                         />
                         <PasswordlessRow
-                            icon={<MessageSquareText size={18} color={palette.EHR_PRIMARY} />}
-                            title="Dùng số điện thoại"
-                            subtitle="Nhận mã OTP qua SMS"
+                            icon={<MessageSquareText size={22} color={palette.EHR_PRIMARY} />}
+                            title="Đăng nhập bằng số điện thoại"
+                            subtitle="Mã xác thực gửi qua SMS"
                             loading={loading && selectedProvider === 'sms_passwordless'}
                             disabled={loading}
                             onPress={() => handleWeb3Login('sms_passwordless')}
                         />
                     </View>
 
-                    {/* Biometric quick-login */}
-                    {isBiometricSupported ? (
-                        <Pressable
-                            onPress={handleBiometricAuth}
-                            disabled={loading}
-                            style={({ pressed }) => ({
-                                marginTop: 22,
-                                alignSelf: 'center',
-                                flexDirection: 'row',
-                                alignItems: 'center',
-                                gap: 8,
-                                paddingHorizontal: 14,
-                                paddingVertical: 10,
-                                opacity: pressed ? 0.5 : 1,
-                            })}
-                        >
-                            <Fingerprint size={16} color={palette.EHR_PRIMARY} />
-                            <Text
-                                style={{
-                                    fontFamily: SANS_MEDIUM,
-                                    fontSize: 13,
-                                    color: palette.EHR_PRIMARY,
-                                    fontWeight: '600',
-                                }}
-                            >
-                                Sinh trắc học (đăng nhập nhanh)
-                            </Text>
-                        </Pressable>
-                    ) : null}
-
-                    {/* Footer trust line */}
+                    {/* Divider */}
                     <View
                         style={{
-                            marginTop: 26,
-                            flexDirection: 'row',
-                            alignItems: 'center',
-                            justifyContent: 'center',
+                            flexDirection: 'row', alignItems: 'center',
+                            marginVertical: 14, gap: 12,
+                        }}
+                    >
+                        <View style={{ flex: 1, height: 0.5, backgroundColor: palette.EHR_OUTLINE_VARIANT }} />
+                        <Text style={{
+                            fontFamily: SANS_BOLD, fontSize: 10.5,
+                            color: palette.EHR_TEXT_MUTED,
+                            letterSpacing: 1.3, textTransform: 'uppercase',
+                            fontWeight: '700',
+                        }}>
+                            Hoặc đăng nhập bằng mạng xã hội
+                        </Text>
+                        <View style={{ flex: 1, height: 0.5, backgroundColor: palette.EHR_OUTLINE_VARIANT }} />
+                    </View>
+
+                    {/* Social grid 3-cột — 6 primary providers */}
+                    {renderTileGrid(PRIMARY_SOCIAL)}
+
+                    {/* Expandable more (8 providers) */}
+                    {showMore ? (
+                        <View style={{ marginTop: 10 }}>
+                            {renderTileGrid(MORE_SOCIAL)}
+                        </View>
+                    ) : null}
+
+                    {/* Toggle "Xem thêm" / "Thu gọn" */}
+                    <Pressable
+                        onPress={() => setShowMore((s) => !s)}
+                        disabled={loading}
+                        accessibilityRole="button"
+                        accessibilityLabel={showMore ? 'Thu gọn danh sách mạng xã hội' : 'Xem thêm mạng xã hội'}
+                        style={({ pressed }) => ({
+                            marginTop: 10,
+                            minHeight: 44,
+                            flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+                            gap: 8,
+                            borderRadius: 14,
+                            borderWidth: 0.75,
+                            borderColor: pressed ? '#34404c' : palette.EHR_OUTLINE_VARIANT,
+                            backgroundColor: 'transparent',
+                            paddingHorizontal: 14,
+                        })}
+                    >
+                        <Text style={{
+                            fontFamily: SANS_SEMI, fontSize: 13.5,
+                            color: palette.EHR_ON_SURFACE_VARIANT,
+                            fontWeight: '600', letterSpacing: 0.2,
+                        }}>
+                            {showMore ? 'Thu gọn' : 'Xem thêm'}
+                        </Text>
+                        <View style={{
+                            paddingHorizontal: 8, paddingVertical: 2,
+                            borderRadius: 999,
+                            backgroundColor: palette.EHR_SURFACE_HIGH,
+                        }}>
+                            <Text style={{
+                                fontFamily: SANS_BOLD, fontSize: 10.5,
+                                color: palette.EHR_TEXT_MUTED,
+                                fontWeight: '700',
+                            }}>
+                                {MORE_SOCIAL.length}
+                            </Text>
+                        </View>
+                        <ChevronDown
+                            size={14}
+                            color={palette.EHR_ON_SURFACE_VARIANT}
+                            style={{ transform: [{ rotate: showMore ? '180deg' : '0deg' }] }}
+                        />
+                    </Pressable>
+
+                    {/* Legal disclosure card jade-tinted (NĐ 13/2023) */}
+                    <View
+                        style={{
+                            marginTop: 14,
+                            flexDirection: 'row', gap: 10,
+                            paddingHorizontal: 13, paddingVertical: 11,
+                            borderRadius: 13,
+                            backgroundColor: 'rgba(123,168,138,0.05)',
+                            borderWidth: 0.75,
+                            borderColor: 'rgba(123,168,138,0.16)',
+                        }}
+                    >
+                        <ShieldCheck size={18} color={palette.EHR_SUCCESS ?? '#7BA88A'} />
+                        <Text style={{
+                            flex: 1,
+                            fontFamily: SANS, fontSize: 11,
+                            color: palette.EHR_ON_SURFACE_VARIANT,
+                            lineHeight: 16.5,
+                        }}>
+                            Tiếp tục nghĩa là bạn đồng ý Điều khoản & Chính sách bảo mật, và đã hiểu{' '}
+                            <Text style={{
+                                color: palette.EHR_ON_SURFACE,
+                                fontFamily: SANS_MEDIUM, fontWeight: '500',
+                            }}>
+                                Nghị định 13/2023/NĐ-CP
+                            </Text>
+                            {' '}về xử lý dữ liệu cá nhân (gồm dữ liệu y tế nhạy cảm).
+                        </Text>
+                    </View>
+
+                    {/* Footer meta */}
+                    <View
+                        style={{
+                            marginTop: 11,
+                            flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
                             gap: 10,
                         }}
                     >
-                        <View style={{ width: 14, height: 0.5, backgroundColor: palette.EHR_OUTLINE_SOFT }} />
-                        <Text
-                            style={{
-                                fontFamily: SANS_SEMI,
-                                fontSize: 10.5,
-                                color: palette.EHR_TEXT_MUTED,
-                                letterSpacing: 1.2,
-                                textTransform: 'uppercase',
-                                fontWeight: '600',
-                            }}
-                        >
+                        <View style={{ width: 16, height: 0.5, backgroundColor: palette.EHR_OUTLINE_VARIANT }} />
+                        <Text style={{
+                            fontFamily: SANS_SEMI, fontSize: 10,
+                            color: palette.EHR_TEXT_MUTED,
+                            letterSpacing: 1.3, textTransform: 'uppercase',
+                            fontWeight: '600',
+                        }}>
                             ViEH · Bảo mật phân quyền
                         </Text>
-                        <View style={{ width: 14, height: 0.5, backgroundColor: palette.EHR_OUTLINE_SOFT }} />
+                        <View style={{ width: 16, height: 0.5, backgroundColor: palette.EHR_OUTLINE_VARIANT }} />
                     </View>
                 </ScrollView>
             </SafeAreaView>
@@ -546,76 +582,92 @@ export default function LoginScreen({ navigation }: any) {
             >
                 <KeyboardAvoidingView
                     behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-                    style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', paddingHorizontal: 24 }}
+                    style={{
+                        flex: 1, backgroundColor: 'rgba(0,0,0,0.66)',
+                        justifyContent: 'center', paddingHorizontal: 24,
+                    }}
                 >
-                    <View style={{ backgroundColor: palette.EHR_SURFACE_LOWEST, borderRadius: 20, padding: 22 }}>
-                        <Text
-                            style={{
-                                fontFamily: SERIF,
-                                fontSize: 20,
-                                color: palette.EHR_ON_SURFACE,
-                                letterSpacing: -0.2,
-                                marginBottom: 6,
-                            }}
-                        >
+                    <View style={{
+                        backgroundColor: palette.EHR_SURFACE_LOWEST,
+                        borderRadius: 22,
+                        borderWidth: 0.75,
+                        borderColor: palette.EHR_OUTLINE_VARIANT,
+                        padding: 24,
+                    }}>
+                        <Text style={{
+                            fontFamily: SERIF_MED, fontSize: 23,
+                            color: palette.EHR_ON_SURFACE,
+                            letterSpacing: -0.4, marginBottom: 6,
+                            fontWeight: '500',
+                        }}>
                             {hintModalProvider === 'sms_passwordless'
                                 ? 'Đăng nhập bằng số điện thoại'
                                 : 'Đăng nhập bằng email'}
                         </Text>
-                        <Text
-                            style={{
-                                fontFamily: SANS,
-                                fontSize: 13,
-                                color: palette.EHR_ON_SURFACE_VARIANT,
-                                lineHeight: 19,
-                                marginBottom: 14,
-                            }}
-                        >
+                        <Text style={{
+                            fontFamily: SANS, fontSize: 13,
+                            color: palette.EHR_ON_SURFACE_VARIANT,
+                            lineHeight: 20, marginBottom: 16,
+                        }}>
                             {hintModalProvider === 'sms_passwordless'
                                 ? 'Nhập số theo định dạng quốc tế (0xxx tự đổi thành +84xxx).'
-                                : 'Mã xác thực sẽ được gửi đến email này.'}
+                                : 'Mã xác thực một lần sẽ được gửi đến email này.'}
                         </Text>
                         <TextInput
-                            style={{ borderWidth: 0.75, borderColor: palette.EHR_OUTLINE_SOFT, borderRadius: 12, paddingVertical: 12, paddingHorizontal: 14, fontFamily: 'monospace', fontSize: 14, color: palette.EHR_ON_SURFACE, backgroundColor: palette.EHR_SURFACE }}
+                            style={{
+                                borderWidth: 0.75,
+                                borderColor: palette.EHR_OUTLINE_VARIANT,
+                                borderRadius: 13,
+                                paddingVertical: 15, paddingHorizontal: 16,
+                                fontFamily: 'monospace', fontSize: 15,
+                                color: palette.EHR_ON_SURFACE,
+                                backgroundColor: palette.EHR_SURFACE,
+                            }}
                             value={hintInput}
                             onChangeText={setHintInput}
                             keyboardType={hintModalProvider === 'sms_passwordless' ? 'phone-pad' : 'email-address'}
                             autoCapitalize="none"
                             autoCorrect={false}
-                            placeholder={hintModalProvider === 'sms_passwordless' ? '+84901234567' : 'name@example.com'}
-                            placeholderTextColor={palette.EHR_OUTLINE}
+                            placeholder={hintModalProvider === 'sms_passwordless' ? '+84 90 123 4567' : 'name@example.com'}
+                            placeholderTextColor={palette.EHR_TEXT_MUTED}
                             autoFocus
                         />
-                        <View style={{ flexDirection: 'row', gap: 8, marginTop: 16 }}>
+                        <View style={{ flexDirection: 'row', gap: 10, marginTop: 18 }}>
                             <Pressable
                                 onPress={() => closeHintModal(null)}
                                 style={({ pressed }) => ({
-                                    flex: 1,
-                                    paddingVertical: 13,
-                                    borderRadius: 12,
+                                    flex: 1, minHeight: 52,
+                                    borderRadius: 13,
                                     borderWidth: 0.75,
                                     borderColor: palette.EHR_OUTLINE_VARIANT,
-                                    alignItems: 'center',
+                                    alignItems: 'center', justifyContent: 'center',
                                     opacity: pressed ? 0.7 : 1,
                                 })}
                             >
-                                <Text style={{ fontFamily: SANS_MEDIUM, fontSize: 14, color: palette.EHR_ON_SURFACE_VARIANT }}>
+                                <Text style={{
+                                    fontFamily: SANS_SEMI, fontSize: 15,
+                                    color: palette.EHR_ON_SURFACE_VARIANT,
+                                    fontWeight: '600',
+                                }}>
                                     Huỷ
                                 </Text>
                             </Pressable>
                             <Pressable
                                 onPress={handleHintConfirm}
                                 style={({ pressed }) => ({
-                                    flex: 1,
-                                    paddingVertical: 13,
-                                    borderRadius: 12,
-                                    backgroundColor: palette.EHR_ON_SURFACE,
-                                    alignItems: 'center',
+                                    flex: 1, minHeight: 52,
+                                    borderRadius: 13,
+                                    backgroundColor: palette.EHR_PRIMARY,
+                                    alignItems: 'center', justifyContent: 'center',
                                     opacity: pressed ? 0.85 : 1,
                                 })}
                             >
-                                <Text style={{ fontFamily: SANS_SEMI, fontSize: 14, color: palette.EHR_SURFACE, fontWeight: '600' }}>
-                                    Tiếp tục
+                                <Text style={{
+                                    fontFamily: SANS_SEMI, fontSize: 15,
+                                    color: '#FAF7F1',
+                                    fontWeight: '600',
+                                }}>
+                                    Gửi mã
                                 </Text>
                             </Pressable>
                         </View>
@@ -626,32 +678,28 @@ export default function LoginScreen({ navigation }: any) {
     );
 }
 
-function FieldLabel({ children }: { children: React.ReactNode }) {
+function SectionLabel({ children, icon }: { children: React.ReactNode; icon?: React.ReactNode }) {
     const palette = useEhrPalette();
     return (
-        <Text
-            style={{
-                fontFamily: SANS_SEMI,
-                fontSize: 11,
+        <View style={{
+            flexDirection: 'row', alignItems: 'center', gap: 8,
+            marginBottom: 9,
+        }}>
+            {icon}
+            <Text style={{
+                fontFamily: SANS_BOLD, fontSize: 11,
                 color: palette.EHR_TEXT_MUTED,
-                letterSpacing: 1,
-                textTransform: 'uppercase',
-                fontWeight: '600',
-            }}
-        >
-            {children}
-        </Text>
+                letterSpacing: 1.4, textTransform: 'uppercase',
+                fontWeight: '700',
+            }}>
+                {children}
+            </Text>
+        </View>
     );
 }
 
 function PasswordlessRow({
-    icon,
-    title,
-    subtitle,
-    badge,
-    loading,
-    disabled,
-    onPress,
+    icon, title, subtitle, badge, loading, disabled, onPress, recommended,
 }: {
     icon: React.ReactNode;
     title: string;
@@ -660,42 +708,56 @@ function PasswordlessRow({
     loading: boolean;
     disabled: boolean;
     onPress: () => void;
+    recommended?: boolean;
 }) {
     const palette = useEhrPalette();
     return (
         <Pressable
             onPress={onPress}
             disabled={disabled}
+            accessibilityRole="button"
+            accessibilityLabel={title}
             style={({ pressed }) => ({
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: 12,
-                paddingVertical: 14,
-                paddingHorizontal: 14,
+                flexDirection: 'row', alignItems: 'center',
+                gap: 13,
+                minHeight: 60,
+                paddingVertical: 11, paddingHorizontal: 14,
                 borderRadius: 14,
-                backgroundColor: palette.EHR_SURFACE_LOWEST,
+                backgroundColor: recommended
+                    ? `${palette.EHR_PRIMARY}10`
+                    : palette.EHR_SURFACE_LOWEST,
                 borderWidth: 0.75,
-                borderColor: palette.EHR_OUTLINE_SOFT,
-                opacity: pressed ? 0.7 : 1,
+                borderColor: pressed
+                    ? '#34404c'
+                    : recommended
+                        ? `${palette.EHR_PRIMARY}73`
+                        : palette.EHR_OUTLINE_VARIANT,
+                opacity: pressed ? 0.85 : 1,
             })}
         >
             <View
                 style={{
-                    width: 36,
-                    height: 36,
-                    borderRadius: 18,
-                    backgroundColor: `${palette.EHR_PRIMARY}1A`,
-                    alignItems: 'center',
-                    justifyContent: 'center',
+                    width: 40, height: 40,
+                    borderRadius: 11,
+                    backgroundColor: `${palette.EHR_PRIMARY}22`,
+                    alignItems: 'center', justifyContent: 'center',
                 }}
             >
                 {icon}
             </View>
             <View style={{ flex: 1 }}>
-                <Text style={{ fontFamily: SANS_MEDIUM, fontSize: 14, color: palette.EHR_ON_SURFACE, fontWeight: '500' }}>
+                <Text style={{
+                    fontFamily: SANS_SEMI, fontSize: 14.5,
+                    color: palette.EHR_ON_SURFACE,
+                    fontWeight: '600', letterSpacing: -0.2,
+                }}>
                     {title}
                 </Text>
-                <Text style={{ marginTop: 2, fontFamily: SANS, fontSize: 11.5, color: palette.EHR_TEXT_MUTED }}>
+                <Text style={{
+                    marginTop: 3,
+                    fontFamily: SANS, fontSize: 11.5,
+                    color: palette.EHR_TEXT_MUTED,
+                }}>
                     {subtitle}
                 </Text>
             </View>
@@ -704,20 +766,22 @@ function PasswordlessRow({
             ) : badge ? (
                 <View
                     style={{
-                        paddingHorizontal: 8,
-                        paddingVertical: 3,
+                        paddingHorizontal: 10, paddingVertical: 5,
                         borderRadius: 999,
-                        backgroundColor: `${palette.EHR_PRIMARY}1A`,
+                        backgroundColor: `${palette.EHR_PRIMARY}24`,
                     }}
                 >
-                    <Text style={{ fontFamily: SANS_SEMI, fontSize: 10, color: palette.EHR_PRIMARY, fontWeight: '700', letterSpacing: 0.4 }}>
+                    <Text style={{
+                        fontFamily: SANS_BOLD, fontSize: 10.5,
+                        color: palette.EHR_PRIMARY,
+                        fontWeight: '700', letterSpacing: 0.3,
+                    }}>
                         {badge}
                     </Text>
                 </View>
             ) : (
-                <ChevronRight size={16} color={palette.EHR_TEXT_MUTED} />
+                <ChevronRight size={18} color={palette.EHR_TEXT_MUTED} />
             )}
         </Pressable>
     );
 }
-

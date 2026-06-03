@@ -334,7 +334,7 @@ export default function RoleSelectionScreen() {
                         >
                             <ArrowLeft size={18} color={palette.EHR_ON_SURFACE_VARIANT} />
                         </Pressable>
-                        <ViWordmark size={16} color={palette.EHR_ON_SURFACE_VARIANT} />
+                        <ViWordmark size={16} color={palette.EHR_ON_SURFACE_VARIANT} withSeal />
                         <View style={{ width: 40 }} />
                     </XStack>
 

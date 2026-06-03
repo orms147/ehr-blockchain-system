@@ -290,8 +290,12 @@ async function signTypedData(walletClient, typedDataPayload) {
 }
 
 /**
- * Login via Web3Auth.
- * @param {string} loginProvider - 'google' | 'apple' | 'twitter' | 'facebook' | 'discord' | 'email_passwordless' | 'sms_passwordless'
+ * Login via Web3Auth Sapphire v8.1.0.
+ * @param {string} loginProvider - 14 social providers + 2 passwordless:
+ *   Social OAuth: 'google' | 'apple' | 'twitter' (X) | 'facebook' | 'discord' |
+ *                 'line' | 'reddit' | 'twitch' | 'github' | 'kakao' |
+ *                 'linkedin' | 'weibo' | 'wechat' | 'farcaster'
+ *   Passwordless: 'email_passwordless' | 'sms_passwordless'
  * @param {object} [options]
  * @param {string} [options.loginHint] - Required for sms_passwordless (phone in E.164 format e.g. +84901234567)
  *                                       and recommended for email_passwordless (skips Web3Auth's email input form).
@@ -308,7 +312,13 @@ async function loginWithWeb3Auth(loginProvider = 'google', options = {}) {
         // Tabs. Web3Auth logout không clear cookie browser → next login auto
         // pick last account → cùng wallet → cùng identity. Force prompt=
         // select_account để bắt user chọn lại tài khoản OAuth.
-        const SOCIAL_PROVIDERS_WITH_ACCOUNT_PICKER = ['google', 'facebook', 'apple', 'discord', 'twitter'];
+        // OAuth providers cho phép `prompt=select_account` (Google/Facebook/Apple/...
+        // dùng OAuth 2.0 standard). Một số provider (Farcaster sign-in-with, WeChat,
+        // Kakao) dùng flow custom — không support extraLoginOptions.prompt.
+        const SOCIAL_PROVIDERS_WITH_ACCOUNT_PICKER = [
+            'google', 'facebook', 'apple', 'discord', 'twitter',
+            'line', 'reddit', 'twitch', 'github', 'linkedin',
+        ];
         const extraLoginOptions = {};
         if (loginHint) {
             extraLoginOptions.login_hint = loginHint;
