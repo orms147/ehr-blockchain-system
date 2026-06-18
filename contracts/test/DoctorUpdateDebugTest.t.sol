@@ -30,11 +30,8 @@ contract DoctorUpdateDebugTest is TestHelpers {
         doctorUpdate = new DoctorUpdate(accessControl, recordRegistry, consentLedger);
         
         // Setup verified doctor
-        vm.prank(org1);
-        accessControl.registerAsOrganization();
-        
         vm.prank(ministry);
-        accessControl.verifyOrganization(org1, "Org");
+        accessControl.createOrganization("Org", org1, address(0));
         
         vm.prank(doctor1);
         accessControl.registerAsDoctor();

@@ -135,8 +135,11 @@ contract RecordRegistry is IRecordRegistry {
         if (!accessControl.isDoctor(msg.sender) && !authorizedContracts[msg.sender]) {
             revert NotDoctor();
         }
+        // F3 fix: patient must be registered (consistent with addRecordFor); prevents
+        // creating a record owned by a non-patient address.
+        if (!accessControl.isPatient(patient)) revert NotPatient();
         if (cidHash == bytes32(0)) revert EmptyCID();
-        
+
         _addRecord(cidHash, parentCidHash, recordTypeHash, msg.sender, patient);
     }
 

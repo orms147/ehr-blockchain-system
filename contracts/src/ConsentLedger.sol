@@ -321,6 +321,16 @@ contract ConsentLedger is EIP712, ReentrancyGuard, IConsentLedger {
         // direct consent. Test: test_DirectGrantClearsDelegationSource.
         recordDelegationSource[consentKey] = address(0);
 
+        // FOOTGUN FIX (F1, 2026-06-19): symmetric clear for the BULK-delegation
+        // path. grantUsingDelegation sets consentDelegationSource/...EpochAtGrant
+        // for this key; if the patient later DIRECT-grants the same (grantee, root),
+        // the stale bulk source would make a future revokeDelegation cascade-kill
+        // the legitimate direct consent. Clear it here; grantUsingDelegation re-sets
+        // both fields right after calling _grantConsent, so the bulk path is intact.
+        // Test: test_F1_DirectGrantOverBulkKey_SurvivesDelegationRevoke.
+        consentDelegationSource[consentKey] = address(0);
+        consentDelegatorEpochAtGrant[consentKey] = 0;
+
         emit ConsentGranted(patient, grantee, root, finalExpiry, allowDelegate);
     }
 

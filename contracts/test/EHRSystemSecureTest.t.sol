@@ -65,10 +65,8 @@ contract EHRSystemSecureTest is TestHelpers {
     }
     
     function _setupVerifiedDoctor() internal {
-        vm.prank(org1);
-        accessControl.registerAsOrganization();
         vm.prank(ministry);
-        accessControl.verifyOrganization(org1, "Hospital");
+        accessControl.createOrganization("Hospital", org1, address(0));
         vm.prank(doctor1);
         accessControl.registerAsDoctor();
         vm.prank(org1);

@@ -295,6 +295,24 @@ router.get('/:orgId/members', authenticate, async (req, res, next) => {
             });
         }
 
+        // F7 fix: authorization gate. The member roster (incl. CCHN license
+        // numbers + specialties) must not be enumerable by any logged-in user.
+        // Allow only an ACTIVE member of THIS org, or the Ministry. (Ministry has
+        // dedicated oversight endpoints under /api/admin; the flag here is a
+        // fail-safe — absent/false flag falls through to the membership check.)
+        const callerAddress = req.user.walletAddress.toLowerCase();
+        if (req.user.isMinistry !== true) {
+            const callerMembership = await prisma.organizationMember.findFirst({
+                where: { orgId, memberAddress: callerAddress, status: 'active' },
+            });
+            if (!callerMembership) {
+                return res.status(403).json({
+                    code: 'NOT_ORG_MEMBER',
+                    error: 'Chỉ thành viên tổ chức (hoặc Bộ Y tế) mới xem được danh sách thành viên',
+                });
+            }
+        }
+
         const where = { orgId };
         if (statusFilter !== 'all') where.status = statusFilter;
 

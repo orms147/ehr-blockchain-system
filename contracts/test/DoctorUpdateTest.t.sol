@@ -74,10 +74,8 @@ contract DoctorUpdateTest is TestHelpers {
     function _setupVerifiedDoctor(address doctor) internal {
         // Setup org only once
         if (!accessControl.isOrganization(org1)) {
-            vm.prank(org1);
-            accessControl.registerAsOrganization();
             vm.prank(ministry);
-            accessControl.verifyOrganization(org1, "Hospital");
+            accessControl.createOrganization("Hospital", org1, address(0));
         }
         
         // Register and verify doctor

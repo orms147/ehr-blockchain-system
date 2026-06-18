@@ -82,7 +82,13 @@ app.use('/api/push', pushRoutes);              // Expo push notifications
 app.use('/api/org', orgRoutes);                // Organization management
 app.use('/api/admin', adminRoutes);            // Ministry-only endpoints
 app.use('/api/profile', profileRoutes);               // User profile & metadata
-app.use('/api/test', testRoutes);              // Development only
+// F8 fix: default-DENY for the dev-only test routes (forge JWT / reset-db).
+// Previously mounted unconditionally and gated per-handler by NODE_ENV ==='production'
+// — which fails OPEN when NODE_ENV is unset/'staging'. Now mount only on explicit opt-in.
+if (process.env.ENABLE_TEST_ROUTES === 'true') {
+    app.use('/api/test', testRoutes);
+    console.warn('⚠️  /api/test/* ENABLED (ENABLE_TEST_ROUTES=true) — DEV ONLY, never in shared/prod env');
+}
 
 // Error handling
 app.use(errorHandler);

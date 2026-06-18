@@ -1,0 +1,42 @@
+# Local run for the EHR DATN backend + Postgres (advisor feedback #8).
+# Usage:
+#   1) cp backend/.env.example backend/.env  and fill RPC_URL, JWT_SECRET,
+#      the 5 contract addresses, SPONSOR_PRIVATE_KEY, PINATA_*, SUBGRAPH_URL,
+#      CREDENTIAL_ENCRYPTION_KEY  (DATABASE_URL/PORT are overridden below).
+#   2) docker compose up --build
+#   3) API at http://localhost:4000  (health: curl http://localhost:4000/health)
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ehr
+      POSTGRES_PASSWORD: ehr_local_password
+      POSTGRES_DB: ehr
+    ports:
+      - "5432:5432"
+    volumes:
+      - ehr_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ehr -d ehr"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build: ./backend
+    env_file:
+      - ./backend/.env
+    environment:
+      # Override so the API talks to the compose Postgres (ignores .env DATABASE_URL)
+      DATABASE_URL: postgresql://ehr:ehr_local_password@db:5432/ehr?schema=public
+      PORT: "4000"
+      NODE_ENV: production
+    ports:
+      - "4000:4000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  ehr_pgdata:

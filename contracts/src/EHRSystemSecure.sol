@@ -141,6 +141,13 @@ contract EHRSystemSecure is IEHRSystem, Ownable, Pausable, ReentrancyGuard, EIP7
                 : MAX_DELEGATION_DURATION;
             
             if (consentDuration > maxDuration) revert InvalidDuration();
+
+            // F2 fix: FullDelegation completes via ConsentLedger.grantDelegationInternal,
+            // which enforces MIN_DURATION = 1 day. Reject sub-day durations here so the
+            // request cannot be created and then revert unrecoverably at completion.
+            if (reqType == RequestType.FullDelegation && consentDuration < 1 days) {
+                revert InvalidDuration();
+            }
         }
 
         // Store request with cidHash (not string!)

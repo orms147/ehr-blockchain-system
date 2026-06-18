@@ -8,9 +8,15 @@ const log = createLogger('Crypto');
 // Ensure 32 byte key for AES-256
 const getEncryptionKey = () => {
     const key = process.env.CREDENTIAL_ENCRYPTION_KEY;
+    const isProd = process.env.NODE_ENV === 'production';
     if (!key) {
-        log.error('CREDENTIAL_ENCRYPTION_KEY not set! Encrypted credentials will be LOST on restart. Set a 64-char hex value in .env');
-        // Still generate ephemeral key so server doesn't crash, but log loudly
+        // F18 fix: fail FAST in production instead of silently using an ephemeral
+        // key (which makes every stored DoctorCredential undecryptable after a
+        // restart / on a second instance).
+        if (isProd) {
+            throw new Error('CREDENTIAL_ENCRYPTION_KEY is required in production (64-char hex). Refusing to start with an ephemeral key.');
+        }
+        log.error('CREDENTIAL_ENCRYPTION_KEY not set! Using an EPHEMERAL key (DEV ONLY) — encrypted credentials will be LOST on restart. Set a 64-char hex value in .env');
         return crypto.randomBytes(32);
     }
     // Key should be 64-char hex string → 32 bytes
@@ -18,8 +24,11 @@ const getEncryptionKey = () => {
     if (/^[a-fA-F0-9]{64}$/.test(hexClean)) {
         return Buffer.from(hexClean, 'hex');
     }
-    // Fallback: hash whatever string was provided to get 32 bytes
-    log.warn('CREDENTIAL_ENCRYPTION_KEY is not 64-char hex. Hashing it to derive key.');
+    // Not 64-char hex: acceptable (hashed) in dev, but reject in production.
+    if (isProd) {
+        throw new Error('CREDENTIAL_ENCRYPTION_KEY must be a 64-char hex (32-byte) value in production.');
+    }
+    log.warn('CREDENTIAL_ENCRYPTION_KEY is not 64-char hex. Hashing it to derive key (DEV ONLY).');
     return crypto.createHash('sha256').update(key).digest();
 };
 

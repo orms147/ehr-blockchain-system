@@ -26,6 +26,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Text, XStack, YStack } from 'tamagui';
 import { Heart, ScanLine, IdCard } from 'lucide-react-native';
+import { keccak256, toBytes } from 'viem';
 
 import api from '../services/api';
 import trustedContactService from '../services/trustedContact.service';
@@ -171,7 +172,10 @@ export default function TrustedContactsScreen({ route }: any) {
         }
         try {
             setCccdSaving(true);
-            await api.put('/api/profile/me/national-id', { nationalId: cccdInput });
+            // F26 fix: hash the CCCD ON-DEVICE (same scheme as EmergencyLookupScreen)
+            // so the raw national ID never leaves the device — only keccak256(toBytes(cccd)).
+            const nationalIdHash = keccak256(toBytes(cccdInput));
+            await api.put('/api/profile/me/national-id', { nationalIdHash });
             // Invalidate cache để EmergencyProfileScreen + screens dùng
             // profile query refetch ngay → enrolled flag flip true → banner
             // "Đăng ký CCCD" thay bằng "CCCD đã đăng ký". User bug 2026-05-28.
@@ -197,7 +201,7 @@ export default function TrustedContactsScreen({ route }: any) {
     const handleUnregisterCccd = async () => {
         try {
             setCccdSaving(true);
-            await api.put('/api/profile/me/national-id', { nationalId: null });
+            await api.put('/api/profile/me/national-id', { nationalIdHash: null });
             queryClient.invalidateQueries({ queryKey: ['profile', 'me'] });
             Alert.alert('Đã huỷ đăng ký Mã định danh khẩn cấp.');
             setCccdOpen(false);

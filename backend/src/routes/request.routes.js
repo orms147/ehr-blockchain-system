@@ -210,7 +210,7 @@ router.get('/as-delegate', authenticate, async (req, res, next) => {
         // 1. Find who delegated to me
         const delegations = await prisma.delegation.findMany({
             where: {
-                delegateAddress: delegateAddress,
+                delegateeAddress: delegateAddress,
                 status: 'active',
             },
             select: { patientAddress: true },
@@ -244,6 +244,7 @@ router.get('/as-delegate', authenticate, async (req, res, next) => {
 router.get('/:requestId', authenticate, async (req, res, next) => {
     try {
         const { requestId } = req.params;
+        const callerAddress = req.user.walletAddress.toLowerCase();
 
         // Try to get from database first
         const dbRequest = await prisma.accessRequest.findUnique({
@@ -251,6 +252,13 @@ router.get('/:requestId', authenticate, async (req, res, next) => {
         });
 
         if (dbRequest) {
+            // F13 fix: a request (requester/patient/cidHash/status/deadline) must
+            // only be visible to the patient or the requester (or Ministry).
+            if (dbRequest.patientAddress?.toLowerCase() !== callerAddress &&
+                dbRequest.requesterAddress?.toLowerCase() !== callerAddress &&
+                req.user.isMinistry !== true) {
+                return res.status(403).json({ code: 'FORBIDDEN', error: 'Không có quyền xem yêu cầu này' });
+            }
             return res.json(dbRequest);
         }
 
@@ -264,6 +272,12 @@ router.get('/:requestId', authenticate, async (req, res, next) => {
                     args: [requestId],
                 });
 
+                // F13 fix: same authorization gate on the on-chain fallback path.
+                if (onChainRequest.patient.toLowerCase() !== callerAddress &&
+                    onChainRequest.requester.toLowerCase() !== callerAddress &&
+                    req.user.isMinistry !== true) {
+                    return res.status(403).json({ code: 'FORBIDDEN', error: 'Không có quyền xem yêu cầu này' });
+                }
                 const statusRaw = Number(onChainRequest.status);
                 return res.json({
                     requestId,
@@ -424,6 +438,13 @@ router.post('/approve-with-sig', authenticate, requirePatientRole, async (req, r
             cascadePayloads,
         } = req.body;
         const patientAddress = req.user.walletAddress.toLowerCase();
+
+        // F10 fix: validate inputs up-front. Without this, a missing deadline makes
+        // BigInt(deadline) throw (500) and a missing requestId makes findUnique throw,
+        // instead of a clean 400.
+        if (!requestId || !signature || deadline === undefined || deadline === null) {
+            return res.status(400).json({ code: 'INVALID_INPUT', error: 'requestId, signature, deadline là bắt buộc' });
+        }
 
         // Verify patient owns this request
         const request = await prisma.accessRequest.findUnique({
@@ -781,13 +802,17 @@ router.post('/:requestId/reject', authenticate, async (req, res, next) => {
 
         // Cleanup awaiting_claim KeyShare — doctor shouldn't see stale entry.
         try {
+            // F9 fix: also zero the sealed payload at rest when revoking the
+            // never-claimed share (defense-in-depth). Kept as a targeted updateMany
+            // (not applyRevoke) so the match set — any awaiting_claim share to this
+            // requester for this cid, regardless of sender — is preserved exactly.
             await prisma.keyShare.updateMany({
                 where: {
                     cidHash: request.cidHash?.toLowerCase(),
                     recipientAddress: request.requesterAddress.toLowerCase(),
                     status: 'awaiting_claim',
                 },
-                data: { status: 'revoked' },
+                data: { status: 'revoked', encryptedPayload: '' },
             });
         } catch (cleanupErr) {
             console.warn('[reject] KeyShare cleanup non-fatal:', cleanupErr?.message);
@@ -843,7 +868,7 @@ router.post('/grant-as-delegate', authenticate, async (req, res, next) => {
         const delegation = await prisma.delegation.findFirst({
             where: {
                 patientAddress: request.patientAddress,
-                delegateAddress: delegateAddress,
+                delegateeAddress: delegateAddress,
                 status: 'active',
             },
         });

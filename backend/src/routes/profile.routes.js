@@ -1,6 +1,5 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { keccak256, toBytes } from 'viem';
 import prisma from '../config/database.js';
 import { authenticate } from '../middleware/auth.js';
 import { getUserRole } from '../config/blockchain.js';
@@ -81,16 +80,17 @@ router.get('/me', authenticate, async (req, res, next) => {
 // Stores keccak256(rawCccd) so doctor in ER can hash the patient's physical
 // CCCD card and look up the wallet address. Plaintext CCCD never leaves the
 // patient's device. Patient can clear by passing nationalId=null.
+// F26 fix: the client hashes the CCCD on-device (keccak256(toBytes(cccd))) and
+// sends ONLY the hash. The raw national ID must never reach the backend (it would
+// otherwise sit in TLS-terminated request bodies / access logs). Same hash scheme
+// as EmergencyLookupScreen, so lookup-by-cccd still matches the stored value.
 const nationalIdSchema = z.object({
-    nationalId: z.string().regex(/^\d{9,12}$/, 'CCCD/CMND phải là 9-12 chữ số').nullable(),
+    nationalIdHash: z.string().regex(/^0x[a-fA-F0-9]{64}$/, 'nationalIdHash phải là keccak256 hex (0x + 64 ký tự)').nullable(),
 });
 router.put('/me/national-id', authenticate, async (req, res, next) => {
     try {
-        const { nationalId } = nationalIdSchema.parse(req.body);
-
-        const nationalIdHash = nationalId
-            ? keccak256(toBytes(nationalId))
-            : null;
+        const { nationalIdHash: rawHash } = nationalIdSchema.parse(req.body);
+        const nationalIdHash = rawHash ? rawHash.toLowerCase() : null;
 
         await prisma.user.update({
             where: { walletAddress: req.user.walletAddress },

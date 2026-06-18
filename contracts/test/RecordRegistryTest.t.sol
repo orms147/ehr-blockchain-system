@@ -49,10 +49,8 @@ contract RecordRegistryTest is TestHelpers {
         accessControl.registerAsPatient();
         
         // Setup verified doctor
-        vm.prank(org1);
-        accessControl.registerAsOrganization();
         vm.prank(ministry);
-        accessControl.verifyOrganization(org1, "Hospital");
+        accessControl.createOrganization("Hospital", org1, address(0));
         
         vm.prank(doctor1);
         accessControl.registerAsDoctor();
