@@ -313,7 +313,11 @@ export default function DoctorRequestAccessScreen() {
                 reason: reason.trim() || undefined,
             });
 
-            if (onChainReqId) {
+            // M3: auto-approving the requester's OWN side is a DEV-only convenience.
+            // In production the requester confirms explicitly (or via the claim-time
+            // fallback), so the 2-party flow (the patient must ALSO sign) is never
+            // short-circuited automatically. The on-chain MIN_APPROVAL_DELAY (15s) still applies.
+            if (onChainReqId && __DEV__) {
                 setTimeout(async () => {
                     try {
                         const { walletClient: wc } = await walletActionService.getWalletContext();
@@ -559,7 +563,7 @@ export default function DoctorRequestAccessScreen() {
                         lineHeight: 19,
                     }}
                 >
-                    Trong giai đoạn thử nghiệm, yêu cầu tự động pre-approve sau 17 giây nếu bệnh nhân không thao tác. Sẽ tắt khi triển khai chính thức.
+                    Quy trình duyệt 2 bên: bạn (người yêu cầu) và bệnh nhân đều phải xác nhận, cách nhau tối thiểu 15 giây. (Ở bản phát triển, phía bạn có thể được tự xác nhận sau 17 giây để tiện thử nghiệm.)
                 </Text>
             </View>
 
