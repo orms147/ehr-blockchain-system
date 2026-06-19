@@ -53,9 +53,15 @@ contract EHRSystemSecureTest is TestHelpers {
         );
         
         // Wiring
-        vm.prank(ministry);
+        vm.startPrank(ministry);
         consentLedger.authorizeContract(address(ehrSystem), true);
-        
+        // F35 fix: wire accessControl + recordRegistry so the verified-doctor read
+        // gate (audit #3) and root-walk normalization are ACTIVE in these tests
+        // (mirrors DeployAll / production) instead of being silently bypassed.
+        consentLedger.setAccessControl(address(accessControl));
+        consentLedger.setRecordRegistry(address(recordRegistry));
+        vm.stopPrank();
+
         // Setup patient
         vm.prank(patient1);
         accessControl.registerAsPatient();
@@ -306,8 +312,78 @@ contract EHRSystemSecureTest is TestHelpers {
         ehrSystem.rejectRequest(reqId);
     }
     
+    // ========== COMPLETION PATHS (F33) + REQUESTER ROLE GATE (F34) ==========
+
+    /// Generalized reqId (the legacy _getLatestReqId hardcodes DirectAccess+CID_HASH).
+    function _reqId(IEHRSystem.RequestType reqType, bytes32 cidHash) internal view returns (bytes32) {
+        uint256 nonce = ehrSystem.getCurrentNonce();
+        return keccak256(abi.encode(doctor1, patient1, cidHash, reqType, nonce - 1));
+    }
+
+    function _dualApprove(bytes32 reqId) internal {
+        vm.prank(doctor1);
+        ehrSystem.confirmAccessRequest(reqId);
+        vm.warp(block.timestamp + 2 minutes); // MIN_APPROVAL_DELAY
+        vm.prank(patient1);
+        ehrSystem.confirmAccessRequest(reqId);
+    }
+
+    function test_Complete_RecordDelegation_GrantsDelegableConsent() public {
+        vm.prank(doctor1);
+        ehrSystem.requestAccess(
+            patient1, CID_HASH, IEHRSystem.RequestType.RecordDelegation,
+            ENC_KEY_HASH, 7 * 24, 7 * 24
+        );
+        bytes32 reqId = _reqId(IEHRSystem.RequestType.RecordDelegation, CID_HASH);
+        _dualApprove(reqId);
+
+        IEHRSystem.AccessRequest memory req = ehrSystem.getAccessRequest(reqId);
+        assertTrue(req.status == IEHRSystem.RequestStatus.Completed, "RecordDelegation should complete");
+        assertTrue(consentLedger.canAccess(patient1, doctor1, CID_HASH), "doctor should have access");
+        // RecordDelegation must grant a RE-DELEGABLE consent (allowDelegate = true).
+        IConsentLedger.Consent memory c = consentLedger.getConsent(patient1, doctor1, CID_HASH);
+        assertTrue(c.allowDelegate, "RecordDelegation must set allowDelegate=true");
+    }
+
+    function test_Complete_FullDelegation_GrantsSubDelegableDelegation() public {
+        vm.prank(doctor1);
+        ehrSystem.requestAccess(
+            patient1, bytes32(0), IEHRSystem.RequestType.FullDelegation,
+            bytes32(0), 30 * 24, 7 * 24
+        );
+        bytes32 reqId = _reqId(IEHRSystem.RequestType.FullDelegation, bytes32(0));
+        _dualApprove(reqId);
+
+        IEHRSystem.AccessRequest memory req = ehrSystem.getAccessRequest(reqId);
+        assertTrue(req.status == IEHRSystem.RequestStatus.Completed, "FullDelegation should complete");
+        // FullDelegation must create an active, sub-delegable delegation.
+        IConsentLedger.Delegation memory d = consentLedger.getDelegation(patient1, doctor1);
+        assertTrue(d.active, "FullDelegation must create an active delegation");
+        assertTrue(d.allowSubDelegate, "FullDelegation must set allowSubDelegate=true");
+    }
+
+    function test_RequestAccess_RevertWhen_RequesterNotProvider() public {
+        // F34: attacker is a plain EOA (not patient/doctor/org) — must be rejected.
+        vm.expectRevert(IEHRSystem.InvalidRequest.selector);
+        vm.prank(attacker);
+        ehrSystem.requestAccess(
+            patient1, CID_HASH, IEHRSystem.RequestType.DirectAccess,
+            ENC_KEY_HASH, 7 * 24, 7 * 24
+        );
+    }
+
+    function test_RequestAccess_ByOrganization_Succeeds() public {
+        // F34: an organization admin is a valid requester (not just doctors).
+        vm.prank(org1);
+        ehrSystem.requestAccess(
+            patient1, CID_HASH, IEHRSystem.RequestType.DirectAccess,
+            ENC_KEY_HASH, 7 * 24, 7 * 24
+        );
+        assertEq(ehrSystem.getCurrentNonce(), 1, "org request should be created");
+    }
+
     // ========== HELPERS ==========
-    
+
     function _getLatestReqId() internal view returns (bytes32) {
         uint256 nonce = ehrSystem.getCurrentNonce();
         return keccak256(abi.encode(

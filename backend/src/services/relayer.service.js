@@ -53,6 +53,19 @@ const walletClient = sponsorAccount ? createWalletClient({
     transport: http(process.env.RPC_URL, TRANSPORT_OPTS),
 }) : null;
 
+// F16 fix: serialize ALL sponsor sends through one in-process queue. The single
+// sponsor wallet must never assign the same nonce to two concurrent writeContract
+// calls (which would drop/replace a tx). At thesis scale throughput is not a concern
+// — correctness is. Every sponsor function calls sponsorWrite() instead of
+// walletClient.writeContract() directly.
+let _sponsorTxChain = Promise.resolve();
+function sponsorWrite(args) {
+    const run = _sponsorTxChain.then(() => walletClient.writeContract(args));
+    // Keep the chain alive even if a send fails, so one failure can't wedge the queue.
+    _sponsorTxChain = run.then(() => {}, () => {});
+    return run;
+}
+
 function createRelayerError(message, { code = 'RELAYER_ERROR', statusCode = 500, details = null, txHash = null } = {}) {
     const error = new Error(message);
     error.code = code;
@@ -265,21 +278,37 @@ async function consumeQuota(walletAddress, actionLabel) {
 
     user = await checkAndResetQuota(user);
 
-    if (!user.hasSelfWallet && user.signaturesThisMonth >= QUOTA_LIMITS.SIGNATURES_PER_MONTH) {
+    // Self-wallet users pay their own gas → no quota consumption.
+    if (user.hasSelfWallet) return user;
+
+    // F15 fix: atomic gate-and-reserve. Increment the counter ONLY if it is still
+    // under the cap, in a single conditional updateMany, so two concurrent sponsored
+    // requests at the boundary (e.g. both reading 99) can't both pass a read-then-check
+    // and push the pool over the cap. Counting now happens HERE (not in a separate
+    // post-tx bump), so a failed sponsored tx consumes its reserved slot — the
+    // safe-side trade-off: the cap is never exceeded.
+    const reserved = await prisma.user.updateMany({
+        where: {
+            walletAddress: address,
+            hasSelfWallet: false,
+            signaturesThisMonth: { lt: QUOTA_LIMITS.SIGNATURES_PER_MONTH },
+        },
+        data: { signaturesThisMonth: { increment: 1 } },
+    });
+    if (reserved.count === 0) {
         throw createRelayerError(
             `Đã hết quota chữ ký miễn phí tháng này (${QUOTA_LIMITS.SIGNATURES_PER_MONTH}). Vui lòng kết nối ví có ETH hoặc chờ sang tháng sau.`,
             { code: 'QUOTA_EXHAUSTED', statusCode: 429, details: actionLabel }
         );
     }
 
-    return user;
+    return { ...user, signaturesThisMonth: user.signaturesThisMonth + 1 };
 }
 
-async function bumpSignatureCounter(walletAddress) {
-    await prisma.user.update({
-        where: { walletAddress: walletAddress.toLowerCase() },
-        data: { signaturesThisMonth: { increment: 1 } },
-    });
+// F15: the counter is now reserved atomically inside consumeQuota. This is kept as
+// a no-op so the existing call sites remain valid without further edits.
+async function bumpSignatureCounter(_walletAddress) {
+    // intentionally no-op (see consumeQuota atomic reserve)
 }
 
 export async function getQuotaStatus(walletAddress) {
@@ -327,7 +356,7 @@ export async function sponsorRegisterPatient(walletAddress) {
         return { alreadyRegistered: true };
     }
 
-    const hash = await walletClient.writeContract({
+    const hash = await sponsorWrite({
         address: CONTRACTS.ACCESS_CONTROL,
         abi: ACCESS_CONTROL_ABI,
         functionName: 'registerPatientFor',
@@ -372,7 +401,7 @@ export async function sponsorRegisterDoctor(walletAddress) {
         return { alreadyRegistered: true };
     }
 
-    const hash = await walletClient.writeContract({
+    const hash = await sponsorWrite({
         address: CONTRACTS.ACCESS_CONTROL,
         abi: ACCESS_CONTROL_ABI,
         functionName: 'registerDoctorFor',
@@ -426,7 +455,7 @@ export async function sponsorUploadRecord(walletAddress, cidHash, parentCidHash,
             args: [cidHash, parentCidHash, recordTypeHash, address],
         });
 
-        hash = await walletClient.writeContract(simulation.request);
+        hash = await sponsorWrite(simulation.request);
     } catch (error) {
         throw buildUploadError(error);
     }
@@ -449,7 +478,7 @@ export async function sponsorRevoke(walletAddress, granteeAddress, cidHash) {
     const address = walletAddress.toLowerCase();
     await consumeQuota(address, 'revoke');
 
-    const hash = await walletClient.writeContract({
+    const hash = await sponsorWrite({
         address: CONTRACTS.CONSENT_LEDGER,
         abi: CONSENT_LEDGER_ABI,
         functionName: 'revokeFor',
@@ -479,7 +508,7 @@ export async function sponsorGrantConsent(
     await consumeQuota(patient, 'grant');
 
     const hash = await withRpcRetry(
-        () => walletClient.writeContract({
+        () => sponsorWrite({
             address: CONTRACTS.CONSENT_LEDGER,
             abi: CONSENT_LEDGER_ABI,
             functionName: 'grantBySig',
@@ -544,7 +573,7 @@ export async function sponsorDelegateAuthority({
                 signature,
             ],
         });
-        hash = await walletClient.writeContract(simulation.request);
+        hash = await sponsorWrite(simulation.request);
     } catch (error) {
         throw buildUploadError(error);
     }
@@ -645,7 +674,7 @@ export async function sponsorSetTrustedContact({
                 signature,
             ],
         });
-        hash = await walletClient.writeContract(simulation.request);
+        hash = await sponsorWrite(simulation.request);
     } catch (error) {
         throw buildUploadError(error);
     }
@@ -795,7 +824,7 @@ export async function sponsorReject(walletAddress, reqId, deadline, signature) {
     await consumeQuota(signer, 'reject');
 
     const hash = await withRpcRetry(
-        () => walletClient.writeContract({
+        () => sponsorWrite({
             address: CONTRACTS.EHR_SYSTEM,
             abi: EHR_SYSTEM_SECURE_ABI,
             functionName: 'rejectRequestBySig',

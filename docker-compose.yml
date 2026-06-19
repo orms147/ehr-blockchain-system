@@ -4,7 +4,7 @@
 #      the 5 contract addresses, SPONSOR_PRIVATE_KEY, PINATA_*, SUBGRAPH_URL,
 #      CREDENTIAL_ENCRYPTION_KEY  (DATABASE_URL/PORT are overridden below).
 #   2) docker compose up --build
-#   3) API at http://localhost:4000  (health: curl http://localhost:4000/health)
+#   3) API at http://localhost:3001  (health: curl http://localhost:3001/health)
 
 services:
   db:
@@ -30,10 +30,10 @@ services:
     environment:
       # Override so the API talks to the compose Postgres (ignores .env DATABASE_URL)
       DATABASE_URL: postgresql://ehr:ehr_local_password@db:5432/ehr?schema=public
-      PORT: "4000"
+      PORT: "3001"
       NODE_ENV: production
     ports:
-      - "4000:4000"
+      - "3001:3001"
     depends_on:
       db:
         condition: service_healthy

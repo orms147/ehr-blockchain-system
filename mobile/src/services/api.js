@@ -107,11 +107,22 @@ class ApiService {
             const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
             this.activeControllers.add(controller);
 
+            // F24: chain a caller-provided signal into OUR controller so the timeout
+            // and abortAll() actually cancel this fetch. Previously the fetch listened
+            // to options.signal directly, so when a caller passed one the timeout never
+            // aborted and abortAll() (logout) couldn't cancel the in-flight request.
+            if (options.signal) {
+                if (options.signal.aborted) controller.abort();
+                else if (typeof options.signal.addEventListener === 'function') {
+                    options.signal.addEventListener('abort', () => controller.abort(), { once: true });
+                }
+            }
+
             try {
                 const response = await fetch(url, {
                     ...options,
                     headers,
-                    signal: options.signal || controller.signal,
+                    signal: controller.signal,
                 });
 
                 const data = await this.parseResponseBody(response);

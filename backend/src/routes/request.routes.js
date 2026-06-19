@@ -676,6 +676,10 @@ router.post('/mark-claimed', authenticate, requireDoctorRole, async (req, res, n
             success: true,
             message: 'Request marked as claimed.',
             keyShareActivated: updatedKeyShare.count > 0,
+            // F11: surface cascade re-share failures instead of silently swallowing
+            // them (they were collected into cascadeFailures but never returned).
+            partialFailure: cascadeFailures.length > 0,
+            cascadeFailures,
         });
     } catch (error) {
         next(error);

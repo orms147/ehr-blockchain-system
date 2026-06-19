@@ -47,7 +47,6 @@ const STATUS_FLIP_SOURCES = new Set([
     'recipient-claim',
     'recipient-reject',
     'sender-revoke',
-    'mark-claimed-flip',
 ]);
 
 const REVOKE_SOURCES = new Set([

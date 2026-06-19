@@ -16,7 +16,7 @@ COPY . .
 # Generate the Prisma client for the container platform
 RUN npx prisma generate
 
-EXPOSE 4000
+EXPOSE 3001
 
 # Apply migrations then start the API
 CMD ["sh", "-c", "npx prisma migrate deploy && node src/app.js"]

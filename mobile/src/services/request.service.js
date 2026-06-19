@@ -1,11 +1,8 @@
 ﻿import api from './api';
 
-// Request types enum (matches smart contract)
-export const REQUEST_TYPES = {
-    VIEW_ONLY: 0,
-    FULL_ACCESS: 1,
-    EMERGENCY: 2,
-};
+// F23: removed the misleading REQUEST_TYPES export. It claimed to "match the smart
+// contract" but used wrong labels/values (EMERGENCY:2 — the contract's enum is
+// DirectAccess=0, FullDelegation=1, RecordDelegation=2) and nothing imported it.
 
 // Request status enum
 export const REQUEST_STATUS = {

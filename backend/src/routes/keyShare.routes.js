@@ -1558,7 +1558,7 @@ router.post('/:id/reject', authenticate, async (req, res, next) => {
             return res.status(404).json({ code: 'KEY_SHARE_NOT_FOUND', error: 'Key share not found', message: 'Key share not found' });
         }
 
-        if (keyShare.recipientAddress !== req.user.walletAddress) {
+        if (keyShare.recipientAddress.toLowerCase() !== req.user.walletAddress.toLowerCase()) {
             return res.status(403).json({ code: 'REQUEST_NOT_AUTHORIZED', error: 'Only recipient can reject', message: 'Only recipient can reject' });
         }
 

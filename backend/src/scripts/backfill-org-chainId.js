@@ -12,8 +12,11 @@ import { arbitrumSepolia } from 'viem/chains';
 import prisma from '../config/database.js';
 import { ACCESS_CONTROL_ABI } from '../config/blockchain.js';
 import dotenv from 'dotenv';
+import { fileURLToPath } from 'node:url';
 
-dotenv.config({ path: new URL('../../../.env', import.meta.url).pathname.replace(/^\/([A-Z]:)/, '$1') });
+// F20: use fileURLToPath for a cross-platform .env path (the old pathname.replace
+// hack only worked on Windows drive-letter paths and broke on POSIX hosts).
+dotenv.config({ path: fileURLToPath(new URL('../../../.env', import.meta.url)) });
 
 const ACCESS_CONTROL_ADDRESS = process.env.ACCESS_CONTROL_ADDRESS;
 

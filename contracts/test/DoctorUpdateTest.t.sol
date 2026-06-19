@@ -129,7 +129,7 @@ contract DoctorUpdateTest is TestHelpers {
     }
     
     function test_AddRecordByDoctor_RevertWhen_NotDoctor() public {
-        vm.expectRevert();  // NotDoctor
+        vm.expectRevert(DoctorUpdate.NotDoctor.selector);
         vm.prank(attacker);
         doctorUpdate.addRecordByDoctor(
             CID_HASH, PARENT_HASH, RECORD_TYPE, patient1, ENC_KEY_HASH, 0
@@ -139,7 +139,7 @@ contract DoctorUpdateTest is TestHelpers {
     function test_AddRecordByDoctor_RevertWhen_PatientNotRegistered() public {
         address unregistered = makeAddr("unregistered");
         
-        vm.expectRevert();  // NotPatient
+        vm.expectRevert(DoctorUpdate.NotPatient.selector);
         vm.prank(doctor1);
         doctorUpdate.addRecordByDoctor(
             CID_HASH, PARENT_HASH, RECORD_TYPE, unregistered, ENC_KEY_HASH, 0
@@ -147,7 +147,7 @@ contract DoctorUpdateTest is TestHelpers {
     }
     
     function test_AddRecordByDoctor_RevertWhen_InvalidAccessDuration() public {
-        vm.expectRevert();  // InvalidAccessDuration (> 90 days)
+        vm.expectRevert(DoctorUpdate.InvalidAccessDuration.selector);
         vm.prank(doctor1);
         doctorUpdate.addRecordByDoctor(
             CID_HASH, PARENT_HASH, RECORD_TYPE, patient1, ENC_KEY_HASH,

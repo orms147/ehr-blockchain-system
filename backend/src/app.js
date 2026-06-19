@@ -46,8 +46,12 @@ initSocket(server);
 
 // Security middleware
 app.use(helmet());
+// F12: allow-list is dev defaults; FRONTEND_URL (documented in .env.example) is now
+// actually wired in when set (was previously read nowhere).
+const corsOrigins = ['http://localhost:5173', 'http://localhost:3000', 'http://localhost:3001'];
+if (process.env.FRONTEND_URL) corsOrigins.push(process.env.FRONTEND_URL);
 app.use(cors({
-    origin: ['http://localhost:5173', 'http://localhost:3000', 'http://localhost:3001'],
+    origin: corsOrigins,
     credentials: true,
 }));
 

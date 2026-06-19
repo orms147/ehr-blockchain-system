@@ -25,7 +25,7 @@ Backend cần đang chạy + ít nhất 1 patient + 5 record + 1 doctor verified
 
 **a. Start backend**:
 ```bash
-cd c:/University/DATN/EHR/backend
+cd c:/Work/DATN/ehr-blockchain-system/backend
 npm run dev
 ```
 
@@ -102,7 +102,7 @@ chứ không 500 crash.
 | `/api/key-share/record/:cidHash` | GET | RPC eth_call (canAccess) + DB read |
 | `/api/records/my` | GET | DB list query |
 | `/api/profile/me` | GET | DB read (light) |
-| `/api/records/save-only` | POST | DB write |
+| `/api/profile/me` | PUT | DB write (light) |
 
 KHÔNG load test:
 - `/api/relayer/*` — cần EIP-712 signature thật, k6 không sign được
