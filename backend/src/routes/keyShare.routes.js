@@ -1490,12 +1490,50 @@ router.post('/:id/claim', authenticate, async (req, res, next) => {
         });
         const updated = flipResult.row;
 
-        // Log access
+        // S2 (advisor feedback #6): the Trusted Contact emergency path lets a
+        // patient-designated family member read a record WITHOUT a normal consent
+        // grant — ConsentLedger.canAccess() returns true purely on
+        // isTrustedContact[patient][grantee] (ConsentLedger.sol:693). That is a
+        // sensitive "access outside the doctor flow", so the patient must get
+        // (a) an immutable audit row tagged distinctly and (b) a notification.
+        // Authorization already happened on-chain in checkConsent above; the
+        // TrustedContact cache here only decides labelling + whether to alert.
+        let accessedAsTrustedContact = false;
+        if (ownerAddress) {
+            const tc = await prisma.trustedContact.findFirst({
+                where: {
+                    patientAddress: ownerAddress,
+                    contactAddress: req.user.walletAddress.toLowerCase(),
+                    status: 'active',
+                },
+                select: { label: true },
+            });
+            if (tc) {
+                accessedAsTrustedContact = true;
+                const who = tc.label ? `Người thân tin cậy (${tc.label})` : 'Người thân tin cậy';
+                emitToUser(ownerAddress, 'trustedContact:accessed', {
+                    cidHash: keyShare.cidHash,
+                    contactAddress: req.user.walletAddress.toLowerCase(),
+                    label: tc.label || null,
+                    at: new Date().toISOString(),
+                });
+                // Fire-and-forget; patient may be offline.
+                sendPushToWallet(ownerAddress, {
+                    title: 'Người thân tin cậy đã truy cập hồ sơ',
+                    body: `${who} vừa mở một hồ sơ y tế của bạn.`,
+                    data: { screen: 'AccessLog', cidHash: keyShare.cidHash },
+                }).catch(() => {});
+            }
+        }
+
+        // Log access — immutable audit trail. Trusted-contact reads get a
+        // distinct action so the patient's access-log view
+        // (GET /api/access-logs/:cidHash) surfaces the emergency-family path.
         await prisma.accessLog.create({
             data: {
                 cidHash: keyShare.cidHash,
                 accessorAddress: req.user.walletAddress,
-                action: 'CLAIM_KEY',
+                action: accessedAsTrustedContact ? 'TRUSTED_CONTACT_CLAIM' : 'CLAIM_KEY',
                 consentVerified: true,  // We verified on-chain!
             }
         });

@@ -18,7 +18,13 @@ import { Router } from 'express';
 import prisma from '../config/database.js';
 import { authenticate } from '../middleware/auth.js';
 import { requireOnChainRoles } from '../middleware/onChainRole.js';
+import { emitToUser } from '../services/socket.service.js';
+import { sendPushToWallet } from '../services/push.service.js';
 import { createLogger } from '../utils/logger.js';
+
+// AccessLog.cidHash is required (VarChar 66) but a contact-list lookup has no
+// record cidHash, so emergency-lookup audit rows are keyed on this sentinel.
+const LOOKUP_SENTINEL_CID = '0x' + '0'.repeat(64);
 
 const log = createLogger('TrustedContactRoutes');
 const router = Router();
@@ -85,9 +91,38 @@ router.get('/by-patient/:address', authenticate, requireDoctorRole, async (req, 
 
         const contacts = await listContactsForPatient(patientAddress);
 
-        // Logged for thesis audit trail. AccessLog table is keyed on cidHash
-        // and doesn't fit a contact-list lookup; we keep this in app log only
-        // until a dedicated audit table is introduced.
+        // S2 (advisor feedback #6): the ER trusted-contact lookup is a sensitive
+        // read of the patient's data (their family contact list) OUTSIDE the
+        // normal doctor-consent flow. Persist an immutable audit row and notify
+        // the patient post-hoc (hậu kiểm — they may be unconscious during the
+        // emergency). AccessLog has no per-patient column, so the row is keyed on
+        // a sentinel cidHash with the doctor as accessor; the patient-facing
+        // signal is the notification below.
+        try {
+            await prisma.accessLog.create({
+                data: {
+                    cidHash: LOOKUP_SENTINEL_CID,
+                    accessorAddress: req.user.walletAddress,
+                    action: 'EMERGENCY_CONTACT_LOOKUP',
+                    consentVerified: true, // gated by on-chain isVerifiedDoctor
+                },
+            });
+        } catch (auditErr) {
+            // Audit write failure must not block the emergency lookup itself.
+            log.warn('Emergency lookup audit write failed', { error: auditErr?.message });
+        }
+
+        emitToUser(patientAddress, 'trustedContact:lookup', {
+            doctor: req.user.walletAddress,
+            count: contacts.length,
+            at: new Date().toISOString(),
+        });
+        sendPushToWallet(patientAddress, {
+            title: 'Tra cứu khẩn cấp người thân tin cậy',
+            body: 'Một bác sĩ vừa tra cứu danh sách người thân tin cậy của bạn trong tình huống khẩn cấp.',
+            data: { screen: 'AccessLog' },
+        }).catch(() => {});
+
         log.info('Emergency trusted-contact lookup', {
             doctor: req.user.walletAddress,
             patient: patientAddress,

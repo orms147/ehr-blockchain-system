@@ -3,12 +3,25 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { authenticate } from '../middleware/auth.js';
 import { requireOnChainRoles } from '../middleware/onChainRole.js';
+import { rateLimitByWallet } from '../middleware/rateLimit.js';
 import relayerService from '../services/relayer.service.js';
 import { createLogger } from '../utils/logger.js';
 
 const log = createLogger('RelayerRoutes');
 const router = Router();
 const requirePatientRole = requireOnChainRoles('patient');
+
+// Per-wallet short-window cap on SPONSORED writes (advisor feedback #7).
+// The 100/month quota (relayer.service.js) caps cost; this caps burst rate so a
+// single wallet can't fire dozens of sponsored txs in seconds. Default 20/min —
+// far above any legitimate share/revoke/delegate flow, well below abuse.
+// Mounted after `authenticate` so it keys on the verified wallet.
+const sponsoredWriteLimit = rateLimitByWallet({
+    windowMs: Number(process.env.RELAYER_RATELIMIT_WINDOW_MS ?? 60_000),
+    max: Number(process.env.RELAYER_RATELIMIT_MAX ?? 20),
+    code: 'RELAYER_RATE_LIMITED',
+    message: 'Bạn đang gửi quá nhiều giao dịch được bảo trợ. Vui lòng chờ một lát rồi thử lại.',
+});
 
 // Validation schemas
 const registerSchema = z.object({
@@ -106,7 +119,7 @@ router.get('/all-grantees', authenticate, async (req, res, next) => {
 });
 
 // POST /api/relayer/register - Sponsor patient/doctor registration
-router.post('/register', authenticate, async (req, res, next) => {
+router.post('/register', authenticate, sponsoredWriteLimit, async (req, res, next) => {
     try {
         const { role } = registerSchema.parse(req.body);
 
@@ -206,7 +219,7 @@ const revokeSchema = z.object({
 });
 
 // POST /api/relayer/revoke - Sponsor revoke consent (unified quota pool)
-router.post('/revoke', authenticate, requirePatientRole, async (req, res, next) => {
+router.post('/revoke', authenticate, sponsoredWriteLimit, requirePatientRole, async (req, res, next) => {
     try {
         const { granteeAddress, cidHash } = revokeSchema.parse(req.body);
 
@@ -271,7 +284,7 @@ const delegateAuthoritySchema = z.object({
 // This is the ROOT grant of a CHAIN: a direct patient -> doctor delegation with
 // chainDepth=1. Sub-delegations are issued on-chain by the delegatee via
 // ConsentLedger.subDelegate (no relayer, no patient signature needed).
-router.post('/delegate-authority', authenticate, requirePatientRole, async (req, res, next) => {
+router.post('/delegate-authority', authenticate, sponsoredWriteLimit, requirePatientRole, async (req, res, next) => {
     try {
         const data = delegateAuthoritySchema.parse(req.body);
 
@@ -297,7 +310,7 @@ router.post('/delegate-authority', authenticate, requirePatientRole, async (req,
 });
 
 // POST /api/relayer/grant - Sponsor grant consent (with Patient's EIP-712 signature)
-router.post('/grant', authenticate, requirePatientRole, async (req, res, next) => {
+router.post('/grant', authenticate, sponsoredWriteLimit, requirePatientRole, async (req, res, next) => {
     try {
         const data = grantSchema.parse(req.body);
 
@@ -336,7 +349,7 @@ const trustedContactSchema = z.object({
 });
 
 // POST /api/relayer/trusted-contact
-router.post('/trusted-contact', authenticate, requirePatientRole, async (req, res, next) => {
+router.post('/trusted-contact', authenticate, sponsoredWriteLimit, requirePatientRole, async (req, res, next) => {
     try {
         const data = trustedContactSchema.parse(req.body);
 
