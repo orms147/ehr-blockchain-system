@@ -72,7 +72,7 @@ export function useGrantAuthority() {
             durationDays: number;
             allowSubDelegate?: boolean;
             scopeNote?: string | null;
-        }) => delegationService.grantAuthority(params),
+        }) => delegationService.grantAuthority({ ...params, scopeNote: params.scopeNote ?? undefined }),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: delegationKeys.all });
         },
