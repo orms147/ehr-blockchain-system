@@ -31,7 +31,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Text } from 'tamagui';
 import Constants from 'expo-constants';
-import { ArrowLeft, ChevronDown, ChevronRight, Mail, MessageSquareText, ShieldCheck } from 'lucide-react-native';
+import { ArrowLeft, ChevronRight, ChevronUp, Mail, MessageSquareText, MoreHorizontal, ShieldCheck } from 'lucide-react-native';
 
 import useAuthStore from '../store/authStore';
 import authService from '../services/auth.service';
@@ -47,6 +47,9 @@ import {
     RedditIcon, TwitchIcon, GithubIcon, KakaoIcon, LinkedinIcon, WeiboIcon,
     WechatIcon, FarcasterIcon,
 } from '../components-v2/BrandIcons';
+import {
+    MetaMaskIcon, WalletConnectIcon, CoinbaseIcon, PhantomIcon, TrustIcon,
+} from '../components-v2/WalletIcons';
 
 const SERIF = 'Fraunces_400Regular';
 const SERIF_ITALIC = 'Fraunces_400Regular_Italic';
@@ -75,18 +78,27 @@ type SocialTile = {
     Icon: React.ComponentType<{ size?: number }>;
 };
 
-// 6 providers ưu tiên hiển thị mặc định (theo mockup).
+// Ví ngoài — UI-only (nút STUB, chưa wiring WalletConnect).
+// Xem context/28_wallet_login_integration.md (chức năng làm sau khi freeze code).
+type WalletKey = 'metamask' | 'walletconnect' | 'coinbase' | 'phantom' | 'trust';
+type WalletTile = {
+    key: WalletKey;
+    label: string;
+    Icon: React.ComponentType<{ size?: number }>;
+};
+
+// 3 social ưu tiên (theo mockup v2.4.1 — grid 4 cột, ô thứ 4 là "Xem thêm").
 const PRIMARY_SOCIAL: SocialTile[] = [
     { key: 'google', label: 'Google', Icon: GoogleIcon },
     { key: 'apple', label: 'Apple', Icon: AppleIcon },
     { key: 'facebook', label: 'Facebook', Icon: FacebookIcon },
+];
+
+// 11 social còn lại hiển thị khi user bấm "Xem thêm".
+const MORE_SOCIAL: SocialTile[] = [
     { key: 'twitter', label: 'X', Icon: XIcon },
     { key: 'discord', label: 'Discord', Icon: DiscordIcon },
     { key: 'line', label: 'LINE', Icon: LineIcon },
-];
-
-// 8 providers hiển thị khi user bấm "Xem thêm".
-const MORE_SOCIAL: SocialTile[] = [
     { key: 'reddit', label: 'Reddit', Icon: RedditIcon },
     { key: 'twitch', label: 'Twitch', Icon: TwitchIcon },
     { key: 'github', label: 'GitHub', Icon: GithubIcon },
@@ -97,12 +109,34 @@ const MORE_SOCIAL: SocialTile[] = [
     { key: 'farcaster', label: 'Farcaster', Icon: FarcasterIcon },
 ];
 
+// 3 ví ưu tiên + 2 ví trong "Xem thêm".
+const PRIMARY_WALLET: WalletTile[] = [
+    { key: 'metamask', label: 'MetaMask', Icon: MetaMaskIcon },
+    { key: 'walletconnect', label: 'WalletConnect', Icon: WalletConnectIcon },
+    { key: 'coinbase', label: 'Coinbase', Icon: CoinbaseIcon },
+];
+
+const MORE_WALLET: WalletTile[] = [
+    { key: 'phantom', label: 'Phantom', Icon: PhantomIcon },
+    { key: 'trust', label: 'Trust', Icon: TrustIcon },
+];
+
 export default function LoginScreen({ navigation }: any) {
     const palette = useEhrPalette();
     const [selectedProvider, setSelectedProvider] = useState<ProviderKey>('email_passwordless');
     const [loading, setLoading] = useState(false);
     const [showMore, setShowMore] = useState(false);
+    const [showMoreWallet, setShowMoreWallet] = useState(false);
     const { login } = useAuthStore();
+
+    // Ví ngoài hiện là UI-only: chưa wiring WalletConnect (cần native dep + rebuild
+    // dev-client + verify chữ ký tất định). Xem context/28_wallet_login_integration.md.
+    const handleWalletStub = (label: string) => {
+        Alert.alert(
+            'Sắp ra mắt',
+            `Đăng nhập bằng ${label} sẽ được hỗ trợ ở phiên bản tới. Hiện tại hãy dùng Email, số điện thoại hoặc mạng xã hội.`,
+        );
+    };
 
     const shouldRetryAuthStep = (error: any) => {
         if (!error) return false;
@@ -280,60 +314,73 @@ export default function LoginScreen({ navigation }: any) {
         }
     };
 
-    const renderSocialTile = (tile: SocialTile) => {
-        const isLoading = loading && selectedProvider === tile.key;
+    // Ô lưới chung (social / ví / nút "Xem thêm").
+    type GridTile = {
+        key: string;
+        label: string;
+        Icon: React.ComponentType<{ size?: number }>;
+        onPress: () => void;
+        loadingKey?: ProviderKey; // social: hiện spinner khi đang đăng nhập provider này
+    };
+
+    const renderTile = (tile: GridTile) => {
+        const isLoading = !!tile.loadingKey && loading && selectedProvider === tile.loadingKey;
         const Icon = tile.Icon;
         return (
             <Pressable
                 key={tile.key}
-                onPress={() => handleWeb3Login(tile.key)}
+                onPress={tile.onPress}
                 disabled={loading}
-                accessibilityLabel={`Đăng nhập bằng ${tile.label}`}
+                accessibilityLabel={tile.label}
                 style={({ pressed }) => ({
                     flex: 1,
-                    minHeight: 60,
+                    minHeight: 58,
                     paddingVertical: 8,
-                    paddingHorizontal: 4,
+                    paddingHorizontal: 2,
                     borderRadius: 13,
                     borderWidth: 0.75,
                     borderColor: pressed ? '#34404c' : palette.EHR_OUTLINE_VARIANT,
                     backgroundColor: pressed ? '#0c0e13' : palette.EHR_SURFACE_LOWEST,
                     alignItems: 'center',
                     justifyContent: 'center',
-                    gap: 6,
+                    gap: 5,
                     opacity: loading && !isLoading ? 0.55 : 1,
                 })}
             >
                 {isLoading ? (
                     <ActivityIndicator size="small" color={palette.EHR_PRIMARY} />
                 ) : (
-                    <Icon size={23} />
+                    <Icon size={22} />
                 )}
-                <Text style={{
-                    fontFamily: SANS_SEMI, fontSize: 10.5,
-                    color: palette.EHR_ON_SURFACE_VARIANT,
-                    fontWeight: '600',
-                }}>
+                <Text
+                    numberOfLines={1}
+                    style={{
+                        fontFamily: SANS_SEMI, fontSize: 9.5,
+                        color: palette.EHR_ON_SURFACE_VARIANT,
+                        fontWeight: '600',
+                        maxWidth: '100%',
+                    }}
+                >
                     {tile.label}
                 </Text>
             </Pressable>
         );
     };
 
-    const renderTileGrid = (tiles: SocialTile[]) => {
-        // 3 cột — group thành rows of 3, render mỗi row trong View row gap 8.
-        const rows: SocialTile[][] = [];
-        for (let i = 0; i < tiles.length; i += 3) {
-            rows.push(tiles.slice(i, i + 3));
+    const renderGrid = (tiles: GridTile[]) => {
+        // 4 cột — group thành rows of 4.
+        const rows: GridTile[][] = [];
+        for (let i = 0; i < tiles.length; i += 4) {
+            rows.push(tiles.slice(i, i + 4));
         }
         return (
             <View style={{ gap: 8 }}>
                 {rows.map((row, idx) => (
                     <View key={idx} style={{ flexDirection: 'row', gap: 8 }}>
-                        {row.map(renderSocialTile)}
+                        {row.map(renderTile)}
                         {/* Pad row cuối nếu thiếu để giữ width đều */}
-                        {row.length < 3
-                            ? Array.from({ length: 3 - row.length }).map((_, i) => (
+                        {row.length < 4
+                            ? Array.from({ length: 4 - row.length }).map((_, i) => (
                                   <View key={`pad-${i}`} style={{ flex: 1 }} />
                               ))
                             : null}
@@ -342,6 +389,52 @@ export default function LoginScreen({ navigation }: any) {
             </View>
         );
     };
+
+    // Icon ô toggle: collapsed = "•••" (Xem thêm); expanded = "^" (Thu gọn) — theo HTML (DOTS_SVG / UP_SVG).
+    const MoreDotsIcon = ({ size = 22 }: { size?: number }) => (
+        <MoreHorizontal size={size} color={palette.EHR_ON_SURFACE_VARIANT} />
+    );
+    const CollapseIcon = ({ size = 20 }: { size?: number }) => (
+        <ChevronUp size={size} color={palette.EHR_ON_SURFACE_VARIANT} />
+    );
+
+    // Ô social. Toggle LUÔN ở cuối lưới: collapsed → sau 3 primary; expanded → sau tất cả.
+    const socialPrimaryCells: GridTile[] = PRIMARY_SOCIAL.map((t) => ({
+        key: t.key, label: t.label, Icon: t.Icon, loadingKey: t.key,
+        onPress: () => handleWeb3Login(t.key),
+    }));
+    const socialMoreCells: GridTile[] = MORE_SOCIAL.map((t) => ({
+        key: t.key, label: t.label, Icon: t.Icon, loadingKey: t.key,
+        onPress: () => handleWeb3Login(t.key),
+    }));
+    const socialToggle: GridTile = {
+        key: '__social_toggle',
+        label: showMore ? 'Thu gọn' : 'Xem thêm',
+        Icon: showMore ? CollapseIcon : MoreDotsIcon,
+        onPress: () => setShowMore((s) => !s),
+    };
+    const socialCells: GridTile[] = showMore
+        ? [...socialPrimaryCells, ...socialMoreCells, socialToggle]
+        : [...socialPrimaryCells, socialToggle];
+
+    // Ô ví (STUB, UI-only). Toggle cũng luôn ở cuối lưới.
+    const walletPrimaryCells: GridTile[] = PRIMARY_WALLET.map((t) => ({
+        key: t.key, label: t.label, Icon: t.Icon,
+        onPress: () => handleWalletStub(t.label),
+    }));
+    const walletMoreCells: GridTile[] = MORE_WALLET.map((t) => ({
+        key: t.key, label: t.label, Icon: t.Icon,
+        onPress: () => handleWalletStub(t.label),
+    }));
+    const walletToggle: GridTile = {
+        key: '__wallet_toggle',
+        label: showMoreWallet ? 'Thu gọn' : 'Xem thêm',
+        Icon: showMoreWallet ? CollapseIcon : MoreDotsIcon,
+        onPress: () => setShowMoreWallet((s) => !s),
+    };
+    const walletCells: GridTile[] = showMoreWallet
+        ? [...walletPrimaryCells, ...walletMoreCells, walletToggle]
+        : [...walletPrimaryCells, walletToggle];
 
     return (
         <View style={{ flex: 1, backgroundColor: palette.EHR_SURFACE }}>
@@ -428,11 +521,9 @@ export default function LoginScreen({ navigation }: any) {
                     {/* Passwordless rows — promoted to primary */}
                     <View style={{ gap: 8 }}>
                         <PasswordlessRow
-                            recommended
                             icon={<Mail size={22} color={palette.EHR_PRIMARY} />}
                             title="Đăng nhập bằng Email"
                             subtitle="Mã xác thực gửi qua email"
-                            badge="Khuyên dùng"
                             loading={loading && selectedProvider === 'email_passwordless'}
                             disabled={loading}
                             onPress={() => handleWeb3Login('email_passwordless')}
@@ -466,60 +557,30 @@ export default function LoginScreen({ navigation }: any) {
                         <View style={{ flex: 1, height: 0.5, backgroundColor: palette.EHR_OUTLINE_VARIANT }} />
                     </View>
 
-                    {/* Social grid 3-cột — 6 primary providers */}
-                    {renderTileGrid(PRIMARY_SOCIAL)}
+                    {/* Social grid 4-cột — 3 primary + ô "Xem thêm" */}
+                    {renderGrid(socialCells)}
 
-                    {/* Expandable more (8 providers) */}
-                    {showMore ? (
-                        <View style={{ marginTop: 10 }}>
-                            {renderTileGrid(MORE_SOCIAL)}
-                        </View>
-                    ) : null}
-
-                    {/* Toggle "Xem thêm" / "Thu gọn" */}
-                    <Pressable
-                        onPress={() => setShowMore((s) => !s)}
-                        disabled={loading}
-                        accessibilityRole="button"
-                        accessibilityLabel={showMore ? 'Thu gọn danh sách mạng xã hội' : 'Xem thêm mạng xã hội'}
-                        style={({ pressed }) => ({
-                            marginTop: 10,
-                            minHeight: 44,
-                            flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-                            gap: 8,
-                            borderRadius: 14,
-                            borderWidth: 0.75,
-                            borderColor: pressed ? '#34404c' : palette.EHR_OUTLINE_VARIANT,
-                            backgroundColor: 'transparent',
-                            paddingHorizontal: 14,
-                        })}
+                    {/* Divider ví điện tử */}
+                    <View
+                        style={{
+                            flexDirection: 'row', alignItems: 'center',
+                            marginVertical: 14, gap: 12,
+                        }}
                     >
+                        <View style={{ flex: 1, height: 0.5, backgroundColor: palette.EHR_OUTLINE_VARIANT }} />
                         <Text style={{
-                            fontFamily: SANS_SEMI, fontSize: 13.5,
-                            color: palette.EHR_ON_SURFACE_VARIANT,
-                            fontWeight: '600', letterSpacing: 0.2,
+                            fontFamily: SANS_BOLD, fontSize: 10.5,
+                            color: palette.EHR_TEXT_MUTED,
+                            letterSpacing: 1.3, textTransform: 'uppercase',
+                            fontWeight: '700',
                         }}>
-                            {showMore ? 'Thu gọn' : 'Xem thêm'}
+                            Hoặc dùng ví điện tử
                         </Text>
-                        <View style={{
-                            paddingHorizontal: 8, paddingVertical: 2,
-                            borderRadius: 999,
-                            backgroundColor: palette.EHR_SURFACE_HIGH,
-                        }}>
-                            <Text style={{
-                                fontFamily: SANS_BOLD, fontSize: 10.5,
-                                color: palette.EHR_TEXT_MUTED,
-                                fontWeight: '700',
-                            }}>
-                                {MORE_SOCIAL.length}
-                            </Text>
-                        </View>
-                        <ChevronDown
-                            size={14}
-                            color={palette.EHR_ON_SURFACE_VARIANT}
-                            style={{ transform: [{ rotate: showMore ? '180deg' : '0deg' }] }}
-                        />
-                    </Pressable>
+                        <View style={{ flex: 1, height: 0.5, backgroundColor: palette.EHR_OUTLINE_VARIANT }} />
+                    </View>
+
+                    {/* Wallet grid 4-cột — 3 primary + ô "Xem thêm" (UI-only, nút STUB) */}
+                    {renderGrid(walletCells)}
 
                     {/* Legal disclosure card jade-tinted (NĐ 13/2023) */}
                     <View
@@ -566,7 +627,8 @@ export default function LoginScreen({ navigation }: any) {
                             letterSpacing: 1.3, textTransform: 'uppercase',
                             fontWeight: '600',
                         }}>
-                            ViEH · Bảo mật phân quyền
+                            ViEH · Bảo mật phân quyền ·{' '}
+                            <Text style={{ textTransform: 'none' }}>v2.4.1</Text>
                         </Text>
                         <View style={{ width: 16, height: 0.5, backgroundColor: palette.EHR_OUTLINE_VARIANT }} />
                     </View>
