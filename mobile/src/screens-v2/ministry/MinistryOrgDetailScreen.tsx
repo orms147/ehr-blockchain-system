@@ -112,7 +112,7 @@ export default function MinistryOrgDetailScreen({ route, navigation }: any) {
 
             Alert.alert(
                 'Đã thu hồi',
-                `Cơ sở "${params.name}" mất trạng thái đã xác minh. Tất cả bác sĩ thuộc cơ sở mất quyền tx mới.\n\nTx: ${String(txHash).slice(0, 14)}…`,
+                `Cơ sở "${params.name}" mất trạng thái đã xác minh (gỡ VERIFIED_ORG của quản trị viên). Bác sĩ đã xác minh KHÔNG bị ảnh hưởng.\n\nTx: ${String(txHash).slice(0, 14)}…`,
                 [{ text: 'OK', onPress: () => navigation?.goBack?.() }],
             );
         } catch (error: any) {
@@ -166,7 +166,7 @@ export default function MinistryOrgDetailScreen({ route, navigation }: any) {
                 <ComplianceRow
                     op="setOrgActive(orgId, false)"
                     title="Tạm dừng cơ sở"
-                    sub="Khoá tx mới của cơ sở và bác sĩ thuộc cơ sở. Có thể bật lại bất kỳ lúc nào."
+                    sub="Khoá thao tác quản trị của cơ sở (xác minh bác sĩ, thêm thành viên). Bác sĩ đã xác minh vẫn hoạt động. Bật lại bất kỳ lúc nào."
                     cta="Tạm dừng"
                     tone="warn"
                     disabled={!active}
@@ -184,7 +184,7 @@ export default function MinistryOrgDetailScreen({ route, navigation }: any) {
                 <ComplianceRow
                     op="revokeOrgVerification(org)"
                     title="Thu hồi xác minh cơ sở"
-                    sub="Cơ sở mất trạng thái đã xác minh. Tất cả bác sĩ thuộc cơ sở mất quyền tx. Không tự khôi phục."
+                    sub="Cơ sở mất trạng thái đã xác minh (gỡ VERIFIED_ORG của quản trị viên). Bác sĩ đã xác minh không bị ảnh hưởng. Không tự khôi phục."
                     cta="Thu hồi"
                     tone="danger"
                     onPress={() => setConfirm('revoke')}
@@ -199,7 +199,7 @@ export default function MinistryOrgDetailScreen({ route, navigation }: any) {
                 visible={confirm === 'pause'}
                 kind="warn"
                 title="Tạm dừng cơ sở"
-                sub={`Bạn đang tạm dừng "${params.name}". Cơ sở và bác sĩ thuộc nó sẽ KHÔNG ký được tx mới. Bạn có thể mở lại bất kỳ lúc nào.`}
+                sub={`Bạn đang tạm dừng "${params.name}". Quản trị viên sẽ KHÔNG thực hiện được thao tác quản trị (xác minh bác sĩ, thêm thành viên). Bác sĩ đã xác minh vẫn hoạt động. Mở lại bất kỳ lúc nào.`}
                 op="setOrgActive"
                 args={`orgId: ${params.orgId}, active: false`}
                 primary="Tạm dừng"
@@ -214,7 +214,7 @@ export default function MinistryOrgDetailScreen({ route, navigation }: any) {
                 visible={confirm === 'resume'}
                 kind="warn"
                 title="Mở lại cơ sở"
-                sub={`Bạn đang mở lại "${params.name}". Cơ sở và bác sĩ thuộc nó sẽ ký được tx trở lại.`}
+                sub={`Bạn đang mở lại "${params.name}". Quản trị viên thực hiện được thao tác quản trị trở lại.`}
                 op="setOrgActive"
                 args={`orgId: ${params.orgId}, active: true`}
                 primary="Mở lại"
@@ -229,7 +229,7 @@ export default function MinistryOrgDetailScreen({ route, navigation }: any) {
                 visible={confirm === 'revoke'}
                 kind="danger"
                 title="Thu hồi xác minh cơ sở"
-                sub={`"${params.name}" sẽ mất trạng thái đã xác minh. Mọi bác sĩ thuộc cơ sở mất quyền ký tx mới. Hành động này KHÔNG TỰ KHÔI PHỤC.`}
+                sub={`"${params.name}" sẽ mất trạng thái đã xác minh (quản trị viên mất VERIFIED_ORG). Bác sĩ đã xác minh không bị ảnh hưởng. Hành động này KHÔNG TỰ KHÔI PHỤC.`}
                 op="revokeOrgVerification"
                 args={`org: ${truncate(params.primaryAdmin)}`}
                 primary="Thu hồi xác minh"
