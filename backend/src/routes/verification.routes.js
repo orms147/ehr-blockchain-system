@@ -275,11 +275,15 @@ router.get('/all', authenticate, requireMinistryRole, async (req, res, next) => 
     }
 });
 
-// POST /api/verification/review - Approve or reject verification (Ministry/Admin only)
-router.post('/review', authenticate, requireMinistryRole, async (req, res, next) => {
+// POST /api/verification/review - Approve or reject verification.
+// Org admins review requests for THEIR OWN org; Ministry has oversight on all.
+// (On-chain verifyDoctor is the real authority and is signed by the org admin's
+// wallet from mobile; this endpoint is DB bookkeeping + returns the call args.)
+router.post('/review', authenticate, requireOrgOrMinistry, async (req, res, next) => {
     try {
         const { requestId, approved, rejectionReason } = reviewVerificationSchema.parse(req.body);
         const reviewerAddress = req.user.walletAddress.toLowerCase();
+        const isMinistry = req.user.isMinistry === true;
         const request = await prisma.verificationRequest.findUnique({
             where: { id: requestId },
         });
@@ -290,6 +294,26 @@ router.post('/review', authenticate, requireMinistryRole, async (req, res, next)
 
         if (request.status !== 'pending') {
             return res.status(400).json({ error: 'Yêu cầu này đã được xử lý' });
+        }
+
+        // Org admins may only review requests directed at their own org.
+        // Resolve the reviewer's org (primary OR backup admin) and match by name
+        // — VerificationRequest stores the org by name (selectedOrg.name on submit).
+        if (!isMinistry) {
+            const reviewerOrg = await prisma.organization.findFirst({
+                where: {
+                    OR: [
+                        { address: reviewerAddress },
+                        { backupAdminAddress: reviewerAddress },
+                    ],
+                },
+            });
+            if (!reviewerOrg) {
+                return res.status(403).json({ error: 'Không tìm thấy tổ chức của bạn' });
+            }
+            if (!request.organization || request.organization !== reviewerOrg.name) {
+                return res.status(403).json({ error: 'Yêu cầu này không thuộc tổ chức của bạn' });
+            }
         }
 
         // Update request status
