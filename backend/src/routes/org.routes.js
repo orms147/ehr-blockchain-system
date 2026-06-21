@@ -237,9 +237,12 @@ router.get('/my-org', authenticate, async (req, res, next) => {
             });
             role = membership.role;
         } else {
-            // Fallback: Check if user is primaryAdmin of an org (created by Ministry)
+            // Fallback: user là primaryAdmin (address) HOẶC backupAdmin của 1 org.
+            // On-chain cả 2 admin bình đẳng (createOrganization cấp ORGANIZATION|VERIFIED_ORG
+            // + adminToOrgId cho cả hai) → backend cũng phải resolve cả backupAdminAddress,
+            // nếu không backup admin đăng nhập sẽ thấy hasOrg:false dù có đủ quyền.
             org = await prisma.organization.findFirst({
-                where: { address: memberAddress }, // In our model, Org Address = Primary Admin Address
+                where: { OR: [{ address: memberAddress }, { backupAdminAddress: memberAddress }] },
             });
 
             if (org) {

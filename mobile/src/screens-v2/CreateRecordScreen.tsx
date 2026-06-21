@@ -35,6 +35,7 @@ import keyShareService from '../services/keyShare.service';
 import { RECORD_REGISTRY_ABI } from '../abi/contractABI';
 import { withSelfPayFallback } from '../utils/selfPayFallback';
 import walletActionService from '../services/walletAction.service';
+import { gateOrThrow } from '../utils/biometricGate';
 import { getOrCreateEncryptionKeypair, encryptForRecipient } from '../services/nacl-crypto';
 import { normalizeBase64 } from '../utils/base64';
 import { friendlyPickerError } from '../utils/friendlyError';
@@ -432,6 +433,10 @@ export default function CreateRecordScreen({ navigation, route: navRoute }: any)
                 attachment: selectedImage,
             });
 
+            // Sinh trắc trước khi tạo hồ sơ — đồng nhất với luồng bác sĩ + TT 13/2025 Đ3
+            // (xác nhận chủ ý bằng sinh trắc). Máy không có/chưa đăng ký vân tay (vd emulator)
+            // sẽ tự bỏ qua (graceful degrade trong requireBiometric).
+            await gateOrThrow('Xác thực để tạo hồ sơ y tế mới');
             const aesKey = await generateAESKey();
             const encryptedData = await encryptData(payload, aesKey);
             const { cid } = await ipfsService.uploadEncrypted({
