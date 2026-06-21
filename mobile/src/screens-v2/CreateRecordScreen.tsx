@@ -32,6 +32,8 @@ import { encryptData, generateAESKey } from '../services/crypto';
 import ipfsService from '../services/ipfs.service';
 import recordService from '../services/record.service';
 import keyShareService from '../services/keyShare.service';
+import { RECORD_REGISTRY_ABI } from '../abi/contractABI';
+import { withSelfPayFallback } from '../utils/selfPayFallback';
 import walletActionService from '../services/walletAction.service';
 import { getOrCreateEncryptionKeypair, encryptForRecipient } from '../services/nacl-crypto';
 import { normalizeBase64 } from '../utils/base64';
@@ -268,6 +270,8 @@ export default function CreateRecordScreen({ navigation, route: navRoute }: any)
     const palette = useEhrPalette();
     const { user } = useAuthStore();
     const recordApi: any = recordService;
+    const RECORD_REGISTRY_ADDRESS = process.env.EXPO_PUBLIC_RECORD_REGISTRY_ADDRESS as `0x${string}`;
+    const ZERO_HASH = ('0x' + '0'.repeat(64)) as `0x${string}`;
     const isMountedRef = useRef(true);
     useEffect(() => () => { isMountedRef.current = false; }, []);
 
@@ -456,10 +460,34 @@ export default function CreateRecordScreen({ navigation, route: navRoute }: any)
             };
             await localRecordStore.setKey(cidHash, localDraft);
 
-            const created = await recordApi.createRecord(
-                cidHash, recordTypeHash, parentCidHash,
-                draft.title.trim(), draft.description.trim() || null, draft.recordType,
+            // Upload via relayer (sponsored) — or, if the 100 free signatures are
+            // used up, self-pay: the patient submits RecordRegistry.addRecord
+            // directly, then mirrors the metadata via save-only (no relayer), the
+            // same pattern the doctor self-pay flow uses.
+            const uploadFb = await withSelfPayFallback(
+                () => recordApi.createRecord(
+                    cidHash, recordTypeHash, parentCidHash,
+                    draft.title.trim(), draft.description.trim() || null, draft.recordType,
+                ),
+                {
+                    address: RECORD_REGISTRY_ADDRESS,
+                    abi: RECORD_REGISTRY_ABI,
+                    functionName: 'addRecord',
+                    args: [cidHash, parentCidHash || ZERO_HASH, recordTypeHash],
+                },
             );
+            const created = uploadFb.selfPaid
+                ? await recordApi.saveOnly({
+                      cidHash,
+                      recordTypeHash,
+                      ownerAddress: user?.walletAddress,
+                      title: draft.title.trim(),
+                      description: draft.description.trim() || null,
+                      recordType: draft.recordType,
+                      parentCidHash: parentCidHash || null,
+                      txHash: uploadFb.txHash,
+                  })
+                : uploadFb.relayerResult;
 
             await localRecordStore.setKey(cidHash, {
                 ...localDraft,

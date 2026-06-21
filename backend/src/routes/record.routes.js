@@ -173,7 +173,7 @@ router.post('/', authenticate, async (req, res, next) => {
         }
 
         const quota = await relayerService.getQuotaStatus(walletAddress);
-        if (!quota.hasSelfWallet && quota.signaturesRemaining <= 0) {
+        if (quota.signaturesRemaining <= 0) {
             return res.status(429).json({
                 code: 'QUOTA_EXHAUSTED',
                 error: 'Monthly sponsored signature quota exhausted. Please connect a wallet with ETH to continue.',
@@ -906,10 +906,15 @@ router.delete('/:cidHash/access/:address', authenticate, async (req, res, next) 
         try {
             txResult = await relayerService.sponsorRevoke(callerAddress, targetAddress, rootCid);
         } catch (txError) {
-            if (txError.message === 'QUOTA_EXHAUSTED_USE_OWN_WALLET') {
+            // Quota exhausted → signal the client to self-pay. consumeQuota throws
+            // code QUOTA_EXHAUSTED (statusCode 429); older paths used the literal
+            // 'QUOTA_EXHAUSTED_USE_OWN_WALLET' message. Match BOTH and surface a
+            // clean 402 + code so the mobile self-pay fallback can catch it.
+            if (txError.code === 'QUOTA_EXHAUSTED' || txError.message === 'QUOTA_EXHAUSTED_USE_OWN_WALLET') {
                 return res.status(402).json({
+                    code: 'QUOTA_EXHAUSTED',
                     error: 'Quota exhausted',
-                    message: 'Please connect a wallet with ETH to continue revoking access.',
+                    message: 'Đã hết 100 lượt miễn phí tháng này. Giao dịch thu hồi sẽ tự trả phí từ ví của bạn.',
                     requiresOwnWallet: true,
                 });
             }

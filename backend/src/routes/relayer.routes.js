@@ -40,9 +40,7 @@ router.get('/quota', authenticate, async (req, res, next) => {
         res.json({
             ...quota,
             limits: relayerService.QUOTA_LIMITS,
-            message: quota.hasSelfWallet
-                ? 'Bạn đang sử dụng ví riêng - không giới hạn'
-                : `Còn ${quota.signaturesRemaining}/${quota.signaturesLimit} chữ ký miễn phí tháng này (gồm upload, cập nhật, cấp quyền, thu hồi, uỷ quyền)`,
+            message: `Còn ${quota.signaturesRemaining}/${quota.signaturesLimit} chữ ký miễn phí tháng này (gồm upload, cập nhật, cấp quyền, thu hồi, uỷ quyền). Hết quota: tự trả gas bằng ví cá nhân.`,
         });
     } catch (error) {
         next(error);

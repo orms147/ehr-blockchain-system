@@ -5,6 +5,7 @@ import { arbitrumSepolia } from 'viem/chains';
 
 import { signDelegationPermit, getDeadline } from '../utils/eip712';
 import { gateOrThrow } from '../utils/biometricGate';
+import { withSelfPayFallback } from '../utils/selfPayFallback';
 import { CONSENT_LEDGER_ABI } from '../abi/contractABI';
 
 const CONSENT_LEDGER_ADDRESS = process.env.EXPO_PUBLIC_CONSENT_LEDGER_ADDRESS;
@@ -87,17 +88,30 @@ export async function grantAuthority({
         nonce: ctx.nonce,
     });
 
-    // 3. Relayer submits delegateAuthorityBySig
-    const result = await api.post('/api/relayer/delegate-authority', {
-        delegateeAddress: delegatee,
-        duration,
-        allowSubDelegate,
-        deadline,
-        signature,
-        scopeNote: scopeNote || null,
-    });
+    // 3. Relayer submits delegateAuthorityBySig — or, if the 100 free signatures
+    //    are used up, the patient self-submits the SAME signature (delegateAuthorityBySig
+    //    is signature-gated) and pays gas from their own wallet. NOTE: scopeNote is
+    //    off-chain-only and only persisted on the relayer path; on self-pay the
+    //    on-chain authority + event-sync Delegation cache are preserved, but the
+    //    clinical scopeNote is not stored.
+    const { txHash, selfPaid } = await withSelfPayFallback(
+        () => api.post('/api/relayer/delegate-authority', {
+            delegateeAddress: delegatee,
+            duration,
+            allowSubDelegate,
+            deadline,
+            signature,
+            scopeNote: scopeNote || null,
+        }),
+        {
+            address: CONSENT_LEDGER_ADDRESS,
+            abi: CONSENT_LEDGER_ABI,
+            functionName: 'delegateAuthorityBySig',
+            args: [patient, delegatee, Number(duration), Boolean(allowSubDelegate), BigInt(deadline), signature],
+        },
+    );
 
-    return { txHash: result.txHash };
+    return { txHash, selfPaid };
 }
 
 // ============ PATIENT: REVOKE ROOT AUTHORITY ============

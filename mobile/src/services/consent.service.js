@@ -3,6 +3,7 @@ import walletActionService from './walletAction.service';
 import { signGrantConsent, computeCidHash, computeEncKeyHash, getDeadline } from '../utils/eip712';
 import { withRpcRetry } from '../utils/rpcRetry';
 import { gateOrThrow } from '../utils/biometricGate';
+import { withSelfPayFallback } from '../utils/selfPayFallback';
 import { createPublicClient, http, keccak256, toBytes } from 'viem';
 import { arbitrumSepolia } from 'viem/chains';
 import { CONSENT_LEDGER_ABI } from '../abi/contractABI';
@@ -155,23 +156,37 @@ export async function grantConsentOnChain({
         nonce: ctx.nonce,
     });
 
-    // 4. Relayer submits grantBySig
-    const result = await api.post('/api/relayer/grant', {
-        granteeAddress: grantee,
-        cidHash,
-        encKeyHash,
-        expireAt,
-        allowDelegate,
-        deadline,
-        signature,
-    });
+    // 4. Relayer submits grantBySig — or, if the 100 free signatures are used up,
+    //    the patient self-submits the SAME signature (grantBySig is signature-gated,
+    //    not msg.sender-gated) and pays gas from their own wallet.
+    const { txHash, selfPaid } = await withSelfPayFallback(
+        () => api.post('/api/relayer/grant', {
+            granteeAddress: grantee,
+            cidHash,
+            encKeyHash,
+            expireAt,
+            allowDelegate,
+            deadline,
+            signature,
+        }),
+        {
+            address: CONSENT_LEDGER_ADDRESS,
+            abi: CONSENT_LEDGER_ABI,
+            functionName: 'grantBySig',
+            args: [patient, grantee, cidHash, encKeyHash, expireAt, allowDelegate, deadline, signature],
+        },
+    );
 
     return {
-        txHash: result.txHash,
+        txHash,
         cidHash,
         isVerifiedDoctor: ctx.isVerifiedDoctor,
         isDoctor: ctx.isDoctor,
-        signaturesRemaining: Math.max(0, (ctx.signaturesRemaining ?? 0) - 1),
+        selfPaid,
+        // Self-pay does NOT consume the free quota (relayer threw before submitting).
+        signaturesRemaining: selfPaid
+            ? (ctx.signaturesRemaining ?? 0)
+            : Math.max(0, (ctx.signaturesRemaining ?? 0) - 1),
     };
 }
 
@@ -230,9 +245,24 @@ export async function revokeConsent(consentOrAddress, cidHash) {
     // root cidHash before calling sponsorRevoke. Hitting /api/relayer/revoke
     // directly with a child cidHash makes the contract revert with
     // Unauthorized() because the consent lives at the root key.
-    const result = await api.delete(
-        `/api/records/${targetCidHash}/access/${String(granteeAddress).toLowerCase()}`
+    //
+    // On quota exhaustion (100 free used up → backend 402 requiresOwnWallet), the
+    // patient self-submits ConsentLedger.revoke (it walks inputCidHash → root
+    // internally, and requires c.patient == msg.sender = this wallet). The
+    // off-chain KeyShare payload purge still happens via backend event sync on the
+    // ConsentRevoked event, plus the best-effort key-share delete below.
+    const { relayerResult, selfPaid } = await withSelfPayFallback(
+        () => api.delete(
+            `/api/records/${targetCidHash}/access/${String(granteeAddress).toLowerCase()}`
+        ),
+        {
+            address: CONSENT_LEDGER_ADDRESS,
+            abi: CONSENT_LEDGER_ABI,
+            functionName: 'revoke',
+            args: [String(granteeAddress).toLowerCase(), targetCidHash],
+        },
     );
+    const result = selfPaid ? { success: true, selfPaid: true } : relayerResult;
 
     // Best-effort: also delete the off-chain key share row so payload is purged immediately.
     // The eventSync projection will eventually flip it to revoked anyway, but this gives instant UI.

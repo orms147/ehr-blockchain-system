@@ -278,8 +278,10 @@ async function consumeQuota(walletAddress, actionLabel) {
 
     user = await checkAndResetQuota(user);
 
-    // Self-wallet users pay their own gas → no quota consumption.
-    if (user.hasSelfWallet) return user;
+    // Mô hình quota thống nhất (2026-06-21): MỌI user — đăng nhập mạng xã hội HAY
+    // ví ngoài qua Web3Auth — đều dùng chung 100 chữ ký sponsor miễn phí/tháng;
+    // hết quota thì tự trả gas bằng ví cá nhân (frontend gửi tx trực tiếp khi nhận
+    // 429). KHÔNG special-case ví ngoài. Xem context/28_wallet_login_integration.md.
 
     // F15 fix: atomic gate-and-reserve. Increment the counter ONLY if it is still
     // under the cap, in a single conditional updateMany, so two concurrent sponsored
@@ -290,7 +292,6 @@ async function consumeQuota(walletAddress, actionLabel) {
     const reserved = await prisma.user.updateMany({
         where: {
             walletAddress: address,
-            hasSelfWallet: false,
             signaturesThisMonth: { lt: QUOTA_LIMITS.SIGNATURES_PER_MONTH },
         },
         data: { signaturesThisMonth: { increment: 1 } },
