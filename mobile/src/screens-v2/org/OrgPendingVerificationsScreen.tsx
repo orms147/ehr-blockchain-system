@@ -17,6 +17,7 @@ import { gateOrThrow } from '../../utils/biometricGate';
 import { ACCESS_CONTROL_ABI } from '../../abi/contractABI';
 import ViCard from '../../components-v2/ViCard';
 import ViButton from '../../components-v2/ViButton';
+import HexRow from '../../components/HexRow';
 import { useEhrPalette } from '../../constants/uiColors';
 
 const SERIF = 'Fraunces_400Regular';
@@ -48,14 +49,48 @@ type PendingItem = {
     address?: string;
     walletAddress?: string;
     specialty?: string;
+    licenseNumber?: string;
+    organization?: string;
+    documentType?: string;
+    documentCid?: string;
     requestedAt?: string;
     createdAt?: string;
     verificationOutcome?: VerificationOutcome;
 };
 
-const truncate = (addr?: string) => (addr ? `${addr.slice(0, 6)}…${addr.slice(-4)}` : '???');
-
 const MONO = 'monospace';
+
+// One labelled field in the CCHN-detail block the org reviews before approving.
+function DetailRow({
+    label,
+    value,
+    palette,
+    mono,
+}: {
+    label: string;
+    value?: string;
+    palette: ReturnType<typeof useEhrPalette>;
+    mono?: boolean;
+}) {
+    return (
+        <YStack style={{ gap: 2 }}>
+            <Text
+                style={{
+                    fontFamily: SANS,
+                    fontSize: 10,
+                    color: palette.EHR_TEXT_MUTED,
+                    letterSpacing: 0.5,
+                    textTransform: 'uppercase',
+                }}
+            >
+                {label}
+            </Text>
+            <Text style={{ fontFamily: mono ? MONO : SANS_MEDIUM, fontSize: 13, color: palette.EHR_ON_SURFACE }}>
+                {value && value.trim() ? value : '—'}
+            </Text>
+        </YStack>
+    );
+}
 
 function PendingRow({
     item,
@@ -111,14 +146,35 @@ function PendingRow({
                             {item.specialty}
                         </Text>
                     ) : null}
-                    <Text style={{ fontFamily: 'monospace', fontSize: 11, color: palette.EHR_TEXT_MUTED, marginTop: 3 }}>
-                        {truncate(item.doctorAddress || item.address || item.walletAddress)}
-                    </Text>
                     <Text style={{ fontFamily: SANS, fontSize: 11, color: palette.EHR_TEXT_MUTED, marginTop: 3 }}>
                         Yêu cầu: {new Date(item.requestedAt || item.createdAt || Date.now()).toLocaleDateString('vi-VN')}
                     </Text>
                 </YStack>
             </XStack>
+
+            {/* CCHN details the doctor submitted — org needs these to verify.
+                documentType = filenames the doctor attached (ảnh chưa upload thật,
+                IPFS đang mock — chỉ liệt kê tên file đã đính kèm). */}
+            <View
+                style={{
+                    marginBottom: 12,
+                    paddingVertical: 11,
+                    paddingHorizontal: 12,
+                    borderRadius: 8,
+                    backgroundColor: `${palette.EHR_ON_SURFACE}08`,
+                    gap: 9,
+                }}
+            >
+                <HexRow
+                    label="Địa chỉ ví bác sĩ"
+                    value={item.doctorAddress || item.address || item.walletAddress || ''}
+                />
+                <DetailRow label="Số CCHN" value={item.licenseNumber} palette={palette} mono />
+                {item.organization ? (
+                    <DetailRow label="Cơ sở đăng ký" value={item.organization} palette={palette} />
+                ) : null}
+                <DetailRow label="Tài liệu đính kèm" value={item.documentType} palette={palette} />
+            </View>
 
             {/* Wave N — 4-check outcome line. Tap to expand check details. */}
             {outcome ? (

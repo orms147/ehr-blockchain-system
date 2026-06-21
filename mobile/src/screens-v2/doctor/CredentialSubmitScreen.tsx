@@ -112,7 +112,7 @@ export default function CredentialSubmitScreen({ navigation }: any) {
         try {
             const [statusRes, orgsRes]: any = await Promise.all([
                 verificationService.getMyVerificationStatus(),
-                orgService.getAllOrganizations().catch(() => []),
+                orgService.getOrgDirectory().catch(() => []),
             ]);
             setServerData(statusRes || null);
             const orgList: OrgOption[] = Array.isArray(orgsRes?.organizations)

@@ -546,6 +546,33 @@ router.post('/:orgId/remove-member/:memberId', authenticate, async (req, res, ne
     }
 });
 
+// GET /api/org/directory - Public directory of verified+active orgs.
+// Any authenticated user (doctors picking a verifier, patients, etc.). Returns a
+// SAFE field subset only — no admin emails/license internals. Doctors need this to
+// choose which facility verifies their CCHN; /all is Ministry-gated so it 403'd them.
+router.get('/directory', authenticate, async (req, res, next) => {
+    try {
+        const orgs = await prisma.organization.findMany({
+            where: { isActive: true, isVerified: true },
+            orderBy: { name: 'asc' },
+            select: {
+                id: true,
+                chainOrgId: true,
+                name: true,
+                orgType: true,
+                location: true,
+            },
+        });
+
+        res.json({
+            count: orgs.length,
+            organizations: orgs,
+        });
+    } catch (error) {
+        next(error);
+    }
+});
+
 // GET /api/org/all - Get all organizations (for Ministry/Admin)
 router.get('/all', authenticate, requireMinistryRole, async (req, res, next) => {
     try {

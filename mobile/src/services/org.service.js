@@ -73,9 +73,15 @@ export const orgService = {
         return api.post(`/api/admin/org-applications/${applicationId}/reject`, { reason });
     },
 
-    // Get all verified organizations
+    // Get all verified organizations (Ministry-only endpoint)
     async getAllOrganizations() {
         return api.get('/api/org/all');
+    },
+
+    // Public directory of verified+active orgs — any authenticated user.
+    // Doctors use this to pick which facility verifies their CCHN.
+    async getOrgDirectory() {
+        return api.get('/api/org/directory');
     },
 
     // Wave E: list doctors NOT belonging to any organization. Ministry uses
