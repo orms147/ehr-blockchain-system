@@ -66,7 +66,22 @@ console.log('[Web3AuthCtx] Resolved redirectUrl:', redirectUrl);
 console.log('[Web3AuthCtx] Network: SAPPHIRE_DEVNET');
 console.log('[Web3AuthCtx] Creating Web3Auth instance...');
 
-const web3auth = new Web3Auth(WebBrowser, SecureStore, {
+// Web3Auth lưu session keyed bằng "sessionId" + TÊN VERIFIER (KeyStore.set(verifier, …)
+// tại Web3Auth.js). Một số verifier — đặc biệt email_passwordless — chứa ký tự mà
+// expo-secure-store từ chối ("Invalid key … chỉ a-z 0-9 . - _") → login crash, trong khi
+// Google (verifier hợp lệ) vẫn chạy. Bọc SecureStore để chuẩn hoá key. Key hợp lệ giữ
+// nguyên (vd "sessionId", verifier Google) → không ảnh hưởng phiên cũ. 2026-06-21.
+const sanitizeSecureStoreKey = (k: unknown): string => {
+  const s = String(k ?? '').replace(/[^a-zA-Z0-9._-]/g, '_');
+  return s.length ? s : 'w3a_default';
+};
+const secureStoreSafe = {
+  getItemAsync: (k: string, opts?: any) => SecureStore.getItemAsync(sanitizeSecureStoreKey(k), opts),
+  setItemAsync: (k: string, v: string, opts?: any) => SecureStore.setItemAsync(sanitizeSecureStoreKey(k), v, opts),
+  deleteItemAsync: (k: string, opts?: any) => SecureStore.deleteItemAsync(sanitizeSecureStoreKey(k), opts),
+};
+
+const web3auth = new Web3Auth(WebBrowser, secureStoreSafe as any, {
   clientId,
   network: WEB3AUTH_NETWORK.SAPPHIRE_DEVNET,
   privateKeyProvider,
