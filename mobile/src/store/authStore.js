@@ -24,7 +24,9 @@ function normalizeWalletAddress(value) {
 
 function roleSelectionDoneKey(walletAddress) {
     const normalized = normalizeWalletAddress(walletAddress);
-    return normalized ? `role_selection_done:${normalized}` : null;
+    // SecureStore chỉ cho key [a-zA-Z0-9._-] → KHÔNG dùng ":" (gây "Invalid key").
+    // Bug: tài khoản nhiều role gọi isRoleSelectionDone → getItemAsync key có ":" → crash login.
+    return normalized ? `role_selection_done_${normalized}` : null;
 }
 
 async function isRoleSelectionDone(walletAddress) {
