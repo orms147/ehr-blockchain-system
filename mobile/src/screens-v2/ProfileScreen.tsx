@@ -52,6 +52,15 @@ const SANS_SEMI = 'DMSans_600SemiBold';
 
 const truncate = (addr?: string) => (addr ? `${addr.slice(0, 6)}…${addr.slice(-4)}` : '0x000…0000');
 
+// Ministry profile thay phần "Tài khoản & ví" bằng địa chỉ 5 hợp đồng (đọc từ env build).
+const MINISTRY_CONTRACTS = [
+    { label: 'AccessControl', address: process.env.EXPO_PUBLIC_ACCESS_CONTROL_ADDRESS },
+    { label: 'ConsentLedger', address: process.env.EXPO_PUBLIC_CONSENT_LEDGER_ADDRESS },
+    { label: 'RecordRegistry', address: process.env.EXPO_PUBLIC_RECORD_REGISTRY_ADDRESS },
+    { label: 'EHRSystemSecure', address: process.env.EXPO_PUBLIC_EHR_SYSTEM_ADDRESS },
+    { label: 'DoctorUpdate', address: process.env.EXPO_PUBLIC_DOCTOR_UPDATE_ADDRESS },
+].filter((c) => c.address);
+
 function firstInitial(fullName?: string) {
     if (!fullName) return 'V';
     const parts = fullName.trim().split(/\s+/);
@@ -61,7 +70,11 @@ function firstInitial(fullName?: string) {
 export default function ProfileScreen() {
     const palette = useEhrPalette();
     const navigation = useNavigation<any>();
-    const { user, logout, token } = useAuthStore();
+    const { user, logout, token, activeRole } = useAuthStore();
+    // Một số mục chỉ dành cho bệnh nhân (sức khoẻ, uỷ quyền bác sĩ, hồ sơ khẩn cấp).
+    // Ministry/Org/Doctor không cần → ẩn theo role đang hoạt động.
+    const isPatient = activeRole === 'patient';
+    const isMinistry = activeRole === 'ministry';
     const { preference: themePref, setPreference: setThemePref } = useThemePreference();
     const [profile, setProfile] = useState<any>(null);
     const [isLoading, setIsLoading] = useState(true);
@@ -166,7 +179,7 @@ export default function ProfileScreen() {
                             textAlign: 'center',
                         }}
                     >
-                        {userData.fullName || 'Chưa cập nhật tên'}
+                        {userData.fullName || (isMinistry ? 'Bộ Y tế' : 'Chưa cập nhật tên')}
                     </Text>
                     {/* G.12.c — HexRow replaces inline wallet pill */}
                     {userData.walletAddress || (userData as any).address ? (
@@ -199,12 +212,13 @@ export default function ProfileScreen() {
                             expanded
                             showAddress={false}
                             interactive={false}
-                            fallbackName={userData.fullName}
+                            fallbackName={userData.fullName || (isMinistry ? 'Bộ Y tế' : undefined)}
                         />
                     </View>
                 </View>
 
-                {/* Health info */}
+                {/* Health info — chỉ bệnh nhân (Ministry/Org/Doctor không cần) */}
+                {isPatient && (<>
                 <ViSectionLabel trailing={
                     <Text
                         style={{ fontFamily: SANS_SEMI, fontSize: 11, color: palette.EHR_PRIMARY, fontWeight: '600' }}
@@ -269,18 +283,37 @@ export default function ProfileScreen() {
                         </Text>
                     </ViCard>
                 </View>
+                </>)}
 
-                {/* Menu */}
+                {/* Ministry: địa chỉ contract thay cho "Tài khoản & ví" */}
+                {isMinistry && MINISTRY_CONTRACTS.length > 0 && (
+                    <>
+                        <ViSectionLabel>Hợp đồng hệ thống</ViSectionLabel>
+                        <View style={{ paddingHorizontal: 20, marginBottom: 14, gap: 8 }}>
+                            {MINISTRY_CONTRACTS.map((c) => (
+                                <HexRow key={c.label} label={c.label} value={c.address as string} head={6} tail={4} sheetTitle={c.label} />
+                            ))}
+                        </View>
+                    </>
+                )}
+
+                {/* Menu — Tài khoản & ví: ẩn cho Ministry */}
+                {!isMinistry && (<>
                 <ViSectionLabel>Tài khoản & ví</ViSectionLabel>
                 <View style={{ paddingHorizontal: 20, marginBottom: 14 }}>
                     <ViCard padding={0}>
                         <MenuRow icon={<QrCode size={16} color={palette.EHR_ON_SURFACE_VARIANT} />} label="Địa chỉ của tôi (QR)" onPress={() => setAddressModalOpen(true)} />
                         <MenuRow icon={<Settings size={16} color={palette.EHR_ON_SURFACE_VARIANT} />} label="Cài đặt & ví" onPress={() => navigation.navigate('Settings')} />
-                        <MenuRow icon={<Edit3 size={16} color={palette.EHR_ON_SURFACE_VARIANT} />} label="Chỉnh sửa hồ sơ" onPress={() => navigation.navigate('EditProfile')} />
-                        <MenuRow icon={<UserCheck size={16} color={palette.EHR_ON_SURFACE_VARIANT} />} label="Uỷ quyền cho bác sĩ" onPress={() => navigation.navigate('Delegation')} />
-                        <MenuRow icon={<Siren size={16} color={palette.EHR_ON_SURFACE_VARIANT} />} label="Hồ sơ khẩn cấp" onPress={() => navigation.navigate('EmergencyProfile')} last />
+                        <MenuRow icon={<Edit3 size={16} color={palette.EHR_ON_SURFACE_VARIANT} />} label="Chỉnh sửa hồ sơ" onPress={() => navigation.navigate('EditProfile')} last={!isPatient} />
+                        {isPatient ? (
+                            <>
+                                <MenuRow icon={<UserCheck size={16} color={palette.EHR_ON_SURFACE_VARIANT} />} label="Uỷ quyền cho bác sĩ" onPress={() => navigation.navigate('Delegation')} />
+                                <MenuRow icon={<Siren size={16} color={palette.EHR_ON_SURFACE_VARIANT} />} label="Hồ sơ khẩn cấp" onPress={() => navigation.navigate('EmergencyProfile')} last />
+                            </>
+                        ) : null}
                     </ViCard>
                 </View>
+                </>)}
 
                 {/* G.12 — Giao diện section per user request: theme toggle visible on Profile tab */}
                 <ViSectionLabel>Giao diện</ViSectionLabel>
