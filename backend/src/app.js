@@ -1,3 +1,10 @@
+// Serialize BigInt as string in ALL JSON responses. Prisma exposes several BigInt
+// columns (Organization.chainOrgId, Delegation.epoch / grantBlockNumber, …); without
+// this, res.json() throws "Do not know how to serialize a BigInt" and the request 500s
+// (e.g. confirm-org-creation + GET /api/org/all → ministry dashboard empty). 2026-06-21.
+// eslint-disable-next-line no-extend-native
+BigInt.prototype.toJSON = function () { return this.toString(); };
+
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';

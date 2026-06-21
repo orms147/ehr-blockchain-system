@@ -127,7 +127,20 @@ export default function MinistryCreateOrgScreen({ navigation }: any) {
                 eventName: 'OrganizationCreated',
                 logs: receipt.logs,
             });
-            const orgId = (events[0] as any)?.args?.orgId;
+            let orgId = (events[0] as any)?.args?.orgId;
+            if (orgId == null) {
+                // Fallback: không parse được event từ receipt → đọc orgCount() (org vừa tạo
+                // có id = orgCount hiện tại vì createOrganization dùng ++orgCount).
+                try {
+                    orgId = await publicClient.readContract({
+                        address: ACCESS_CONTROL_ADDRESS,
+                        abi: ACCESS_CONTROL_ABI,
+                        functionName: 'orgCount',
+                    });
+                } catch (e) {
+                    console.warn('orgCount fallback failed', e);
+                }
+            }
             if (orgId == null) {
                 Alert.alert(
                     'Giao dịch thành công nhưng thiếu sự kiện',
