@@ -47,9 +47,6 @@ import {
     RedditIcon, TwitchIcon, GithubIcon, KakaoIcon, LinkedinIcon, WeiboIcon,
     WechatIcon, FarcasterIcon,
 } from '../components-v2/BrandIcons';
-import {
-    MetaMaskIcon, WalletConnectIcon, CoinbaseIcon, PhantomIcon, TrustIcon,
-} from '../components-v2/WalletIcons';
 
 const SERIF = 'Fraunces_400Regular';
 const SERIF_ITALIC = 'Fraunces_400Regular_Italic';
@@ -78,15 +75,6 @@ type SocialTile = {
     Icon: React.ComponentType<{ size?: number }>;
 };
 
-// Ví ngoài — UI-only (nút STUB, chưa wiring WalletConnect).
-// Xem context/28_wallet_login_integration.md (chức năng làm sau khi freeze code).
-type WalletKey = 'metamask' | 'walletconnect' | 'coinbase' | 'phantom' | 'trust';
-type WalletTile = {
-    key: WalletKey;
-    label: string;
-    Icon: React.ComponentType<{ size?: number }>;
-};
-
 // 3 social ưu tiên (theo mockup v2.4.1 — grid 4 cột, ô thứ 4 là "Xem thêm").
 const PRIMARY_SOCIAL: SocialTile[] = [
     { key: 'google', label: 'Google', Icon: GoogleIcon },
@@ -109,34 +97,12 @@ const MORE_SOCIAL: SocialTile[] = [
     { key: 'farcaster', label: 'Farcaster', Icon: FarcasterIcon },
 ];
 
-// 3 ví ưu tiên + 2 ví trong "Xem thêm".
-const PRIMARY_WALLET: WalletTile[] = [
-    { key: 'metamask', label: 'MetaMask', Icon: MetaMaskIcon },
-    { key: 'walletconnect', label: 'WalletConnect', Icon: WalletConnectIcon },
-    { key: 'coinbase', label: 'Coinbase', Icon: CoinbaseIcon },
-];
-
-const MORE_WALLET: WalletTile[] = [
-    { key: 'phantom', label: 'Phantom', Icon: PhantomIcon },
-    { key: 'trust', label: 'Trust', Icon: TrustIcon },
-];
-
 export default function LoginScreen({ navigation }: any) {
     const palette = useEhrPalette();
     const [selectedProvider, setSelectedProvider] = useState<ProviderKey>('email_passwordless');
     const [loading, setLoading] = useState(false);
     const [showMore, setShowMore] = useState(false);
-    const [showMoreWallet, setShowMoreWallet] = useState(false);
     const { login } = useAuthStore();
-
-    // Ví ngoài hiện là UI-only: chưa wiring WalletConnect (cần native dep + rebuild
-    // dev-client + verify chữ ký tất định). Xem context/28_wallet_login_integration.md.
-    const handleWalletStub = (label: string) => {
-        Alert.alert(
-            'Sắp ra mắt',
-            `Đăng nhập bằng ${label} sẽ được hỗ trợ ở phiên bản tới. Hiện tại hãy dùng Email, số điện thoại hoặc mạng xã hội.`,
-        );
-    };
 
     const shouldRetryAuthStep = (error: any) => {
         if (!error) return false;
@@ -417,25 +383,6 @@ export default function LoginScreen({ navigation }: any) {
         ? [...socialPrimaryCells, ...socialMoreCells, socialToggle]
         : [...socialPrimaryCells, socialToggle];
 
-    // Ô ví (STUB, UI-only). Toggle cũng luôn ở cuối lưới.
-    const walletPrimaryCells: GridTile[] = PRIMARY_WALLET.map((t) => ({
-        key: t.key, label: t.label, Icon: t.Icon,
-        onPress: () => handleWalletStub(t.label),
-    }));
-    const walletMoreCells: GridTile[] = MORE_WALLET.map((t) => ({
-        key: t.key, label: t.label, Icon: t.Icon,
-        onPress: () => handleWalletStub(t.label),
-    }));
-    const walletToggle: GridTile = {
-        key: '__wallet_toggle',
-        label: showMoreWallet ? 'Thu gọn' : 'Xem thêm',
-        Icon: showMoreWallet ? CollapseIcon : MoreDotsIcon,
-        onPress: () => setShowMoreWallet((s) => !s),
-    };
-    const walletCells: GridTile[] = showMoreWallet
-        ? [...walletPrimaryCells, ...walletMoreCells, walletToggle]
-        : [...walletPrimaryCells, walletToggle];
-
     return (
         <View style={{ flex: 1, backgroundColor: palette.EHR_SURFACE }}>
             <SafeAreaView style={{ flex: 1 }}>
@@ -559,28 +506,6 @@ export default function LoginScreen({ navigation }: any) {
 
                     {/* Social grid 4-cột — 3 primary + ô "Xem thêm" */}
                     {renderGrid(socialCells)}
-
-                    {/* Divider ví điện tử */}
-                    <View
-                        style={{
-                            flexDirection: 'row', alignItems: 'center',
-                            marginVertical: 14, gap: 12,
-                        }}
-                    >
-                        <View style={{ flex: 1, height: 0.5, backgroundColor: palette.EHR_OUTLINE_VARIANT }} />
-                        <Text style={{
-                            fontFamily: SANS_BOLD, fontSize: 10.5,
-                            color: palette.EHR_TEXT_MUTED,
-                            letterSpacing: 1.3, textTransform: 'uppercase',
-                            fontWeight: '700',
-                        }}>
-                            Hoặc dùng ví điện tử
-                        </Text>
-                        <View style={{ flex: 1, height: 0.5, backgroundColor: palette.EHR_OUTLINE_VARIANT }} />
-                    </View>
-
-                    {/* Wallet grid 4-cột — 3 primary + ô "Xem thêm" (UI-only, nút STUB) */}
-                    {renderGrid(walletCells)}
 
                     {/* Legal disclosure card jade-tinted (NĐ 13/2023) */}
                     <View
