@@ -316,7 +316,10 @@ router.get('/:orgId/members', authenticate, async (req, res, next) => {
             }
         }
 
-        const where = { orgId };
+        // Admin (primary/backup) là quản trị viên, KHÔNG phải bác sĩ cần xác minh →
+        // loại khỏi roster "Quản lý bác sĩ" (auth-gate ở query riêng phía trên nên
+        // admin vẫn xem được danh sách).
+        const where = { orgId, role: { not: 'admin' } };
         if (statusFilter !== 'all') where.status = statusFilter;
 
         const members = await prisma.organizationMember.findMany({
@@ -380,7 +383,7 @@ router.get('/:orgId/members', authenticate, async (req, res, next) => {
         // Counts for filter chips — across all status filters so UI can render
         // chip badges even when current view is filtered.
         const allMembers = await prisma.organizationMember.findMany({
-            where: { orgId },
+            where: { orgId, role: { not: 'admin' } },  // counts: bác sĩ thật, không tính admin
             select: { status: true, memberAddress: true },
         });
         const allAddrs = allMembers.map((m) => m.memberAddress.toLowerCase());
