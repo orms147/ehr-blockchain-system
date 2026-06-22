@@ -45,6 +45,12 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 3001;
 
+// Render (and any reverse proxy) sets the X-Forwarded-For header. Without
+// trusting the proxy, express-rate-limit throws ERR_ERL_UNEXPECTED_X_FORWARDED_FOR
+// because it can't derive a stable client key. Trust the single Render proxy hop
+// (1) — NOT `true` (which would let clients spoof the header).
+app.set('trust proxy', 1);
+
 // Create HTTP server for Socket.io
 const server = createServer(app);
 

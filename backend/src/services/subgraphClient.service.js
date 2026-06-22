@@ -54,6 +54,18 @@ export async function gql(query, variables = {}) {
         );
     }
 
+    // A 200 response with no `data` (and no `errors`) — e.g. SUBGRAPH_URL points
+    // to an unpublished/wrong version — used to fall through and make the caller
+    // crash on `data.consentEvents` (undefined) OUTSIDE its try/catch. Throw a
+    // clear SubgraphError so subgraphSync skips the cycle gracefully and logs the
+    // actual body for diagnosis (check SUBGRAPH_URL / the subgraph version).
+    if (json.data == null) {
+        throw new SubgraphError(
+            'Subgraph returned no data — check SUBGRAPH_URL / that the subgraph version is published: '
+            + JSON.stringify(json).slice(0, 200),
+        );
+    }
+
     return json.data;
 }
 
