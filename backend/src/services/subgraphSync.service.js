@@ -304,7 +304,16 @@ async function syncOnce() {
             const addr = String(row.address || row.id || '').toLowerCase();
             if (addr) {
                 invalidateRoleCache(addr);
-                log.info('roleCache invalidated for newly-verified doctor', { addr });
+                // On-chain DoctorVerified is the source of truth: finalize the
+                // verification request only now (the /review endpoint no longer
+                // marks it 'approved' optimistically — see verification.routes.js).
+                // If the org's verifyDoctor tx had failed, no event fires and the
+                // request stays 'pending' so the org can retry.
+                await prisma.verificationRequest.updateMany({
+                    where: { doctorAddress: addr, status: { in: ['pending', 'approving'] } },
+                    data: { status: 'approved', reviewedAt: new Date() },
+                });
+                log.info('roleCache invalidated + verificationRequest finalized for newly-verified doctor', { addr });
             }
             await setCursor(CURSOR_KEYS.doctorVerified, BigInt(row.verifiedAt));
         } catch (err) {

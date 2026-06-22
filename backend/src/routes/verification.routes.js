@@ -134,6 +134,7 @@ router.get('/status', authenticate, async (req, res, next) => {
         // Check on-chain status
         let isVerifiedOnChain = false;
         let isDoctorOnChain = false;
+        let chainReadOk = false;
 
         if (ACCESS_CONTROL_ADDRESS) {
             try {
@@ -151,12 +152,13 @@ router.get('/status', authenticate, async (req, res, next) => {
                         args: [doctorAddress],
                     }),
                 ]);
+                chainReadOk = true;
             } catch (e) {
             }
         }
 
         // Get pending verification request
-        const pendingRequest = await prisma.verificationRequest.findFirst({
+        let pendingRequest = await prisma.verificationRequest.findFirst({
             where: {
                 doctorAddress: doctorAddress,
                 status: 'pending',
@@ -164,12 +166,27 @@ router.get('/status', authenticate, async (req, res, next) => {
         });
 
         // Get approved request
-        const approvedRequest = await prisma.verificationRequest.findFirst({
+        let approvedRequest = await prisma.verificationRequest.findFirst({
             where: {
                 doctorAddress: doctorAddress,
                 status: 'approved',
             },
         });
+
+        // Self-heal: a request marked 'approved' in the DB but NOT verified
+        // on-chain means the org's verifyDoctor tx never landed (e.g. ran out of
+        // gas) under the old optimistic flow. Downgrade it back to 'pending' so
+        // the org sees it again and can retry. Guarded by chainReadOk so a
+        // transient RPC failure (isVerifiedOnChain defaults false) can't wrongly
+        // demote a genuinely-verified doctor.
+        if (chainReadOk && !isVerifiedOnChain && approvedRequest) {
+            await prisma.verificationRequest.update({
+                where: { id: approvedRequest.id },
+                data: { status: 'pending' },
+            });
+            pendingRequest = pendingRequest || { ...approvedRequest, status: 'pending' };
+            approvedRequest = null;
+        }
 
         res.json({
             isDoctor: isDoctorOnChain,
@@ -316,24 +333,40 @@ router.post('/review', authenticate, requireOrgOrMinistry, async (req, res, next
             }
         }
 
-        // Update request status
-        const updated = await prisma.verificationRequest.update({
-            where: { id: requestId },
-            data: {
-                status: approved ? 'approved' : 'rejected',
-                reviewedBy: reviewerAddress,
-                reviewedAt: new Date(),
-                rejectionReason: approved ? null : rejectionReason,
-            },
-        });
+        let updated = request;
+        if (approved) {
+            // DO NOT optimistically set status='approved'. The on-chain
+            // verifyDoctor tx (signed + paid by the org admin from mobile) is the
+            // source of truth. The request flips to 'approved' only when the
+            // DoctorVerified event is synced (subgraphSync). If that tx fails
+            // (e.g. out of gas) the request stays 'pending' so the org still sees
+            // it and can retry — this prevents the "DB approved but chain
+            // reverted" desync (org loses the request, doctor sees a phantom
+            // "đã xác minh" while still unverified on-chain). We only record the
+            // reviewer for audit; status stays 'pending'.
+            updated = await prisma.verificationRequest.update({
+                where: { id: requestId },
+                data: { reviewedBy: reviewerAddress, reviewedAt: new Date() },
+            });
+        } else {
+            updated = await prisma.verificationRequest.update({
+                where: { id: requestId },
+                data: {
+                    status: 'rejected',
+                    reviewedBy: reviewerAddress,
+                    reviewedAt: new Date(),
+                    rejectionReason: rejectionReason || null,
+                },
+            });
+        }
 
-        // If approved, the Ministry needs to call verifyDoctor on-chain
-        // This returns the data needed for that call
         res.json({
             success: true,
-            message: approved ? 'Đã phê duyệt bác sĩ' : 'Đã từ chối yêu cầu',
+            message: approved
+                ? 'Đã ký duyệt — vui lòng ký giao dịch xác minh on-chain để hoàn tất'
+                : 'Đã từ chối yêu cầu',
             request: updated,
-            // If approved, return contract call info
+            // If approved, return the data the org admin needs to broadcast verifyDoctor.
             contractCall: approved ? {
                 function: 'verifyDoctor',
                 args: [request.doctorAddress, request.licenseNumber || 'VERIFIED'],
