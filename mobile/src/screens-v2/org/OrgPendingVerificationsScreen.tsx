@@ -7,6 +7,8 @@ import { Alert, FlatList, Pressable, RefreshControl, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Text, XStack, YStack } from 'tamagui';
 import { Clock, Check, X, Award } from 'lucide-react-native';
+import { createPublicClient, http } from 'viem';
+import { arbitrumSepolia } from 'viem/chains';
 
 import LoadingSpinner from '../../components/LoadingSpinner';
 import orgService from '../../services/org.service';
@@ -26,6 +28,12 @@ const SANS_MEDIUM = 'DMSans_500Medium';
 const SANS_SEMI = 'DMSans_600SemiBold';
 
 const ACCESS_CONTROL_ADDRESS = process.env.EXPO_PUBLIC_ACCESS_CONTROL_ADDRESS as `0x${string}`;
+
+// writeContract resolves on broadcast, not on mining — we need a public client to
+// wait for the verifyDoctor receipt before retiring the request. Same RPC the
+// wallet uses (private endpoint when set, public fallback for local dev).
+const RPC_URL = process.env.EXPO_PUBLIC_RPC_URL || 'https://sepolia-rollup.arbitrum.io/rpc';
+const publicClient = createPublicClient({ chain: arbitrumSepolia, transport: http(RPC_URL) });
 
 type VerificationCheck = {
     id: string;
@@ -346,8 +354,35 @@ export default function OrgPendingVerificationsScreen() {
                             functionName: 'verifyDoctor',
                             args: [doctorAddr, credential || 'VERIFIED'],
                         });
+
+                        // Wait for the tx to actually mine before declaring success.
+                        // A reverted tx must keep the request in the list to retry.
+                        const receipt = await publicClient.waitForTransactionReceipt({
+                            hash: txHash,
+                            timeout: 60_000,
+                        });
+                        if (receipt.status !== 'success') {
+                            throw new Error('Giao dịch xác thực thất bại on-chain. Vui lòng thử lại.');
+                        }
+
+                        // Finalize THIS request server-side (keyed by id) so the card
+                        // leaves the list now instead of waiting ~30s for subgraphSync —
+                        // that delay was letting the same request be verified repeatedly.
+                        let finalized = false;
+                        try {
+                            await verificationService.confirmVerification(item.id, txHash);
+                            finalized = true;
+                        } catch (confirmErr) {
+                            // Tx already succeeded; subgraphSync will finalize as a backstop.
+                            console.warn('confirmVerification failed (subgraphSync backstop):', confirmErr);
+                        }
+
+                        // Remove locally so the card disappears immediately.
+                        setPending((prev) => prev.filter((p) => p.id !== item.id));
                         Alert.alert('Thành công', `Đã xác thực bác sĩ.\nMã giao dịch: ${String(txHash).slice(0, 14)}…`);
-                        fetchData();
+                        // Only re-sync from the server when the DB row is finalized;
+                        // otherwise the still-'pending' row would pop the card back.
+                        if (finalized) fetchData();
                     } catch (e: any) {
                         const msg = String(e?.message || '');
                         if (msg.includes('NotAuthorized') || msg.includes('NotVerifiedOrg')) {

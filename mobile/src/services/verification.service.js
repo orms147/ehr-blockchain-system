@@ -16,12 +16,19 @@ export const verificationService = {
         return api.get('/api/verification/pending');
     },
 
-    // Approve a verification request
+    // Approve a verification request (returns verifyDoctor call args to broadcast)
     async approveVerification(requestId) {
         return api.post('/api/verification/review', {
             requestId,
             approved: true,
         });
+    },
+
+    // Finalize a request AFTER the org admin's verifyDoctor tx is confirmed
+    // on-chain — removes it from the pending list immediately (don't wait ~30s
+    // for subgraphSync, which let the org re-verify the same request repeatedly).
+    async confirmVerification(requestId, txHash) {
+        return api.post('/api/verification/confirm', { requestId, txHash });
     },
 
     // Reject a verification request

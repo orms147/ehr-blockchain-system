@@ -126,6 +126,11 @@ const reviewVerificationSchema = z.object({
     rejectionReason: z.string().optional(),
 });
 
+const confirmVerificationSchema = z.object({
+    requestId: z.string().uuid(),
+    txHash: z.string().optional(),
+});
+
 // GET /api/verification/status - Check current doctor's verification status
 router.get('/status', authenticate, async (req, res, next) => {
     try {
@@ -372,6 +377,86 @@ router.post('/review', authenticate, requireOrgOrMinistry, async (req, res, next
                 args: [request.doctorAddress, request.licenseNumber || 'VERIFIED'],
             } : null,
         });
+    } catch (error) {
+        next(error);
+    }
+});
+
+// POST /api/verification/confirm - Finalize a verification request AFTER the org
+// admin's verifyDoctor tx is confirmed on-chain. The org's mobile app calls this
+// once it has a successful receipt, so the specific request (keyed by id) leaves
+// the pending list immediately instead of waiting for subgraphSync (~30s) — that
+// delay is what let an org re-broadcast verifyDoctor several times for the same
+// request (verifyDoctor is idempotent on-chain and does NOT revert).
+//
+// Marking 'approved' here is safe from the old "DB approved but chain reverted"
+// desync because the caller only calls /confirm AFTER a mined, successful tx. As
+// defense-in-depth we re-read isVerifiedDoctor on-chain: finalize on true OR
+// unknown (RPC down — the receipt already proved it), refuse only on explicit
+// false. Keyed by requestId + org-scope → multi-org safe: a doctor verified by
+// another org keeps any separate (sequential) request to a different org intact.
+router.post('/confirm', authenticate, requireOrgOrMinistry, async (req, res, next) => {
+    try {
+        const { requestId } = confirmVerificationSchema.parse(req.body);
+        const reviewerAddress = req.user.walletAddress.toLowerCase();
+        const isMinistry = req.user.isMinistry === true;
+
+        const request = await prisma.verificationRequest.findUnique({ where: { id: requestId } });
+        if (!request) {
+            return res.status(404).json({ error: 'Không tìm thấy yêu cầu xác thực' });
+        }
+        if (request.status === 'approved') {
+            return res.json({ success: true, message: 'Yêu cầu đã hoàn tất.', request });
+        }
+        if (request.status !== 'pending') {
+            return res.status(400).json({ error: 'Yêu cầu này đã được xử lý' });
+        }
+
+        // Org admins may only finalize requests directed at their own org.
+        if (!isMinistry) {
+            const reviewerOrg = await prisma.organization.findFirst({
+                where: {
+                    OR: [
+                        { address: reviewerAddress },
+                        { backupAdminAddress: reviewerAddress },
+                    ],
+                },
+            });
+            if (!reviewerOrg) {
+                return res.status(403).json({ error: 'Không tìm thấy tổ chức của bạn' });
+            }
+            if (!request.organization || request.organization !== reviewerOrg.name) {
+                return res.status(403).json({ error: 'Yêu cầu này không thuộc tổ chức của bạn' });
+            }
+        }
+
+        // Defense-in-depth: confirm the doctor really is verified on-chain before
+        // finalizing. null = RPC unavailable → trust the client's confirmed receipt.
+        let verifiedOnChain = null;
+        if (ACCESS_CONTROL_ADDRESS) {
+            try {
+                verifiedOnChain = await publicClient.readContract({
+                    address: ACCESS_CONTROL_ADDRESS,
+                    abi: ACCESS_CONTROL_ABI,
+                    functionName: 'isVerifiedDoctor',
+                    args: [request.doctorAddress],
+                });
+            } catch {
+                verifiedOnChain = null;
+            }
+        }
+        if (verifiedOnChain === false) {
+            return res.status(409).json({
+                error: 'Chưa thấy bác sĩ được xác minh on-chain. Vui lòng thử lại sau giây lát.',
+            });
+        }
+
+        const updated = await prisma.verificationRequest.update({
+            where: { id: requestId },
+            data: { status: 'approved', reviewedBy: reviewerAddress, reviewedAt: new Date() },
+        });
+
+        res.json({ success: true, message: 'Đã xác minh bác sĩ — hoàn tất.', request: updated });
     } catch (error) {
         next(error);
     }
