@@ -22,7 +22,8 @@
         "EXPO_PUBLIC_RECORD_REGISTRY_ADDRESS": "0x3d44D8f5438aF5Bc47b88FE289A699743C9Ef53a",
         "EXPO_PUBLIC_EHR_SYSTEM_ADDRESS": "0x8C03A46022C94D82a863BA2E2fb55f6C488708cb",
         "EXPO_PUBLIC_DOCTOR_UPDATE_ADDRESS": "0x83D7Bd3DCC05307Ed130f0F7331606462d1dD17c",
-        "EXPO_PUBLIC_PINATA_GATEWAY": "scarlet-advanced-fly-29.mypinata.cloud"
+        "EXPO_PUBLIC_PINATA_GATEWAY": "scarlet-advanced-fly-29.mypinata.cloud",
+        "EXPO_PUBLIC_WEB3AUTH_REDIRECT_URL": "erhsystem://auth"
       },
       "android": {
         "buildType": "apk",
@@ -39,7 +40,8 @@
         "EXPO_PUBLIC_RECORD_REGISTRY_ADDRESS": "0x3d44D8f5438aF5Bc47b88FE289A699743C9Ef53a",
         "EXPO_PUBLIC_EHR_SYSTEM_ADDRESS": "0x8C03A46022C94D82a863BA2E2fb55f6C488708cb",
         "EXPO_PUBLIC_DOCTOR_UPDATE_ADDRESS": "0x83D7Bd3DCC05307Ed130f0F7331606462d1dD17c",
-        "EXPO_PUBLIC_PINATA_GATEWAY": "scarlet-advanced-fly-29.mypinata.cloud"
+        "EXPO_PUBLIC_PINATA_GATEWAY": "scarlet-advanced-fly-29.mypinata.cloud",
+        "EXPO_PUBLIC_WEB3AUTH_REDIRECT_URL": "erhsystem://auth"
       },
       "android": {
         "buildType": "apk",
