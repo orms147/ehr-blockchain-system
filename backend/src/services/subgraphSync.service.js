@@ -141,6 +141,15 @@ function shapeDelegationAccessGrant(row) {
 
 // ---------- Polling cycle ----------
 
+// In-memory set of doctor addresses whose VerificationRevoked we've already
+// reconciled this process. The subgraph keeps `verifiedAt` on revoke (only flips
+// verified=false, no revokedAt to cursor on), so we re-fetch the full
+// verified=false set each cycle but act on each address once. Re-verification
+// clears the address (see the verified loop) so a later revocation is handled
+// again. Reset on restart → re-reconcile is idempotent (member flip is a no-op
+// once already 'revoked').
+const handledRevocations = new Set();
+
 const QUERY = `
     query SubgraphSync(
         $sinceConsent: BigInt!,
@@ -188,6 +197,14 @@ const QUERY = `
             first: 200
         ) {
             id address verifiedAt
+        }
+        revokedDoctors: doctors(
+            where: { verified: false }
+            orderBy: verifiedAt
+            orderDirection: asc
+            first: 200
+        ) {
+            id address
         }
     }
 `;
@@ -304,6 +321,9 @@ async function syncOnce() {
             const addr = String(row.address || row.id || '').toLowerCase();
             if (addr) {
                 invalidateRoleCache(addr);
+                // Re-verification resets revocation tracking so a future
+                // VerificationRevoked for this doctor is reconciled again.
+                handledRevocations.delete(addr);
                 // On-chain DoctorVerified is the source of truth: finalize the
                 // verification request only now (the /review endpoint no longer
                 // marks it 'approved' optimistically — see verification.routes.js).
@@ -319,6 +339,32 @@ async function syncOnce() {
         } catch (err) {
             log.error('Doctor verification handler failed', { id: row.id, error: err.message });
             break;
+        }
+    }
+
+    // Doctor verification REVOCATIONS: the subgraph flips Doctor.verified=false
+    // on VerificationRevoked but keeps verifiedAt, so there is no timestamp to
+    // cursor on. Reconcile the (small, bounded) ever-revoked set each cycle,
+    // acting on each address once: invalidate the roleCache so middleware re-reads
+    // the cleared on-chain flag before ROLE_CACHE_TTL_MS, and mirror the
+    // revocation into the member cache as a backstop for a failed mobile
+    // /revoke-member mirror. The security-critical gate is on-chain canAccess
+    // (already immediate); this only keeps backend caches consistent.
+    for (const row of data.revokedDoctors ?? []) {
+        const addr = String(row.address || row.id || '').toLowerCase();
+        if (!addr || handledRevocations.has(addr)) continue;
+        try {
+            invalidateRoleCache(addr);
+            const flipped = await prisma.organizationMember.updateMany({
+                where: { memberAddress: addr, status: { not: 'revoked' } },
+                data: { status: 'revoked', leftAt: new Date() },
+            });
+            handledRevocations.add(addr);
+            if (flipped.count > 0) {
+                log.info('verification revoked → roleCache invalidated + member(s) flipped', { addr, members: flipped.count });
+            }
+        } catch (err) {
+            log.error('Doctor revocation handler failed', { id: row.id, error: err.message });
         }
     }
 }
