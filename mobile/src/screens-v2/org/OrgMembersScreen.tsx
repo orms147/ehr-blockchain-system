@@ -20,7 +20,8 @@ import { ActivityIndicator, Alert, FlatList, Modal, Pressable, RefreshControl, S
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Text, XStack, YStack } from 'tamagui';
 import { Search, X } from 'lucide-react-native';
-import { parseGwei } from 'viem';
+import { parseGwei, createPublicClient, http } from 'viem';
+import { arbitrumSepolia } from 'viem/chains';
 
 import LoadingSpinner from '../../components/LoadingSpinner';
 import orgService from '../../services/org.service';
@@ -38,6 +39,11 @@ const SANS_SEMI = 'DMSans_600SemiBold';
 const MONO = 'monospace';
 
 const ACCESS_CONTROL_ADDRESS = process.env.EXPO_PUBLIC_ACCESS_CONTROL_ADDRESS as `0x${string}`;
+
+// writeContract resolves on broadcast, not on mining — need a public client to
+// wait for the revoke receipt before mirroring to the backend.
+const RPC_URL = process.env.EXPO_PUBLIC_RPC_URL || 'https://sepolia-rollup.arbitrum.io/rpc';
+const publicClient = createPublicClient({ chain: arbitrumSepolia, transport: http(RPC_URL) });
 
 type Member = {
     id?: string;
@@ -520,7 +526,20 @@ function RevokeDoctorModal({
                 maxPriorityFeePerGas: parseGwei('0.1'),
             });
 
-            // Mirror to backend so member list updates instantly.
+            // Wait for the tx to mine before declaring success. Explicit `gas`
+            // skips estimation, so a revert (e.g. this admin is NOT the verifier
+            // that originally signed verifyDoctor — only that exact admin or the
+            // Ministry may revoke) is NOT thrown at send time. Without this wait
+            // we'd flip the DB to 'revoked' while the doctor stays verified
+            // on-chain (DB/chain desync).
+            const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash, timeout: 60_000 });
+            if (receipt.status !== 'success') {
+                throw new Error(
+                    'Giao dịch thu hồi bị revert on-chain. Chỉ admin đã ký xác minh bác sĩ này (hoặc Bộ Y tế) mới thu hồi được.',
+                );
+            }
+
+            // Mirror to backend ONLY after the on-chain revoke is confirmed.
             try {
                 await (orgService as any).mirrorRevokeMember(orgId, doctorAddr, txHash, `${reason}: ${note.trim()}`);
             } catch (mirrorErr) {
