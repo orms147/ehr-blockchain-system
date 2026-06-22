@@ -472,7 +472,14 @@
 
 ## 6. Ghi chú nguồn ngoài-repo (pháp lý) — đã web-verify riêng
 
-LỚP-2 mục pháp lý đã đối chiếu toàn văn nguồn chính phủ và xác nhận ĐÚNG (không còn là issue mở, đã chuyển sang §4 verified): NĐ13/2023 Điều 2 khoản 4 (định nghĩa DLCN nhạy cảm gồm hồ sơ bệnh án/sinh trắc) + Điều 28; Luật ANM 24/2018 Điều 26 (nội địa hoá) + NĐ53/2022 Điều 26; Luật GDĐT 20/2023/QH15 hiệu lực 01/07/2024; QĐ586/QĐ-BYT ban hành 09/03/2026 / deadline 31/12/2026 / bỏ giấy 01/01/2027; TT32/2023 Phụ lục XXVIII = mẫu HSBA + "29 mẫu". **Còn cần kiểm tay:** Luật KCB 15/2023 Đ69K1 và TT 13/2025 Đ3 (nội dung điều/khoản cụ thể, chưa fetch toàn văn trong các vòng này) + bổ sung url cho `qd586_2026_byt` trong .bib.
+LỚP-2 mục pháp lý đã đối chiếu toàn văn nguồn chính phủ và xác nhận ĐÚNG (không còn là issue mở, đã chuyển sang §4 verified): NĐ13/2023 Điều 2 khoản 4 (định nghĩa DLCN nhạy cảm gồm hồ sơ bệnh án/sinh trắc) + Điều 28; Luật ANM 24/2018 Điều 26 (nội địa hoá) + NĐ53/2022 Điều 26; Luật GDĐT 20/2023/QH15 hiệu lực 01/07/2024; QĐ586/QĐ-BYT ban hành 09/03/2026 / deadline 31/12/2026 / bỏ giấy 01/01/2027; TT32/2023 Phụ lục XXVIII = mẫu HSBA + "29 mẫu".
+
+**✅ ĐÃ VERIFY TỪ VĂN BẢN GỐC (PDF, 2026-06-22):**
+- **Luật KCB 15/2023/QH15 Đ69 K1** = "Hồ sơ bệnh án được lập bằng giấy hoặc bản điện tử **có giá trị pháp lý như nhau**"; thông qua 09/01/2023; hiệu lực **01/01/2024** (Đ120). Báo cáo (1_Gioi_thieu:24) ĐÚNG.
+- **TT 13/2025/TT-BYT** "Hướng dẫn triển khai hồ sơ bệnh án điện tử"; ban hành **06/6/2025**; hiệu lực **21/7/2025** (Đ4.1); ký Thứ trưởng Nguyễn Tri Thức; căn cứ Luật KCB 2023 + NĐ 42/2025/NĐ-CP; thay TT 46/2018/TT-BYT. **Điều 3** = ký/xác nhận điện tử HSBA theo MỘT TRONG ba hình thức: (1) chữ ký điện tử hợp pháp; (2) **kỹ thuật sinh trắc học**; (3) hình thức điện tử khác theo K4 Đ22 Luật GDĐT. Báo cáo (1_Gioi_thieu:25 "một trong các hình thức ký") ĐÚNG.
+  - ⚠️ NHƯNG TT13/2025 **KHÔNG bắt buộc "xác thực mạnh"/MFA** — sinh trắc chỉ là 1 lựa chọn hình thức ký. → over-claim ở `6_Ket_luan` ("yêu cầu xác thực mạnh của TT13/2025") VẪN cần hạ giọng (xem m1/§2.C).
+
+**Còn cần kiểm tay:** bổ sung `url` cho `qd586_2026_byt` trong .bib; (lưu ý lần đầu owner gửi nhầm TT 13/2025/**TT-BCT** — bản điện lực Bộ Công Thương — nên cite PHẢI giữ hậu tố `/TT-BYT` + tên đầy đủ để tránh nhầm).
 
 ---
 
