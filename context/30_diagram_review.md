@@ -22,7 +22,8 @@ invariant cascade — phần khó nhất luận văn). Nhưng có **một lớp 
 
 | Loại lỗi | Mô tả | Mức |
 |---|---|---|
-| **Tên hàm/permit BỊA** | `revokeBySig`, `RevokePermit`, `RecordPermit`, `approveRequestBySig`, `grantDelegation`, `walkToRoot` — **không tồn tại trong code** | 🔴 CRITICAL |
+| **Tên hàm/permit BỊA** | `revokeBySig`, `RevokePermit`, `RecordPermit`, `approveRequestBySig` — **không tồn tại** (thật: `revoke`/`revokeFor`, `ConsentPermit`, `confirmAccessRequestWithSignature`) | 🔴 CRITICAL |
+| **Sai visibility/contract** | SĐ 04 vẽ `walkToRoot` là public method của RecordRegistry — thật là **internal `_walkToRoot`** ở ConsentLedger (`:191`); RecordRegistry expose `parentOf` (`:312`). ⚠️ ĐÍNH CHÍNH: `grantDelegation` **CÓ THẬT** (`ConsentLedger.sol:380`) — SĐ 04 vẽ đúng, KHÔNG phải lỗi | 🟡 |
 | **Số liệu STALE** | 5 địa chỉ contract cũ (pre-redeploy), subgraph `v0.1.5`→`0.3.0`, "27 Screens"→34, sai signature hàm | 🔴 CRITICAL |
 | **Sai precondition/modifier** | `addRecordByDoctor <<onlyVerifiedDoctor>>` (thật: `onlyDoctor`); requestAccess/verifyDoctor đòi "verified" (không enforce) | 🟠 MAJOR |
 | **Sai endpoint/event/nguồn sync** | `/api/relayer/grant-consent`→`/grant`; `consent:updated`→`consentUpdated`; "subgraph 30s"→RPC watch 15s | 🟠 MAJOR |
@@ -46,7 +47,7 @@ invariant cascade — phần khó nhất luận văn). Nhưng có **một lớp 
    - EHRSystemSecure `0x8C03A46022C94D82a863BA2E2fb55f6C488708cb`
    - DoctorUpdate `0x83D7Bd3DCC05307Ed130f0F7331606462d1dD17c`
    - Subgraph `…/120096/ehr/0.3.0` (đang ghi `v0.1.5`). **Đề xuất**: thay đúng, HOẶC chỉ ghi tên + trỏ "xem Phụ lục A" để khỏi stale lần sau.
-2. **SĐ 04 — `RecordRegistry.walkToRoot()` không tồn tại** → thật là `parentOf(bytes32)` (`RecordRegistry.sol:312`); walk là internal `_walkToRoot` của `ConsentLedger.sol:191`.
+2. **SĐ 04 — `walkToRoot` đặt sai (🟡, KHÔNG phải "không tồn tại")** [ĐÍNH CHÍNH 2026-06-22]: SĐ vẽ `walkToRoot` là **public method của RecordRegistry** — RecordRegistry KHÔNG có hàm này (expose `parentOf(bytes32)` `RecordRegistry.sol:312`). Hàm walk thật là **internal** `_walkToRoot` trong **ConsentLedger** (`ConsentLedger.sol:191`, gọi tại :298/:346/:600/:624…). → Sửa: bỏ `walkToRoot` khỏi RecordRegistry; nếu muốn thể hiện thì ghi `ConsentLedger._walkToRoot()` (internal). **Lưu ý: `grantDelegation` (`ConsentLedger.sol:380`) CÓ THẬT — SĐ 04 vẽ đúng, ban đầu tôi gắn nhãn bịa là SAI.**
 3. **SĐ 04 — `ConsentLedger.revokeBySig()` không tồn tại** → `revoke(grantee,cid)` (`ConsentLedger.sol:345`, msg.sender=patient) hoặc `revokeFor(patient,grantee,cid)` (`:362`, sponsor). Không có BySig.
 4. **SĐ 04 — `EHRSystemSecure.approveRequestBySig()` không tồn tại** → `confirmAccessRequestWithSignature(reqId,deadline,sig)` (`EHRSystemSecure.sol:233`) + `confirmAccessRequest(reqId)` (`:178`). (`rejectRequestBySig` thì CÓ thật, `:292`.)
 5. **SĐ 04 — `DoctorUpdate.addRecordByDoctor <<onlyVerifiedDoctor>>` SAI** → modifier thật `onlyDoctor` = `isDoctor` (`DoctorUpdate.sol:64-67,87`). Write path KHÔNG đòi verified. (Đúng điểm thầy #2 cần làm rõ.)
@@ -79,7 +80,8 @@ invariant cascade — phần khó nhất luận văn). Nhưng có **một lớp 
 - 📐 Thoáng, dễ đọc.
 
 #### 04-class-contracts (DÀY & SAI NHẤT)
-- 🔴 `walkToRoot`, `revokeBySig`, `approveRequestBySig`, `<<onlyVerifiedDoctor>>` — xem A.2–A.5.
+- 🔴 `revokeBySig`, `approveRequestBySig`, `<<onlyVerifiedDoctor>>` — xem A.3–A.5.
+- 🟡 `walkToRoot` đặt sai (internal `_walkToRoot`@ConsentLedger, không phải public@RecordRegistry) — xem A.2. `grantDelegation` (`:380`) vẽ ĐÚNG.
 - 🟠 `addMember/removeMember(orgId,doctor)` là **DEPRECATED luôn revert** (`AccessControl.sol:401-410`, signature `address org`). Thật: `addOrgMember(uint256,address)` (`:345`) + `removeOrgMember(uint256,address)` (`:364`), gate `isActiveOrgAdmin` inline.
 - 🟠 State AccessControl sai: `mapping(address=>uint8) _roles` (không uint256, `:36`); không có `address public ministry` → là `address immutable MINISTRY_OF_HEALTH` (`:33`); members là `isMemberOfOrgById`/`orgMembersByOrgId` (`:43-44`), `orgMembers` là mapping DEPRECATED.
 - 🟠 View thật: `isOrganization`/`isVerifiedOrganization` (KHÔNG phải `isOrg`/`isVerifiedOrg`) (`:438-462`).
