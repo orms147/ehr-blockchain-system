@@ -17,8 +17,9 @@
 > - `PendingUpdate` đã bỏ; `frontend/` đã xoá; repo path thực = `c:\Work\DATN\ehr-blockchain-system` (không phải `c:\University\...`).
 > - **Tên hàm thật** (báo cáo + CLAUDE hay bịa biến thể "X+Permit/…BySig"): revoke = `revoke`/`revokeFor` (KHÔNG `revokeBySig`, không EIP-712); approve request = `confirmAccessRequestWithSignature` (+ primaryType `ConfirmRequest`, KHÔNG `approveRequestBySig`); full delegation = `delegateAuthorityBySig` (KHÔNG `grantDelegationBySig`; `grantDelegation` self-call CÓ thật); revoke delegation = `revokeDelegation` (self-pay); tạo hồ sơ KHÔNG có `RecordPermit`; getter record = `getOwnerRecords`. Permit thật chỉ: `ConsentPermit`/`DelegationPermit`/`TrustedContactPermit` (mobile) + `ConfirmRequest`/`RejectRequest` (backend).
 > - `addRecordByDoctor` = `onlyDoctor` (isDoctor, KHÔNG verified) và KHÔNG check canAccess/consent trên parent — `DoctorUpdate.sol:64-91`.
+> - **Pháp lý** (verified PDF gốc, chi tiết [context/32](context/32_legal_updates.md)): NĐ 13/2023 **hết hiệu lực 01/01/2026** → dùng **Luật BVDLCN 91/2025/QH15 + NĐ 356/2025/NĐ-CP**. "TT13/2026" là tiêm chủng (sai); HSBA = **TT 13/2025/TT-BYT**. Căn cứ "vàng": **NĐ 356/2025 Đ11 k2b** — chuỗi khối chỉ lưu hash/khử nhận dạng on-chain (đúng thiết kế cidHash).
 >
-> **Nguồn chính xác = `context/` + code.** Audit mới nhất: [context/30](context/30_diagram_review.md) (18 sơ đồ) + [context/31](context/31_full_report_audit.md) (toàn báo cáo, 2-lớp). Đọc [context/00_index.md](context/00_index.md) + [context/15_current_state_gaps_risks.md](context/15_current_state_gaps_risks.md).
+> **Nguồn chính xác = `context/` + code.** Audit mới nhất: [context/30](context/30_diagram_review.md) (18 sơ đồ) + [context/31](context/31_full_report_audit.md) (toàn báo cáo, 2-lớp) + [context/32](context/32_legal_updates.md) (pháp lý). Đọc [context/00_index.md](context/00_index.md) + [context/15_current_state_gaps_risks.md](context/15_current_state_gaps_risks.md).
 
 > Đồ án tốt nghiệp (DATN): Hệ thống Hồ sơ Y tế điện tử (EHR) trên blockchain
 > theo mô hình quản lý ngành Y tế Việt Nam. **Trọng tâm luận văn là an toàn &
