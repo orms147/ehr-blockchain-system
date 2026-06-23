@@ -14,6 +14,7 @@
 import React, { useEffect, useState } from 'react';
 import { Alert, Linking, Pressable, ScrollView, Switch, View } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
+import Constants from 'expo-constants';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Text, XStack, YStack } from 'tamagui';
 import { useNavigation } from '@react-navigation/native';
@@ -281,7 +282,7 @@ export default function SettingsScreen() {
                         letterSpacing: 0.4,
                     }}
                 >
-                    ViEH · v1.0.0 · Đồ án tốt nghiệp
+                    ViEH · v{Constants.expoConfig?.version ?? '1.0.0'} · Đồ án tốt nghiệp
                 </Text>
             </ScrollView>
         </SafeAreaView>
