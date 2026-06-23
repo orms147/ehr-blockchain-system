@@ -102,6 +102,50 @@ contract ConsentLedgerCascadePropertyTest is Test {
     }
 
     // =====================================================================
+    // 1b) ADVISOR WORDING, LITERAL 3-DOCTOR CHAIN:
+    //     patient -> A -> B -> C (sub-delegation chain); C (the leaf) grants G
+    //     access to R1 via the delegated authority. The patient ALSO grants C a
+    //     DIRECT consent for R2. Revoke A  =>  the whole A->B->C chain dies (G
+    //     loses R1) but C's DIRECT consent (R2) survives. Mirrors the advisor's
+    //     exact "BN -> A -> B -> C + BN cấp trực tiếp cho C; thu hồi A" scenario.
+    // =====================================================================
+    function test_Scenario_ABC_RevokeRoot_KillsChain_KeepsDirectToC() public {
+        address A = makeAddr("abc-doctorA");
+        address B = makeAddr("abc-doctorB");
+        address C = makeAddr("abc-doctorC");
+        address G = makeAddr("abc-grantee");
+        bytes32 R1 = keccak256("abc-record-via-chain");
+        bytes32 R2 = keccak256("abc-record-direct-to-C");
+        uint40 expire = uint40(block.timestamp) + WEEK;
+
+        // chain: patient -> A -> B -> C (each allowSubDelegate = true)
+        vm.prank(patient);
+        cl.grantDelegation(A, DUR, true);
+        vm.prank(A);
+        cl.subDelegate(patient, B, DUR, true);
+        vm.prank(B);
+        cl.subDelegate(patient, C, DUR, true);
+
+        // C (leaf of the 3-hop chain) grants G access to R1 via the delegation
+        vm.prank(C);
+        cl.grantUsingDelegation(patient, G, R1, ENC, expire, false);
+
+        // patient grants C a DIRECT consent for a DIFFERENT record R2
+        _directGrant(C, R2, expire);
+
+        assertTrue(cl.canAccess(patient, G, R1), "G must access R1 via patient->A->B->C before revoke");
+        assertTrue(cl.canAccess(patient, C, R2), "C must access R2 via direct grant before revoke");
+
+        // patient revokes the root A
+        vm.prank(patient);
+        cl.revokeDelegation(A);
+
+        // whole A->B->C chain dies; C's DIRECT consent survives
+        assertFalse(cl.canAccess(patient, G, R1), "A->B->C chain access to R1 must DIE after revoking A");
+        assertTrue (cl.canAccess(patient, C, R2), "C's DIRECT access to R2 must SURVIVE the cascade revoke");
+    }
+
+    // =====================================================================
     // 2) FUZZ: revoking the root of an N-hop chain kills the leaf-granted consent.
     // =====================================================================
     function testFuzz_DeepChain_RevokeRoot_KillsLeaf(uint8 linksSeed) public {
