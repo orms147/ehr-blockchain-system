@@ -13,6 +13,13 @@
 
 → **Không còn việc code BẮT BUỘC nào cần rebuild.** Chỉ #1b/#6 (optional) mới cần rebuild nếu làm.
 
+> **TIẾN ĐỘ Phase C (cập nhật 2026-06-23, sửa thẳng `Bao Cao/*.tex` + compile sạch):**
+> - **Pha 0 (build)**: ✅ XONG — quyen.pdf compile exit=0, 0 lỗi; fix ✓/✗ pifont, subfile master, placeholder hình, lstlisting UTF-8 (ASCII hoá Phụ lục A), `---`/`—`/`–`→`-`.
+> - **Ch4**: ✅ XONG — 141/141 test (re-run), địa chỉ+startBlock LIVE 21/06, deployer ví Bộ Y tế `0x4564f2Fc…`, subgraph 0.3.0, 1 worker subgraphSync, Prisma 6, gỡ expo-server-sdk/graphql-request→express-rate-limit/helmet, `_accessRequests`, NĐ13→Luật91, +mô tả test ABC.
+> - **Ch2 (code-path)**: ✅ XONG — bỏ `RecordPermit`/`RevokePermit` (bịa), `revokeBySig`→`revoke/revokeFor`, `grantDelegationBySig`→`delegateAuthorityBySig`, `approveRequestBySig`→`confirmAccessRequestWithSignature`, `_requests`→`_accessRequests`, UC008 bỏ over-claim "verified+canAccess parent" (chỉ onlyDoctor), error code thật, `addRecordFor` cho sponsored.
+> - **CÒN LẠI Ch2 (LEGAL — chờ pass pháp lý #9, PHẢI web-verify, không đoán):** bảng `tab:compliance` còn keyed NĐ13/2023 → re-key Luật 91/2025+NĐ356/2025 (dùng [34 #5], thêm ❌ FHIR/DICOM/BHYT/VNeID/CA); TT13/2026 (tiêm chủng — nghi sai, line 45/284/825); QĐ586 (date/deadline, line 47/826). + minor: self-share/downgrade guard (m3), "21 vị trí ký".
+> - **Thứ tự còn lại**: Ch5 → Phụ lục B → Ch3 → Ch6 → Ch1 → Tóm tắt → Ch7/.bib → **pass pháp lý #9** → Sơ đồ. Backup: `BaoCao_preCh4_20260623_2203.tgz`.
+
 ---
 
 ## A. CÒN LẠI: CODE / TEST (nhỏ, đa số không đụng app)
