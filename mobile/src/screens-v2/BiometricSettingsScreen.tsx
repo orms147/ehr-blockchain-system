@@ -77,11 +77,20 @@ export default function BiometricSettingsScreen() {
     }, []);
 
     const handleToggle = async (next: boolean) => {
-        setEnabled(next);
+        // Signing authentication is MANDATORY for patient/doctor and cannot be
+        // turned off (the gate ignores this flag for those roles). Refuse to
+        // disable so the UI doesn't imply a non-existent opt-out.
+        if (!next) {
+            Alert.alert(
+                'Bắt buộc',
+                'Xác thực khi ký là bắt buộc với bệnh nhân/bác sĩ để đảm bảo chỉ chính chủ ký hồ sơ. Không thể tắt.'
+            );
+            return;
+        }
+        setEnabled(true);
         try {
-            await setBiometricSigningEnabled(next);
+            await setBiometricSigningEnabled(true);
         } catch {
-            setEnabled(!next);
             Alert.alert('Lỗi', 'Không lưu được thiết lập. Vui lòng thử lại.');
         }
     };
@@ -210,8 +219,8 @@ export default function BiometricSettingsScreen() {
                         <ToggleRow
                             value={enabled}
                             onChange={handleToggle}
-                            title="Yêu cầu vân tay khi ký"
-                            sub="Mỗi lần cấp consent, uỷ quyền, tạo hồ sơ sẽ yêu cầu xác thực sinh trắc học."
+                            title="Yêu cầu xác thực khi ký (bắt buộc)"
+                            sub="Mỗi lần cấp consent, uỷ quyền, tạo hồ sơ sẽ yêu cầu vân tay/khuôn mặt hoặc PIN khoá màn hình thiết bị. Bắt buộc với bệnh nhân/bác sĩ — không thể tắt."
                         />
                         <ToggleRow
                             value={pinFallback}
