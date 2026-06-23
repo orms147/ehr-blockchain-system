@@ -1,39 +1,36 @@
-// MfaOnboardingModal — hiển thị 1 lần sau login đầu tiên (§19 R4 fix 2026-06-03).
+// MfaOnboardingModal — one-time disclosure shown after first login.
 //
-// Mục đích: tuân thủ Nghị định 13/2023/NĐ-CP Điều 11.8 (BUỘC thông báo khi xử lý
-// dữ liệu cá nhân nhạy cảm — bao gồm sinh trắc học) trước khi user bật biometric
-// MFA. Cũng dispatch 3 case theo research biometric-research.md mục 4.3:
-//   - Case A: no hardware → notice "sẽ dùng PIN" + dismiss
-//   - Case B: hardware nhưng chưa enrolled → guide vào Cài đặt + dismiss
-//   - Case C: hardware + enrolled → disclosure + bật MFA / để sau
+// Device-level model (2026-06): every patient/doctor signing action requires a
+// DEVICE authentication factor (biometric OR the device screen-lock PIN/pattern),
+// enforced non-bypassably in utils/biometricGate.requireBiometric. This modal is
+// a one-time DISCLOSURE (sinh trắc/khoá thiết bị) + a nudge to set a device lock
+// when none exists. It does NOT set an app-level PIN and does NOT offer an
+// opt-out — the gate is mandatory.
+//
+// Legal basis: ký/xác nhận HSBA điện tử bằng sinh trắc học là hình thức hợp lệ
+// (TT 13/2025/TT-BYT Đ3); dữ liệu sinh trắc là dữ liệu cá nhân nhạy cảm (Luật
+// BVDLCN 91/2025/QH15 + NĐ 356/2025/NĐ-CP) — OS khớp cục bộ, app KHÔNG nhận dữ
+// liệu sinh trắc thô nên không phát sinh nghĩa vụ xử lý dữ liệu sinh trắc.
 
 import React, { useEffect, useState } from 'react';
 import { Alert, Linking, Modal, Pressable, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Text, XStack, YStack } from 'tamagui';
-import { Fingerprint, Shield, ShieldAlert, Smartphone } from 'lucide-react-native';
+import { Fingerprint, ShieldAlert, Smartphone } from 'lucide-react-native';
+import * as LocalAuthentication from 'expo-local-authentication';
 
-import {
-    getBiometricStatus,
-    isMfaOnboarded,
-    setMfaOnboarded,
-    setBiometricSigningEnabled,
-} from '../utils/biometricGate';
+import { isMfaOnboarded, setMfaOnboarded } from '../utils/biometricGate';
 import { useEhrPalette } from '../constants/uiColors';
 import ViButton from '../components-v2/ViButton';
-import SetupPinModal from './SetupPinModal';
 
 const SERIF = 'Fraunces_500Medium';
 const SANS = 'DMSans_400Regular';
 const SANS_SEMI = 'DMSans_600SemiBold';
 
-type Case = 'A_no_hardware' | 'B_not_enrolled' | 'C_ready';
-
 export default function MfaOnboardingModal() {
     const palette = useEhrPalette();
     const [visible, setVisible] = useState(false);
-    const [mfaCase, setMfaCase] = useState<Case | null>(null);
-    const [pinSetupOpen, setPinSetupOpen] = useState(false);
+    const [hasDeviceLock, setHasDeviceLock] = useState(true);
 
     useEffect(() => {
         let mounted = true;
@@ -41,13 +38,14 @@ export default function MfaOnboardingModal() {
             try {
                 const done = await isMfaOnboarded();
                 if (done || !mounted) return;
-                const status = await getBiometricStatus();
-                let c: Case;
-                if (!status.hasHardware) c = 'A_no_hardware';
-                else if (!status.isEnrolled) c = 'B_not_enrolled';
-                else c = 'C_ready';
+                let level = LocalAuthentication.SecurityLevel.NONE;
+                try {
+                    level = await LocalAuthentication.getEnrolledLevelAsync();
+                } catch {
+                    level = LocalAuthentication.SecurityLevel.NONE;
+                }
                 if (mounted) {
-                    setMfaCase(c);
+                    setHasDeviceLock(level !== LocalAuthentication.SecurityLevel.NONE);
                     setVisible(true);
                 }
             } catch (e) {
@@ -58,9 +56,8 @@ export default function MfaOnboardingModal() {
         return () => { mounted = false; };
     }, []);
 
-    const finish = async (enableBiometric: boolean) => {
+    const finish = async () => {
         try {
-            await setBiometricSigningEnabled(enableBiometric);
             await setMfaOnboarded(true);
         } catch (e) {
             console.warn('[MfaOnboarding] save failed', e);
@@ -68,235 +65,111 @@ export default function MfaOnboardingModal() {
         setVisible(false);
     };
 
-    if (!visible || !mfaCase) return null;
+    if (!visible) return null;
 
     return (
-        <>
-            <Modal visible={visible} transparent animationType="fade" onRequestClose={() => finish(false)}>
-                <View style={{
-                    flex: 1,
-                    backgroundColor: 'rgba(0,0,0,0.78)',
-                    justifyContent: 'center',
-                    paddingHorizontal: 22,
-                }}>
-                    <SafeAreaView style={{
-                        backgroundColor: palette.EHR_SURFACE,
-                        borderRadius: 20,
-                        borderWidth: 0.5,
-                        borderColor: palette.EHR_OUTLINE_VARIANT,
-                        maxHeight: '88%',
-                    }}>
-                        <ScrollView contentContainerStyle={{ padding: 24 }}>
-                            {mfaCase === 'C_ready' && <ReadyContent palette={palette} onFinish={finish} />}
-                            {mfaCase === 'B_not_enrolled' && (
-                                <NotEnrolledContent
-                                    palette={palette}
-                                    onFinish={finish}
-                                    onSetupPin={() => setPinSetupOpen(true)}
-                                />
-                            )}
-                            {mfaCase === 'A_no_hardware' && (
-                                <NoHardwareContent
-                                    palette={palette}
-                                    onFinish={finish}
-                                    onSetupPin={() => setPinSetupOpen(true)}
-                                />
-                            )}
-                        </ScrollView>
-                    </SafeAreaView>
-                </View>
-            </Modal>
-
-            <SetupPinModal
-                visible={pinSetupOpen}
-                onDismiss={() => setPinSetupOpen(false)}
-                onSuccess={() => { setPinSetupOpen(false); finish(false); }}
-            />
-        </>
-    );
-}
-
-// ============================================================
-// Case C — Hardware + Enrolled. Disclosure NĐ 13/2023 + bật MFA.
-// ============================================================
-function ReadyContent({ palette, onFinish }: any) {
-    return (
-        <YStack style={{ gap: 18 }}>
-            <View style={{ alignItems: 'center', marginBottom: 4 }}>
-                <View style={{
-                    width: 64, height: 64, borderRadius: 32,
-                    backgroundColor: `${palette.EHR_PRIMARY}1A`,
-                    alignItems: 'center', justifyContent: 'center',
-                }}>
-                    <Fingerprint size={32} color={palette.EHR_PRIMARY} />
-                </View>
-            </View>
-
-            <Text style={{
-                fontFamily: SERIF, fontSize: 22, color: palette.EHR_ON_SURFACE,
-                textAlign: 'center', letterSpacing: -0.3,
-            }}>
-                Bật xác thực sinh trắc học
-            </Text>
-
-            <Text style={{
-                fontFamily: SANS, fontSize: 14, color: palette.EHR_ON_SURFACE_VARIANT,
-                textAlign: 'center', lineHeight: 21,
-            }}>
-                Mỗi khi bạn cấp quyền truy cập hồ sơ y tế hoặc thu hồi quyền của bác sĩ, hệ thống sẽ yêu cầu vân tay hoặc khuôn mặt để xác nhận chính bạn là người ra quyết định.
-            </Text>
-
-            {/* Disclosure NĐ 13/2023 Điều 11.8 — BUỘC */}
+        <Modal visible={visible} transparent animationType="fade" onRequestClose={finish}>
             <View style={{
-                padding: 14, borderRadius: 12,
-                backgroundColor: palette.EHR_SURFACE_LOWEST,
-                borderWidth: 0.5, borderColor: palette.EHR_OUTLINE_SOFT,
+                flex: 1,
+                backgroundColor: 'rgba(0,0,0,0.78)',
+                justifyContent: 'center',
+                paddingHorizontal: 22,
             }}>
-                <XStack style={{ gap: 8, alignItems: 'flex-start', marginBottom: 8 }}>
-                    <ShieldAlert size={14} color={palette.EHR_PRIMARY} style={{ marginTop: 1 }} />
-                    <Text style={{
-                        fontFamily: SANS_SEMI, fontSize: 12,
-                        color: palette.EHR_ON_SURFACE, fontWeight: '700',
-                        letterSpacing: 0.4, textTransform: 'uppercase', flex: 1,
-                    }}>
-                        Thông báo theo Nghị định 13/2023/NĐ-CP
-                    </Text>
-                </XStack>
-                <Text style={{
-                    fontFamily: SANS, fontSize: 12,
-                    color: palette.EHR_ON_SURFACE_VARIANT, lineHeight: 18,
+                <SafeAreaView style={{
+                    backgroundColor: palette.EHR_SURFACE,
+                    borderRadius: 20,
+                    borderWidth: 0.5,
+                    borderColor: palette.EHR_OUTLINE_VARIANT,
+                    maxHeight: '88%',
                 }}>
-                    Vân tay và khuôn mặt là <Text style={{ fontWeight: '700', color: palette.EHR_ON_SURFACE }}>dữ liệu cá nhân nhạy cảm</Text> theo Điều 2 khoản 4 điểm đ. Dữ liệu sinh trắc học không rời khỏi thiết bị của bạn — hệ thống chỉ nhận tín hiệu đã/chưa xác thực, không nhận hình ảnh vân tay hay khuôn mặt.
-                </Text>
+                    <ScrollView contentContainerStyle={{ padding: 24 }}>
+                        <YStack style={{ gap: 18 }}>
+                            <View style={{ alignItems: 'center', marginBottom: 4 }}>
+                                <View style={{
+                                    width: 64, height: 64, borderRadius: 32,
+                                    backgroundColor: hasDeviceLock ? `${palette.EHR_PRIMARY}1A` : `${palette.EHR_CLAY}1A`,
+                                    alignItems: 'center', justifyContent: 'center',
+                                }}>
+                                    {hasDeviceLock
+                                        ? <Fingerprint size={32} color={palette.EHR_PRIMARY} />
+                                        : <Smartphone size={32} color={palette.EHR_CLAY} />}
+                                </View>
+                            </View>
+
+                            <Text style={{
+                                fontFamily: SERIF, fontSize: 22, color: palette.EHR_ON_SURFACE,
+                                textAlign: 'center', letterSpacing: -0.3,
+                            }}>
+                                {hasDeviceLock ? 'Xác thực khi ký hồ sơ' : 'Hãy đặt khoá màn hình'}
+                            </Text>
+
+                            <Text style={{
+                                fontFamily: SANS, fontSize: 14, color: palette.EHR_ON_SURFACE_VARIANT,
+                                textAlign: 'center', lineHeight: 21,
+                            }}>
+                                {hasDeviceLock
+                                    ? 'Mỗi khi bạn cấp/thu hồi quyền truy cập hồ sơ y tế hoặc tạo hồ sơ, hệ thống yêu cầu vân tay/khuôn mặt hoặc mã PIN khoá màn hình thiết bị để xác nhận chính bạn là người ký.'
+                                    : 'Thiết bị của bạn chưa đặt khoá màn hình. Để ký hồ sơ y tế, hãy bật vân tay/khuôn mặt hoặc mã PIN/mật khẩu trong Cài đặt thiết bị.'}
+                            </Text>
+
+                            {/* Disclosure — dữ liệu sinh trắc là DLCN nhạy cảm; OS khớp cục bộ. */}
+                            <View style={{
+                                padding: 14, borderRadius: 12,
+                                backgroundColor: palette.EHR_SURFACE_LOWEST,
+                                borderWidth: 0.5, borderColor: palette.EHR_OUTLINE_SOFT,
+                            }}>
+                                <XStack style={{ gap: 8, alignItems: 'flex-start', marginBottom: 8 }}>
+                                    <ShieldAlert size={14} color={palette.EHR_PRIMARY} style={{ marginTop: 1 }} />
+                                    <Text style={{
+                                        fontFamily: SANS_SEMI, fontSize: 12,
+                                        color: palette.EHR_ON_SURFACE, fontWeight: '700',
+                                        letterSpacing: 0.4, textTransform: 'uppercase', flex: 1,
+                                    }}>
+                                        Bảo vệ dữ liệu sinh trắc học
+                                    </Text>
+                                </XStack>
+                                <Text style={{
+                                    fontFamily: SANS, fontSize: 12,
+                                    color: palette.EHR_ON_SURFACE_VARIANT, lineHeight: 18,
+                                }}>
+                                    Vân tay/khuôn mặt là <Text style={{ fontWeight: '700', color: palette.EHR_ON_SURFACE }}>dữ liệu cá nhân nhạy cảm</Text> (Luật BVDLCN 91/2025 + NĐ 356/2025). Việc khớp sinh trắc do hệ điều hành thực hiện cục bộ — <Text style={{ fontWeight: '700', color: palette.EHR_ON_SURFACE }}>ứng dụng chỉ nhận tín hiệu đã/chưa xác thực, không nhận hình ảnh vân tay/khuôn mặt</Text>. Sinh trắc học cũng là hình thức ký HSBA điện tử hợp lệ (TT 13/2025/TT-BYT Đ3).
+                                </Text>
+                            </View>
+
+                            <YStack style={{ gap: 10, marginTop: 6 }}>
+                                {hasDeviceLock ? (
+                                    <ViButton variant="primary" full size="lg" onPress={finish}>
+                                        Đã hiểu
+                                    </ViButton>
+                                ) : (
+                                    <>
+                                        <ViButton
+                                            variant="primary"
+                                            full
+                                            size="lg"
+                                            onPress={() => {
+                                                Linking.openSettings().catch(() => {
+                                                    Alert.alert('Không mở được Cài đặt', 'Vui lòng mở Cài đặt thiết bị thủ công.');
+                                                });
+                                            }}
+                                        >
+                                            Mở Cài đặt thiết bị
+                                        </ViButton>
+                                        <Pressable onPress={finish} style={{ paddingVertical: 12, alignItems: 'center' }}>
+                                            <Text style={{
+                                                fontFamily: SANS_SEMI, fontSize: 13.5,
+                                                color: palette.EHR_ON_SURFACE_VARIANT,
+                                            }}>
+                                                Để sau (sẽ được nhắc lại khi ký)
+                                            </Text>
+                                        </Pressable>
+                                    </>
+                                )}
+                            </YStack>
+                        </YStack>
+                    </ScrollView>
+                </SafeAreaView>
             </View>
-
-            <YStack style={{ gap: 10, marginTop: 6 }}>
-                <ViButton variant="primary" full size="lg" onPress={() => onFinish(true)}>
-                    Bật xác thực sinh trắc học
-                </ViButton>
-                <Pressable onPress={() => onFinish(false)} style={{ paddingVertical: 12, alignItems: 'center' }}>
-                    <Text style={{
-                        fontFamily: SANS_SEMI, fontSize: 13.5,
-                        color: palette.EHR_ON_SURFACE_VARIANT,
-                    }}>
-                        Để sau (có thể bật trong Cài đặt)
-                    </Text>
-                </Pressable>
-            </YStack>
-        </YStack>
-    );
-}
-
-// ============================================================
-// Case B — Hardware có nhưng chưa enrolled vân tay/face id.
-// ============================================================
-function NotEnrolledContent({ palette, onFinish, onSetupPin }: any) {
-    return (
-        <YStack style={{ gap: 18 }}>
-            <View style={{ alignItems: 'center', marginBottom: 4 }}>
-                <View style={{
-                    width: 64, height: 64, borderRadius: 32,
-                    backgroundColor: `${palette.EHR_CLAY}1A`,
-                    alignItems: 'center', justifyContent: 'center',
-                }}>
-                    <Smartphone size={32} color={palette.EHR_CLAY} />
-                </View>
-            </View>
-
-            <Text style={{
-                fontFamily: SERIF, fontSize: 22, color: palette.EHR_ON_SURFACE,
-                textAlign: 'center', letterSpacing: -0.3,
-            }}>
-                Thiết bị chưa thiết lập vân tay
-            </Text>
-
-            <Text style={{
-                fontFamily: SANS, fontSize: 14, color: palette.EHR_ON_SURFACE_VARIANT,
-                textAlign: 'center', lineHeight: 21,
-            }}>
-                Điện thoại của bạn hỗ trợ vân tay / Face ID nhưng chưa được thiết lập. Vào{' '}
-                <Text style={{ fontWeight: '700', color: palette.EHR_ON_SURFACE }}>Cài đặt → Bảo mật → Sinh trắc học</Text>
-                {' '}để đăng ký, sau đó quay lại app và bật xác thực trong Cài đặt ViEH.
-            </Text>
-
-            <YStack style={{ gap: 10, marginTop: 6 }}>
-                <ViButton
-                    variant="primary"
-                    full
-                    size="lg"
-                    onPress={() => {
-                        Linking.openSettings().catch(() => {
-                            Alert.alert('Không mở được Cài đặt', 'Vui lòng mở Cài đặt thủ công.');
-                        });
-                    }}
-                >
-                    Mở Cài đặt thiết bị
-                </ViButton>
-                <Pressable onPress={onSetupPin} style={{ paddingVertical: 12, alignItems: 'center' }}>
-                    <Text style={{
-                        fontFamily: SANS_SEMI, fontSize: 13.5,
-                        color: palette.EHR_PRIMARY,
-                    }}>
-                        Đặt PIN 6 số làm dự phòng
-                    </Text>
-                </Pressable>
-                <Pressable onPress={() => onFinish(false)} style={{ paddingVertical: 10, alignItems: 'center' }}>
-                    <Text style={{
-                        fontFamily: SANS_SEMI, fontSize: 13,
-                        color: palette.EHR_ON_SURFACE_VARIANT,
-                    }}>
-                        Để sau
-                    </Text>
-                </Pressable>
-            </YStack>
-        </YStack>
-    );
-}
-
-// ============================================================
-// Case A — Thiết bị không có hardware sinh trắc học.
-// ============================================================
-function NoHardwareContent({ palette, onFinish, onSetupPin }: any) {
-    return (
-        <YStack style={{ gap: 18 }}>
-            <View style={{ alignItems: 'center', marginBottom: 4 }}>
-                <View style={{
-                    width: 64, height: 64, borderRadius: 32,
-                    backgroundColor: palette.EHR_SURFACE_LOWEST,
-                    borderWidth: 0.5, borderColor: palette.EHR_OUTLINE_SOFT,
-                    alignItems: 'center', justifyContent: 'center',
-                }}>
-                    <Shield size={32} color={palette.EHR_ON_SURFACE_VARIANT} />
-                </View>
-            </View>
-
-            <Text style={{
-                fontFamily: SERIF, fontSize: 22, color: palette.EHR_ON_SURFACE,
-                textAlign: 'center', letterSpacing: -0.3,
-            }}>
-                Thiết bị không hỗ trợ sinh trắc học
-            </Text>
-
-            <Text style={{
-                fontFamily: SANS, fontSize: 14, color: palette.EHR_ON_SURFACE_VARIANT,
-                textAlign: 'center', lineHeight: 21,
-            }}>
-                Ứng dụng sẽ dùng mã PIN 6 chữ số để bảo vệ các thao tác ký xác nhận hồ sơ y tế. Bạn có thể tạo PIN trong Cài đặt → Bảo mật của ứng dụng.
-            </Text>
-
-            <YStack style={{ gap: 10, marginTop: 6 }}>
-                <ViButton variant="primary" full size="lg" onPress={onSetupPin}>
-                    Đặt PIN 6 số ngay
-                </ViButton>
-                <Pressable onPress={() => onFinish(false)} style={{ paddingVertical: 12, alignItems: 'center' }}>
-                    <Text style={{
-                        fontFamily: SANS_SEMI, fontSize: 13.5,
-                        color: palette.EHR_ON_SURFACE_VARIANT,
-                    }}>
-                        Để sau (đặt qua Cài đặt)
-                    </Text>
-                </Pressable>
-            </YStack>
-        </YStack>
+        </Modal>
     );
 }
