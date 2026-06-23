@@ -9,7 +9,7 @@
 //     8 expandable "Xem thêm" (Reddit/Twitch/GitHub/Kakao/LinkedIn/Weibo/
 //     WeChat/Farcaster). Tổng 14 providers Web3Auth Sapphire v8.1.0 hỗ trợ.
 //   - Brand-accurate SVG icons (BrandIcons.tsx) thay FontAwesome6 generic.
-//   - Disclosure card jade-tinted cuối màn — cite Nghị định 13/2023/NĐ-CP về
+//   - Disclosure card jade-tinted cuối màn — cite Luật BVDLCN 91/2025/QH15 về
 //     dữ liệu cá nhân nhạy cảm (yêu cầu compliance pre-OAuth).
 //   - Top bar dùng ViSealLogo (hướng C — dấu son + nhịp tim) + wordmark.
 //
@@ -507,7 +507,7 @@ export default function LoginScreen({ navigation }: any) {
                     {/* Social grid 4-cột — 3 primary + ô "Xem thêm" */}
                     {renderGrid(socialCells)}
 
-                    {/* Legal disclosure card jade-tinted (NĐ 13/2023) */}
+                    {/* Legal disclosure card jade-tinted (Luật BVDLCN 91/2025/QH15) */}
                     <View
                         style={{
                             marginTop: 14,
@@ -531,7 +531,7 @@ export default function LoginScreen({ navigation }: any) {
                                 color: palette.EHR_ON_SURFACE,
                                 fontFamily: SANS_MEDIUM, fontWeight: '500',
                             }}>
-                                Nghị định 13/2023/NĐ-CP
+                                Luật Bảo vệ dữ liệu cá nhân 91/2025/QH15
                             </Text>
                             {' '}về xử lý dữ liệu cá nhân (gồm dữ liệu y tế nhạy cảm).
                         </Text>
@@ -553,7 +553,7 @@ export default function LoginScreen({ navigation }: any) {
                             fontWeight: '600',
                         }}>
                             ViEH · Bảo mật phân quyền ·{' '}
-                            <Text style={{ textTransform: 'none' }}>v2.4.1</Text>
+                            <Text style={{ textTransform: 'none' }}>v{Constants.expoConfig?.version ?? '1.0.0'}</Text>
                         </Text>
                         <View style={{ width: 16, height: 0.5, backgroundColor: palette.EHR_OUTLINE_VARIANT }} />
                     </View>

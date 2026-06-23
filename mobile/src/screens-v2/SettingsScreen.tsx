@@ -251,7 +251,7 @@ export default function SettingsScreen() {
                         <Tile
                             icon={<HelpCircle size={18} color={palette.EHR_ON_SURFACE_VARIANT} />}
                             title="Điều khoản & quyền riêng tư"
-                            sub="TT 13/2025/TT-BYT · ND 13/2023/ND-CP"
+                            sub="TT 13/2025/TT-BYT · Luật BVDLCN 91/2025/QH15"
                             onPress={() => Linking.openURL('https://moh.gov.vn')}
                             last
                         />
