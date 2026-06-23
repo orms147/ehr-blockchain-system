@@ -16,7 +16,8 @@
 ---
 
 ## A. CÒN LẠI: CODE / TEST (nhỏ, đa số không đụng app)
-> **Nội dung báo cáo sẵn-để-dán cho TẤT CẢ mục viết → [context/34](34_report_ready_content.md)** (bảng contract/invariant, threat model, đối chiếu 3 mức, relayer, envelope+puml, deployment, sửa pháp lý).
+> **Nội dung báo cáo sẵn-để-dán → [context/34](34_report_ready_content.md)** (bảng contract/invariant, threat model, đối chiếu 3 mức, relayer, envelope+puml, deployment, sửa pháp lý).
+> **KẾ HOẠCH viết/sửa báo cáo chi tiết (Phase C) → [context/35](35_report_writing_plan.md)** (phân pha + từng chương + sơ đồ + văn phòng + giao thức).
 
 | # | Việc | Loại | Rebuild? | Trạng thái |
 |---|---|---|---|---|
