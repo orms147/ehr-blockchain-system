@@ -87,7 +87,7 @@ Sau khi 3 scenario chạy xong, tổng hợp:
 | Limit | Value | Source |
 |---|---|---|
 | Express rate limit | 1000 req / 15 min mỗi /api path | backend/src/app.js:55-60 |
-| Neon Postgres free tier | 3-5 concurrent connections | Neon docs |
+| Neon Postgres free tier | pooler endpoint, high connection ceiling (đo thực ~30-40 dùng / 450 server / 10000 pooler) | Neon console |
 | Alchemy free tier RPC | 300 CU/s | dashboard |
 | Subgraph poll interval | 30s | .env SUBGRAPH_POLL_MS |
 
