@@ -16,10 +16,12 @@
 ---
 
 ## A. CÒN LẠI: CODE / TEST (nhỏ, đa số không đụng app)
-| # | Việc | Loại | Rebuild? | Ưu tiên |
+> **Nội dung báo cáo sẵn-để-dán cho TẤT CẢ mục viết → [context/34](34_report_ready_content.md)** (bảng contract/invariant, threat model, đối chiếu 3 mức, relayer, envelope+puml, deployment, sửa pháp lý).
+
+| # | Việc | Loại | Rebuild? | Trạng thái |
 |---|---|---|---|---|
-| **3** | **Property/fuzz test cascade** (BN→A→B→C + BN trực tiếp→C; revoke A ⇒ B mất, C trực tiếp còn) — Foundry, thêm file trong `contracts/test/`, KHÔNG đổi contract | test | ❌ | **CAO** (thầy: trọng tâm) |
-| 4 | **k6** script + chạy + ghi bảng (server/DB/VU/ramp/payload/p50-95-99/error/throughput); nêu rõ chưa đo đường ghi on-chain & crypto client | đo | ❌ | TB |
+| **3** | **Property/fuzz test cascade** (BN→A→B→C + trực tiếp→C; revoke A ⇒ chain chết, direct còn) | test | ❌ | ✅ **XONG** — 5 property + 1 invariant (128k calls) PASS; đã thêm test `..._ABC_...` đúng chữ thầy |
+| 4 | **k6** đo + ghi bảng | đo | ❌ | 🟡 **Script sẵn** `loadtest/read-path.k6.js` → owner chạy (cần JWT + endpoint DB) + điền bảng; nêu rõ chưa đo on-chain/crypto |
 | 1b | **AAD = cidHash** cho AES-GCM (`mobile/src/services/crypto.js` encrypt+decrypt) | app code | ✅ nếu làm | THẤP/opt — ⚠️ data cũ giải mã lỗi → phải tạo lại data test |
 | 6 | Trusted-contact: TTL khẩn cấp / xác minh danh tính người thân / log per-access **bất biến on-chain** (log+thông báo backend ĐÃ có) | app code | ✅ nếu làm | THẤP/opt — để "future work" |
 
