@@ -20,6 +20,17 @@
 
 import * as LocalAuthentication from 'expo-local-authentication';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import useAuthStore from '../store/authStore';
+
+// Roles whose signing actions MUST pass a device authentication factor at the
+// moment of signing (Luật GDĐT 20/2023 Đ22 k2c — "chủ thể ký kiểm soát tại thời
+// điểm ký"). Org/Ministry/Admin are institutional accounts and are exempt by
+// product decision. The factor is the DEVICE OS credential (biometric OR device
+// PIN/pattern) — VN law does not mandate a per-account app credential for health
+// apps (TT 13/2025 Đ3 lists biometric as one optional form; NĐ 356/2025 Đ9 k3b
+// MFA applies only to "xử lý dữ liệu lớn"); device-level OS auth also satisfies
+// OWASP MASVS-AUTH-2.
+const FACTOR_REQUIRED_ROLES = ['patient', 'doctor'];
 
 const SETTINGS_KEY = 'biometric_signing_enabled';
 const ONBOARDING_KEY = 'mfa_onboarded_v1';
@@ -98,23 +109,46 @@ export async function setBiometricSigningEnabled(enabled: boolean): Promise<void
  *               being signed. Keep <80 chars; long strings clip on Android.
  */
 export async function requireBiometric(reason: string): Promise<boolean> {
-    const enabled = await isBiometricSigningEnabled();
-    if (!enabled) return true;
-
-    const { hasHardware, isEnrolled } = await probeSupport();
-    if (!hasHardware || !isEnrolled) {
-        // Graceful degrade: device can't do biometric → proceed without it.
-        // Users typing private keys / using passwords aren't gated either.
+    // Role scope: only patient/doctor signing is gated. Org/Ministry/Admin
+    // (institutional accounts) are exempt — return true without prompting.
+    let role = 'patient';
+    try {
+        role = String(useAuthStore.getState().activeRole || 'patient');
+    } catch {
+        role = 'patient';
+    }
+    if (!FACTOR_REQUIRED_ROLES.includes(role)) {
         return true;
+    }
+
+    // MANDATORY for patient/doctor — no opt-out toggle, no silent bypass.
+    // The second factor is the device OS credential: biometric if enrolled,
+    // otherwise the device PIN/pattern/password (disableDeviceFallback:false).
+    let level: LocalAuthentication.SecurityLevel;
+    try {
+        level = await LocalAuthentication.getEnrolledLevelAsync();
+    } catch {
+        level = LocalAuthentication.SecurityLevel.NONE;
+    }
+
+    if (level === LocalAuthentication.SecurityLevel.NONE) {
+        // Device has NEITHER biometric NOR a screen-lock PIN/pattern → we cannot
+        // bind the signing moment to the device owner. Refuse with a clear,
+        // actionable error (this is the "require setup" enforcement).
+        const e: any = new Error(
+            'Thiết bị chưa đặt khoá màn hình. Hãy bật vân tay/khuôn mặt hoặc mã PIN/mật khẩu trong Cài đặt thiết bị để ký hồ sơ y tế.'
+        );
+        e.code = 'NO_DEVICE_LOCK';
+        throw e;
     }
 
     try {
         const result = await LocalAuthentication.authenticateAsync({
             promptMessage: reason,
             cancelLabel: 'Huỷ',
-            fallbackLabel: 'Mã PIN thiết bị',
-            // disableDeviceFallback=false: allow PIN/pattern fallback so
-            // users without enrolled biometric (just PIN) can still sign.
+            fallbackLabel: 'Mã khoá thiết bị',
+            // Allow OS fallback to device PIN/pattern/password when biometric
+            // isn't enrolled — the second factor is the device-owner credential.
             disableDeviceFallback: false,
         });
         return result.success === true;
