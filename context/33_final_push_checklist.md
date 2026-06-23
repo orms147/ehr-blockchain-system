@@ -21,7 +21,7 @@
 | **3** | **Property/fuzz test cascade** (BN→A→B→C + BN trực tiếp→C; revoke A ⇒ B mất, C trực tiếp còn) — Foundry, thêm file trong `contracts/test/`, KHÔNG đổi contract | test | ❌ | **CAO** (thầy: trọng tâm) |
 | 4 | **k6** script + chạy + ghi bảng (server/DB/VU/ramp/payload/p50-95-99/error/throughput); nêu rõ chưa đo đường ghi on-chain & crypto client | đo | ❌ | TB |
 | 1b | **AAD = cidHash** cho AES-GCM (`mobile/src/services/crypto.js` encrypt+decrypt) | app code | ✅ nếu làm | THẤP/opt — ⚠️ data cũ giải mã lỗi → phải tạo lại data test |
-| 6 | Trusted-contact: TTL khẩn cấp / thông báo hậu truy cập / xác minh danh tính | app code | ✅ nếu làm | THẤP/opt — có thể để "future work" |
+| 6 | Trusted-contact: TTL khẩn cấp / xác minh danh tính người thân / log per-access **bất biến on-chain** (log+thông báo backend ĐÃ có) | app code | ✅ nếu làm | THẤP/opt — để "future work" |
 
 ## B. CÒN LẠI: SỬA BÁO CÁO (Phase C) — 11 nhận xét thầy × hành động
 | # | Nhận xét | Hành động | Loại | Vật liệu |
@@ -31,7 +31,7 @@
 | 3 | Test cascade | (xem mục A#3) + mô tả kịch bản trong Quyển | viết+test | — |
 | 4 | k6 đủ điều kiện | (xem A#4) + bảng + caveat | viết+đo | [12] |
 | 5 | Pháp lý: đối chiếu, **3 mức** | Bảng 2.10 chia ✅đã hiện thực / ⚠️một phần / ❌ngoài phạm vi (FHIR/DICOM/BHYT/VNeID/CA/lưu trữ chính thức = ❌) | viết | [32], deep-research |
-| 6 | Trusted-contact kiểm soát | Bảng "hiện có vs cần thêm"; (code TTL/notify = optional A#6) | viết(+opt code) | ConsentLedger TrustedContactPermit, [31] |
+| 6 | Trusted-contact kiểm soát | **ĐÃ CÓ** (chỉ trình bày): canAccess on-chain (ConsentLedger.sol:693), log riêng `TRUSTED_CONTACT_CLAIM` (keyShare.routes.js:1532), **thông báo realtime+push cho bệnh nhân** (:1521), chỉ định người thân = event on-chain bất biến. Future: TTL/xác minh danh tính/per-access on-chain | viết | keyShare.routes.js:1500-1539, ConsentLedger.sol:693/818 |
 | 7 | Relayer chống replay | **ĐÃ CÓ**: nonce+deadline EIP-712 (ConsentLedger.sol:26-38, check :249/:271/:405/:428) + quota 100/tháng + rate-limit → chỉ **trình bày** + self-pay fallback | viết | ConsentLedger.sol, relayer.service.js, CLAUDE §6 |
 | 8 | Bằng chứng triển khai | Gom: 5 địa chỉ + arbiscan link, subgraph 0.3.0, API URL Render, APK/QR (EAS), 4 tài khoản demo, `.env.example`, ghi "chạy npm (không Docker)" | viết | [[ehr-deploy-targets]], [[ehr-data-loss-state]] |
 | 9 | Rà văn bản pháp lý | Sửa **TT13/2026→TT13/2025** (06/06/2025, hiệu lực 21/07/2025); rà QĐ586; thêm Luật 91/2025+NĐ356 (NĐ13/2023 hết hiệu lực 01/01/2026) | viết | [32] |
