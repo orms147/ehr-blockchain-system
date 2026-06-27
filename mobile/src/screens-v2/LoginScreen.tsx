@@ -612,7 +612,7 @@ export default function LoginScreen({ navigation }: any) {
                             lineHeight: 20, marginBottom: 16,
                         }}>
                             {hintModalProvider === 'sms_passwordless'
-                                ? 'Nhập 0xxx (tự đổi thành +84) hoặc +{mã quốc gia}-{số}, vd +84-901234567.'
+                                ? 'Nhập số điện thoại của bạn.'
                                 : 'Mã xác thực một lần sẽ được gửi đến email này.'}
                         </Text>
                         <TextInput
