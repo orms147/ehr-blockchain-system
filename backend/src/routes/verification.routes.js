@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { authenticate } from '../middleware/auth.js';
 import prisma from '../config/database.js';
 import { requireOnChainRoles } from '../middleware/onChainRole.js';
-import { createPublicClient, http, parseAbi } from 'viem';
+import { createPublicClient, http, parseAbi, keccak256, toBytes } from 'viem';
 import { arbitrumSepolia } from 'viem/chains';
 
 const router = Router();
@@ -21,6 +21,14 @@ const publicClient = createPublicClient({
     chain: arbitrumSepolia,
     transport: http(process.env.RPC_URL),
 });
+
+// The on-chain `credential` field of verifyDoctor must NOT carry plaintext PII:
+// per NĐ 356/2025 Đ11, only de-identified / hashed values may be written to a
+// blockchain. We store keccak256 of the licence string on-chain; the plaintext
+// licenseNumber stays in Postgres (access-gated) as the source of truth.
+function hashCredential(raw) {
+    return keccak256(toBytes(String(raw ?? '').trim() || 'VERIFIED'));
+}
 
 const requireDoctorRole = requireOnChainRoles('doctor');
 const requireMinistryRole = requireOnChainRoles('ministry');
@@ -374,7 +382,7 @@ router.post('/review', authenticate, requireOrgOrMinistry, async (req, res, next
             // If approved, return the data the org admin needs to broadcast verifyDoctor.
             contractCall: approved ? {
                 function: 'verifyDoctor',
-                args: [request.doctorAddress, request.licenseNumber || 'VERIFIED'],
+                args: [request.doctorAddress, hashCredential(request.licenseNumber)],
             } : null,
         });
     } catch (error) {
@@ -413,8 +421,9 @@ router.post('/confirm', authenticate, requireOrgOrMinistry, async (req, res, nex
         }
 
         // Org admins may only finalize requests directed at their own org.
+        let reviewerOrg = null;
         if (!isMinistry) {
-            const reviewerOrg = await prisma.organization.findFirst({
+            reviewerOrg = await prisma.organization.findFirst({
                 where: {
                     OR: [
                         { address: reviewerAddress },
@@ -455,6 +464,31 @@ router.post('/confirm', authenticate, requireOrgOrMinistry, async (req, res, nex
             where: { id: requestId },
             data: { status: 'approved', reviewedBy: reviewerAddress, reviewedAt: new Date() },
         });
+
+        // A doctor the org has just verified IS a member of that org's roster.
+        // The CCHN verification flow previously never created an OrganizationMember
+        // row, so verified doctors were invisible in the "Quản lý bác sĩ thuộc cơ
+        // sở" screen (which lists OrganizationMember rows, role != admin). Upsert
+        // one here so the verified doctor shows up. Ministry-verified independent
+        // doctors have no org → skip. On an existing row keep its role (never
+        // downgrade an admin who is also a doctor) and just (re)activate it.
+        if (reviewerOrg) {
+            await prisma.organizationMember.upsert({
+                where: {
+                    orgId_memberAddress: {
+                        orgId: reviewerOrg.id,
+                        memberAddress: request.doctorAddress.toLowerCase(),
+                    },
+                },
+                update: { status: 'active', leftAt: null },
+                create: {
+                    orgId: reviewerOrg.id,
+                    memberAddress: request.doctorAddress.toLowerCase(),
+                    role: 'doctor',
+                    status: 'active',
+                },
+            });
+        }
 
         res.json({ success: true, message: 'Đã xác minh bác sĩ — hoàn tất.', request: updated });
     } catch (error) {

@@ -323,6 +323,23 @@ async function handleDoctorVerified(event) {
         data: verificationUpdate,
     });
 
+    // Backstop for /api/verification/confirm: a doctor an org verifies must also
+    // land in that org's member roster (OrganizationMember) — otherwise verified
+    // doctors are invisible in "Quản lý bác sĩ thuộc cơ sở". Org verification
+    // carries a non-zero chainOrgId; ministry-verified independent doctors carry
+    // 0 → no org membership. Preserve an existing row's role (don't downgrade an
+    // admin who is also a doctor) and just (re)activate it.
+    if (chainOrgId && chainOrgId !== 0n) {
+        const org = await prisma.organization.findUnique({ where: { chainOrgId } });
+        if (org) {
+            await prisma.organizationMember.upsert({
+                where: { orgId_memberAddress: { orgId: org.id, memberAddress: doctorAddress } },
+                update: { status: 'active', leftAt: null },
+                create: { orgId: org.id, memberAddress: doctorAddress, role: 'doctor', status: 'active' },
+            });
+        }
+    }
+
     // The on-chain role middleware caches isVerifiedDoctor for 60s. Without
     // this invalidation, fresh requests after verification still see "not
     // verified" until cache expires — patient share would block on

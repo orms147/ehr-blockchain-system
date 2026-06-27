@@ -14,7 +14,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { Alert, FlatList, Pressable, RefreshControl, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Text, XStack, YStack } from 'tamagui';
-import { parseGwei } from 'viem';
+import { keccak256, parseGwei, toBytes } from 'viem';
 
 import LoadingSpinner from '../../components/LoadingSpinner';
 import orgService from '../../services/org.service';
@@ -82,7 +82,10 @@ export default function MinistryVerifyDoctorScreen() {
             return;
         }
         const doctorAddr = doctor.walletAddress.toLowerCase();
+        // Plaintext stays off-chain (mirror → Postgres). On-chain credential is a
+        // keccak256 hash so no licence PII lands on the public ledger (NĐ 356/2025 Đ11).
         const credential = doctor.licenseNumber || 'VERIFIED_BY_MINISTRY';
+        const credentialHash = keccak256(toBytes(credential));
 
         const confirmed = await new Promise<boolean>((resolve) => {
             Alert.alert(
@@ -106,7 +109,7 @@ export default function MinistryVerifyDoctorScreen() {
                 address: ACCESS_CONTROL_ADDRESS,
                 abi: ACCESS_CONTROL_ABI,
                 functionName: 'verifyDoctorByMinistry',
-                args: [doctorAddr as `0x${string}`, credential],
+                args: [doctorAddr as `0x${string}`, credentialHash],
                 gas: BigInt(300000),
                 maxFeePerGas: parseGwei('1.0'),
                 maxPriorityFeePerGas: parseGwei('0.1'),

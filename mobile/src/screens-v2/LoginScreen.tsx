@@ -162,10 +162,24 @@ export default function LoginScreen({ navigation }: any) {
             return;
         }
         if (provider === 'sms_passwordless') {
-            let phone = raw.replace(/[\s-]/g, '');
-            if (/^0\d{8,10}$/.test(phone)) phone = '+84' + phone.slice(1);
+            // Tolerate any formatting the user types (spaces, dashes, dots,
+            // parentheses, non-breaking spaces from the phone keypad): keep only
+            // digits and a single leading '+', then normalise to E.164.
+            const digits = raw.replace(/[^\d+]/g, '').replace(/(?!^)\+/g, '');
+            let phone;
+            if (digits.startsWith('+')) {
+                phone = digits;                  // already +<country><number>
+            } else if (digits.startsWith('00')) {
+                phone = '+' + digits.slice(2);   // 00 = international prefix
+            } else if (digits.startsWith('0')) {
+                phone = '+84' + digits.slice(1); // Vietnamese local 0xxxxxxxxx
+            } else if (digits.startsWith('84')) {
+                phone = '+' + digits;            // Vietnamese number missing the '+'
+            } else {
+                phone = '+' + digits;            // assume the country code is present
+            }
             if (!/^\+\d{8,15}$/.test(phone)) {
-                Alert.alert('Số điện thoại không hợp lệ', 'Hãy nhập theo định dạng quốc tế, ví dụ +84901234567.');
+                Alert.alert('Số điện thoại không hợp lệ', 'Hãy nhập số quốc tế, ví dụ +84901234567 hoặc 0901234567.');
                 return;
             }
             closeHintModal(phone);
