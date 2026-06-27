@@ -162,24 +162,25 @@ export default function LoginScreen({ navigation }: any) {
             return;
         }
         if (provider === 'sms_passwordless') {
-            // Tolerate any formatting the user types (spaces, dashes, dots,
-            // parentheses, non-breaking spaces from the phone keypad): keep only
-            // digits and a single leading '+', then normalise to E.164.
-            const digits = raw.replace(/[^\d+]/g, '').replace(/(?!^)\+/g, '');
-            let phone;
-            if (digits.startsWith('+')) {
-                phone = digits;                  // already +<country><number>
-            } else if (digits.startsWith('00')) {
-                phone = '+' + digits.slice(2);   // 00 = international prefix
-            } else if (digits.startsWith('0')) {
-                phone = '+84' + digits.slice(1); // Vietnamese local 0xxxxxxxxx
-            } else if (digits.startsWith('84')) {
-                phone = '+' + digits;            // Vietnamese number missing the '+'
+            // Web3Auth's SMS passwordless requires "+{countryCode}-{number}" (WITH a
+            // hyphen). Plain E.164 like +84901234567 is rejected by Web3Auth itself:
+            // "Invalid phone number ... format eg: +{cc}-{number}".
+            const cleaned = raw.replace(/[^\d+\-]/g, '');
+            let phone: string | null = null;
+            if (/^\+\d{1,3}-\d{4,14}$/.test(cleaned)) {
+                phone = cleaned;                              // user already gave +cc-number
             } else {
-                phone = '+' + digits;            // assume the country code is present
+                // Otherwise treat it as a Vietnamese number → build +84-<national>.
+                let national = cleaned.replace(/\D/g, '');
+                if (national.startsWith('0')) national = national.slice(1);
+                else if (national.startsWith('84')) national = national.slice(2);
+                if (/^\d{8,11}$/.test(national)) phone = '+84-' + national;
             }
-            if (!/^\+\d{8,15}$/.test(phone)) {
-                Alert.alert('Số điện thoại không hợp lệ', 'Hãy nhập số quốc tế, ví dụ +84901234567 hoặc 0901234567.');
+            if (!phone) {
+                Alert.alert(
+                    'Số điện thoại không hợp lệ',
+                    'Nhập số Việt Nam (vd 0901234567) hoặc theo định dạng +{mã quốc gia}-{số}, vd +84-901234567.',
+                );
                 return;
             }
             closeHintModal(phone);
@@ -611,7 +612,7 @@ export default function LoginScreen({ navigation }: any) {
                             lineHeight: 20, marginBottom: 16,
                         }}>
                             {hintModalProvider === 'sms_passwordless'
-                                ? 'Nhập số theo định dạng quốc tế (0xxx tự đổi thành +84xxx).'
+                                ? 'Nhập 0xxx (tự đổi thành +84) hoặc +{mã quốc gia}-{số}, vd +84-901234567.'
                                 : 'Mã xác thực một lần sẽ được gửi đến email này.'}
                         </Text>
                         <TextInput
@@ -629,7 +630,7 @@ export default function LoginScreen({ navigation }: any) {
                             keyboardType={hintModalProvider === 'sms_passwordless' ? 'phone-pad' : 'email-address'}
                             autoCapitalize="none"
                             autoCorrect={false}
-                            placeholder={hintModalProvider === 'sms_passwordless' ? '+84 90 123 4567' : 'name@example.com'}
+                            placeholder={hintModalProvider === 'sms_passwordless' ? '+84-901234567' : 'name@example.com'}
                             placeholderTextColor={palette.EHR_TEXT_MUTED}
                             autoFocus
                         />
