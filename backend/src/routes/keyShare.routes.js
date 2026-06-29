@@ -440,7 +440,7 @@ router.post('/bulk-trusted-contact', authenticate, async (req, res, next) => {
                     senderPublicKey,
                     status: 'claimed',  // Trusted Contact pre-share is auto-claimed
                     expiresAt: null,    // FOREVER until the contact is revoked
-                    allowDelegate: true, // Trusted Contact can re-share to ER doctor
+                    allowDelegate: false, // TC reads via isTrustedContact (canAccess); cannot re-share to third parties
                     source: 'trusted-contact-pre-share',
                     sourceTimestamp,
                 });
