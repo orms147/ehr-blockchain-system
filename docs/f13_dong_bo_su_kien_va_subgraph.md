@@ -31,6 +31,8 @@ Lý do tách: nếu mỗi lần render danh sách "ai đã chia sẻ hồ sơ ch
 ### 1.3 Subgraph (The Graph) là gì?
 The Graph là dịch vụ **index blockchain**. Ta khai báo (trong `subgraph.yaml`) "hãy theo dõi các contract này, các event này, và khi event xảy ra hãy lưu thành các entity theo schema". The Graph chạy node quét chain, gọi các hàm mapping (viết bằng AssemblyScript trong `subgraph/src/*.ts`) để biến event thành **entity** lưu trong store của nó. Sau đó ta **query bằng GraphQL** — một request lấy được nhiều loại dữ liệu, đã sắp xếp, lọc, phân trang sẵn, **không tốn RPC của ta**.
 
+> **Hai CSDL tách biệt (hay nhầm):** The Graph có **PostgreSQL riêng của nó** (do The Graph Studio vận hành, nằm sau endpoint GraphQL), **độc lập hoàn toàn** với Neon Postgres của dự án. Neon chỉ là **bản sao cache** mà backend kéo về (mục 4). Indexer quét mỗi khối **một lần** rồi ghi entity vào DB-của-The-Graph; app/back-end **không bao giờ tự quét chain** — đó là lý do "đọc nhanh hơn": phép quét tuyến tính được khấu hao một lần lúc index, mỗi truy vấn sau chỉ là tra cứu có index (O(log n)) thay vì O(số khối) lặp lại như `eth_getLogs`.
+
 ```
                           ┌──────────────────────────────┐
    Blockchain (Arbitrum)  │  The Graph node (Studio)      │
@@ -233,6 +235,10 @@ Khai báo ở `subgraph/subgraph.yaml` (4 dataSources) + `subgraph/schema.graphq
 | `EHRSystem` (`subgraph.yaml:32-56`) | `AccessRequested`, `RequestCompleted`, `RequestRejected` | `AccessRequest`, `Patient` |
 | `ConsentLedger` (`subgraph.yaml:58-92`) | `ConsentGranted/Revoked`, `DelegationGranted/Revoked`, `AccessGrantedViaDelegation`, `TrustedContactSet/Revoked` | `ConsentEvent`, `DelegationEvent`, `DelegationAccessGrant`, `TrustedContactEvent` |
 | `AccessControl` (`subgraph.yaml:94-120`) | `DoctorVerified`, `VerificationRevoked`, `OrganizationCreated`, `OrganizationStatusChanged` | `Doctor`, `Organization` |
+
+### Vì sao chỉ 4 dataSource dù có 5 contract?
+
+Contract thứ 5 — **DoctorUpdate** — **không** được index, vì nó là **facade mỏng**: `addRecordByDoctor` của nó gọi thẳng sang `RecordRegistry.addRecordByDoctor` (`contracts/src/DoctorUpdate.sol:94`). Nghĩa là hồ sơ do bác sĩ tạo vẫn phát sự kiện `RecordAdded` từ **RecordRegistry** — vốn đã được index ở dataSource RecordRegistry. DoctorUpdate có phát thêm event riêng (`RecordAddedByDoctor`, `TemporaryAccessGranted` — `DoctorUpdate.sol:29,38`) nhưng đó là event **phụ/trùng lặp**; trạng thái hồ sơ mới đã nằm trong `RecordAdded`. → Index thêm DoctorUpdate là thừa, nên subgraph chỉ cần 4 dataSource. (Câu trả lời sẵn nếu hội đồng hỏi "5 contract sao chỉ index 4?".)
 
 Đặc điểm thiết kế quan trọng (bảo vệ trước hội đồng về **riêng tư**):
 - Schema ghi rõ "**NEVER store plaintext CIDs / payloads — only on-chain bytes32 hashes**" (`schema.graphql:1-2`). Mọi field nhạy cảm là `Bytes` (hash), không có CID plaintext, không có nội dung FHIR.
