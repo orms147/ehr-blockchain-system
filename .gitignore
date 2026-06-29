@@ -70,3 +70,7 @@ yarn-error.*
 *.tgz
 Bao Cao_rewrite_archive/
 contracts/lcov.info
+
+# Project docs & one-off dev scripts (not part of source deliverable)
+/docs/
+backend/clear-verification-requests.js
