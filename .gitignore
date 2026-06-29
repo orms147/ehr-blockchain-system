@@ -65,3 +65,8 @@ yarn-error.*
 **/.vscode/
 **/*.swp
 **/*.swo
+
+# Thesis build archives & coverage artifacts (not source code)
+*.tgz
+Bao Cao_rewrite_archive/
+contracts/lcov.info
